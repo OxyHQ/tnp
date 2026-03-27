@@ -19,7 +19,7 @@ const clientPlatforms: { id: Platform; label: string }[] = [
   { id: "windows", label: "Windows" },
 ];
 
-const DNS_IP = "161.35.80.14";
+const DNS_IP = "165.22.193.247";
 const DNS_HOST = "dns.tnp.network";
 
 interface ClientInfo {
