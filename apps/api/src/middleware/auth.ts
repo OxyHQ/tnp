@@ -10,7 +10,7 @@ export interface AuthRequest extends Request {
 
 const oxy = new OxyServices({ baseURL: config.oxyApiUrl });
 
-export const oxyAuth = oxy.auth({ optional: true });
+export const oxyAuth = oxy.auth();
 
 export function requireAuth(
   req: AuthRequest,

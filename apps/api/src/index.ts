@@ -20,17 +20,31 @@ app.use(
 );
 app.use(express.json());
 
-// Oxy auth middleware (optional) -- sets req.user.id if token present, doesn't block otherwise
-app.use(oxyAuth);
-
-app.use("/tlds", tldsRouter);
-app.use("/domains", domainsRouter);
-app.use("/client", clientRouter);
+// Public routes -- no auth needed at all
 app.use("/dns", dnsRouter);
-
+app.use("/client", clientRouter);
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "tnp-api" });
 });
+
+// Routes with mixed auth -- oxy.auth() sets req.user if token present,
+// individual handlers use requireAuth for write operations.
+// Wrapping in optionalAuth so GET requests work without a token.
+const optionalAuth: express.RequestHandler = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return next();
+  }
+  oxyAuth(req, res, (err?: unknown) => {
+    if (err) {
+      (req as Record<string, unknown>).user = undefined;
+    }
+    next();
+  });
+};
+
+app.use("/tlds", optionalAuth, tldsRouter);
+app.use("/domains", optionalAuth, domainsRouter);
 
 async function start() {
   await mongoose.connect(config.mongoUri, { dbName: config.dbName });
