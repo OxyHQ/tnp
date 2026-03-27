@@ -307,14 +307,16 @@ export class DnsProxy {
     this.udpServer = dgram.createSocket({ type: "udp4", reuseAddr: true });
 
     const handleUdpMessage = function(msg: Buffer, rinfo: dgram.RemoteInfo) {
-      console.log(`[tnp] udp query from ${rinfo.address}:${rinfo.port} (${msg.length} bytes)`);
-      self.handleQuery(Buffer.from(msg))
-        .then((response) => {
-          self.udpServer!.send(response, 0, response.length, rinfo.port, rinfo.address);
-        })
-        .catch((err) => {
-          console.error(`[tnp] udp error: ${err instanceof Error ? err.stack : err}`);
-        });
+      // Defer to next tick to unblock Bun's event loop for fetch()
+      setTimeout(() => {
+        self.handleQuery(Buffer.from(msg))
+          .then((response) => {
+            self.udpServer!.send(response, 0, response.length, rinfo.port, rinfo.address);
+          })
+          .catch((err) => {
+            console.error(`[tnp] udp error: ${err instanceof Error ? err.stack : err}`);
+          });
+      }, 0);
     };
 
     this.udpServer.on("message", handleUdpMessage);
