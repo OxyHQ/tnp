@@ -23,6 +23,13 @@
         "@types/express": "^5.0.6",
       },
     },
+    "apps/dns-server": {
+      "name": "@tnp/dns-server",
+      "version": "0.1.0",
+      "dependencies": {
+        "dns2": "^2.1.0",
+      },
+    },
     "apps/web": {
       "name": "@tnp/web",
       "version": "1.0.0",
@@ -271,6 +278,8 @@
     "@tnp/api": ["@tnp/api@workspace:apps/api"],
 
     "@tnp/client": ["@tnp/client@workspace:packages/client"],
+
+    "@tnp/dns-server": ["@tnp/dns-server@workspace:apps/dns-server"],
 
     "@tnp/web": ["@tnp/web@workspace:apps/web"],
 

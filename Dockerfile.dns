@@ -1,0 +1,16 @@
+FROM oven/bun:1
+WORKDIR /app
+
+COPY package.json bun.lock ./
+COPY packages/client/package.json packages/client/
+COPY apps/dns-server/package.json apps/dns-server/
+RUN bun install --frozen-lockfile --production
+
+COPY packages/client packages/client
+COPY apps/dns-server apps/dns-server
+
+ENV NODE_ENV=production
+EXPOSE 53/udp
+EXPOSE 53/tcp
+
+CMD ["bun", "apps/dns-server/src/index.ts"]

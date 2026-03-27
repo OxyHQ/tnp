@@ -13,7 +13,7 @@ export interface TnpConfig {
 const DEFAULT_CONFIG: TnpConfig = {
   listenAddr: "127.0.0.1",
   listenPort: 5354,
-  apiBaseUrl: "https://tnp.network/api",
+  apiBaseUrl: "https://api.tnp.network",
   upstreamDns: "1.1.1.1",
   cacheTtlSeconds: 300,
 };

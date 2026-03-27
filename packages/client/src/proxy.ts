@@ -122,6 +122,7 @@ export class DnsProxy {
   async start(): Promise<void> {
     this.server = dns2.createServer({
       udp: true,
+      tcp: true,
       handle: async (request: Record<string, unknown>, send: (response: unknown) => void) => {
         const response = Packet.createResponseFromRequest(request);
         const questions = (request as { questions: Array<{ name: string; type: number }> }).questions;
@@ -167,6 +168,10 @@ export class DnsProxy {
 
     this.server.listen({
       udp: {
+        port: this.config.listenPort,
+        address: this.config.listenAddr,
+      },
+      tcp: {
         port: this.config.listenPort,
         address: this.config.listenAddr,
       },

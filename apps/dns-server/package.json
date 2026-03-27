@@ -1,0 +1,13 @@
+{
+  "name": "@tnp/dns-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch src/index.ts"
+  },
+  "dependencies": {
+    "dns2": "^2.1.0"
+  }
+}
