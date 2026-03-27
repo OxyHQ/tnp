@@ -20,7 +20,7 @@ app.use(
 );
 app.use(express.json());
 
-// Oxy auth middleware -- validates Bearer tokens and sets req.user.id
+// Oxy auth middleware (optional) -- sets req.user.id if token present, doesn't block otherwise
 app.use(oxyAuth);
 
 app.use("/tlds", tldsRouter);
