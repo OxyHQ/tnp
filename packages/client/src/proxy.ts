@@ -205,10 +205,14 @@ export class DnsProxy {
     this.udpServer = dgram.createSocket("udp4");
     this.udpServer.on("message", async (msg: Buffer, rinfo: dgram.RemoteInfo) => {
       try {
-        const response = await this.handleQuery(msg);
+        const response = await this.handleQuery(Buffer.from(msg));
+        if (!response || !Buffer.isBuffer(response)) {
+          console.error(`[tnp] handleQuery returned non-buffer: ${typeof response}`);
+          return;
+        }
         this.udpServer!.send(response, 0, response.length, rinfo.port, rinfo.address);
       } catch (err) {
-        console.error(`[tnp] udp error: ${err}`);
+        console.error(`[tnp] udp error: ${err instanceof Error ? err.stack : err}`);
       }
     });
     this.udpServer.bind(listenPort, listenAddr);
