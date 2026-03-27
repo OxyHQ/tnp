@@ -1,6 +1,6 @@
 #!/bin/sh
 # TNP Resolver Installer
-# Usage: curl -fsSL https://tnp.network/install.sh | sh
+# Usage: curl -fsSL https://get.tnp.network | sh
 set -e
 
 REPO="OxyHQ/tnp"

@@ -15,7 +15,7 @@ curl -fsSL https://get.tnp.network | sh
 **Windows (PowerShell as Administrator):**
 
 ```
-irm https://get.tnp.network/install.ps1 | iex
+irm https://get.tnp.network | iex
 ```
 
 ## How it works
