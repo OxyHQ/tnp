@@ -6,6 +6,29 @@ import dns2 from "dns2";
 
 const { Packet } = dns2;
 
+function encodeDnsName(name: string): number[] {
+  const bytes: number[] = [];
+  for (const label of name.split(".")) {
+    bytes.push(label.length);
+    for (const c of label) bytes.push(c.charCodeAt(0));
+  }
+  bytes.push(0);
+  return bytes;
+}
+
+function expandIPv6(addr: string): number[] {
+  // Expand :: and parse into 8 x 16-bit words
+  let parts = addr.split(":");
+  const emptyIdx = parts.indexOf("");
+  if (emptyIdx !== -1) {
+    const before = parts.slice(0, emptyIdx);
+    const after = parts.slice(emptyIdx + 1).filter((p) => p !== "");
+    const missing = 8 - before.length - after.length;
+    parts = [...before, ...Array(missing).fill("0"), ...after];
+  }
+  return parts.map((p) => parseInt(p || "0", 16));
+}
+
 interface CacheEntry {
   answers: DnsAnswer[];
   expiresAt: number;
@@ -74,28 +97,94 @@ export class DnsProxy {
   }
 
   /**
-   * Forward DNS query to Cloudflare's DNS-over-HTTPS endpoint.
-   * This avoids the Bun dgram limitation where multiple UDP sockets
-   * can't receive messages simultaneously.
+   * Forward a DNS query to Google's DoH JSON API.
+   * Returns a DNS wire-format response buffer.
+   * Uses fetch() to avoid Bun's dgram multi-socket limitation.
    */
   private async forwardUpstreamRaw(queryBuf: Buffer): Promise<Buffer> {
-    // Use IP directly to avoid circular DNS resolution
-    const response = await fetch("https://1.1.1.1/dns-query", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/dns-message",
-        "Accept": "application/dns-message",
-      },
-      body: queryBuf,
-      signal: AbortSignal.timeout(4000),
-    });
+    const parsed = Packet.parse(queryBuf);
+    const q = parsed.questions?.[0];
+    if (!q) throw new Error("no question in query");
 
-    if (!response.ok) {
-      throw new Error(`DoH upstream returned ${response.status}`);
+    const qname = q.name.replace(/\.$/, "");
+    const qtype = this.typeToString(q.type);
+
+    const res = await fetch(
+      `https://8.8.8.8/resolve?name=${encodeURIComponent(qname)}&type=${qtype}`,
+      {
+        signal: AbortSignal.timeout(4000),
+        // @ts-expect-error Bun supports tls option on fetch
+        tls: { rejectUnauthorized: false },
+      }
+    );
+
+    if (!res.ok) throw new Error(`DoH returned ${res.status}`);
+
+    const json = (await res.json()) as {
+      Answer?: Array<{ name: string; type: number; TTL: number; data: string }>;
+    };
+
+    // Build a DNS wire-format response
+    const writer = new Packet.Writer();
+    const id = queryBuf.readUInt16BE(0);
+    const answers = json.Answer || [];
+
+    writer.write(id, 16);         // ID
+    writer.write(0x8180, 16);     // Flags: QR, RD, RA
+    writer.write(1, 16);          // QDCOUNT
+    writer.write(answers.length, 16); // ANCOUNT
+    writer.write(0, 16);          // NSCOUNT
+    writer.write(0, 16);          // ARCOUNT
+
+    // Question section
+    for (const label of qname.split(".")) {
+      writer.write(label.length, 8);
+      for (const c of label) writer.write(c.charCodeAt(0), 8);
+    }
+    writer.write(0, 8);
+    writer.write(q.type, 16);
+    writer.write(q.class || 1, 16);
+
+    // Answer section
+    for (const ans of answers) {
+      const aname = (ans.name || qname).replace(/\.$/, "");
+      for (const label of aname.split(".")) {
+        writer.write(label.length, 8);
+        for (const c of label) writer.write(c.charCodeAt(0), 8);
+      }
+      writer.write(0, 8);
+      writer.write(ans.type, 16);
+      writer.write(1, 16); // CLASS IN
+      writer.write(ans.TTL, 32);
+
+      if (ans.type === 1) {
+        // A record
+        writer.write(4, 16);
+        for (const octet of ans.data.split(".")) {
+          writer.write(parseInt(octet, 10), 8);
+        }
+      } else if (ans.type === 28) {
+        // AAAA -- write 16 bytes
+        const expanded = expandIPv6(ans.data);
+        writer.write(16, 16);
+        for (const part of expanded) {
+          writer.write(part, 16);
+        }
+      } else if (ans.type === 5) {
+        // CNAME
+        const cname = ans.data.replace(/\.$/, "");
+        const cnameBytes = encodeDnsName(cname);
+        writer.write(cnameBytes.length, 16);
+        for (const b of cnameBytes) writer.write(b, 8);
+      } else {
+        // Other types -- write as raw string
+        const dataBytes = Buffer.from(ans.data, "utf-8");
+        writer.write(dataBytes.length, 16);
+        for (const b of dataBytes) writer.write(b, 8);
+      }
     }
 
-    const arrayBuf = await response.arrayBuffer();
-    return Buffer.from(arrayBuf);
+    return Buffer.from(writer.toBuffer());
   }
 
   private async handleQuery(queryBuf: Buffer): Promise<Buffer> {
