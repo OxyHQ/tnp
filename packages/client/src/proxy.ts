@@ -1,7 +1,6 @@
 import { TnpApiClient, type DnsAnswer } from "./api";
 import type { TnpConfig } from "./config";
 import dns2 from "dns2";
-import dgram from "dgram";
 
 const { Packet } = dns2;
 
@@ -92,35 +91,17 @@ export class DnsProxy {
     return answers;
   }
 
-  /**
-   * Forward a raw DNS query to the upstream resolver via UDP and return the raw response buffer.
-   * This preserves the full DNS wire format including all sections.
-   */
-  private forwardUpstreamRaw(queryBuf: Buffer): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const socket = dgram.createSocket("udp4");
-      const [host, portStr] = this.config.upstreamDns.split(":");
-      const port = parseInt(portStr || "53", 10);
-
-      const timeout = setTimeout(() => {
-        socket.close();
-        reject(new Error("upstream DNS timeout"));
-      }, 4000);
-
-      socket.on("message", (msg) => {
-        clearTimeout(timeout);
-        socket.close();
-        resolve(msg);
-      });
-
-      socket.on("error", (err) => {
-        clearTimeout(timeout);
-        socket.close();
-        reject(err);
-      });
-
-      socket.send(queryBuf, port, host);
-    });
+  private async forwardUpstream(
+    name: string,
+    type: number
+  ): Promise<Record<string, unknown>> {
+    const client = new dns2.UDPClient({ dns: this.config.upstreamDns });
+    try {
+      const typeStr = this.typeToString(type);
+      return await client.resolve(name, typeStr);
+    } finally {
+      client.close();
+    }
   }
 
   async start(): Promise<void> {
@@ -131,15 +112,13 @@ export class DnsProxy {
         const questions = (request as { questions: Array<{ name: string; type: number }> }).questions;
 
         if (!questions || questions.length === 0) {
-          const response = Packet.createResponseFromRequest(request);
-          send(response);
+          send(Packet.createResponseFromRequest(request));
           return;
         }
 
         const { name, type } = questions[0];
 
         if (this.isTnpDomain(name)) {
-          // Resolve TNP domain via API
           const response = Packet.createResponseFromRequest(request);
           const typeStr = this.typeToString(type);
           try {
@@ -154,25 +133,19 @@ export class DnsProxy {
           }
           send(response);
         } else {
-          // Forward to upstream DNS -- encode query, send via UDP, decode response
           try {
-            const queryBuf = Packet.encode({
-              header: (request as Record<string, unknown>).header,
-              questions,
-            });
-            const responseBuf = await this.forwardUpstreamRaw(queryBuf);
-            const decoded = Packet.decode(responseBuf);
-
-            // Build response preserving the original request ID
+            const upstream = await this.forwardUpstream(name, type);
+            // Build a proper response with the original request header
             const response = Packet.createResponseFromRequest(request);
-            (response as Record<string, unknown[]>).answers = (decoded as Record<string, unknown[]>).answers || [];
-            (response as Record<string, unknown[]>).authorities = (decoded as Record<string, unknown[]>).authorities || [];
-            (response as Record<string, unknown[]>).additionals = (decoded as Record<string, unknown[]>).additionals || [];
+            const upAny = upstream as Record<string, unknown[]>;
+            const resAny = response as Record<string, unknown[]>;
+            if (upAny.answers) resAny.answers = upAny.answers;
+            if (upAny.authorities) resAny.authorities = upAny.authorities;
+            if (upAny.additionals) resAny.additionals = upAny.additionals;
             send(response);
           } catch (err) {
             console.error(`[tnp] upstream error for ${name}: ${err}`);
-            const response = Packet.createResponseFromRequest(request);
-            send(response);
+            send(Packet.createResponseFromRequest(request));
           }
         }
       },
