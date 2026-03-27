@@ -102,7 +102,7 @@ export class DnsProxy {
         for (const ans of answers) {
           response.answers.push(this.answerToRecord(name, ans));
         }
-        return Packet.createResourceFromQuestion(response) || this.writeResponse(response);
+        return this.writeResponse(response);
       } catch (err) {
         console.error(`[tnp] resolve error for ${name}: ${err}`);
         return this.writeEmptyResponse(request);
@@ -138,7 +138,7 @@ export class DnsProxy {
     writer.write(0, 8);
     writer.write(q.type, 16);
     writer.write(q.class || 1, 16);
-    return writer.toBuffer();
+    return Buffer.from(writer.toBuffer());
   }
 
   private writeResponse(response: Record<string, unknown>): Buffer {
@@ -195,7 +195,7 @@ export class DnsProxy {
       }
     }
 
-    return writer.toBuffer();
+    return Buffer.from(writer.toBuffer());
   }
 
   async start(): Promise<void> {
