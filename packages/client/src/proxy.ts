@@ -73,16 +73,39 @@ export class DnsProxy {
     return answers;
   }
 
-  private forwardUpstreamRaw(queryBuf: Buffer): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const socket = dgram.createSocket("udp4");
-      const [host, portStr] = this.config.upstreamDns.split(":");
-      const port = parseInt(portStr || "53", 10);
+  private upstreamSocket: dgram.Socket | null = null;
+  private pendingUpstream = new Map<number, { resolve: (buf: Buffer) => void; timer: ReturnType<typeof setTimeout> }>();
 
-      const timeout = setTimeout(() => { socket.close(); reject(new Error("timeout")); }, 4000);
-      socket.on("message", (msg: Buffer) => { clearTimeout(timeout); socket.close(); resolve(msg); });
-      socket.on("error", (err: Error) => { clearTimeout(timeout); socket.close(); reject(err); });
-      socket.send(queryBuf, port, host);
+  private initUpstreamSocket() {
+    this.upstreamSocket = dgram.createSocket({ type: "udp4" });
+    this.upstreamSocket.on("message", (msg: Buffer) => {
+      // Extract query ID from DNS header (first 2 bytes)
+      if (msg.length < 2) return;
+      const id = msg.readUInt16BE(0);
+      const pending = this.pendingUpstream.get(id);
+      if (pending) {
+        clearTimeout(pending.timer);
+        this.pendingUpstream.delete(id);
+        pending.resolve(Buffer.from(msg));
+      }
+    });
+    this.upstreamSocket.bind(); // bind to random port
+  }
+
+  private forwardUpstreamRaw(queryBuf: Buffer): Promise<Buffer> {
+    if (!this.upstreamSocket) this.initUpstreamSocket();
+    const [host, portStr] = this.config.upstreamDns.split(":");
+    const port = parseInt(portStr || "53", 10);
+    const id = queryBuf.length >= 2 ? queryBuf.readUInt16BE(0) : 0;
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingUpstream.delete(id);
+        reject(new Error("upstream timeout"));
+      }, 4000);
+
+      this.pendingUpstream.set(id, { resolve, timer });
+      this.upstreamSocket!.send(queryBuf, 0, queryBuf.length, port, host);
     });
   }
 
