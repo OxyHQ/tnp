@@ -203,40 +203,42 @@ export class DnsProxy {
 
     // UDP server
     this.udpServer = dgram.createSocket("udp4");
-    this.udpServer.on("message", async (msg: Buffer, rinfo: dgram.RemoteInfo) => {
-      try {
-        const response = await this.handleQuery(Buffer.from(msg));
-        if (!response || !Buffer.isBuffer(response)) {
-          console.error(`[tnp] handleQuery returned non-buffer: ${typeof response}`);
-          return;
-        }
-        this.udpServer!.send(response, 0, response.length, rinfo.port, rinfo.address);
-      } catch (err) {
-        console.error(`[tnp] udp error: ${err instanceof Error ? err.stack : err}`);
-      }
+    this.udpServer.on("message", (msg: Buffer, rinfo: dgram.RemoteInfo) => {
+      this.handleQuery(Buffer.from(msg))
+        .then((response) => {
+          this.udpServer!.send(response, 0, response.length, rinfo.port, rinfo.address);
+        })
+        .catch((err) => {
+          console.error(`[tnp] udp error: ${err instanceof Error ? err.stack : err}`);
+        });
     });
     this.udpServer.bind(listenPort, listenAddr);
 
     // TCP server (for DNS-over-TLS via stunnel)
     this.tcpServer = net.createServer((socket) => {
       let buffer = Buffer.alloc(0);
-      socket.on("data", async (data: Buffer) => {
+      socket.on("data", (data: Buffer) => {
         buffer = Buffer.concat([buffer, data]);
         // TCP DNS uses 2-byte length prefix
-        while (buffer.length >= 2) {
+        const processNext = () => {
+          if (buffer.length < 2) return;
           const msgLen = buffer.readUInt16BE(0);
-          if (buffer.length < 2 + msgLen) break;
-          const queryBuf = buffer.subarray(2, 2 + msgLen);
+          if (buffer.length < 2 + msgLen) return;
+          const queryBuf = Buffer.from(buffer.subarray(2, 2 + msgLen));
           buffer = buffer.subarray(2 + msgLen);
-          try {
-            const response = await this.handleQuery(Buffer.from(queryBuf));
-            const lenBuf = Buffer.alloc(2);
-            lenBuf.writeUInt16BE(response.length, 0);
-            socket.write(Buffer.concat([lenBuf, response]));
-          } catch (err) {
-            console.error(`[tnp] tcp error: ${err}`);
-          }
-        }
+          this.handleQuery(queryBuf)
+            .then((response) => {
+              const lenBuf = Buffer.alloc(2);
+              lenBuf.writeUInt16BE(response.length, 0);
+              socket.write(Buffer.concat([lenBuf, response]));
+              processNext();
+            })
+            .catch((err) => {
+              console.error(`[tnp] tcp error: ${err}`);
+              processNext();
+            });
+        };
+        processNext();
       });
     });
     this.tcpServer.listen(listenPort, listenAddr);
