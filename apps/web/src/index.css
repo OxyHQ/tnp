@@ -7,12 +7,24 @@
   --color-primary-foreground: #ffffff;
   --color-secondary: #18181b;
   --color-secondary-foreground: #e8e8e6;
-  --color-muted: #71717a;
-  --color-border: rgba(16, 185, 129, 0.12);
+  --color-muted: #18181b;
+  --color-muted-foreground: #71717a;
+  --color-accent: #18181b;
+  --color-accent-foreground: #e8e8e6;
   --color-surface: #111113;
+  --color-surface-foreground: #e8e8e6;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-input: rgba(255, 255, 255, 0.1);
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 }
 
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
+}
+
+::selection {
+  background-color: rgba(16, 185, 129, 0.3);
 }

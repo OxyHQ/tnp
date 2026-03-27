@@ -25,9 +25,7 @@ export default function Dashboard() {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const fetchDomains = useCallback(() => {
-    apiFetch<Domain[]>("/domains/mine")
-      .then(setDomains)
-      .catch(() => {});
+    apiFetch<Domain[]>("/domains/mine").then(setDomains).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -59,82 +57,67 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-16 lg:px-6">
-      <p className="mb-2 font-mono text-xs uppercase tracking-widest text-muted">
-        [ Dashboard ]
-      </p>
-      <h1 className="mb-8 text-3xl font-bold tracking-tight">Your Domains</h1>
+    <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
+      <h1 className="mb-8 text-[clamp(1.5rem,1.25rem+1vw,2rem)] font-semibold tracking-tight">
+        Your Domains
+      </h1>
 
       {domains.length === 0 ? (
-        <p className="text-muted">
+        <p className="text-[15px] text-muted-foreground">
           You have not registered any domains yet.
         </p>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {domains.map((domain) => (
-            <div
-              key={domain._id}
-              className="rounded-xl border border-border bg-surface"
-            >
+            <div key={domain._id} className="rounded-xl border border-border bg-surface">
               <button
-                onClick={() =>
-                  setExpanded(expanded === domain._id ? null : domain._id)
-                }
-                className="flex w-full cursor-pointer items-center justify-between p-5 text-left"
+                onClick={() => setExpanded(expanded === domain._id ? null : domain._id)}
+                className="flex w-full cursor-pointer items-center justify-between p-4 text-left"
               >
-                <div>
-                  <span className="font-mono text-lg">
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-[15px]">
                     {domain.name}
                     <span className="text-primary">.{domain.tld}</span>
                   </span>
                   <span
-                    className={`ml-3 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    className={`rounded-[10px] px-2.5 py-0.5 text-xs font-medium ${
                       domain.status === "active"
                         ? "bg-primary/10 text-primary"
-                        : "bg-muted/10 text-muted"
+                        : "bg-muted/20 text-muted-foreground"
                     }`}
                   >
                     {domain.status}
                   </span>
                 </div>
-                <span className="text-sm text-muted">
-                  {domain.records.length} records
+                <span className="text-sm text-muted-foreground">
+                  {domain.records.length} record{domain.records.length !== 1 ? "s" : ""}
                 </span>
               </button>
 
               {expanded === domain._id && (
-                <div className="border-t border-border p-5 space-y-6">
-                  {/* Records table */}
+                <div className="border-t border-border p-4 space-y-6">
                   {domain.records.length > 0 && (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="text-left text-xs text-muted">
+                          <tr className="text-left text-xs text-muted-foreground">
                             <th className="pb-2 pr-4">Type</th>
                             <th className="pb-2 pr-4">Name</th>
                             <th className="pb-2 pr-4">Value</th>
                             <th className="pb-2 pr-4">TTL</th>
-                            <th className="pb-2"></th>
+                            <th className="pb-2" />
                           </tr>
                         </thead>
                         <tbody>
                           {domain.records.map((record) => (
                             <tr key={record._id} className="border-t border-border/50">
-                              <td className="py-2 pr-4 font-mono text-xs">
-                                {record.type}
-                              </td>
+                              <td className="py-2 pr-4 font-mono text-xs">{record.type}</td>
                               <td className="py-2 pr-4">{record.name}</td>
-                              <td className="py-2 pr-4 font-mono text-xs text-muted">
-                                {record.value}
-                              </td>
-                              <td className="py-2 pr-4 text-muted">
-                                {record.ttl}
-                              </td>
+                              <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{record.value}</td>
+                              <td className="py-2 pr-4 text-muted-foreground">{record.ttl}</td>
                               <td className="py-2">
                                 <button
-                                  onClick={() =>
-                                    deleteRecord(domain._id, record._id)
-                                  }
+                                  onClick={() => deleteRecord(domain._id, record._id)}
                                   className="cursor-pointer text-xs text-red-400 transition-colors hover:text-red-300"
                                 >
                                   Delete
@@ -147,19 +130,15 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  {/* Add record */}
                   <div>
-                    <h4 className="mb-3 text-sm font-semibold">Add Record</h4>
-                    <RecordEditor
-                      onSubmit={(record) => addRecord(domain._id, record)}
-                    />
+                    <h4 className="mb-3 text-sm font-medium">Add Record</h4>
+                    <RecordEditor onSubmit={(record) => addRecord(domain._id, record)} />
                   </div>
 
-                  {/* Release domain */}
                   <div className="flex justify-end">
                     <button
                       onClick={() => releaseDomain(domain._id)}
-                      className="cursor-pointer rounded-full border border-red-400/30 px-4 py-2 text-xs text-red-400 transition-colors hover:bg-red-400/10"
+                      className="cursor-pointer rounded-[10px] border border-red-400/30 px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-400/10"
                     >
                       Release Domain
                     </button>

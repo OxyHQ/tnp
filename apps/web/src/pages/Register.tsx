@@ -72,16 +72,16 @@ export default function Register() {
 
   if (!isAuthenticated) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-24 text-center">
-        <h1 className="mb-4 text-3xl font-bold tracking-tight">
+      <div className="mx-auto max-w-[480px] px-4 py-24 text-center">
+        <h1 className="mb-4 text-[clamp(1.5rem,1.25rem+1vw,2rem)] font-semibold tracking-tight">
           Register a Domain
         </h1>
-        <p className="mb-8 text-muted">
+        <p className="mb-8 text-[15px] text-muted-foreground">
           Sign in with your Oxy account to register a TNP domain.
         </p>
         <button
-          onClick={() => login("demo-user")}
-          className="cursor-pointer rounded-full bg-primary px-6 py-3 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          onClick={login}
+          className="inline-flex h-9 cursor-pointer items-center justify-center rounded-[10px] border border-primary bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
           Sign in with Oxy
         </button>
@@ -90,28 +90,25 @@ export default function Register() {
   }
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-16">
-      <p className="mb-2 font-mono text-xs uppercase tracking-widest text-muted">
-        [ Register ]
-      </p>
-      <h1 className="mb-8 text-3xl font-bold tracking-tight">
+    <div className="mx-auto max-w-[480px] px-4 py-16">
+      <h1 className="mb-8 text-[clamp(1.5rem,1.25rem+1vw,2rem)] font-semibold tracking-tight">
         Register a Domain
       </h1>
 
-      <form onSubmit={handleRegister} className="space-y-6">
+      <form onSubmit={handleRegister} className="space-y-5">
         <div className="flex gap-2">
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value.toLowerCase())}
             placeholder="yourname"
-            className="flex-1 rounded-xl border border-border bg-surface px-4 py-3 font-mono text-foreground placeholder:text-muted focus:border-primary focus:outline-none"
+            className="flex-1 rounded-[10px] border border-border bg-surface px-4 py-2.5 font-mono text-[15px] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none transition-colors"
             required
           />
           <select
             value={tld}
             onChange={(e) => setTld(e.target.value)}
-            className="rounded-xl border border-border bg-surface px-4 py-3 font-mono text-foreground"
+            className="rounded-[10px] border border-border bg-surface px-4 py-2.5 font-mono text-[15px] text-foreground"
           >
             {tlds.map((t) => (
               <option key={t._id} value={t.name}>
@@ -127,7 +124,7 @@ export default function Register() {
           </p>
         )}
         {checking && (
-          <p className="text-sm text-muted">Checking availability...</p>
+          <p className="text-sm text-muted-foreground">Checking availability...</p>
         )}
 
         {error && <p className="text-sm text-red-400">{error}</p>}
@@ -136,7 +133,7 @@ export default function Register() {
         <button
           type="submit"
           disabled={!available || registering}
-          className="w-full cursor-pointer rounded-full bg-primary px-6 py-3 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full cursor-pointer rounded-[10px] border border-primary bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {registering ? "Registering..." : `Register ${name || "domain"}.${tld}`}
         </button>

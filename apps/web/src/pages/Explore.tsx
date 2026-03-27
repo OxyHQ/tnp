@@ -53,39 +53,33 @@ export default function Explore() {
   const displayDomains = searchResults ?? domains;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-16 lg:px-6">
-      <p className="mb-2 font-mono text-xs uppercase tracking-widest text-muted">
-        [ Explore ]
-      </p>
-      <h1 className="mb-8 text-3xl font-bold tracking-tight">
-        Browse TLDs and domains
+    <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
+      <h1 className="mb-8 text-[clamp(1.5rem,1.25rem+1vw,2rem)] font-semibold tracking-tight">
+        Explore
       </h1>
 
-      {/* Active TLDs */}
       <div className="mb-12">
-        <h2 className="mb-4 text-lg font-semibold">Active TLDs</h2>
-        <div className="flex flex-wrap gap-3">
+        <h2 className="mb-4 text-[15px] font-medium">Active TLDs</h2>
+        <div className="flex flex-wrap gap-2">
           {tlds.map((tld) => (
             <TLDBadge key={tld._id} name={tld.name} status={tld.status} />
           ))}
         </div>
       </div>
 
-      {/* Search */}
       <div className="mb-8">
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search domains..."
-          className="w-full rounded-xl border border-border bg-surface px-5 py-3 text-foreground placeholder:text-muted focus:border-primary focus:outline-none"
+          className="w-full rounded-[10px] border border-border bg-surface px-4 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none transition-colors"
         />
       </div>
 
-      {/* Domains */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         {displayDomains.length === 0 ? (
-          <p className="text-sm text-muted">
+          <p className="text-sm text-muted-foreground">
             {searchResults !== null ? "No domains found" : "No domains registered yet"}
           </p>
         ) : (

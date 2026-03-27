@@ -43,7 +43,6 @@ export default function Propose() {
       setSuccess(`.${tld} proposed successfully!`);
       setTld("");
       setReason("");
-      // Refresh proposals
       const updated = await apiFetch<Proposal[]>("/tlds/proposals");
       setProposals(updated);
     } catch (err) {
@@ -54,73 +53,63 @@ export default function Propose() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-16">
-      <p className="mb-2 font-mono text-xs uppercase tracking-widest text-muted">
-        [ Propose ]
-      </p>
-      <h1 className="mb-2 text-3xl font-bold tracking-tight">
+    <div className="mx-auto max-w-[640px] px-4 py-16">
+      <h1 className="mb-2 text-[clamp(1.5rem,1.25rem+1vw,2rem)] font-semibold tracking-tight">
         Propose a TLD
       </h1>
-      <p className="mb-8 text-muted">
+      <p className="mb-8 text-[15px] text-muted-foreground">
         Think the world needs .dev, .music, or .pizza? Propose it and let the community vote.
       </p>
 
       {isAuthenticated ? (
         <form onSubmit={handleSubmit} className="mb-12 space-y-4">
-          <div className="flex gap-3">
-            <div className="space-y-1">
-              <label className="text-xs text-muted">TLD</label>
-              <div className="flex items-center rounded-xl border border-border bg-surface">
-                <span className="pl-4 font-mono text-muted">.</span>
-                <input
-                  type="text"
-                  value={tld}
-                  onChange={(e) => setTld(e.target.value.toLowerCase())}
-                  placeholder="music"
-                  className="rounded-r-xl bg-transparent px-2 py-3 font-mono text-foreground placeholder:text-muted focus:outline-none"
-                  required
-                />
-              </div>
-            </div>
-            <div className="flex-1 space-y-1">
-              <label className="text-xs text-muted">Reason</label>
+          <div className="flex gap-2">
+            <div className="flex items-center rounded-[10px] border border-border bg-surface">
+              <span className="pl-4 font-mono text-muted-foreground">.</span>
               <input
                 type="text"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Why should this TLD exist?"
-                className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-foreground placeholder:text-muted focus:border-primary focus:outline-none"
+                value={tld}
+                onChange={(e) => setTld(e.target.value.toLowerCase())}
+                placeholder="music"
+                className="rounded-r-[10px] bg-transparent px-2 py-2.5 font-mono text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none"
                 required
-                maxLength={500}
               />
             </div>
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Why should this TLD exist?"
+              className="flex-1 rounded-[10px] border border-border bg-surface px-4 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none transition-colors"
+              required
+              maxLength={500}
+            />
           </div>
           {error && <p className="text-sm text-red-400">{error}</p>}
           {success && <p className="text-sm text-primary">{success}</p>}
           <button
             type="submit"
             disabled={submitting}
-            className="cursor-pointer rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            className="cursor-pointer rounded-[10px] border border-primary bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
             {submitting ? "Proposing..." : "Propose TLD"}
           </button>
         </form>
       ) : (
         <div className="mb-12 rounded-xl border border-border bg-surface p-6 text-center">
-          <p className="mb-4 text-muted">Sign in to propose a new TLD.</p>
+          <p className="mb-4 text-[15px] text-muted-foreground">Sign in to propose a new TLD.</p>
           <button
-            onClick={() => login("demo-user")}
-            className="cursor-pointer rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            onClick={login}
+            className="cursor-pointer rounded-[10px] border border-primary bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             Sign in with Oxy
           </button>
         </div>
       )}
 
-      {/* Proposals list */}
       <h2 className="mb-4 text-lg font-semibold">Open Proposals</h2>
       {proposals.length === 0 ? (
-        <p className="text-sm text-muted">No proposals yet. Be the first!</p>
+        <p className="text-sm text-muted-foreground">No proposals yet. Be the first!</p>
       ) : (
         <div className="space-y-3">
           {proposals.map((p) => (
@@ -130,21 +119,21 @@ export default function Propose() {
             >
               <div>
                 <span className="font-mono text-primary">.{p.tld}</span>
-                <p className="mt-1 text-sm text-muted">{p.reason}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{p.reason}</p>
               </div>
-              <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-3 text-sm">
                 <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  className={`rounded-[10px] px-2.5 py-0.5 text-xs font-medium ${
                     p.status === "open"
                       ? "bg-primary/10 text-primary"
                       : p.status === "approved"
-                        ? "bg-green-500/10 text-green-500"
-                        : "bg-red-500/10 text-red-500"
+                        ? "bg-green-500/10 text-green-400"
+                        : "bg-red-500/10 text-red-400"
                   }`}
                 >
                   {p.status}
                 </span>
-                <span className="text-muted">{p.votes} votes</span>
+                <span className="text-muted-foreground">{p.votes} votes</span>
               </div>
             </div>
           ))}
