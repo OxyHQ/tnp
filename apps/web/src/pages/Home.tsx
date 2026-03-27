@@ -34,6 +34,8 @@ export default function Home() {
       <Helmet>
         <title>TNP — The Network Protocol</title>
         <meta name="description" content="Your internet. Your rules. Register domains on The Network Protocol — outside ICANN, linked to your Oxy identity." />
+        <link rel="canonical" href="https://tnp.network/" />
+        <meta property="og:url" content="https://tnp.network/" />
       </Helmet>
       {/* Hero */}
       <section className="py-24 sm:py-36">

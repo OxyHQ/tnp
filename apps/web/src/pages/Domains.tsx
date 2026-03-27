@@ -55,7 +55,11 @@ export default function Domains() {
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
       <Helmet>
         <title>All Domains — TNP</title>
-        <meta name="description" content="Browse all registered domains on The Network Protocol." />
+        <meta name="description" content="View all registered domains on The Network Protocol. Search and browse the complete TNP domain directory." />
+        <link rel="canonical" href="https://tnp.network/domains" />
+        <meta property="og:title" content="All Domains — TNP" />
+        <meta property="og:description" content="View all registered domains on The Network Protocol." />
+        <meta property="og:url" content="https://tnp.network/domains" />
       </Helmet>
       <h1 className="mb-2 font-pixel text-xl text-accent">
         All Domains

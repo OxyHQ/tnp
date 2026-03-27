@@ -16,7 +16,7 @@ export default function Layout() {
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <header className="sticky top-0 z-50 border-b border-edge bg-background/80 backdrop-blur-md">
         <div className="mx-auto w-full max-w-[1200px] px-4 lg:px-6">
-          <nav className="flex items-center justify-between py-3 lg:py-4">
+          <nav aria-label="Main navigation" className="flex items-center justify-between py-3 lg:py-4">
             <div className="flex items-center gap-6">
               <Link
                 to="/"
@@ -82,7 +82,7 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      <footer className="border-t border-edge">
+      <footer role="contentinfo" className="border-t border-edge">
         <div className="mx-auto w-full max-w-[1200px] px-4 py-12 lg:px-6">
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
             <div>

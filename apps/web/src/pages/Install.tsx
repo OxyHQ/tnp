@@ -41,8 +41,12 @@ export default function Install() {
   return (
     <div className="mx-auto max-w-[640px] px-4 py-16">
       <Helmet>
-        <title>Install TNP — TNP</title>
-        <meta name="description" content="Install the TNP resolver to start resolving TNP domains on your device." />
+        <title>Install TNP — The Network Protocol</title>
+        <meta name="description" content="Install the TNP daemon to resolve TNP domains natively on macOS, Linux, or Windows. One command setup." />
+        <link rel="canonical" href="https://tnp.network/install" />
+        <meta property="og:title" content="Install TNP — The Network Protocol" />
+        <meta property="og:description" content="Install the TNP daemon to resolve TNP domains natively on macOS, Linux, or Windows." />
+        <meta property="og:url" content="https://tnp.network/install" />
       </Helmet>
       <h1 className="mb-2 font-pixel text-xl text-accent">
         Install TNP

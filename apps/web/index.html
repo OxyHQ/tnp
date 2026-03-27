@@ -7,6 +7,7 @@
     <title>TNP — The Network Protocol</title>
     <meta name="description" content="Your internet. Your rules. Register domains on The Network Protocol — outside ICANN, linked to your Oxy identity." />
     <meta name="theme-color" content="#000000" />
+    <link rel="canonical" href="https://tnp.network" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
@@ -15,12 +16,58 @@
     <meta property="og:description" content="Your internet. Your rules. Register domains on The Network Protocol — outside ICANN, linked to your Oxy identity." />
     <meta property="og:url" content="https://tnp.network" />
     <meta property="og:image" content="https://tnp.network/tnpMeta.png" />
+    <meta property="og:image:width" content="700" />
+    <meta property="og:image:height" content="349" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:locale" content="en_US" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="TNP — The Network Protocol" />
     <meta name="twitter:description" content="Your internet. Your rules. Register domains on The Network Protocol — outside ICANN, linked to your Oxy identity." />
     <meta name="twitter:image" content="https://tnp.network/tnpMeta.png" />
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "name": "TNP — The Network Protocol",
+          "url": "https://tnp.network",
+          "description": "Register domains on an alternative internet namespace outside ICANN. Explore TLDs, manage DNS records, and claim your space on TNP.",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://tnp.network/explore?q={search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": "Organization",
+          "name": "Oxy",
+          "url": "https://oxy.so",
+          "logo": "https://tnp.network/favicon.svg",
+          "sameAs": [
+            "https://github.com/OxyHQ"
+          ]
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": "TNP",
+          "applicationCategory": "NetworkApplication",
+          "operatingSystem": "macOS, Linux, Windows",
+          "description": "The TNP daemon configures your system DNS to resolve TNP domains natively.",
+          "url": "https://tnp.network/install",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          }
+        }
+      ]
+    }
+    </script>
   </head>
   <body class="bg-black text-[#ededef] font-sans antialiased">
     <div id="root"></div>

@@ -61,6 +61,7 @@ export default function Dashboard() {
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
       <Helmet>
         <title>Dashboard — TNP</title>
+        <meta name="robots" content="noindex, nofollow" />
       </Helmet>
       <h1 className="mb-8 font-pixel text-xl text-accent">
         Your Domains

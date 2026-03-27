@@ -98,7 +98,11 @@ export default function DomainDetail() {
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
       <Helmet>
         <title>{domainParam ?? "Domain"} — TNP</title>
-        <meta name="description" content={`Details for ${domainParam ?? "domain"} on The Network Protocol.`} />
+        <meta name="description" content={`DNS records, status, and details for ${domainParam ?? "domain"} on The Network Protocol.`} />
+        <link rel="canonical" href={`https://tnp.network/d/${domainParam}`} />
+        <meta property="og:title" content={`${domainParam ?? "Domain"} — TNP`} />
+        <meta property="og:description" content={`Details for ${domainParam ?? "domain"} on The Network Protocol.`} />
+        <meta property="og:url" content={`https://tnp.network/d/${domainParam}`} />
       </Helmet>
       {/* Breadcrumb */}
       <nav className="mb-6 font-mono text-xs text-muted">

@@ -57,7 +57,11 @@ export default function Explore() {
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
       <Helmet>
         <title>Explore Domains — TNP</title>
-        <meta name="description" content="Browse all registered domains on The Network Protocol." />
+        <meta name="description" content="Browse available TLDs and recently registered domains on The Network Protocol. Search the TNP namespace." />
+        <link rel="canonical" href="https://tnp.network/explore" />
+        <meta property="og:title" content="Explore Domains — TNP" />
+        <meta property="og:description" content="Browse available TLDs and recently registered domains on The Network Protocol." />
+        <meta property="og:url" content="https://tnp.network/explore" />
       </Helmet>
       <h1 className="mb-2 font-pixel text-xl text-accent">
         Explore

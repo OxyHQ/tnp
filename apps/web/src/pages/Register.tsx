@@ -76,7 +76,11 @@ export default function Register() {
       <div className="mx-auto max-w-[480px] px-4 py-24 text-center">
         <Helmet>
           <title>Register a Domain — TNP</title>
-          <meta name="description" content="Register your domain on The Network Protocol." />
+          <meta name="description" content="Claim your name on The Network Protocol. Pick a TLD and register your domain instantly with your Oxy account." />
+          <link rel="canonical" href="https://tnp.network/register" />
+          <meta property="og:title" content="Register a Domain — TNP" />
+          <meta property="og:description" content="Claim your name on The Network Protocol. Pick a TLD and register instantly." />
+          <meta property="og:url" content="https://tnp.network/register" />
         </Helmet>
         <h1 className="mb-4 font-pixel text-xl text-accent">
           Register a Domain

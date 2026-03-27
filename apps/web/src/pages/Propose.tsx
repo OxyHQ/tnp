@@ -57,7 +57,11 @@ export default function Propose() {
     <div className="mx-auto max-w-[640px] px-4 py-16">
       <Helmet>
         <title>Propose a TLD — TNP</title>
-        <meta name="description" content="Propose a new top-level domain on The Network Protocol." />
+        <meta name="description" content="Propose a new top-level domain for The Network Protocol and let the community vote. Shape the TNP namespace." />
+        <link rel="canonical" href="https://tnp.network/propose" />
+        <meta property="og:title" content="Propose a TLD — TNP" />
+        <meta property="og:description" content="Propose a new top-level domain for The Network Protocol and let the community vote." />
+        <meta property="og:url" content="https://tnp.network/propose" />
       </Helmet>
       <h1 className="mb-2 font-pixel text-xl text-accent">
         Propose a TLD
