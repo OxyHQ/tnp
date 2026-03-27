@@ -12,7 +12,7 @@ interface Proposal {
 }
 
 export default function Propose() {
-  const { isAuthenticated, login } = useAuth();
+  const { user, isAuthenticated, signIn } = useAuth();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [tld, setTld] = useState("");
   const [reason, setReason] = useState("");
@@ -39,6 +39,7 @@ export default function Propose() {
       await apiFetch("/tlds/propose", {
         method: "POST",
         body: JSON.stringify({ tld, reason }),
+        oxyUserId: user?._id as string,
       });
       setSuccess(`.${tld} proposed successfully!`);
       setTld("");
@@ -99,7 +100,7 @@ export default function Propose() {
         <div className="mb-12 rounded-xl border border-border bg-surface p-6 text-center">
           <p className="mb-4 text-[15px] text-muted-foreground">Sign in to propose a new TLD.</p>
           <button
-            onClick={login}
+            onClick={() => signIn()}
             className="cursor-pointer rounded-[10px] border border-primary bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             Sign in with Oxy

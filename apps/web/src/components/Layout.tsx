@@ -9,7 +9,7 @@ const navLinks = [
 ];
 
 export default function Layout() {
-  const { isAuthenticated, login, logout } = useAuth();
+  const { isAuthenticated, signIn, signOut } = useAuth();
   const location = useLocation();
 
   return (
@@ -52,7 +52,7 @@ export default function Layout() {
                     Dashboard
                   </Link>
                   <button
-                    onClick={logout}
+                    onClick={signOut}
                     className="inline-flex h-8 cursor-pointer items-center justify-center text-nowrap rounded-[10px] border border-transparent px-3 text-sm font-medium text-muted-foreground transition-colors duration-300 hover:bg-surface hover:text-foreground"
                   >
                     Sign out
@@ -61,13 +61,13 @@ export default function Layout() {
               ) : (
                 <>
                   <button
-                    onClick={login}
+                    onClick={() => signIn()}
                     className="inline-flex h-8 cursor-pointer items-center justify-center text-nowrap rounded-[10px] border border-border px-3 text-sm font-medium text-foreground transition-colors duration-300 hover:bg-surface"
                   >
                     Sign in
                   </button>
                   <button
-                    onClick={login}
+                    onClick={() => signIn()}
                     className="inline-flex h-8 cursor-pointer items-center justify-center text-nowrap rounded-[10px] border border-primary bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors duration-300 hover:bg-primary/90"
                   >
                     Start for free

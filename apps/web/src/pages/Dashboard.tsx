@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "../lib/auth";
 import { apiFetch } from "../lib/api";
 import RecordEditor from "../components/RecordEditor";
 
@@ -21,12 +22,13 @@ interface Domain {
 }
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [domains, setDomains] = useState<Domain[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const fetchDomains = useCallback(() => {
-    apiFetch<Domain[]>("/domains/mine").then(setDomains).catch(() => {});
-  }, []);
+    apiFetch<Domain[]>("/domains/mine", { oxyUserId: user?._id as string }).then(setDomains).catch(() => {});
+  }, [user?._id as string]);
 
   useEffect(() => {
     fetchDomains();
@@ -39,6 +41,7 @@ export default function Dashboard() {
     await apiFetch(`/domains/${domainId}/records`, {
       method: "POST",
       body: JSON.stringify(record),
+      oxyUserId: user?._id as string,
     });
     fetchDomains();
   };
@@ -46,13 +49,14 @@ export default function Dashboard() {
   const deleteRecord = async (domainId: string, recordId: string) => {
     await apiFetch(`/domains/${domainId}/records/${recordId}`, {
       method: "DELETE",
+      oxyUserId: user?._id as string,
     });
     fetchDomains();
   };
 
   const releaseDomain = async (domainId: string) => {
     if (!confirm("Are you sure you want to release this domain?")) return;
-    await apiFetch(`/domains/${domainId}`, { method: "DELETE" });
+    await apiFetch(`/domains/${domainId}`, { method: "DELETE", oxyUserId: user?._id as string });
     fetchDomains();
   };
 

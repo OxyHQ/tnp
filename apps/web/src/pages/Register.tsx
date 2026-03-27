@@ -8,7 +8,7 @@ interface TLD {
 }
 
 export default function Register() {
-  const { isAuthenticated, login } = useAuth();
+  const { user, isAuthenticated, signIn } = useAuth();
   const [tlds, setTlds] = useState<TLD[]>([]);
   const [name, setName] = useState("");
   const [tld, setTld] = useState("ox");
@@ -60,6 +60,7 @@ export default function Register() {
       await apiFetch("/domains/register", {
         method: "POST",
         body: JSON.stringify({ name, tld }),
+        oxyUserId: user?._id as string,
       });
       setSuccess(`${name}.${tld} registered successfully!`);
       setName("");
@@ -80,7 +81,7 @@ export default function Register() {
           Sign in with your Oxy account to register a TNP domain.
         </p>
         <button
-          onClick={login}
+          onClick={() => signIn()}
           className="inline-flex h-9 cursor-pointer items-center justify-center rounded-[10px] border border-primary bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
           Sign in with Oxy

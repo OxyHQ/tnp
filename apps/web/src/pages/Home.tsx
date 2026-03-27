@@ -4,7 +4,7 @@ import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
 export default function Home() {
-  const { isAuthenticated, login } = useAuth();
+  const { isAuthenticated, signIn } = useAuth();
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<{
     domain: string;
@@ -84,7 +84,7 @@ export default function Home() {
               </Link>
             ) : (
               <button
-                onClick={login}
+                onClick={() => signIn()}
                 className="inline-flex h-9 cursor-pointer items-center justify-center rounded-[10px] border border-border px-4 text-[15px] font-medium text-foreground transition-colors hover:bg-surface"
               >
                 Sign in with Oxy
