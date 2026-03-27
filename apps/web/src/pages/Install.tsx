@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { apiFetch } from "../lib/api";
 
-type Platform = "macos" | "linux" | "windows" | "android" | "ios";
+type Platform = "macos" | "linux" | "windows" | "android" | "ios" | "router";
 type SetupMethod = "dns" | "client";
 
 const dnsPlatforms: { id: Platform; label: string }[] = [
@@ -11,6 +11,7 @@ const dnsPlatforms: { id: Platform; label: string }[] = [
   { id: "windows", label: "Windows" },
   { id: "macos", label: "macOS" },
   { id: "linux", label: "Linux" },
+  { id: "router", label: "Router" },
 ];
 
 const clientPlatforms: { id: Platform; label: string }[] = [
@@ -19,7 +20,7 @@ const clientPlatforms: { id: Platform; label: string }[] = [
   { id: "windows", label: "Windows" },
 ];
 
-const DNS_IP = "165.22.193.247";
+const DNS_IP = "206.189.96.213";
 const DNS_HOST = "dns.tnp.network";
 
 interface ClientInfo {
@@ -202,6 +203,26 @@ export default function Install() {
                     </p>
                   </div>
                 </div>
+              </>
+            )}
+            {dnsPlatform === "router" && (
+              <>
+                <h3 className="font-mono text-sm font-medium text-primary">Router</h3>
+                <p className="font-mono text-xs text-muted">
+                  Setting DNS on your router applies TNP resolution to every device on your network
+                  -- phones, laptops, smart TVs, everything. No per-device setup needed.
+                </p>
+                <ol className="list-decimal pl-5 space-y-2 font-mono text-xs text-muted">
+                  <li>Open your router admin panel (usually <code className="rounded bg-surface px-1.5 py-0.5 text-accent">192.168.1.1</code> or <code className="rounded bg-surface px-1.5 py-0.5 text-accent">192.168.0.1</code>)</li>
+                  <li>Find the <span className="text-secondary">DNS</span> or <span className="text-secondary">DHCP</span> settings</li>
+                  <li>Set Primary DNS to <code className="rounded bg-surface px-1.5 py-0.5 text-accent">{DNS_IP}</code></li>
+                  <li>Set Secondary DNS to <code className="rounded bg-surface px-1.5 py-0.5 text-accent">1.1.1.1</code> (fallback)</li>
+                  <li>Save and reboot the router</li>
+                </ol>
+                <p className="font-mono text-xs text-muted">
+                  Works with any router that lets you customize DNS servers. After this,
+                  all devices on the network will resolve TNP domains automatically.
+                </p>
               </>
             )}
           </div>
