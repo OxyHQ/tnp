@@ -8,6 +8,7 @@ import { runSeed } from "./seed.js";
 import tldsRouter from "./routes/tlds.js";
 import domainsRouter from "./routes/domains.js";
 import clientRouter from "./routes/client.js";
+import dnsRouter from "./routes/dns.js";
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.use(oxyAuth);
 app.use("/tlds", tldsRouter);
 app.use("/domains", domainsRouter);
 app.use("/client", clientRouter);
+app.use("/dns", dnsRouter);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "tnp-api" });

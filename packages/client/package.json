@@ -1,0 +1,17 @@
+{
+  "name": "@tnp/client",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "tnp": "src/cli.ts"
+  },
+  "scripts": {
+    "start": "bun run src/cli.ts run",
+    "dev": "bun --watch src/cli.ts run",
+    "build": "bun build src/cli.ts --compile --outfile dist/tnp"
+  },
+  "dependencies": {
+    "dns2": "^2.1.0"
+  }
+}
