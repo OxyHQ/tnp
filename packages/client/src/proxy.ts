@@ -73,40 +73,28 @@ export class DnsProxy {
     return answers;
   }
 
-  private upstreamSocket: dgram.Socket | null = null;
-  private pendingUpstream = new Map<number, { resolve: (buf: Buffer) => void; timer: ReturnType<typeof setTimeout> }>();
-
-  private initUpstreamSocket() {
-    this.upstreamSocket = dgram.createSocket({ type: "udp4" });
-    this.upstreamSocket.on("message", (msg: Buffer) => {
-      // Extract query ID from DNS header (first 2 bytes)
-      if (msg.length < 2) return;
-      const id = msg.readUInt16BE(0);
-      const pending = this.pendingUpstream.get(id);
-      if (pending) {
-        clearTimeout(pending.timer);
-        this.pendingUpstream.delete(id);
-        pending.resolve(Buffer.from(msg));
-      }
+  /**
+   * Forward DNS query to Cloudflare's DNS-over-HTTPS endpoint.
+   * This avoids the Bun dgram limitation where multiple UDP sockets
+   * can't receive messages simultaneously.
+   */
+  private async forwardUpstreamRaw(queryBuf: Buffer): Promise<Buffer> {
+    const response = await fetch("https://cloudflare-dns.com/dns-query", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/dns-message",
+        "Accept": "application/dns-message",
+      },
+      body: queryBuf,
+      signal: AbortSignal.timeout(4000),
     });
-    this.upstreamSocket.bind(); // bind to random port
-  }
 
-  private forwardUpstreamRaw(queryBuf: Buffer): Promise<Buffer> {
-    if (!this.upstreamSocket) this.initUpstreamSocket();
-    const [host, portStr] = this.config.upstreamDns.split(":");
-    const port = parseInt(portStr || "53", 10);
-    const id = queryBuf.length >= 2 ? queryBuf.readUInt16BE(0) : 0;
+    if (!response.ok) {
+      throw new Error(`DoH upstream returned ${response.status}`);
+    }
 
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingUpstream.delete(id);
-        reject(new Error("upstream timeout"));
-      }, 4000);
-
-      this.pendingUpstream.set(id, { resolve, timer });
-      this.upstreamSocket!.send(queryBuf, 0, queryBuf.length, port, host);
-    });
+    const arrayBuf = await response.arrayBuffer();
+    return Buffer.from(arrayBuf);
   }
 
   private async handleQuery(queryBuf: Buffer): Promise<Buffer> {
