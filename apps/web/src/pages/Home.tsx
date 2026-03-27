@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -31,6 +32,10 @@ export default function Home() {
 
   return (
     <div>
+      <Helmet>
+        <title>TNP — The Network Protocol</title>
+        <meta name="description" content="Your internet. Your rules. Register domains on The Network Protocol — outside ICANN, linked to your Oxy identity." />
+      </Helmet>
       {/* Hero */}
       <section className="py-24 sm:py-36">
         <div className="mx-auto max-w-[640px] px-4 text-center">

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { useAuth } from "../lib/auth";
 import { apiFetch } from "../lib/api";
 
@@ -54,6 +55,10 @@ export default function Propose() {
 
   return (
     <div className="mx-auto max-w-[640px] px-4 py-16">
+      <Helmet>
+        <title>Propose a TLD — TNP</title>
+        <meta name="description" content="Propose a new top-level domain for The Network Protocol and let the community vote." />
+      </Helmet>
       <h1 className="mb-2 font-pixel text-xl text-accent">
         Propose a TLD
       </h1>

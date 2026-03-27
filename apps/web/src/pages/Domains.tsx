@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { apiFetch } from "../lib/api";
 import DomainCard from "../components/DomainCard";
 
@@ -52,6 +53,10 @@ export default function Domains() {
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
+      <Helmet>
+        <title>Domains — TNP</title>
+        <meta name="description" content="All registered domains on The Network Protocol." />
+      </Helmet>
       <h1 className="mb-2 font-pixel text-xl text-accent">
         All Domains
       </h1>

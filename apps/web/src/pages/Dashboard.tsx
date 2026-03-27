@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Helmet } from "react-helmet-async";
 import { apiFetch } from "../lib/api";
 import RecordEditor from "../components/RecordEditor";
 
@@ -58,6 +59,9 @@ export default function Dashboard() {
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
+      <Helmet>
+        <title>Dashboard — TNP</title>
+      </Helmet>
       <h1 className="mb-8 text-[clamp(1.5rem,1.25rem+1vw,2rem)] font-semibold tracking-tight">
         Your Domains
       </h1>

@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Home from "./pages/Home";
@@ -12,6 +13,7 @@ import DomainDetail from "./pages/DomainDetail";
 
 export default function App() {
   return (
+    <HelmetProvider>
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
@@ -33,5 +35,6 @@ export default function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </HelmetProvider>
   );
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { apiFetch } from "../lib/api";
 import TLDBadge from "../components/TLDBadge";
 import DomainCard from "../components/DomainCard";
@@ -54,6 +55,10 @@ export default function Explore() {
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
+      <Helmet>
+        <title>Explore Domains — TNP</title>
+        <meta name="description" content="Browse all registered domains on The Network Protocol." />
+      </Helmet>
       <h1 className="mb-2 font-pixel text-xl text-accent">
         Explore
       </h1>

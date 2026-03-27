@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { useAuth } from "../lib/auth";
 import { apiFetch } from "../lib/api";
 
@@ -91,6 +92,10 @@ export default function Register() {
 
   return (
     <div className="mx-auto max-w-[480px] px-4 py-16">
+      <Helmet>
+        <title>Register a Domain — TNP</title>
+        <meta name="description" content="Claim your name on The Network Protocol. Pick a TLD and register instantly." />
+      </Helmet>
       <h1 className="mb-2 font-pixel text-xl text-accent">
         Register a Domain
       </h1>

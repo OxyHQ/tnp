@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { apiFetch } from "../lib/api";
 import CodeBlock from "../components/CodeBlock";
 
@@ -32,6 +33,10 @@ export default function Install() {
 
   return (
     <div className="mx-auto max-w-[640px] px-4 py-16">
+      <Helmet>
+        <title>Install TNP — The Network Protocol</title>
+        <meta name="description" content="Install the TNP daemon to resolve TNP domains natively on macOS, Linux, or Windows." />
+      </Helmet>
       <h1 className="mb-4 text-[clamp(1.5rem,1.25rem+1vw,2rem)] font-semibold tracking-tight">
         Install TNP
       </h1>

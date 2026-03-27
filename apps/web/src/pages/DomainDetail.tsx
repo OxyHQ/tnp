@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { Link, useParams } from "react-router-dom";
 import { apiFetch } from "../lib/api";
 import TLDBadge from "../components/TLDBadge";
@@ -95,6 +96,10 @@ export default function DomainDetail() {
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
+      <Helmet>
+        <title>{domainParam ?? "Domain"} — TNP</title>
+        <meta name="description" content={`Details for ${domainParam ?? "domain"} on The Network Protocol.`} />
+      </Helmet>
       {/* Breadcrumb */}
       <nav className="mb-6 font-mono text-xs text-muted">
         <Link to="/" className="transition-colors hover:text-secondary">Home</Link>
