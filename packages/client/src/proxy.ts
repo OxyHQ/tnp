@@ -79,7 +79,8 @@ export class DnsProxy {
    * can't receive messages simultaneously.
    */
   private async forwardUpstreamRaw(queryBuf: Buffer): Promise<Buffer> {
-    const response = await fetch("https://cloudflare-dns.com/dns-query", {
+    // Use IP directly to avoid circular DNS resolution
+    const response = await fetch("https://1.1.1.1/dns-query", {
       method: "POST",
       headers: {
         "Content-Type": "application/dns-message",
