@@ -206,7 +206,7 @@ export class DnsProxy {
     this.udpServer.on("message", async (msg: Buffer, rinfo: dgram.RemoteInfo) => {
       try {
         const response = await this.handleQuery(msg);
-        this.udpServer!.send(response, rinfo.port, rinfo.address);
+        this.udpServer!.send(response, 0, response.length, rinfo.port, rinfo.address);
       } catch (err) {
         console.error(`[tnp] udp error: ${err}`);
       }
