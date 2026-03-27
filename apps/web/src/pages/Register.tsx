@@ -74,7 +74,11 @@ export default function Register() {
   if (!isAuthenticated) {
     return (
       <div className="mx-auto max-w-[480px] px-4 py-24 text-center">
-        <h1 className="mb-2 font-pixel text-xl text-accent">
+        <Helmet>
+          <title>Register a Domain — TNP</title>
+          <meta name="description" content="Register your domain on The Network Protocol." />
+        </Helmet>
+        <h1 className="mb-4 font-pixel text-xl text-accent">
           Register a Domain
         </h1>
         <p className="mb-8 font-mono text-sm text-muted">
@@ -94,14 +98,11 @@ export default function Register() {
     <div className="mx-auto max-w-[480px] px-4 py-16">
       <Helmet>
         <title>Register a Domain — TNP</title>
-        <meta name="description" content="Claim your name on The Network Protocol. Pick a TLD and register instantly." />
+        <meta name="description" content="Register your domain on The Network Protocol." />
       </Helmet>
-      <h1 className="mb-2 font-pixel text-xl text-accent">
+      <h1 className="mb-8 font-pixel text-xl text-accent">
         Register a Domain
       </h1>
-      <p className="mb-8 font-mono text-sm text-muted">
-        Claim your name on any active TNP top-level domain.
-      </p>
 
       <form onSubmit={handleRegister} className="space-y-5">
         <div className="flex gap-2">
