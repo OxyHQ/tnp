@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
+import { homedir } from "os";
 
 export interface TnpConfig {
   listenAddr: string;
@@ -18,13 +19,38 @@ const DEFAULT_CONFIG: TnpConfig = {
 };
 
 export function configDir(): string {
-  return process.platform === "darwin"
-    ? "/usr/local/etc/tnp"
-    : "/etc/tnp";
+  switch (process.platform) {
+    case "darwin":
+      return "/usr/local/etc/tnp";
+    case "win32":
+      return join(process.env.PROGRAMDATA || "C:\\ProgramData", "tnp");
+    default:
+      return "/etc/tnp";
+  }
 }
 
 export function configPath(): string {
   return join(configDir(), "config.json");
+}
+
+export function dataDir(): string {
+  switch (process.platform) {
+    case "darwin":
+      return join(homedir(), "Library", "Application Support", "tnp");
+    case "win32":
+      return join(process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local"), "tnp");
+    default:
+      return "/var/lib/tnp";
+  }
+}
+
+export function logPath(): string {
+  switch (process.platform) {
+    case "win32":
+      return join(dataDir(), "tnp-resolver.log");
+    default:
+      return "/var/log/tnp-resolver.log";
+  }
 }
 
 export function loadConfig(): TnpConfig {

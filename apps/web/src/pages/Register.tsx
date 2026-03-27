@@ -73,7 +73,7 @@ export default function Register() {
 
   if (!isAuthenticated) {
     return (
-      <div className="mx-auto max-w-[480px] px-4 py-24 text-center">
+      <div className="mx-auto max-w-[1200px] px-4 py-24 text-center lg:px-6">
         <Helmet>
           <title>Register a Domain — TNP</title>
           <meta name="description" content="Claim your name on The Network Protocol. Pick a TLD and register your domain instantly with your Oxy account." />
@@ -99,7 +99,7 @@ export default function Register() {
   }
 
   return (
-    <div className="mx-auto max-w-[480px] px-4 py-16">
+    <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
       <Helmet>
         <title>Register a Domain — TNP</title>
         <meta name="description" content="Register your domain on The Network Protocol." />

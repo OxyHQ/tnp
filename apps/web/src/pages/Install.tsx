@@ -39,7 +39,7 @@ export default function Install() {
   };
 
   return (
-    <div className="mx-auto max-w-[640px] px-4 py-16">
+    <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
       <Helmet>
         <title>Install TNP — The Network Protocol</title>
         <meta name="description" content="Install the TNP daemon to resolve TNP domains natively on macOS, Linux, or Windows. One command setup." />
