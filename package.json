@@ -1,0 +1,17 @@
+{
+  "name": "tnp",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "cd apps/api && bun run dev",
+    "dev:web": "cd apps/web && npm run dev",
+    "seed": "cd apps/api && bun run seed"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
