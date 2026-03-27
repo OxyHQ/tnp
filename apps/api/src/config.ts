@@ -13,5 +13,6 @@ export const config = {
     "http://localhost:5173",
     "https://tnp.network",
     "https://www.tnp.network",
+    "https://tnp-9uk.pages.dev",
   ],
 };

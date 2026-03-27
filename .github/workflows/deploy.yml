@@ -22,6 +22,8 @@ jobs:
 
       - name: Build
         run: npm run build --workspace=apps/web
+        env:
+          VITE_API_URL: https://api.tnp.network
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
