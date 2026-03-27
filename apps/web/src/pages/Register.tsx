@@ -74,17 +74,17 @@ export default function Register() {
   if (!isAuthenticated) {
     return (
       <div className="mx-auto max-w-[480px] px-4 py-24 text-center">
-        <h1 className="mb-4 text-[clamp(1.5rem,1.25rem+1vw,2rem)] font-semibold tracking-tight">
+        <h1 className="mb-4 font-pixel text-xl text-accent">
           Register a Domain
         </h1>
-        <p className="mb-8 text-[15px] text-muted-foreground">
+        <p className="mb-8 font-mono text-sm text-muted">
           Sign in with your Oxy account to register a TNP domain.
         </p>
         <button
           onClick={() => signIn()}
-          className="inline-flex h-9 cursor-pointer items-center justify-center rounded-[10px] border border-primary bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          className="cursor-pointer rounded-md border border-accent/30 bg-accent/10 px-4 py-2.5 font-mono text-sm text-accent transition-colors hover:bg-accent/20"
         >
-          Sign in with Oxy
+          [sign in with oxy]
         </button>
       </div>
     );
@@ -92,7 +92,7 @@ export default function Register() {
 
   return (
     <div className="mx-auto max-w-[480px] px-4 py-16">
-      <h1 className="mb-8 text-[clamp(1.5rem,1.25rem+1vw,2rem)] font-semibold tracking-tight">
+      <h1 className="mb-8 font-pixel text-xl text-accent">
         Register a Domain
       </h1>
 
@@ -103,13 +103,13 @@ export default function Register() {
             value={name}
             onChange={(e) => setName(e.target.value.toLowerCase())}
             placeholder="yourname"
-            className="flex-1 rounded-[10px] border border-border bg-surface px-4 py-2.5 font-mono text-[15px] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none transition-colors"
+            className="flex-1 rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none transition-colors"
             required
           />
           <select
             value={tld}
             onChange={(e) => setTld(e.target.value)}
-            className="rounded-[10px] border border-border bg-surface px-4 py-2.5 font-mono text-[15px] text-foreground"
+            className="rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-primary"
           >
             {tlds.map((t) => (
               <option key={t._id} value={t.name}>
@@ -120,21 +120,21 @@ export default function Register() {
         </div>
 
         {name && !checking && available !== null && (
-          <p className={`text-sm ${available ? "text-primary" : "text-red-400"}`}>
+          <p className={`font-mono text-sm ${available ? "text-accent" : "text-red-400"}`}>
             {name}.{tld} is {available ? "available" : "already taken"}
           </p>
         )}
         {checking && (
-          <p className="text-sm text-muted-foreground">Checking availability...</p>
+          <p className="font-mono text-sm text-muted">Checking availability...</p>
         )}
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
-        {success && <p className="text-sm text-primary">{success}</p>}
+        {error && <p className="font-mono text-sm text-red-400">{error}</p>}
+        {success && <p className="font-mono text-sm text-accent">{success}</p>}
 
         <button
           type="submit"
           disabled={!available || registering}
-          className="w-full cursor-pointer rounded-[10px] border border-primary bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full cursor-pointer rounded-md border border-accent/30 bg-accent/10 px-4 py-2.5 font-mono text-sm text-accent transition-colors hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {registering ? "Registering..." : `Register ${name || "domain"}.${tld}`}
         </button>

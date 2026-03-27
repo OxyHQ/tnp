@@ -54,12 +54,15 @@ export default function Explore() {
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
-      <h1 className="mb-8 text-[clamp(1.5rem,1.25rem+1vw,2rem)] font-semibold tracking-tight">
+      <h1 className="mb-2 font-pixel text-xl text-accent">
         Explore
       </h1>
+      <p className="mb-8 font-mono text-sm text-muted">
+        Browse TLDs and recently registered domains.
+      </p>
 
       <div className="mb-12">
-        <h2 className="mb-4 text-[15px] font-medium">Active TLDs</h2>
+        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">Active TLDs</h2>
         <div className="flex flex-wrap gap-2">
           {tlds.map((tld) => (
             <TLDBadge key={tld._id} name={tld.name} status={tld.status} />
@@ -73,13 +76,13 @@ export default function Explore() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search domains..."
-          className="w-full rounded-[10px] border border-border bg-surface px-4 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none transition-colors"
+          className="w-full rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none transition-colors"
         />
       </div>
 
       <div className="space-y-2">
         {displayDomains.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="font-mono text-sm text-muted">
             {searchResults !== null ? "No domains found" : "No domains registered yet"}
           </p>
         ) : (

@@ -35,11 +35,11 @@ export default function RecordEditor({
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2">
       <div className="space-y-1">
-        <label className="text-xs text-muted-foreground">Type</label>
+        <label className="font-mono text-xs text-muted">Type</label>
         <select
           value={type}
           onChange={(e) => setType(e.target.value)}
-          className="block rounded-[10px] border border-border bg-background px-3 py-2 text-sm text-foreground"
+          className="block rounded-md border border-edge bg-surface-raised px-3 py-2 font-mono text-sm text-primary"
         >
           {RECORD_TYPES.map((t) => (
             <option key={t} value={t}>{t}</option>
@@ -47,40 +47,40 @@ export default function RecordEditor({
         </select>
       </div>
       <div className="space-y-1">
-        <label className="text-xs text-muted-foreground">Name</label>
+        <label className="font-mono text-xs text-muted">Name</label>
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="block rounded-[10px] border border-border bg-background px-3 py-2 text-sm text-foreground"
+          className="block rounded-md border border-edge bg-surface-raised px-3 py-2 font-mono text-sm text-primary"
           placeholder="@"
           required
         />
       </div>
       <div className="flex-1 space-y-1">
-        <label className="text-xs text-muted-foreground">Value</label>
+        <label className="font-mono text-xs text-muted">Value</label>
         <input
           type="text"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="block w-full rounded-[10px] border border-border bg-background px-3 py-2 text-sm text-foreground"
+          className="block w-full rounded-md border border-edge bg-surface-raised px-3 py-2 font-mono text-sm text-primary"
           placeholder="192.168.1.1"
           required
         />
       </div>
       <div className="space-y-1">
-        <label className="text-xs text-muted-foreground">TTL</label>
+        <label className="font-mono text-xs text-muted">TTL</label>
         <input
           type="number"
           value={ttl}
           onChange={(e) => setTtl(Number(e.target.value))}
-          className="block w-24 rounded-[10px] border border-border bg-background px-3 py-2 text-sm text-foreground"
+          className="block w-24 rounded-md border border-edge bg-surface-raised px-3 py-2 font-mono text-sm text-primary"
           min={60}
         />
       </div>
       <button
         type="submit"
-        className="cursor-pointer rounded-[10px] border border-primary bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        className="cursor-pointer rounded-md border border-accent/30 bg-accent/10 px-3 py-2 font-mono text-sm text-accent transition-colors hover:bg-accent/20"
       >
         {submitLabel}
       </button>

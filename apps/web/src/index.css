@@ -1,23 +1,91 @@
 @import "tailwindcss";
 
-@theme {
-  --color-background: #09090b;
-  --color-foreground: #e8e8e6;
-  --color-primary: #10b981;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #18181b;
-  --color-secondary-foreground: #e8e8e6;
-  --color-muted: #18181b;
-  --color-muted-foreground: #71717a;
-  --color-accent: #18181b;
-  --color-accent-foreground: #e8e8e6;
-  --color-surface: #111113;
-  --color-surface-foreground: #e8e8e6;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-input: rgba(255, 255, 255, 0.1);
+@font-face {
+  font-family: "Geist Sans";
+  src: url("/fonts/Geist-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
 
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+@font-face {
+  font-family: "Geist Sans";
+  src: url("/fonts/Geist-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Sans";
+  src: url("/fonts/Geist-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Sans";
+  src: url("/fonts/Geist-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Sans";
+  src: url("/fonts/Geist-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/GeistMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/GeistMono-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Pixel";
+  src: url("/fonts/GeistPixel-Square.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --color-surface: #000;
+  --color-surface-raised: #0a0a0a;
+  --color-surface-card: #111;
+  --color-surface-hover: #181818;
+  --color-edge: #222;
+  --color-edge-subtle: #1a1a1a;
+  --color-primary: #ededef;
+  --color-secondary: #8a8a97;
+  --color-muted: #56565f;
+  --color-accent: #22c55e;
+  --color-background: #000;
+  --color-foreground: #ededef;
+  --color-primary-foreground: #000;
+  --color-muted-foreground: #56565f;
+  --color-accent-foreground: #000;
+  --color-border: #222;
+  --color-input: #222;
+
+  --font-sans: "Geist Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --font-pixel: "Geist Pixel", monospace;
 }
 
 body {
@@ -26,5 +94,5 @@ body {
 }
 
 ::selection {
-  background-color: rgba(16, 185, 129, 0.3);
+  background-color: rgba(34, 197, 94, 0.3);
 }

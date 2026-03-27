@@ -33,10 +33,10 @@ export default function Home() {
       {/* Hero */}
       <section className="py-24 sm:py-36">
         <div className="mx-auto max-w-[600px] px-4 text-center">
-          <h1 className="mb-6 text-[clamp(2.5rem,2rem+2vw,3.5rem)] font-semibold leading-[1.05] tracking-tight">
+          <h1 className="mb-6 font-pixel text-3xl tracking-tight text-accent sm:text-4xl">
             The Network Protocol
           </h1>
-          <p className="mb-10 text-[clamp(0.9375rem,0.875rem+0.25vw,1.0625rem)] leading-relaxed text-muted-foreground">
+          <p className="mb-10 font-mono text-sm leading-relaxed text-secondary">
             Register domains on an alternative internet namespace. Explore TLDs,
             manage DNS records, and claim your space on TNP.
           </p>
@@ -48,19 +48,19 @@ export default function Home() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="yourname.ox"
-              className="flex-1 rounded-[10px] border border-border bg-surface px-4 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none transition-colors"
+              className="flex-1 rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none transition-colors"
             />
             <button
               type="submit"
               disabled={checking}
-              className="cursor-pointer rounded-[10px] border border-primary bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              className="cursor-pointer rounded-md border border-accent/30 bg-accent/10 px-5 py-2.5 font-mono text-sm text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
             >
-              {checking ? "Checking..." : "Check availability"}
+              {checking ? "Checking..." : "Check"}
             </button>
           </form>
           {result && (
             <p
-              className={`mb-6 text-sm ${result.available ? "text-primary" : "text-red-400"}`}
+              className={`mb-6 font-mono text-sm ${result.available ? "text-accent" : "text-red-400"}`}
             >
               {result.domain} is {result.available ? "available" : "taken"}
               {result.available && (
@@ -78,76 +78,67 @@ export default function Home() {
             {isAuthenticated ? (
               <Link
                 to="/dashboard"
-                className="inline-flex h-9 items-center justify-center rounded-[10px] border border-border px-4 text-[15px] font-medium text-foreground transition-colors hover:bg-surface"
+                className="font-mono text-sm text-secondary transition-colors hover:text-primary"
               >
-                Go to Dashboard
+                [dashboard]
               </Link>
             ) : (
               <button
                 onClick={() => signIn()}
-                className="inline-flex h-9 cursor-pointer items-center justify-center rounded-[10px] border border-border px-4 text-[15px] font-medium text-foreground transition-colors hover:bg-surface"
+                className="cursor-pointer font-mono text-sm text-secondary transition-colors hover:text-primary"
               >
-                Sign in with Oxy
+                [sign in with oxy]
               </button>
             )}
             <a
               href="https://oxy.so/tnp"
-              className="inline-flex h-9 items-center justify-center rounded-[10px] border border-transparent px-4 text-[15px] font-medium text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
+              className="font-mono text-sm text-muted transition-colors hover:text-secondary"
             >
-              Learn more about TNP
+              [learn more]
             </a>
           </div>
         </div>
       </section>
 
       {/* Quick links */}
-      <section className="border-t border-border py-16">
+      <section className="border-t border-edge py-16">
         <div className="mx-auto max-w-[1200px] px-4 lg:px-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Link
-              to="/explore"
-              className="group rounded-xl border border-border bg-surface p-5 transition-colors hover:border-primary/20"
-            >
-              <h3 className="mb-1 text-[15px] font-medium text-foreground group-hover:text-primary transition-colors">
-                Explore TLDs
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Browse available TLDs and recently registered domains.
-              </p>
-            </Link>
-            <Link
-              to="/register"
-              className="group rounded-xl border border-border bg-surface p-5 transition-colors hover:border-primary/20"
-            >
-              <h3 className="mb-1 text-[15px] font-medium text-foreground group-hover:text-primary transition-colors">
-                Register a Domain
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Claim your name on .ox, .app, .com, or any active TLD.
-              </p>
-            </Link>
-            <Link
-              to="/propose"
-              className="group rounded-xl border border-border bg-surface p-5 transition-colors hover:border-primary/20"
-            >
-              <h3 className="mb-1 text-[15px] font-medium text-foreground group-hover:text-primary transition-colors">
-                Propose a TLD
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Suggest a new TLD and let the community vote on it.
-              </p>
-            </Link>
-            <Link
-              to="/install"
-              className="group rounded-xl border border-border bg-surface p-5 transition-colors hover:border-primary/20"
-            >
-              <h3 className="mb-1 text-[15px] font-medium text-foreground group-hover:text-primary transition-colors">
-                Install TNP
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                One command to resolve TNP domains on your device.
-              </p>
-            </Link>
+            {[
+              {
+                to: "/explore",
+                title: "Explore TLDs",
+                desc: "Browse available TLDs and recently registered domains.",
+              },
+              {
+                to: "/register",
+                title: "Register a Domain",
+                desc: "Claim your name on .ox, .app, .com, or any active TLD.",
+              },
+              {
+                to: "/propose",
+                title: "Propose a TLD",
+                desc: "Suggest a new TLD and let the community vote on it.",
+              },
+              {
+                to: "/install",
+                title: "Install TNP",
+                desc: "One command to resolve TNP domains on your device.",
+              },
+            ].map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="group rounded-lg border border-edge bg-surface-card p-5 transition-colors hover:border-edge hover:bg-surface-hover"
+              >
+                <h3 className="mb-1 font-mono text-sm font-medium text-primary group-hover:text-accent transition-colors">
+                  {item.title}
+                </h3>
+                <p className="font-mono text-xs text-muted">
+                  {item.desc}
+                </p>
+              </Link>
+            ))}
           </div>
         </div>
       </section>

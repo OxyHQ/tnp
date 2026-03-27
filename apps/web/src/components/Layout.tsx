@@ -2,10 +2,10 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 
 const navLinks = [
-  { label: "Explore", href: "/explore" },
-  { label: "Domains", href: "/domains" },
-  { label: "Propose", href: "/propose" },
-  { label: "Install", href: "/install" },
+  { label: "explore", href: "/explore" },
+  { label: "domains", href: "/domains" },
+  { label: "propose", href: "/propose" },
+  { label: "install", href: "/install" },
 ];
 
 export default function Layout() {
@@ -14,61 +14,60 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
-      {/* Navbar */}
-      <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
+      <header className="sticky top-0 z-50 border-b border-edge bg-background/80 backdrop-blur-md">
         <div className="mx-auto w-full max-w-[1200px] px-4 lg:px-6">
           <nav className="flex items-center justify-between py-3 lg:py-4">
-            <div className="flex items-center gap-8">
+            <div className="flex items-center gap-6">
               <Link
                 to="/"
-                className="flex items-center gap-2 text-[15px] font-semibold text-foreground"
+                className="font-pixel text-sm text-accent transition-colors hover:text-primary"
               >
-                <span className="text-primary">TNP</span>
+                TNP
               </Link>
               <ul className="hidden items-center gap-1 lg:flex">
                 {navLinks.map((link) => (
                   <li key={link.href}>
                     <Link
                       to={link.href}
-                      className={`inline-flex h-9 items-center justify-center rounded-[10px] border border-transparent px-3 text-[15px] transition-colors duration-300 hover:bg-surface hover:text-foreground ${
+                      className={`font-mono text-sm transition-colors ${
                         location.pathname === link.href
-                          ? "bg-surface text-foreground"
-                          : "text-muted-foreground"
+                          ? "text-accent"
+                          : "text-muted hover:text-secondary"
                       }`}
                     >
-                      {link.label}
+                      [{link.label}]
                     </Link>
                   </li>
                 ))}
               </ul>
             </div>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-3">
               {isAuthenticated ? (
                 <>
                   <Link
                     to="/dashboard"
-                    className="inline-flex h-8 cursor-pointer items-center justify-center text-nowrap rounded-[10px] border border-border px-3 text-sm font-medium text-foreground transition-colors duration-300 hover:bg-surface"
+                    className="font-mono text-sm text-secondary transition-colors hover:text-primary"
                   >
-                    Dashboard
+                    [dashboard]
                   </Link>
                   <button
                     onClick={signOut}
-                    className="inline-flex h-8 cursor-pointer items-center justify-center text-nowrap rounded-[10px] border border-transparent px-3 text-sm font-medium text-muted-foreground transition-colors duration-300 hover:bg-surface hover:text-foreground"
+                    className="cursor-pointer font-mono text-sm text-muted transition-colors hover:text-secondary"
                   >
-                    Sign out
+                    [sign out]
                   </button>
                 </>
               ) : (
                 <>
                   <button
                     onClick={() => signIn()}
-                    className="inline-flex h-8 cursor-pointer items-center justify-center text-nowrap rounded-[10px] border border-border px-3 text-sm font-medium text-foreground transition-colors duration-300 hover:bg-surface"
+                    className="cursor-pointer font-mono text-sm text-secondary transition-colors hover:text-primary"
                   >
-                    Sign in
+                    [sign in]
                   </button>
                   <button
                     onClick={() => signIn()}
-                    className="inline-flex h-8 cursor-pointer items-center justify-center text-nowrap rounded-[10px] border border-primary bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors duration-300 hover:bg-primary/90"
+                    className="inline-flex h-8 cursor-pointer items-center justify-center rounded-md border border-accent/30 bg-accent/10 px-3 font-mono text-sm text-accent transition-colors hover:bg-accent/20"
                   >
                     Start for free
                   </button>
@@ -83,44 +82,43 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-border">
+      <footer className="border-t border-edge">
         <div className="mx-auto w-full max-w-[1200px] px-4 py-12 lg:px-6">
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
             <div>
-              <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">TNP</p>
-              <div className="space-y-2.5 text-sm">
-                <Link to="/" className="block text-muted-foreground transition-colors hover:text-foreground">Home</Link>
-                <Link to="/explore" className="block text-muted-foreground transition-colors hover:text-foreground">Explore</Link>
-                <Link to="/domains" className="block text-muted-foreground transition-colors hover:text-foreground">Domains</Link>
-                <a href="https://oxy.so/tnp" className="block text-muted-foreground transition-colors hover:text-foreground">About TNP</a>
+              <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">TNP</p>
+              <div className="space-y-2.5 font-mono text-sm">
+                <Link to="/" className="block text-secondary transition-colors hover:text-primary">Home</Link>
+                <Link to="/explore" className="block text-secondary transition-colors hover:text-primary">Explore</Link>
+                <Link to="/domains" className="block text-secondary transition-colors hover:text-primary">Domains</Link>
+                <a href="https://oxy.so/tnp" className="block text-secondary transition-colors hover:text-primary">About TNP</a>
               </div>
             </div>
             <div>
-              <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Resources</p>
-              <div className="space-y-2.5 text-sm">
-                <Link to="/install" className="block text-muted-foreground transition-colors hover:text-foreground">Install</Link>
-                <Link to="/propose" className="block text-muted-foreground transition-colors hover:text-foreground">Propose a TLD</Link>
-                <a href="https://github.com/OxyHQ/tnp" target="_blank" rel="noopener noreferrer" className="block text-muted-foreground transition-colors hover:text-foreground">GitHub</a>
+              <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">Resources</p>
+              <div className="space-y-2.5 font-mono text-sm">
+                <Link to="/install" className="block text-secondary transition-colors hover:text-primary">Install</Link>
+                <Link to="/propose" className="block text-secondary transition-colors hover:text-primary">Propose a TLD</Link>
+                <a href="https://github.com/OxyHQ/tnp" target="_blank" rel="noopener noreferrer" className="block text-secondary transition-colors hover:text-primary">GitHub</a>
               </div>
             </div>
             <div>
-              <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Oxy</p>
-              <div className="space-y-2.5 text-sm">
-                <a href="https://oxy.so" target="_blank" rel="noopener noreferrer" className="block text-muted-foreground transition-colors hover:text-foreground">oxy.so</a>
-                <a href="https://accounts.oxy.so" target="_blank" rel="noopener noreferrer" className="block text-muted-foreground transition-colors hover:text-foreground">Accounts</a>
-                <a href="https://oxy.so/tnp" className="block text-muted-foreground transition-colors hover:text-foreground">TNP on Oxy</a>
+              <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">Oxy</p>
+              <div className="space-y-2.5 font-mono text-sm">
+                <a href="https://oxy.so" target="_blank" rel="noopener noreferrer" className="block text-secondary transition-colors hover:text-primary">oxy.so</a>
+                <a href="https://accounts.oxy.so" target="_blank" rel="noopener noreferrer" className="block text-secondary transition-colors hover:text-primary">Accounts</a>
+                <a href="https://oxy.so/tnp" className="block text-secondary transition-colors hover:text-primary">TNP on Oxy</a>
               </div>
             </div>
             <div>
-              <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Legal</p>
-              <div className="space-y-2.5 text-sm">
-                <a href="https://oxy.so/privacy" className="block text-muted-foreground transition-colors hover:text-foreground">Privacy</a>
-                <a href="https://oxy.so/terms" className="block text-muted-foreground transition-colors hover:text-foreground">Terms</a>
+              <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">Legal</p>
+              <div className="space-y-2.5 font-mono text-sm">
+                <a href="https://oxy.so/privacy" className="block text-secondary transition-colors hover:text-primary">Privacy</a>
+                <a href="https://oxy.so/terms" className="block text-secondary transition-colors hover:text-primary">Terms</a>
               </div>
             </div>
           </div>
-          <div className="mt-12 text-center text-xs text-muted-foreground">
+          <div className="mt-12 text-center font-mono text-xs text-muted">
             Made with love by Oxy.
           </div>
         </div>
