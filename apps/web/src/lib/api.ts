@@ -1,9 +1,11 @@
-import { oxyServices } from "./oxyServices";
-
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
-// Clear stale token from previous auth implementation
-localStorage.removeItem("tnp_token");
+// Token getter set by AuthBridge component from the React context
+let getToken: (() => string | null) | null = null;
+
+export function setTokenGetter(getter: () => string | null) {
+  getToken = getter;
+}
 
 export async function apiFetch<T>(
   path: string,
@@ -13,7 +15,7 @@ export async function apiFetch<T>(
     "Content-Type": "application/json",
   };
 
-  const token = oxyServices.getClient().getAccessToken();
+  const token = getToken?.();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }

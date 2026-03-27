@@ -10,10 +10,12 @@ import Dashboard from "./pages/Dashboard";
 import Propose from "./pages/Propose";
 import Install from "./pages/Install";
 import DomainDetail from "./pages/DomainDetail";
+import { AuthBridge } from "./lib/auth";
 
 export default function App() {
   return (
     <HelmetProvider>
+    <AuthBridge />
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
