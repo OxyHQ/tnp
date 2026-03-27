@@ -200,18 +200,24 @@ export class DnsProxy {
 
   async start(): Promise<void> {
     const { listenAddr, listenPort } = this.config;
+    const self = this;
 
     // UDP server
-    this.udpServer = dgram.createSocket("udp4");
-    this.udpServer.on("message", (msg: Buffer, rinfo: dgram.RemoteInfo) => {
-      this.handleQuery(Buffer.from(msg))
+    this.udpServer = dgram.createSocket({ type: "udp4", reuseAddr: true });
+
+    const handleUdpMessage = function(msg: Buffer, rinfo: dgram.RemoteInfo) {
+      console.log(`[tnp] udp query from ${rinfo.address}:${rinfo.port} (${msg.length} bytes)`);
+      self.handleQuery(Buffer.from(msg))
         .then((response) => {
-          this.udpServer!.send(response, 0, response.length, rinfo.port, rinfo.address);
+          self.udpServer!.send(response, 0, response.length, rinfo.port, rinfo.address);
         })
         .catch((err) => {
           console.error(`[tnp] udp error: ${err instanceof Error ? err.stack : err}`);
         });
-    });
+    };
+
+    this.udpServer.on("message", handleUdpMessage);
+    this.udpServer.on("error", (err: Error) => console.error(`[tnp] udp server error: ${err}`));
     this.udpServer.bind(listenPort, listenAddr);
 
     // TCP server (for DNS-over-TLS via stunnel)
