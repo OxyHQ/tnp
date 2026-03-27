@@ -1,6 +1,7 @@
 import { TnpApiClient, type DnsAnswer } from "./api";
 import type { TnpConfig } from "./config";
 import dns2 from "dns2";
+import dgram from "dgram";
 
 const { Packet } = dns2;
 
@@ -91,17 +92,57 @@ export class DnsProxy {
     return answers;
   }
 
-  private async forwardUpstream(
+  private forwardUpstream(
     name: string,
     type: number
   ): Promise<Record<string, unknown>> {
-    const client = new dns2.UDPClient({ dns: this.config.upstreamDns });
-    try {
-      const typeStr = this.typeToString(type);
-      return await client.resolve(name, typeStr);
-    } finally {
-      client.close();
-    }
+    return new Promise((resolve, reject) => {
+      const socket = dgram.createSocket("udp4");
+      const [host, portStr] = this.config.upstreamDns.split(":");
+      const port = parseInt(portStr || "53", 10);
+
+      // Build DNS query using dns2's Writer
+      const writer = new Packet.Writer();
+      const id = Math.floor(Math.random() * 65535);
+      writer.write(id, 16);      // ID
+      writer.write(0x0100, 16);  // Flags: RD
+      writer.write(1, 16);       // QDCOUNT
+      writer.write(0, 16);       // ANCOUNT
+      writer.write(0, 16);       // NSCOUNT
+      writer.write(0, 16);       // ARCOUNT
+
+      const cleanName = name.replace(/\.$/, "");
+      for (const label of cleanName.split(".")) {
+        writer.write(label.length, 8);
+        for (const c of label) writer.write(c.charCodeAt(0), 8);
+      }
+      writer.write(0, 8);       // root label
+      writer.write(type, 16);   // QTYPE
+      writer.write(1, 16);      // QCLASS IN
+
+      const timeout = setTimeout(() => {
+        socket.close();
+        reject(new Error("upstream DNS timeout"));
+      }, 4000);
+
+      socket.on("message", (msg: Buffer) => {
+        clearTimeout(timeout);
+        socket.close();
+        try {
+          resolve(Packet.parse(msg));
+        } catch (err) {
+          reject(err);
+        }
+      });
+
+      socket.on("error", (err: Error) => {
+        clearTimeout(timeout);
+        socket.close();
+        reject(err);
+      });
+
+      socket.send(writer.toBuffer(), port, host);
+    });
   }
 
   async start(): Promise<void> {
