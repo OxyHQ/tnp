@@ -3,7 +3,23 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      name: "stub-native-modules",
+      resolveId(source) {
+        if (source === "expo-secure-store" || source === "expo-crypto") {
+          return source;
+        }
+      },
+      load(id) {
+        if (id === "expo-secure-store" || id === "expo-crypto") {
+          return "export default null;";
+        }
+      },
+    },
+  ],
   resolve: {
     alias: {
       "react-native": "react-native-web",

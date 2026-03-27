@@ -2,8 +2,9 @@ import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
 import { config } from "./config.js";
+import { oxyAuth } from "./middleware/auth.js";
+import { runSeed } from "./seed.js";
 
-import authRouter from "./routes/auth.js";
 import tldsRouter from "./routes/tlds.js";
 import domainsRouter from "./routes/domains.js";
 import clientRouter from "./routes/client.js";
@@ -18,7 +19,9 @@ app.use(
 );
 app.use(express.json());
 
-app.use("/auth", authRouter);
+// Oxy auth middleware -- validates Bearer tokens and sets req.user.id
+app.use(oxyAuth);
+
 app.use("/tlds", tldsRouter);
 app.use("/domains", domainsRouter);
 app.use("/client", clientRouter);
@@ -30,6 +33,8 @@ app.get("/health", (_req, res) => {
 async function start() {
   await mongoose.connect(config.mongoUri, { dbName: config.dbName });
   console.log(`Connected to MongoDB (${config.dbName})`);
+
+  await runSeed();
 
   app.listen(config.port, () => {
     console.log(`TNP API running on http://localhost:${config.port}`);

@@ -3,10 +3,19 @@ import Domain from "../models/Domain.js";
 import TLD from "../models/TLD.js";
 import User from "../models/User.js";
 import { requireAuth } from "../middleware/auth.js";
+import type { AuthRequest } from "../middleware/auth.js";
 
 const router = Router();
 
 const DOMAIN_NAME_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+
+async function findOrCreateUser(oxyUserId: string) {
+  let user = await User.findOne({ oxyUserId });
+  if (!user) {
+    user = await User.create({ oxyUserId });
+  }
+  return user;
+}
 
 // GET /domains -- public directory of all registered domains
 router.get("/", async (req, res) => {
@@ -54,7 +63,22 @@ router.get("/search", async (req, res) => {
   }
 });
 
-// GET /domains/check/:name.:tld -- check if a specific domain is available
+// GET /domains/check/:name/:tld -- check if a specific domain is available
+router.get("/check/:name/:tld", async (req, res) => {
+  try {
+    const name = req.params.name.toLowerCase();
+    const tld = req.params.tld.toLowerCase();
+
+    const existing = await Domain.findOne({ name, tld });
+
+    res.json({ domain: `${name}.${tld}`, available: !existing });
+  } catch (err) {
+    console.error("Check domain error:", err);
+    res.status(500).json({ error: "Failed to check domain" });
+  }
+});
+
+// GET /domains/check/:domain -- check availability (name.tld format)
 router.get("/check/:domain", async (req, res) => {
   try {
     const parts = req.params.domain.split(".");
@@ -77,8 +101,37 @@ router.get("/check/:domain", async (req, res) => {
   }
 });
 
+// GET /domains/lookup/:domain -- public detail view for a domain (name.tld format)
+router.get("/lookup/:domain", async (req, res) => {
+  try {
+    const parts = req.params.domain.split(".");
+    if (parts.length !== 2) {
+      res.status(400).json({ error: "Format must be name.tld" });
+      return;
+    }
+
+    const [name, tld] = parts;
+
+    const domain = await Domain.findOne({
+      name: name.toLowerCase(),
+      tld: tld.toLowerCase(),
+      status: "active",
+    }).select("-ownerId");
+
+    if (!domain) {
+      res.status(404).json({ error: "Domain not found" });
+      return;
+    }
+
+    res.json(domain);
+  } catch (err) {
+    console.error("Lookup domain error:", err);
+    res.status(500).json({ error: "Failed to look up domain" });
+  }
+});
+
 // POST /domains/register -- register a domain (auth required)
-router.post("/register", requireAuth, async (req, res) => {
+router.post("/register", requireAuth, async (req: AuthRequest, res) => {
   try {
     const { name, tld } = req.body;
 
@@ -114,20 +167,23 @@ router.post("/register", requireAuth, async (req, res) => {
       return;
     }
 
+    const oxyUserId = req.user!.id;
+    const user = await findOrCreateUser(oxyUserId);
+
     const expiresAt = new Date();
     expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
     const domain = await Domain.create({
       name: cleanName,
       tld: cleanTld,
-      ownerId: req.auth!.userId,
-      oxyUserId: req.auth!.oxyUserId,
+      ownerId: user._id,
+      oxyUserId,
       status: "active",
       records: [],
       expiresAt,
     });
 
-    await User.findByIdAndUpdate(req.auth!.userId, {
+    await User.findByIdAndUpdate(user._id, {
       $push: { domains: domain._id },
     });
 
@@ -139,9 +195,9 @@ router.post("/register", requireAuth, async (req, res) => {
 });
 
 // GET /domains/mine -- get current user's domains (auth required)
-router.get("/mine", requireAuth, async (req, res) => {
+router.get("/mine", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const domains = await Domain.find({ ownerId: req.auth!.userId }).sort({
+    const domains = await Domain.find({ oxyUserId: req.user!.id }).sort({
       createdAt: -1,
     });
     res.json(domains);
@@ -152,7 +208,7 @@ router.get("/mine", requireAuth, async (req, res) => {
 });
 
 // DELETE /domains/:id -- release a domain (auth required, must be owner)
-router.delete("/:id", requireAuth, async (req, res) => {
+router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
   try {
     const domain = await Domain.findById(req.params.id);
     if (!domain) {
@@ -160,15 +216,16 @@ router.delete("/:id", requireAuth, async (req, res) => {
       return;
     }
 
-    if (domain.ownerId.toString() !== req.auth!.userId) {
+    if (domain.oxyUserId !== req.user!.id) {
       res.status(403).json({ error: "You do not own this domain" });
       return;
     }
 
     await Domain.findByIdAndDelete(domain._id);
-    await User.findByIdAndUpdate(req.auth!.userId, {
-      $pull: { domains: domain._id },
-    });
+    await User.findOneAndUpdate(
+      { oxyUserId: req.user!.id },
+      { $pull: { domains: domain._id } }
+    );
 
     res.json({ message: "Domain released" });
   } catch (err) {
@@ -177,14 +234,18 @@ router.delete("/:id", requireAuth, async (req, res) => {
   }
 });
 
-// ── DNS Records ──
+// -- DNS Records --
 
-// GET /domains/:id/records
-router.get("/:id/records", async (req, res) => {
+// GET /domains/:id/records (auth required, must be owner)
+router.get("/:id/records", requireAuth, async (req: AuthRequest, res) => {
   try {
     const domain = await Domain.findById(req.params.id);
     if (!domain) {
       res.status(404).json({ error: "Domain not found" });
+      return;
+    }
+    if (domain.oxyUserId !== req.user!.id) {
+      res.status(403).json({ error: "You do not own this domain" });
       return;
     }
     res.json(domain.records);
@@ -195,14 +256,14 @@ router.get("/:id/records", async (req, res) => {
 });
 
 // POST /domains/:id/records -- add a DNS record (auth required, must be owner)
-router.post("/:id/records", requireAuth, async (req, res) => {
+router.post("/:id/records", requireAuth, async (req: AuthRequest, res) => {
   try {
     const domain = await Domain.findById(req.params.id);
     if (!domain) {
       res.status(404).json({ error: "Domain not found" });
       return;
     }
-    if (domain.ownerId.toString() !== req.auth!.userId) {
+    if (domain.oxyUserId !== req.user!.id) {
       res.status(403).json({ error: "You do not own this domain" });
       return;
     }
@@ -225,14 +286,14 @@ router.post("/:id/records", requireAuth, async (req, res) => {
 });
 
 // PUT /domains/:id/records/:rid -- update a DNS record
-router.put("/:id/records/:rid", requireAuth, async (req, res) => {
+router.put("/:id/records/:rid", requireAuth, async (req: AuthRequest, res) => {
   try {
     const domain = await Domain.findById(req.params.id);
     if (!domain) {
       res.status(404).json({ error: "Domain not found" });
       return;
     }
-    if (domain.ownerId.toString() !== req.auth!.userId) {
+    if (domain.oxyUserId !== req.user!.id) {
       res.status(403).json({ error: "You do not own this domain" });
       return;
     }
@@ -258,14 +319,14 @@ router.put("/:id/records/:rid", requireAuth, async (req, res) => {
 });
 
 // DELETE /domains/:id/records/:rid -- delete a DNS record
-router.delete("/:id/records/:rid", requireAuth, async (req, res) => {
+router.delete("/:id/records/:rid", requireAuth, async (req: AuthRequest, res) => {
   try {
     const domain = await Domain.findById(req.params.id);
     if (!domain) {
       res.status(404).json({ error: "Domain not found" });
       return;
     }
-    if (domain.ownerId.toString() !== req.auth!.userId) {
+    if (domain.oxyUserId !== req.user!.id) {
       res.status(403).json({ error: "You do not own this domain" });
       return;
     }

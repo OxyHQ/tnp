@@ -8,7 +8,7 @@ interface TLD {
 }
 
 export default function Register() {
-  const { user, isAuthenticated, signIn } = useAuth();
+  const { isAuthenticated, signIn } = useAuth();
   const [tlds, setTlds] = useState<TLD[]>([]);
   const [name, setName] = useState("");
   const [tld, setTld] = useState("ox");
@@ -60,7 +60,6 @@ export default function Register() {
       await apiFetch("/domains/register", {
         method: "POST",
         body: JSON.stringify({ name, tld }),
-        oxyUserId: user?._id as string,
       });
       setSuccess(`${name}.${tld} registered successfully!`);
       setName("");
@@ -74,7 +73,7 @@ export default function Register() {
   if (!isAuthenticated) {
     return (
       <div className="mx-auto max-w-[480px] px-4 py-24 text-center">
-        <h1 className="mb-4 font-pixel text-xl text-accent">
+        <h1 className="mb-2 font-pixel text-xl text-accent">
           Register a Domain
         </h1>
         <p className="mb-8 font-mono text-sm text-muted">
@@ -92,9 +91,12 @@ export default function Register() {
 
   return (
     <div className="mx-auto max-w-[480px] px-4 py-16">
-      <h1 className="mb-8 font-pixel text-xl text-accent">
+      <h1 className="mb-2 font-pixel text-xl text-accent">
         Register a Domain
       </h1>
+      <p className="mb-8 font-mono text-sm text-muted">
+        Claim your name on any active TNP top-level domain.
+      </p>
 
       <form onSubmit={handleRegister} className="space-y-5">
         <div className="flex gap-2">

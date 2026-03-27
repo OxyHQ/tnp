@@ -1,65 +1,28 @@
-const API_BASE = import.meta.env.VITE_API_URL || "";
+import { oxyServices } from "./oxyServices";
 
-let tnpToken: string | null = localStorage.getItem("tnp_token");
-let tokenOxyUserId: string | null = null;
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
-export function clearToken() {
-  tnpToken = null;
-  tokenOxyUserId = null;
-  localStorage.removeItem("tnp_token");
-}
+// Clear stale token from previous auth implementation
+localStorage.removeItem("tnp_token");
 
-/**
- * Ensures we have a valid TNP JWT for the given Oxy user.
- * Exchanges the oxyUserId with the TNP API if needed.
- */
-async function ensureToken(oxyUserId: string): Promise<string> {
-  if (tnpToken && tokenOxyUserId === oxyUserId) {
-    return tnpToken;
-  }
-
-  const res = await fetch(`${API_BASE}/auth/oxy`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ oxyUserId }),
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to authenticate with TNP API");
-  }
-
-  const data = (await res.json()) as { token: string };
-  tnpToken = data.token;
-  tokenOxyUserId = oxyUserId;
-  localStorage.setItem("tnp_token", data.token);
-  return data.token;
-}
-
-/**
- * Make an authenticated API call. Pass oxyUserId to auto-exchange for a TNP JWT.
- */
 export async function apiFetch<T>(
   path: string,
-  options?: RequestInit & { oxyUserId?: string }
+  options?: RequestInit
 ): Promise<T> {
-  const { oxyUserId, ...fetchOptions } = options ?? {};
-
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
 
-  if (oxyUserId) {
-    const token = await ensureToken(oxyUserId);
+  const token = oxyServices.getClient().getAccessToken();
+  if (token) {
     headers.Authorization = `Bearer ${token}`;
-  } else if (tnpToken) {
-    headers.Authorization = `Bearer ${tnpToken}`;
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
-    ...fetchOptions,
+    ...options,
     headers: {
       ...headers,
-      ...(fetchOptions?.headers as Record<string, string>),
+      ...(options?.headers as Record<string, string>),
     },
   });
 

@@ -1,9 +1,19 @@
 import { Router } from "express";
 import TLD from "../models/TLD.js";
 import TLDProposal from "../models/TLDProposal.js";
+import User from "../models/User.js";
 import { requireAuth } from "../middleware/auth.js";
+import type { AuthRequest } from "../middleware/auth.js";
 
 const router = Router();
+
+async function findOrCreateUser(oxyUserId: string) {
+  let user = await User.findOne({ oxyUserId });
+  if (!user) {
+    user = await User.create({ oxyUserId });
+  }
+  return user;
+}
 
 // GET /tlds -- list all active TLDs
 router.get("/", async (_req, res) => {
@@ -17,7 +27,7 @@ router.get("/", async (_req, res) => {
 });
 
 // POST /tlds/propose -- propose a new TLD (auth required)
-router.post("/propose", requireAuth, async (req, res) => {
+router.post("/propose", requireAuth, async (req: AuthRequest, res) => {
   try {
     const { tld, reason } = req.body;
 
@@ -45,16 +55,19 @@ router.post("/propose", requireAuth, async (req, res) => {
       return;
     }
 
+    const oxyUserId = req.user!.id;
+    const user = await findOrCreateUser(oxyUserId);
+
     const proposal = await TLDProposal.create({
       tld: name,
-      proposedBy: req.auth!.userId,
+      proposedBy: user._id,
       reason,
     });
 
     await TLD.create({
       name,
       status: "proposed",
-      proposedBy: req.auth!.userId,
+      proposedBy: user._id,
     });
 
     res.status(201).json(proposal);

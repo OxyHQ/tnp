@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../lib/api";
+import CodeBlock from "../components/CodeBlock";
 
 type Platform = "macos" | "linux" | "windows";
 
@@ -11,14 +12,12 @@ const platforms: { id: Platform; label: string }[] = [
 
 interface ClientInfo {
   version: string;
-  changelog: string;
-  platforms: Record<string, { url: string; sha256: string } | null>;
+  platforms: Record<string, string>;
 }
 
 export default function Install() {
   const [platform, setPlatform] = useState<Platform>("macos");
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
-  const [copied, setCopied] = useState(false);
   const installCommand = "curl -fsSL https://get.tnp.network | sh";
 
   useEffect(() => {
@@ -31,46 +30,32 @@ export default function Install() {
     return () => { ignore = true; };
   }, []);
 
-  const copyCommand = () => {
-    navigator.clipboard.writeText(installCommand);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <div className="mx-auto max-w-[640px] px-4 py-16">
-      <h1 className="mb-2 font-pixel text-xl text-accent">
+      <h1 className="mb-4 text-[clamp(1.5rem,1.25rem+1vw,2rem)] font-semibold tracking-tight">
         Install TNP
       </h1>
-      <p className="mb-8 font-mono text-sm text-muted">
+      <p className="mb-8 text-[15px] text-muted-foreground">
         One command. Your device starts resolving TNP domains immediately.
       </p>
 
       {clientInfo && (
-        <p className="mb-4 font-mono text-xs text-muted">
+        <p className="mb-4 text-sm text-muted-foreground">
           Latest version: {clientInfo.version}
         </p>
       )}
 
-      <div className="mb-8 flex items-center justify-between rounded-lg border border-edge bg-surface-card px-4 py-3">
-        <code className="font-mono text-sm text-accent">{installCommand}</code>
-        <button
-          onClick={copyCommand}
-          className="ml-3 cursor-pointer font-mono text-xs text-muted transition-colors hover:text-secondary"
-        >
-          [{copied ? "copied" : "copy"}]
-        </button>
-      </div>
+      <CodeBlock code={installCommand} className="mb-8" />
 
       <div className="mb-6 flex gap-2">
         {platforms.map((p) => (
           <button
             key={p.id}
             onClick={() => setPlatform(p.id)}
-            className={`cursor-pointer rounded-md px-3 py-1.5 font-mono text-sm transition-colors ${
+            className={`cursor-pointer rounded-[10px] px-3 py-1.5 text-sm font-medium transition-colors ${
               platform === p.id
-                ? "border border-accent/30 bg-accent/10 text-accent"
-                : "border border-edge text-muted hover:text-secondary"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border text-muted-foreground hover:bg-surface hover:text-foreground"
             }`}
           >
             {p.label}
@@ -78,16 +63,16 @@ export default function Install() {
         ))}
       </div>
 
-      <div className="rounded-lg border border-edge bg-surface-card p-5 space-y-4">
+      <div className="rounded-xl border border-border bg-surface p-5 space-y-4">
         {platform === "macos" && (
           <>
-            <h3 className="font-mono text-sm font-medium text-primary">macOS</h3>
-            <p className="font-mono text-xs text-muted">
+            <h3 className="font-medium">macOS</h3>
+            <p className="text-sm text-muted-foreground">
               The installer configures your system DNS resolver to query TNP nameservers for
               TNP domains, while forwarding everything else to your default resolver.
             </p>
-            <div className="space-y-1 font-mono text-xs text-muted">
-              <p className="font-medium text-secondary">Requirements:</p>
+            <div className="space-y-1 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">Requirements:</p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>macOS 12 Monterey or later</li>
                 <li>Admin password (the installer sets up a resolver config)</li>
@@ -97,13 +82,13 @@ export default function Install() {
         )}
         {platform === "linux" && (
           <>
-            <h3 className="font-mono text-sm font-medium text-primary">Linux</h3>
-            <p className="font-mono text-xs text-muted">
+            <h3 className="font-medium">Linux</h3>
+            <p className="text-sm text-muted-foreground">
               Works with systemd-resolved, NetworkManager, and standalone resolv.conf setups.
               The installer detects your DNS configuration automatically.
             </p>
-            <div className="space-y-1 font-mono text-xs text-muted">
-              <p className="font-medium text-secondary">Requirements:</p>
+            <div className="space-y-1 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">Requirements:</p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>Any modern Linux distribution</li>
                 <li>sudo access</li>
@@ -113,20 +98,30 @@ export default function Install() {
         )}
         {platform === "windows" && (
           <>
-            <h3 className="font-mono text-sm font-medium text-primary">Windows</h3>
-            <p className="font-mono text-xs text-muted">
+            <h3 className="font-medium">Windows</h3>
+            <p className="text-sm text-muted-foreground">
               Windows support is coming soon.
             </p>
           </>
         )}
       </div>
 
+      <div className="mt-8 space-y-4">
+        <h3 className="font-medium">What happens after install</h3>
+        <ol className="list-decimal pl-5 space-y-2 text-sm text-muted-foreground">
+          <li>The TNP daemon installs as a background service</li>
+          <li>Your system DNS resolver is configured to forward TNP TLD queries to TNP root servers</li>
+          <li>All other DNS queries are forwarded to 1.1.1.1 untouched</li>
+          <li>TNP domains resolve natively in every app -- browsers, curl, everything</li>
+        </ol>
+      </div>
+
       <div className="mt-8">
         <a
-          href="https://oxy.so/tnp"
-          className="font-mono text-sm text-muted transition-colors hover:text-secondary"
+          href="/register"
+          className="text-sm text-primary transition-colors hover:text-primary/80"
         >
-          [learn more about tnp]
+          Get a domain to point to your server
         </a>
       </div>
     </div>

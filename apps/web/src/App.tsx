@@ -8,6 +8,7 @@ import Domains from "./pages/Domains";
 import Dashboard from "./pages/Dashboard";
 import Propose from "./pages/Propose";
 import Install from "./pages/Install";
+import DomainDetail from "./pages/DomainDetail";
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/explore" element={<Explore />} />
           <Route path="/register" element={<Register />} />
           <Route path="/domains" element={<Domains />} />
+          <Route path="/d/:domain" element={<DomainDetail />} />
           <Route
             path="/dashboard"
             element={

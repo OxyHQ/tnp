@@ -12,7 +12,7 @@ interface Proposal {
 }
 
 export default function Propose() {
-  const { user, isAuthenticated, signIn } = useAuth();
+  const { isAuthenticated, signIn } = useAuth();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [tld, setTld] = useState("");
   const [reason, setReason] = useState("");
@@ -39,7 +39,6 @@ export default function Propose() {
       await apiFetch("/tlds/propose", {
         method: "POST",
         body: JSON.stringify({ tld, reason }),
-        oxyUserId: user?._id as string,
       });
       setSuccess(`.${tld} proposed successfully!`);
       setTld("");

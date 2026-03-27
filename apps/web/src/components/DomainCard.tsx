@@ -1,9 +1,10 @@
+import { Link } from "react-router-dom";
+
 interface DomainCardProps {
   name: string;
   tld: string;
   status: string;
   oxyUserId?: string;
-  onClick?: () => void;
 }
 
 export default function DomainCard({
@@ -11,12 +12,11 @@ export default function DomainCard({
   tld,
   status,
   oxyUserId,
-  onClick,
 }: DomainCardProps) {
   return (
-    <button
-      onClick={onClick}
-      className="w-full cursor-pointer rounded-lg border border-edge bg-surface-card p-4 text-left transition-colors hover:bg-surface-hover"
+    <Link
+      to={`/d/${name}.${tld}`}
+      className="block w-full rounded-lg border border-edge bg-surface-card p-4 text-left transition-colors hover:bg-surface-hover"
     >
       <div className="flex items-center justify-between">
         <span className="font-mono text-sm text-primary">
@@ -36,6 +36,6 @@ export default function DomainCard({
       {oxyUserId && (
         <p className="mt-1 font-mono text-xs text-muted">{oxyUserId}</p>
       )}
-    </button>
+    </Link>
   );
 }

@@ -9,15 +9,14 @@
     "seed": "bun src/seed.ts"
   },
   "dependencies": {
+    "@oxyhq/core": "^1.11.6",
     "express": "^5.2.1",
     "cors": "^2.8.6",
     "mongoose": "^9.3.1",
-    "jsonwebtoken": "^9.0.2",
     "dotenv": "^17.3.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
-    "@types/cors": "^2.8.19",
-    "@types/jsonwebtoken": "^9.0.9"
+    "@types/cors": "^2.8.19"
   }
 }
