@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages/client/package.json packages/client/
 COPY apps/dns-server/package.json apps/dns-server/
-RUN bun install --production
+RUN BUN_FROZEN_LOCKFILE=0 bun install --production
 
 COPY packages/client packages/client
 COPY apps/dns-server apps/dns-server
