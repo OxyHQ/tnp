@@ -5,7 +5,7 @@ COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY apps/dns-server/package.json apps/dns-server/
-RUN bun install --frozen-lockfile --production
+RUN bun install --production
 
 COPY apps/api apps/api
 
