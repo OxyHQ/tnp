@@ -5,7 +5,6 @@ export interface ITLDProposal extends Document {
   tld: string;
   proposedBy: Types.ObjectId;
   reason: string;
-  votes: number;
   status: "open" | "approved" | "rejected";
   createdAt: Date;
   updatedAt: Date;
@@ -29,10 +28,6 @@ const TLDProposalSchema = new Schema<ITLDProposal>(
       type: String,
       required: true,
       maxlength: 500,
-    },
-    votes: {
-      type: Number,
-      default: 0,
     },
     status: {
       type: String,
