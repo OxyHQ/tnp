@@ -1,0 +1,13 @@
+{
+  "meta": {
+    "title": "{{domain}} — TNP",
+    "description": "{{domain}} está registrado en The Network Protocol."
+  },
+  "registeredOn": "Registrado en The Network Protocol",
+  "viewDetails": "Ver detalles del dominio",
+  "whatIsTnp": "¿Qué es TNP?",
+  "notRegistered": "Este dominio no está registrado en TNP.",
+  "registerIt": "Regístralo ahora",
+  "configured": "Este dominio ya está configurado.",
+  "goToDomain": "Ir a detalles del dominio"
+}

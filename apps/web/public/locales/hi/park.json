@@ -1,0 +1,13 @@
+{
+  "meta": {
+    "title": "{{domain}} — TNP",
+    "description": "{{domain}} The Network Protocol पर पंजीकृत है।"
+  },
+  "registeredOn": "The Network Protocol पर पंजीकृत",
+  "viewDetails": "डोमेन विवरण देखें",
+  "whatIsTnp": "TNP क्या है?",
+  "notRegistered": "यह डोमेन TNP पर पंजीकृत नहीं है।",
+  "registerIt": "अभी पंजीकृत करें",
+  "configured": "यह डोमेन पहले से कॉन्फ़िगर है।",
+  "goToDomain": "डोमेन विवरण पर जाएं"
+}

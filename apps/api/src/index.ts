@@ -50,6 +50,20 @@ app.use("/domains", optionalAuth, domainsRouter);
 app.use("/nodes", optionalAuth, nodesRouter);
 app.use("/relays", optionalAuth, relaysRouter);
 
+// Catch-all: if the Host header is a TNP domain (not the API itself),
+// redirect to the parking page on the web frontend.
+app.use((req, res, next) => {
+  const host = req.hostname;
+  if (!host || host === "localhost" || host.endsWith("tnp.network") || host.endsWith("oxy.so") || host.endsWith("pages.dev")) {
+    return next();
+  }
+  if (host.includes(".")) {
+    res.redirect(302, `https://tnp.network/park/${host}`);
+    return;
+  }
+  next();
+});
+
 async function start() {
   await mongoose.connect(config.mongoUri, { dbName: config.dbName });
   console.log(`Connected to MongoDB (${config.dbName})`);

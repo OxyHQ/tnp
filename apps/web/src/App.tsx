@@ -12,6 +12,7 @@ import Network from "./pages/Network";
 import Propose from "./pages/Propose";
 import Install from "./pages/Install";
 import DomainDetail from "./pages/DomainDetail";
+import Park from "./pages/Park";
 import { AuthBridge } from "./lib/auth";
 
 export default function App() {
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/network" element={<Network />} />
           <Route path="/propose" element={<Propose />} />
           <Route path="/install" element={<Install />} />
+          <Route path="/park/:domain" element={<Park />} />
         </Route>
       </Routes>
     </BrowserRouter>

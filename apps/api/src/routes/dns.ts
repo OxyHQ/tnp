@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { config } from "../config.js";
 import Domain from "../models/Domain.js";
 import TLD from "../models/TLD.js";
 import ServiceNode from "../models/ServiceNode.js";
@@ -66,6 +67,18 @@ router.get("/resolve", async (req, res) => {
         value: r.value,
         ttl: r.ttl,
       }));
+
+    // If domain has no records and no service node, return parking page fallback
+    if (answers.length === 0 && !domain.serviceNodeId && config.parkingIp) {
+      if (qtype === "A" || qtype === "ANY") {
+        answers.push({
+          name: fqdn,
+          type: "A",
+          value: config.parkingIp,
+          ttl: 300,
+        });
+      }
+    }
 
     const response: Record<string, unknown> = { name: fqdn, type: qtype, answers };
 

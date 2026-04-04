@@ -1,0 +1,13 @@
+{
+  "meta": {
+    "title": "{{domain}} — TNP",
+    "description": "{{domain}} 已在 The Network Protocol 上注册。"
+  },
+  "registeredOn": "已在 The Network Protocol 上注册",
+  "viewDetails": "查看域名详情",
+  "whatIsTnp": "什么是 TNP？",
+  "notRegistered": "此域名未在 TNP 上注册。",
+  "registerIt": "立即注册",
+  "configured": "此域名已配置。",
+  "goToDomain": "前往域名详情"
+}
