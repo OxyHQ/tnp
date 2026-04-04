@@ -181,7 +181,11 @@ export default function Propose() {
               {(() => {
                 const canVote = p.status === "open" && isAuthenticated && user?.id !== p.proposedBy?.oxyUserId;
                 const score = p.score ?? 0;
-                const formattedScore = score > 0 ? `+${score}` : `${score}`;
+                const abs = Math.abs(score);
+                const compact = abs >= 1_000_000 ? `${(abs / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`
+                  : abs >= 1_000 ? `${(abs / 1_000).toFixed(1).replace(/\.0$/, "")}K`
+                  : `${abs}`;
+                const formattedScore = score > 0 ? `+${compact}` : score < 0 ? `-${compact}` : compact;
                 return (
                   <div className={`flex w-10 flex-col items-center gap-0.5${!canVote ? " justify-center" : ""}`}>
                     {canVote && (
