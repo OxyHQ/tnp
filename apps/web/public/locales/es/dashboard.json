@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "title": "Panel -- TNP"
+  },
+  "tabs": {
+    "domains": "Dominios",
+    "serviceNodes": "Nodos de servicio"
+  },
+  "heading": "Tus dominios",
+  "emptyState": "Aún no has registrado ningún dominio.",
+  "addRecord": "Agregar registro"
+}

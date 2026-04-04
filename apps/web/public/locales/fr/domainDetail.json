@@ -1,0 +1,35 @@
+{
+  "meta": {
+    "title": "{{domain}} -- TNP",
+    "description": "Enregistrements DNS, état et détails de {{domain}} sur The Network Protocol.",
+    "ogTitle": "{{domain}} -- TNP",
+    "ogDescription": "Détails de {{domain}} sur The Network Protocol."
+  },
+  "breadcrumb": {
+    "home": "Accueil",
+    "explore": "Explorer"
+  },
+  "registeredOnTnp": "Enregistré sur The Network Protocol",
+  "sections": {
+    "details": "Détails",
+    "dnsRecords": "Enregistrements DNS",
+    "howToResolve": "Comment résoudre"
+  },
+  "specs": {
+    "status": "État",
+    "tld": "TLD",
+    "records": "Enregistrements",
+    "registered": "Enregistré",
+    "expires": "Expire",
+    "lastUpdated": "Dernière mise à jour"
+  },
+  "noDnsRecords": "Aucun enregistrement DNS configuré",
+  "howToResolveDesc": "Pour résoudre <accent>{{domain}}</accent> sur votre appareil, installez le résolveur TNP. Il configure le DNS de votre système pour interroger les serveurs de noms TNP pour les domaines TNP tout en transférant le reste vers votre résolveur par défaut.",
+  "installResolver": "installer le résolveur TNP",
+  "notFound": {
+    "title": "Domaine introuvable",
+    "description": "{{domain}} n'est pas enregistré sur TNP ou a peut-être été libéré.",
+    "registerLink": "enregistrer ce domaine"
+  },
+  "neverExpires": "--"
+}

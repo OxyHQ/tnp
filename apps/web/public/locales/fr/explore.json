@@ -1,0 +1,11 @@
+{
+  "meta": {
+    "title": "Explorer les domaines",
+    "description": "Parcourez les TLD disponibles et les domaines récemment enregistrés sur The Network Protocol. Recherchez dans l'espace de noms TNP.",
+    "ogDescription": "Parcourez les TLD disponibles et les domaines récemment enregistrés sur The Network Protocol."
+  },
+  "title": "Explorer",
+  "subtitle": "Parcourez les TLD et les domaines récemment enregistrés.",
+  "activeTlds": "TLD actifs",
+  "noDomainsRegistered": "Aucun domaine enregistré pour le moment"
+}

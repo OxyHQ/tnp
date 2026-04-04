@@ -1,0 +1,17 @@
+{
+  "meta": {
+    "title": "Network Status",
+    "description": "Live status of the TNP overlay network. See active relays, operators, and network health.",
+    "ogDescription": "Live status of the TNP overlay network."
+  },
+  "title": "Network Status",
+  "subtitle": "Live overview of the TNP overlay network infrastructure.",
+  "loadingStatus": "Loading network status...",
+  "activeRelays": "Active Relays",
+  "oxyOperated": "Oxy-Operated",
+  "community": "Community",
+  "filterAll": "All",
+  "filterOxy": "Oxy",
+  "filterCommunity": "Community",
+  "noRelaysMatch": "No relays match the current filter."
+}

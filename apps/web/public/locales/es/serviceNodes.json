@@ -1,0 +1,28 @@
+{
+  "meta": {
+    "title": "Nodos de servicio -- TNP"
+  },
+  "tabs": {
+    "domains": "Dominios",
+    "serviceNodes": "Nodos de servicio"
+  },
+  "heading": "Nodos de servicio",
+  "subtitle": "Los nodos de servicio hacen que tus dominios sean accesibles a través de la red superpuesta de TNP -- sin necesidad de reenvío de puertos ni IP pública.",
+  "loadingDomains": "Cargando dominios...",
+  "emptyState": "Aún no tienes dominios.",
+  "emptyStateRegister": "Registra uno",
+  "emptyStateToGetStarted": "para comenzar.",
+  "lastSeen": "visto por última vez {{time}}",
+  "publicKey": "Clave pública:",
+  "relay": "Relay:",
+  "noNodeConfigured": "No hay nodo de servicio configurado. Consulta las instrucciones de configuración a continuación.",
+  "setup": {
+    "heading": "Instrucciones de configuración",
+    "intro": "Para exponer un servicio local a través de la red superpuesta de TNP, ejecuta el cliente TNP en modo servidor. Tu servicio se vuelve accesible en tu dominio sin reenvío de puertos ni IP pública.",
+    "step1Title": "1. Instala el cliente TNP",
+    "step2Title": "2. Inicia un nodo de servicio",
+    "step3Title": "3. Obtén tu token de autenticación",
+    "step3Desc": "Ejecuta <code>tnp auth login</code> para autenticarte con tu cuenta Oxy. El token se almacena localmente y se usa para los comandos siguientes.",
+    "footer": "El nodo de servicio se registra con un servidor relay y acepta conexiones entrantes a través de túneles cifrados. Reemplaza <code1>example.ox</code1> con tu dominio real y <code2>localhost:80</code2> con la dirección local de tu servicio."
+  }
+}

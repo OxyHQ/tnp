@@ -1,0 +1,9 @@
+{
+  "meta": {
+    "title": "所有域名",
+    "description": "查看 The Network Protocol 上所有已注册的域名。搜索和浏览完整的 TNP 域名目录。",
+    "ogDescription": "查看 The Network Protocol 上所有已注册的域名。"
+  },
+  "title": "所有域名",
+  "domainsRegistered": "已注册 {{total}} 个域名"
+}

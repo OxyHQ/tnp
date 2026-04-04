@@ -1,0 +1,17 @@
+{
+  "meta": {
+    "title": "网络状态",
+    "description": "TNP 覆盖网络的实时状态。查看活跃的中继、运营商和网络健康状况。",
+    "ogDescription": "TNP 覆盖网络的实时状态。"
+  },
+  "title": "网络状态",
+  "subtitle": "TNP 覆盖网络基础设施的实时概览。",
+  "loadingStatus": "加载网络状态...",
+  "activeRelays": "活跃中继",
+  "oxyOperated": "Oxy 运营",
+  "community": "社区",
+  "filterAll": "全部",
+  "filterOxy": "Oxy",
+  "filterCommunity": "社区",
+  "noRelaysMatch": "没有匹配当前筛选条件的中继。"
+}

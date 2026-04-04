@@ -1,0 +1,9 @@
+{
+  "meta": {
+    "title": "All Domains",
+    "description": "View all registered domains on The Network Protocol. Search and browse the complete TNP domain directory.",
+    "ogDescription": "View all registered domains on The Network Protocol."
+  },
+  "title": "All Domains",
+  "domainsRegistered": "{{total}} domains registered"
+}

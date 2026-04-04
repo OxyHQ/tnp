@@ -1,0 +1,72 @@
+{
+  "nav": {
+    "explore": "explorer",
+    "domains": "domaines",
+    "network": "réseau",
+    "propose": "proposer",
+    "install": "installer",
+    "dashboard": "tableau de bord"
+  },
+  "auth": {
+    "signIn": "se connecter",
+    "signOut": "se déconnecter",
+    "startForFree": "Commencer gratuitement",
+    "signInWithOxy": "se connecter avec oxy"
+  },
+  "footer": {
+    "tnp": "TNP",
+    "resources": "Ressources",
+    "oxy": "Oxy",
+    "legal": "Juridique",
+    "home": "Accueil",
+    "explore": "Explorer",
+    "domains": "Domaines",
+    "aboutTnp": "À propos de TNP",
+    "install": "Installer",
+    "proposeTld": "Proposer un TLD",
+    "github": "GitHub",
+    "oxySo": "oxy.so",
+    "accounts": "Comptes",
+    "tnpOnOxy": "TNP sur Oxy",
+    "privacy": "Confidentialité",
+    "terms": "Conditions",
+    "madeWithLove": "Fait avec amour par Oxy."
+  },
+  "form": {
+    "type": "Type",
+    "name": "Nom",
+    "value": "Valeur",
+    "ttl": "TTL"
+  },
+  "addRecord": "Ajouter un enregistrement",
+  "copy": "Copier",
+  "copied": "Copié",
+  "loading": "Chargement...",
+  "delete": "supprimer",
+  "prev": "précédent",
+  "next": "suivant",
+  "noDomainsFound": "Aucun domaine trouvé",
+  "searchPlaceholder": "Rechercher des domaines...",
+  "pagination": "{{page}} / {{totalPages}}",
+  "confirmReleaseDomain": "Êtes-vous sûr de vouloir libérer ce domaine ?",
+  "recordCount_one": "{{count}} enregistrement",
+  "recordCount_other": "{{count}} enregistrements",
+  "releaseDomain": "libérer le domaine",
+  "placeholder": {
+    "recordName": "@",
+    "recordValue": "192.168.1.1"
+  },
+  "status": {
+    "active": "actif",
+    "pending": "en attente",
+    "online": "en ligne",
+    "offline": "hors ligne",
+    "checking": "vérification",
+    "noNode": "aucun nœud"
+  },
+  "errors": {
+    "registrationFailed": "Échec de l'enregistrement",
+    "loadFailed": "Échec du chargement",
+    "genericError": "Une erreur est survenue"
+  }
+}

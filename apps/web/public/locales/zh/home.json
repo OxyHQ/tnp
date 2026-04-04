@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "title": "TNP — The Network Protocol",
+    "description": "你的互联网，你的规则。在 The Network Protocol 上注册域名 — 独立于 ICANN，关联你的 Oxy 身份。"
+  },
+  "heroTitle": "The Network Protocol",
+  "heroDescription": "在替代互联网命名空间上注册域名。探索 TLD、管理 DNS 记录，在 TNP 上占据你的空间。",
+  "searchPlaceholder": "yourname.ox",
+  "checking": "检查中...",
+  "check": "检查",
+  "domainAvailable": "{{domain}} 可注册",
+  "domainTaken": "{{domain}} 已被注册",
+  "registerNow": "立即注册",
+  "signInWithOxy": "使用 Oxy 登录",
+  "learnMore": "了解更多",
+  "quickLinks": {
+    "explore": {
+      "title": "探索 TLD",
+      "desc": "浏览可用的 TLD 和最近注册的域名。"
+    },
+    "register": {
+      "title": "注册域名",
+      "desc": "在 .ox、.app、.com 或任何活跃的 TLD 上注册你的名字。"
+    },
+    "propose": {
+      "title": "提议 TLD",
+      "desc": "建议新的 TLD，让社区投票决定。"
+    },
+    "install": {
+      "title": "安装 TNP",
+      "desc": "一条命令即可在你的设备上解析 TNP 域名。"
+    }
+  }
+}

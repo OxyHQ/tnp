@@ -1,0 +1,35 @@
+{
+  "meta": {
+    "title": "{{domain}} -- TNP",
+    "description": "The Network Protocol पर {{domain}} के DNS रिकॉर्ड, स्थिति और विवरण।",
+    "ogTitle": "{{domain}} -- TNP",
+    "ogDescription": "The Network Protocol पर {{domain}} का विवरण।"
+  },
+  "breadcrumb": {
+    "home": "होम",
+    "explore": "खोजें"
+  },
+  "registeredOnTnp": "The Network Protocol पर पंजीकृत",
+  "sections": {
+    "details": "विवरण",
+    "dnsRecords": "DNS रिकॉर्ड",
+    "howToResolve": "कैसे हल करें"
+  },
+  "specs": {
+    "status": "स्थिति",
+    "tld": "TLD",
+    "records": "रिकॉर्ड",
+    "registered": "पंजीकृत",
+    "expires": "समाप्ति",
+    "lastUpdated": "अंतिम अपडेट"
+  },
+  "noDnsRecords": "कोई DNS रिकॉर्ड कॉन्फ़िगर नहीं किया गया",
+  "howToResolveDesc": "अपने डिवाइस पर <accent>{{domain}}</accent> हल करने के लिए, TNP रिज़ॉल्वर इंस्टॉल करें। यह आपके सिस्टम DNS को TNP डोमेन के लिए TNP नेमसर्वर से क्वेरी करने के लिए कॉन्फ़िगर करता है, जबकि बाकी सब कुछ आपके डिफ़ॉल्ट रिज़ॉल्वर को फॉरवर्ड करता है।",
+  "installResolver": "TNP रिज़ॉल्वर इंस्टॉल करें",
+  "notFound": {
+    "title": "डोमेन नहीं मिला",
+    "description": "{{domain}} TNP पर पंजीकृत नहीं है या रिलीज़ किया गया हो सकता है।",
+    "registerLink": "यह डोमेन पंजीकृत करें"
+  },
+  "neverExpires": "--"
+}

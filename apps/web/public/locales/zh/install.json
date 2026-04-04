@@ -1,0 +1,146 @@
+{
+  "meta": {
+    "title": "安装 TNP -- The Network Protocol",
+    "description": "设置 TNP 以在任何设备上解析 TNP 域名。更改 DNS 或安装 TNP 客户端。",
+    "ogTitle": "安装 TNP -- The Network Protocol",
+    "ogDescription": "设置 TNP 以在任何设备上解析 TNP 域名。"
+  },
+  "title": "设置 TNP",
+  "subtitle": "在任何设备上解析 TNP 域名。选择以下方法。",
+  "methods": {
+    "dns": "更改 DNS（无需安装）",
+    "client": "安装 TNP 客户端",
+    "serve": "托管服务",
+    "relay": "运行中继"
+  },
+  "dns": {
+    "intro": "将设备的 DNS 指向 TNP 解析器。TNP 域名原生解析，其他所有请求转发到 Cloudflare (1.1.1.1)。",
+    "android": {
+      "title": "Android",
+      "steps": [
+        "打开<accent>设置</accent>",
+        "点击<accent>网络和互联网</accent>（或<accent>连接</accent>）",
+        "点击<accent>私人 DNS</accent>",
+        "选择<accent>私人 DNS 提供商主机名</accent>",
+        "输入 <code>{{dnsHost}}</code>",
+        "点击<accent>保存</accent>"
+      ],
+      "note": "需要 Android 9+ 且支持私人 DNS (DNS-over-TLS)。或者将 Wi-Fi DNS 设置为 <code>{{dnsIp}}</code>。"
+    },
+    "ios": {
+      "title": "iOS / iPadOS",
+      "steps": [
+        "打开<accent>设置</accent>",
+        "点击<accent>Wi-Fi</accent>",
+        "点击你的网络旁边的 <accent>(i)</accent>",
+        "点击<accent>配置 DNS</accent>",
+        "选择<accent>手动</accent>",
+        "删除现有服务器，添加 <code>{{dnsIp}}</code>",
+        "点击<accent>保存</accent>"
+      ],
+      "note": "注意：这只适用于当前 Wi-Fi 网络。要全系统 DNS，请安装 TNP 客户端。"
+    },
+    "windows": {
+      "title": "Windows",
+      "steps": [
+        "打开<accent>设置 > 网络和 Internet</accent>",
+        "点击你的活动连接（Wi-Fi 或以太网）",
+        "点击<accent>硬件属性</accent>",
+        "在 DNS 服务器分配旁边，点击<accent>编辑</accent>",
+        "选择<accent>手动</accent>，启用 <accent>IPv4</accent>",
+        "将首选 DNS 设置为 <code>{{dnsIp}}</code>",
+        "点击<accent>保存</accent>"
+      ]
+    },
+    "macos": {
+      "title": "macOS",
+      "steps": [
+        "打开<accent>系统设置 > 网络</accent>",
+        "选择你的活动连接（Wi-Fi 或以太网）",
+        "点击<accent>详细信息...</accent>",
+        "点击侧边栏中的 <accent>DNS</accent>",
+        "点击 <accent>+</accent> 并添加 <code>{{dnsIp}}</code>",
+        "点击<accent>好</accent>"
+      ]
+    },
+    "linux": {
+      "title": "Linux",
+      "systemdResolved": "systemd-resolved (Ubuntu, Fedora 等)：",
+      "resolvConf": "resolv.conf（手动）：",
+      "networkManager": "NetworkManager：",
+      "networkManagerDesc": "打开设置 > 网络 > 你的连接 > IPv4 > 将 DNS 设置为 <code>{{dnsIp}}</code>"
+    },
+    "router": {
+      "title": "路由器",
+      "intro": "在路由器上设置 DNS 会将 TNP 解析应用到网络上的每个设备 -- 手机、笔记本、智能电视，所有设备。无需逐个设备配置。",
+      "steps": [
+        "打开路由器管理面板（通常是 <code1>192.168.1.1</code1> 或 <code2>192.168.0.1</code2>）",
+        "找到 <accent>DNS</accent> 或 <accent>DHCP</accent> 设置",
+        "将主 DNS 设置为 <code>{{dnsIp}}</code>",
+        "将备用 DNS 设置为 <code>1.1.1.1</code>（备用）",
+        "保存并重启路由器"
+      ],
+      "note": "适用于任何允许自定义 DNS 服务器的路由器。之后，网络上的所有设备将自动解析 TNP 域名。"
+    }
+  },
+  "client": {
+    "latestVersion": "最新版本：{{version}}",
+    "intro": "客户端只拦截 TNP 域名 -- 你的常规 DNS 不受影响。这是桌面设备的推荐设置。",
+    "macos": {
+      "title": "macOS",
+      "description": "客户端运行本地 DNS 代理，只拦截 TNP 域名。所有其他 DNS 查询通过你的常规解析器，不受影响。",
+      "requirementsTitle": "要求：",
+      "requirements": [
+        "macOS 12 Monterey 或更高版本",
+        "管理员密码（安装程序会设置解析器配置）"
+      ]
+    },
+    "linux": {
+      "title": "Linux",
+      "description": "支持 systemd-resolved、NetworkManager 和独立的 resolv.conf 配置。安装程序会自动检测你的 DNS 配置。",
+      "requirementsTitle": "要求：",
+      "requirements": [
+        "任何现代 Linux 发行版",
+        "sudo 权限"
+      ]
+    },
+    "windows": {
+      "title": "Windows",
+      "description": "Windows 支持即将推出。"
+    }
+  },
+  "serve": {
+    "intro": "通过 TNP 覆盖网络使任何本地服务可访问。无需端口转发、公网 IP 或防火墙配置。",
+    "heading": "托管服务",
+    "step1Title": "1. 安装 TNP 客户端",
+    "step2Title": "2. 使用你的 Oxy 账户认证",
+    "step2Desc": "这将打开浏览器窗口进行 SSO。你的令牌存储在本地，用于后续命令。",
+    "step3Title": "3. 启动服务节点",
+    "step3Desc": "将 <code1>example.ox</code1> 替换为你注册的域名，将 <code2>localhost:80</code2> 替换为你服务的本地地址。",
+    "howItWorks": "工作原理",
+    "howItWorksList": [
+      "客户端连接到中继服务器，并将你的域名注册为服务节点。",
+      "对你域名的传入请求通过中继经加密隧道路由。",
+      "你的本地服务接收流量，如同本地提供服务 -- 不暴露于公共互联网。",
+      "连接通过定期心跳保持活跃。如果客户端断开连接，域名将离线。"
+    ]
+  },
+  "relay": {
+    "intro": "中继是 TNP 覆盖网络的骨干。它们在客户端和服务节点之间路由加密流量。",
+    "whatRelaysDo": "中继的作用",
+    "whatRelaysDoList": [
+      "接受来自服务节点的连接，并将其保持为隧道。",
+      "通过这些隧道将传入的客户端请求路由到正确的服务节点。",
+      "端到端加密所有流量 -- 中继永远不会看到明文数据。",
+      "向 TNP 注册表报告活跃状态和容量，用于负载均衡。"
+    ],
+    "communityRelay": "运行社区中继",
+    "communityRelayDesc": "社区中继有助于扩展网络并改善所有人的性能。你需要一台有公网 IP 和稳定连接的服务器。",
+    "step1Title": "1. 克隆中继服务器",
+    "step2Title": "2. 配置并启动",
+    "step3Title": "3. 注册到网络",
+    "step3Desc": "中继在启动时自动注册到 TNP 注册表。激活后将显示在<link>网络状态页面</link>上。",
+    "githubNote": "查看 <link>GitHub 仓库</link>获取完整文档和配置选项。"
+  },
+  "learnMore": "了解更多关于 TNP"
+}

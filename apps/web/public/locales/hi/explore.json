@@ -1,0 +1,11 @@
+{
+  "meta": {
+    "title": "डोमेन खोजें",
+    "description": "The Network Protocol पर उपलब्ध TLD और हाल ही में पंजीकृत डोमेन ब्राउज़ करें। TNP नेमस्पेस खोजें।",
+    "ogDescription": "The Network Protocol पर उपलब्ध TLD और हाल ही में पंजीकृत डोमेन ब्राउज़ करें।"
+  },
+  "title": "खोजें",
+  "subtitle": "TLD और हाल ही में पंजीकृत डोमेन ब्राउज़ करें।",
+  "activeTlds": "सक्रिय TLD",
+  "noDomainsRegistered": "अभी तक कोई डोमेन पंजीकृत नहीं है"
+}

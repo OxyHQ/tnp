@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
+import { useTranslation } from "react-i18next";
 import { apiFetch } from "../lib/api";
 import DomainCard from "../components/DomainCard";
 
@@ -19,6 +20,7 @@ interface DomainsResponse {
 }
 
 export default function Domains() {
+  const { t } = useTranslation(["domains", "common"]);
   const [domains, setDomains] = useState<Domain[]>([]);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -54,29 +56,29 @@ export default function Domains() {
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
       <Helmet>
-        <title>All Domains — TNP</title>
-        <meta name="description" content="View all registered domains on The Network Protocol. Search and browse the complete TNP domain directory." />
+        <title>{t("domains:meta.title")} — TNP</title>
+        <meta name="description" content={t("domains:meta.description")} />
         <link rel="canonical" href="https://tnp.network/domains" />
-        <meta property="og:title" content="All Domains — TNP" />
-        <meta property="og:description" content="View all registered domains on The Network Protocol." />
+        <meta property="og:title" content={`${t("domains:meta.title")} — TNP`} />
+        <meta property="og:description" content={t("domains:meta.ogDescription")} />
         <meta property="og:url" content="https://tnp.network/domains" />
       </Helmet>
       <h1 className="mb-2 font-pixel text-xl text-accent">
-        All Domains
+        {t("domains:title")}
       </h1>
-      <p className="mb-8 font-mono text-sm text-muted">{total} domains registered</p>
+      <p className="mb-8 font-mono text-sm text-muted">{t("domains:domainsRegistered", { total })}</p>
 
       <input
         type="text"
         value={query}
         onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-        placeholder="Search domains..."
+        placeholder={t("common:searchPlaceholder")}
         className="mb-8 w-full rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none transition-colors"
       />
 
       <div className="space-y-2">
         {domains.length === 0 ? (
-          <p className="font-mono text-sm text-muted">No domains found</p>
+          <p className="font-mono text-sm text-muted">{t("common:noDomainsFound")}</p>
         ) : (
           domains.map((d) => (
             <DomainCard key={d._id} name={d.name} tld={d.tld} status={d.status} oxyUserId={d.oxyUserId} />
@@ -91,17 +93,17 @@ export default function Domains() {
             disabled={page <= 1}
             className="cursor-pointer font-mono text-sm text-secondary transition-colors hover:text-primary disabled:opacity-50"
           >
-            [prev]
+            [{t("common:prev")}]
           </button>
           <span className="font-mono text-sm text-muted">
-            {page} / {totalPages}
+            {t("common:pagination", { page, totalPages })}
           </span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page >= totalPages}
             className="cursor-pointer font-mono text-sm text-secondary transition-colors hover:text-primary disabled:opacity-50"
           >
-            [next]
+            [{t("common:next")}]
           </button>
         </div>
       )}

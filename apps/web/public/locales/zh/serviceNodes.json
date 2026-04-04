@@ -1,0 +1,28 @@
+{
+  "meta": {
+    "title": "服务节点 -- TNP"
+  },
+  "tabs": {
+    "domains": "域名",
+    "serviceNodes": "服务节点"
+  },
+  "heading": "服务节点",
+  "subtitle": "服务节点使你的域名可通过 TNP 覆盖网络访问 -- 无需端口转发或公网 IP。",
+  "loadingDomains": "加载域名...",
+  "emptyState": "你还没有域名。",
+  "emptyStateRegister": "注册一个",
+  "emptyStateToGetStarted": "开始使用。",
+  "lastSeen": "最后在线 {{time}}",
+  "publicKey": "公钥：",
+  "relay": "中继：",
+  "noNodeConfigured": "未配置服务节点。请参阅下方的设置说明。",
+  "setup": {
+    "heading": "设置说明",
+    "intro": "要通过 TNP 覆盖网络暴露本地服务，请以服务模式运行 TNP 客户端。你的服务将在你的域名下可访问，无需端口转发或公网 IP。",
+    "step1Title": "1. 安装 TNP 客户端",
+    "step2Title": "2. 启动服务节点",
+    "step3Title": "3. 获取认证令牌",
+    "step3Desc": "运行 <code>tnp auth login</code> 使用你的 Oxy 账户进行认证。令牌存储在本地，用于后续命令。",
+    "footer": "服务节点注册到中继服务器，并通过加密隧道接受传入连接。将 <code1>example.ox</code1> 替换为你的实际域名，将 <code2>localhost:80</code2> 替换为你服务的本地地址。"
+  }
+}

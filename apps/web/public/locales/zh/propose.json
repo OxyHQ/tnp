@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "title": "提议 TLD",
+    "description": "为 The Network Protocol 提议新的顶级域名，让社区投票。塑造 TNP 命名空间。",
+    "ogDescription": "为 The Network Protocol 提议新的顶级域名，让社区投票。"
+  },
+  "title": "提议 TLD",
+  "subtitle": "觉得世界需要 .dev、.music 或 .pizza？提议它，让社区投票。",
+  "tldPlaceholder": "music",
+  "reasonPlaceholder": "为什么需要这个 TLD？",
+  "proposing": "提交中...",
+  "proposeTld": "提议 TLD",
+  "proposeSuccess": ".{{tld}} 提议成功！",
+  "proposeFailed": "提议 TLD 失败",
+  "signInPrompt": "登录以提议新的 TLD。",
+  "openProposals": "公开提议",
+  "noProposals": "暂无提议。成为第一个！",
+  "upvote": "赞成",
+  "downvote": "反对",
+  "statusOpen": "开放",
+  "statusApproved": "已批准",
+  "statusRejected": "已拒绝"
+}

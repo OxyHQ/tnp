@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
+import { Trans, useTranslation } from "react-i18next";
 import { apiFetch } from "../lib/api";
+import { useLocaleFormatter } from "../lib/useLocaleFormatter";
 
 interface ServiceNode {
   publicKey: string;
@@ -25,6 +27,8 @@ interface DomainWithNode {
 }
 
 export default function ServiceNodes() {
+  const { t } = useTranslation(["serviceNodes", "common"]);
+  const { formatRelativeTime } = useLocaleFormatter();
   const [entries, setEntries] = useState<DomainWithNode[]>([]);
   const [domainsLoading, setDomainsLoading] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
@@ -80,24 +84,10 @@ export default function ServiceNodes() {
     return `${key.slice(0, 10)}...${key.slice(-10)}`;
   };
 
-  const formatTimestamp = (ts: string): string => {
-    const date = new Date(ts);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-
-    if (diffSec < 60) return `${diffSec}s ago`;
-    const diffMin = Math.floor(diffSec / 60);
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return `${diffHr}h ago`;
-    return date.toLocaleDateString();
-  };
-
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
       <Helmet>
-        <title>Service Nodes — TNP</title>
+        <title>{t("serviceNodes:meta.title")}</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
@@ -106,35 +96,34 @@ export default function ServiceNodes() {
           to="/dashboard"
           className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-edge text-muted hover:text-secondary"
         >
-          Domains
+          {t("serviceNodes:tabs.domains")}
         </Link>
         <Link
           to="/service-nodes"
           className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-accent/30 bg-accent/10 text-accent"
         >
-          Service Nodes
+          {t("serviceNodes:tabs.serviceNodes")}
         </Link>
       </div>
 
-      <h1 className="mb-2 font-pixel text-xl text-accent">Service Nodes</h1>
+      <h1 className="mb-2 font-pixel text-xl text-accent">{t("serviceNodes:heading")}</h1>
       <p className="mb-8 font-mono text-sm text-muted">
-        Service nodes make your domains reachable over the TNP overlay network
-        -- no port forwarding or public IP needed.
+        {t("serviceNodes:subtitle")}
       </p>
 
       {domainsLoading ? (
-        <p className="font-mono text-sm text-muted">Loading domains...</p>
+        <p className="font-mono text-sm text-muted">{t("serviceNodes:loadingDomains")}</p>
       ) : entries.length === 0 ? (
         <div className="rounded-lg border border-edge bg-surface-card p-6">
           <p className="font-mono text-sm text-muted">
-            You have no domains yet.{" "}
+            {t("serviceNodes:emptyState")}{" "}
             <Link
               to="/register"
               className="text-accent transition-colors hover:text-primary"
             >
-              Register one
+              {t("serviceNodes:emptyStateRegister")}
             </Link>{" "}
-            to get started.
+            {t("serviceNodes:emptyStateToGetStarted")}
           </p>
         </div>
       ) : (
@@ -156,10 +145,10 @@ export default function ServiceNodes() {
                     }`}
                     title={
                       loading
-                        ? "Checking..."
+                        ? t("common:status.checking")
                         : node?.status === "online"
-                          ? "Online"
-                          : "Offline"
+                          ? t("common:status.online")
+                          : t("common:status.offline")
                     }
                   />
                   <span className="font-mono text-sm">
@@ -175,12 +164,16 @@ export default function ServiceNodes() {
                           : "bg-surface-hover text-muted"
                     }`}
                   >
-                    {loading ? "checking" : node?.status ?? "no node"}
+                    {loading
+                      ? t("common:status.checking")
+                      : node?.status
+                        ? t(`common:status.${node.status}`)
+                        : t("common:status.noNode")}
                   </span>
                 </div>
                 {node?.lastSeen && (
                   <span className="font-mono text-xs text-muted">
-                    last seen {formatTimestamp(node.lastSeen)}
+                    {t("serviceNodes:lastSeen", { time: formatRelativeTime(node.lastSeen) })}
                   </span>
                 )}
               </div>
@@ -189,7 +182,7 @@ export default function ServiceNodes() {
                 <div className="mt-3 space-y-2 border-t border-edge pt-3">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-xs text-muted">
-                      Public key:
+                      {t("serviceNodes:publicKey")}
                     </span>
                     <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-xs text-secondary">
                       {truncateKey(node.publicKey)}
@@ -200,13 +193,13 @@ export default function ServiceNodes() {
                       }
                       className="cursor-pointer font-mono text-xs text-muted transition-colors hover:text-secondary"
                     >
-                      [{copied === domain._id ? "copied" : "copy"}]
+                      [{copied === domain._id ? t("common:copied") : t("common:copy")}]
                     </button>
                   </div>
                   {node.connectedRelay && (
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs text-muted">
-                        Relay:
+                        {t("serviceNodes:relay")}
                       </span>
                       <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-xs text-secondary">
                         {node.connectedRelay}
@@ -218,7 +211,7 @@ export default function ServiceNodes() {
 
               {!node && !loading && (
                 <p className="mt-3 border-t border-edge pt-3 font-mono text-xs text-muted">
-                  No service node configured. See the setup instructions below.
+                  {t("serviceNodes:noNodeConfigured")}
                 </p>
               )}
             </div>
@@ -227,17 +220,15 @@ export default function ServiceNodes() {
       )}
 
       <div className="mt-12 rounded-lg border border-edge bg-surface-card p-5 space-y-4">
-        <h2 className="font-pixel text-lg text-accent">Setup Instructions</h2>
+        <h2 className="font-pixel text-lg text-accent">{t("serviceNodes:setup.heading")}</h2>
         <p className="font-mono text-xs text-muted">
-          To expose a local service through the TNP overlay network, run the TNP
-          client in serve mode. Your service becomes reachable at your domain
-          without port forwarding or a public IP.
+          {t("serviceNodes:setup.intro")}
         </p>
 
         <div className="space-y-3">
           <div>
             <p className="mb-1 font-mono text-xs font-medium text-secondary">
-              1. Install the TNP client
+              {t("serviceNodes:setup.step1Title")}
             </p>
             <code className="block rounded bg-surface px-3 py-2 font-mono text-xs text-accent">
               curl -fsSL https://get.tnp.network | sh
@@ -246,7 +237,7 @@ export default function ServiceNodes() {
 
           <div>
             <p className="mb-1 font-mono text-xs font-medium text-secondary">
-              2. Start a service node
+              {t("serviceNodes:setup.step2Title")}
             </p>
             <code className="block rounded bg-surface px-3 py-2 font-mono text-xs text-accent">
               tnp serve --domain example.ox --target localhost:80 --token
@@ -256,30 +247,27 @@ export default function ServiceNodes() {
 
           <div>
             <p className="mb-1 font-mono text-xs font-medium text-secondary">
-              3. Get your auth token
+              {t("serviceNodes:setup.step3Title")}
             </p>
             <p className="font-mono text-xs text-muted">
-              Run{" "}
-              <code className="rounded bg-surface px-1.5 py-0.5 text-accent">
-                tnp auth login
-              </code>{" "}
-              to authenticate with your Oxy account. The token is stored locally
-              and used for subsequent commands.
+              <Trans
+                i18nKey="serviceNodes:setup.step3Desc"
+                t={t}
+                components={{ code: <code className="rounded bg-surface px-1.5 py-0.5 text-accent" /> }}
+              />
             </p>
           </div>
         </div>
 
         <p className="font-mono text-xs text-muted">
-          The service node registers with a relay server and accepts incoming
-          connections over encrypted tunnels. Replace{" "}
-          <code className="rounded bg-surface px-1.5 py-0.5 text-accent">
-            example.ox
-          </code>{" "}
-          with your actual domain and{" "}
-          <code className="rounded bg-surface px-1.5 py-0.5 text-accent">
-            localhost:80
-          </code>{" "}
-          with the local address of your service.
+          <Trans
+            i18nKey="serviceNodes:setup.footer"
+            t={t}
+            components={{
+              code1: <code className="rounded bg-surface px-1.5 py-0.5 text-accent" />,
+              code2: <code className="rounded bg-surface px-1.5 py-0.5 text-accent" />,
+            }}
+          />
         </p>
       </div>
     </div>

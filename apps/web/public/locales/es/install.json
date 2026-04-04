@@ -1,0 +1,146 @@
+{
+  "meta": {
+    "title": "Instalar TNP -- The Network Protocol",
+    "description": "Configura TNP para resolver dominios TNP en cualquier dispositivo. Cambia tu DNS o instala el cliente TNP.",
+    "ogTitle": "Instalar TNP -- The Network Protocol",
+    "ogDescription": "Configura TNP para resolver dominios TNP en cualquier dispositivo."
+  },
+  "title": "Configurar TNP",
+  "subtitle": "Resuelve dominios TNP en cualquier dispositivo. Elige un método a continuación.",
+  "methods": {
+    "dns": "Cambiar DNS (sin instalación)",
+    "client": "Instalar cliente TNP",
+    "serve": "Alojar un servicio",
+    "relay": "Ejecutar un relay"
+  },
+  "dns": {
+    "intro": "Apunta el DNS de tu dispositivo al resolvedor TNP. Los dominios TNP se resuelven de forma nativa, todo lo demás se reenvía a Cloudflare (1.1.1.1).",
+    "android": {
+      "title": "Android",
+      "steps": [
+        "Abre <accent>Configuración</accent>",
+        "Toca <accent>Red e internet</accent> (o <accent>Conexiones</accent>)",
+        "Toca <accent>DNS privado</accent>",
+        "Selecciona <accent>Nombre de host del proveedor de DNS privado</accent>",
+        "Ingresa <code>{{dnsHost}}</code>",
+        "Toca <accent>Guardar</accent>"
+      ],
+      "note": "Requiere Android 9+ con soporte de DNS privado (DNS-over-TLS). Alternativamente, configura el DNS de tu Wi-Fi a <code>{{dnsIp}}</code>."
+    },
+    "ios": {
+      "title": "iOS / iPadOS",
+      "steps": [
+        "Abre <accent>Configuración</accent>",
+        "Toca <accent>Wi-Fi</accent>",
+        "Toca la <accent>(i)</accent> junto a tu red",
+        "Toca <accent>Configurar DNS</accent>",
+        "Selecciona <accent>Manual</accent>",
+        "Elimina los servidores existentes, agrega <code>{{dnsIp}}</code>",
+        "Toca <accent>Guardar</accent>"
+      ],
+      "note": "Nota: esto solo aplica a la red Wi-Fi actual. Para DNS en todo el sistema, instala el cliente TNP."
+    },
+    "windows": {
+      "title": "Windows",
+      "steps": [
+        "Abre <accent>Configuración > Red e Internet</accent>",
+        "Haz clic en tu conexión activa (Wi-Fi o Ethernet)",
+        "Haz clic en <accent>Propiedades del hardware</accent>",
+        "Junto a asignación de servidor DNS, haz clic en <accent>Editar</accent>",
+        "Selecciona <accent>Manual</accent>, activa <accent>IPv4</accent>",
+        "Establece DNS preferido en <code>{{dnsIp}}</code>",
+        "Haz clic en <accent>Guardar</accent>"
+      ]
+    },
+    "macos": {
+      "title": "macOS",
+      "steps": [
+        "Abre <accent>Configuración del Sistema > Red</accent>",
+        "Selecciona tu conexión activa (Wi-Fi o Ethernet)",
+        "Haz clic en <accent>Detalles...</accent>",
+        "Haz clic en <accent>DNS</accent> en la barra lateral",
+        "Haz clic en <accent>+</accent> y agrega <code>{{dnsIp}}</code>",
+        "Haz clic en <accent>OK</accent>"
+      ]
+    },
+    "linux": {
+      "title": "Linux",
+      "systemdResolved": "systemd-resolved (Ubuntu, Fedora, etc.):",
+      "resolvConf": "resolv.conf (manual):",
+      "networkManager": "NetworkManager:",
+      "networkManagerDesc": "Abre Configuración > Red > tu conexión > IPv4 > establece DNS en <code>{{dnsIp}}</code>"
+    },
+    "router": {
+      "title": "Router",
+      "intro": "Configurar DNS en tu router aplica la resolución TNP a todos los dispositivos de tu red -- teléfonos, laptops, smart TVs, todo. Sin configuración por dispositivo.",
+      "steps": [
+        "Abre el panel de administración de tu router (normalmente <code1>192.168.1.1</code1> o <code2>192.168.0.1</code2>)",
+        "Busca la configuración de <accent>DNS</accent> o <accent>DHCP</accent>",
+        "Establece DNS primario en <code>{{dnsIp}}</code>",
+        "Establece DNS secundario en <code>1.1.1.1</code> (respaldo)",
+        "Guarda y reinicia el router"
+      ],
+      "note": "Funciona con cualquier router que permita personalizar servidores DNS. Después de esto, todos los dispositivos de la red resolverán dominios TNP automáticamente."
+    }
+  },
+  "client": {
+    "latestVersion": "Última versión: {{version}}",
+    "intro": "El cliente solo intercepta dominios TNP -- tu DNS normal no cambia. Esta es la configuración recomendada para dispositivos de escritorio.",
+    "macos": {
+      "title": "macOS",
+      "description": "El cliente ejecuta un proxy DNS local que intercepta solo dominios TNP. Todas las demás consultas DNS pasan por tu resolvedor normal sin cambios.",
+      "requirementsTitle": "Requisitos:",
+      "requirements": [
+        "macOS 12 Monterey o posterior",
+        "Contraseña de administrador (el instalador configura un archivo de resolución)"
+      ]
+    },
+    "linux": {
+      "title": "Linux",
+      "description": "Funciona con systemd-resolved, NetworkManager y configuraciones resolv.conf independientes. El instalador detecta tu configuración DNS automáticamente.",
+      "requirementsTitle": "Requisitos:",
+      "requirements": [
+        "Cualquier distribución Linux moderna",
+        "Acceso sudo"
+      ]
+    },
+    "windows": {
+      "title": "Windows",
+      "description": "El soporte para Windows estará disponible pronto."
+    }
+  },
+  "serve": {
+    "intro": "Haz accesible cualquier servicio local a través de la red superpuesta de TNP. Sin reenvío de puertos, sin IP pública, sin configuración de firewall.",
+    "heading": "Alojar un servicio",
+    "step1Title": "1. Instala el cliente TNP",
+    "step2Title": "2. Autentícate con tu cuenta Oxy",
+    "step2Desc": "Esto abre una ventana del navegador para SSO. Tu token se almacena localmente y se reutiliza para los comandos siguientes.",
+    "step3Title": "3. Inicia el nodo de servicio",
+    "step3Desc": "Reemplaza <code1>example.ox</code1> con tu dominio registrado y <code2>localhost:80</code2> con la dirección local de tu servicio.",
+    "howItWorks": "Cómo funciona",
+    "howItWorksList": [
+      "El cliente se conecta a un servidor relay y registra tu dominio como nodo de servicio.",
+      "Las solicitudes entrantes a tu dominio se enrutan a través del relay por un túnel cifrado.",
+      "Tu servicio local recibe tráfico como si se sirviera localmente -- sin exposición a internet público.",
+      "La conexión se mantiene viva con heartbeats periódicos. Si el cliente se desconecta, el dominio queda fuera de línea."
+    ]
+  },
+  "relay": {
+    "intro": "Los relays son la columna vertebral de la red superpuesta de TNP. Enrutan tráfico cifrado entre clientes y nodos de servicio.",
+    "whatRelaysDo": "Qué hacen los relays",
+    "whatRelaysDoList": [
+      "Aceptan conexiones de nodos de servicio y las mantienen abiertas como túneles.",
+      "Enrutan las solicitudes entrantes de clientes al nodo de servicio correcto a través de esos túneles.",
+      "Cifran todo el tráfico de extremo a extremo -- el relay nunca ve datos en texto plano.",
+      "Reportan disponibilidad y capacidad al registro de TNP para balanceo de carga."
+    ],
+    "communityRelay": "Ejecutar un relay comunitario",
+    "communityRelayDesc": "Los relays comunitarios ayudan a hacer crecer la red y mejorar el rendimiento para todos. Necesitas un servidor con IP pública y una conexión estable.",
+    "step1Title": "1. Clona el servidor relay",
+    "step2Title": "2. Configura e inicia",
+    "step3Title": "3. Regístrate en la red",
+    "step3Desc": "El relay se registra automáticamente en el registro de TNP al iniciar. Aparecerá en la <link>página de estado de la red</link> una vez activo.",
+    "githubNote": "Consulta el <link>repositorio de GitHub</link> para documentación completa y opciones de configuración."
+  },
+  "learnMore": "más información sobre tnp"
+}

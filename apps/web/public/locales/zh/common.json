@@ -1,0 +1,72 @@
+{
+  "nav": {
+    "explore": "探索",
+    "domains": "域名",
+    "network": "网络",
+    "propose": "提议",
+    "install": "安装",
+    "dashboard": "控制台"
+  },
+  "auth": {
+    "signIn": "登录",
+    "signOut": "退出",
+    "startForFree": "免费开始",
+    "signInWithOxy": "使用 Oxy 登录"
+  },
+  "footer": {
+    "tnp": "TNP",
+    "resources": "资源",
+    "oxy": "Oxy",
+    "legal": "法律",
+    "home": "首页",
+    "explore": "探索",
+    "domains": "域名",
+    "aboutTnp": "关于 TNP",
+    "install": "安装",
+    "proposeTld": "提议 TLD",
+    "github": "GitHub",
+    "oxySo": "oxy.so",
+    "accounts": "账户",
+    "tnpOnOxy": "Oxy 上的 TNP",
+    "privacy": "隐私",
+    "terms": "条款",
+    "madeWithLove": "由 Oxy 用心打造。"
+  },
+  "form": {
+    "type": "类型",
+    "name": "名称",
+    "value": "值",
+    "ttl": "TTL"
+  },
+  "addRecord": "添加记录",
+  "copy": "复制",
+  "copied": "已复制",
+  "loading": "加载中...",
+  "delete": "删除",
+  "prev": "上一页",
+  "next": "下一页",
+  "noDomainsFound": "未找到域名",
+  "searchPlaceholder": "搜索域名...",
+  "pagination": "{{page}} / {{totalPages}}",
+  "confirmReleaseDomain": "确定要释放此域名吗？",
+  "recordCount_one": "{{count}} 条记录",
+  "recordCount_other": "{{count}} 条记录",
+  "releaseDomain": "释放域名",
+  "placeholder": {
+    "recordName": "@",
+    "recordValue": "192.168.1.1"
+  },
+  "status": {
+    "active": "活跃",
+    "pending": "待处理",
+    "online": "在线",
+    "offline": "离线",
+    "checking": "检查中",
+    "noNode": "无节点"
+  },
+  "errors": {
+    "registrationFailed": "注册失败",
+    "loadFailed": "加载失败",
+    "genericError": "发生错误"
+  }
+}

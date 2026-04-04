@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "title": "Tableau de bord -- TNP"
+  },
+  "tabs": {
+    "domains": "Domaines",
+    "serviceNodes": "Nœuds de service"
+  },
+  "heading": "Vos domaines",
+  "emptyState": "Vous n'avez pas encore enregistré de domaine.",
+  "addRecord": "Ajouter un enregistrement"
+}

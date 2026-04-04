@@ -1,0 +1,72 @@
+{
+  "nav": {
+    "explore": "explore",
+    "domains": "domains",
+    "network": "network",
+    "propose": "propose",
+    "install": "install",
+    "dashboard": "dashboard"
+  },
+  "auth": {
+    "signIn": "sign in",
+    "signOut": "sign out",
+    "startForFree": "Start for free",
+    "signInWithOxy": "sign in with oxy"
+  },
+  "footer": {
+    "tnp": "TNP",
+    "resources": "Resources",
+    "oxy": "Oxy",
+    "legal": "Legal",
+    "home": "Home",
+    "explore": "Explore",
+    "domains": "Domains",
+    "aboutTnp": "About TNP",
+    "install": "Install",
+    "proposeTld": "Propose a TLD",
+    "github": "GitHub",
+    "oxySo": "oxy.so",
+    "accounts": "Accounts",
+    "tnpOnOxy": "TNP on Oxy",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "madeWithLove": "Made with love by Oxy."
+  },
+  "form": {
+    "type": "Type",
+    "name": "Name",
+    "value": "Value",
+    "ttl": "TTL"
+  },
+  "addRecord": "Add Record",
+  "copy": "Copy",
+  "copied": "Copied",
+  "loading": "Loading...",
+  "delete": "delete",
+  "prev": "prev",
+  "next": "next",
+  "noDomainsFound": "No domains found",
+  "searchPlaceholder": "Search domains...",
+  "pagination": "{{page}} / {{totalPages}}",
+  "confirmReleaseDomain": "Are you sure you want to release this domain?",
+  "recordCount_one": "{{count}} record",
+  "recordCount_other": "{{count}} records",
+  "releaseDomain": "release domain",
+  "placeholder": {
+    "recordName": "@",
+    "recordValue": "192.168.1.1"
+  },
+  "status": {
+    "active": "active",
+    "pending": "pending",
+    "online": "online",
+    "offline": "offline",
+    "checking": "checking",
+    "noNode": "no node"
+  },
+  "errors": {
+    "registrationFailed": "Registration failed",
+    "loadFailed": "Failed to load",
+    "genericError": "An error occurred"
+  }
+}

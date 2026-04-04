@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "title": "注册域名",
+    "description": "在 The Network Protocol 上注册你的名字。选择一个 TLD，使用你的 Oxy 账户即时注册域名。",
+    "ogDescription": "在 The Network Protocol 上注册你的名字。选择 TLD 即时注册。",
+    "descriptionForm": "在 The Network Protocol 上注册你的域名。"
+  },
+  "title": "注册域名",
+  "signInPrompt": "使用你的 Oxy 账户登录以注册 TNP 域名。",
+  "placeholder": "yourname",
+  "domainAvailable": "{{domain}} 可注册",
+  "domainTaken": "{{domain}} 已被注册",
+  "checkingAvailability": "检查可用性...",
+  "registerButton": "注册 {{domain}}",
+  "registering": "注册中...",
+  "registerSuccess": "{{domain}} 注册成功！",
+  "registrationFailed": "注册失败"
+}

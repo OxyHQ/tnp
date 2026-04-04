@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "title": "Enregistrer un domaine",
+    "description": "Revendiquez votre nom sur The Network Protocol. Choisissez un TLD et enregistrez votre domaine instantanément avec votre compte Oxy.",
+    "ogDescription": "Revendiquez votre nom sur The Network Protocol. Choisissez un TLD et enregistrez-vous instantanément.",
+    "descriptionForm": "Enregistrez votre domaine sur The Network Protocol."
+  },
+  "title": "Enregistrer un domaine",
+  "signInPrompt": "Connectez-vous avec votre compte Oxy pour enregistrer un domaine TNP.",
+  "placeholder": "votrenom",
+  "domainAvailable": "{{domain}} est disponible",
+  "domainTaken": "{{domain}} est déjà pris",
+  "checkingAvailability": "Vérification de la disponibilité...",
+  "registerButton": "Enregistrer {{domain}}",
+  "registering": "Enregistrement...",
+  "registerSuccess": "{{domain}} enregistré avec succès !",
+  "registrationFailed": "Échec de l'enregistrement"
+}

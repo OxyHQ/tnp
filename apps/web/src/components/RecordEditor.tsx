@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface RecordEditorProps {
   onSubmit: (record: {
@@ -16,8 +17,9 @@ const RECORD_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "NS"];
 export default function RecordEditor({
   onSubmit,
   initial,
-  submitLabel = "Add Record",
+  submitLabel,
 }: RecordEditorProps) {
+  const { t } = useTranslation("common");
   const [type, setType] = useState(initial?.type || "A");
   const [name, setName] = useState(initial?.name || "@");
   const [value, setValue] = useState(initial?.value || "");
@@ -35,41 +37,41 @@ export default function RecordEditor({
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2">
       <div className="space-y-1">
-        <label className="font-mono text-xs text-muted">Type</label>
+        <label className="font-mono text-xs text-muted">{t("form.type")}</label>
         <select
           value={type}
           onChange={(e) => setType(e.target.value)}
           className="block rounded-md border border-edge bg-surface-raised px-3 py-2 font-mono text-sm text-primary"
         >
-          {RECORD_TYPES.map((t) => (
-            <option key={t} value={t}>{t}</option>
+          {RECORD_TYPES.map((rt) => (
+            <option key={rt} value={rt}>{rt}</option>
           ))}
         </select>
       </div>
       <div className="space-y-1">
-        <label className="font-mono text-xs text-muted">Name</label>
+        <label className="font-mono text-xs text-muted">{t("form.name")}</label>
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="block rounded-md border border-edge bg-surface-raised px-3 py-2 font-mono text-sm text-primary"
-          placeholder="@"
+          placeholder={t("placeholder.recordName")}
           required
         />
       </div>
       <div className="flex-1 space-y-1">
-        <label className="font-mono text-xs text-muted">Value</label>
+        <label className="font-mono text-xs text-muted">{t("form.value")}</label>
         <input
           type="text"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           className="block w-full rounded-md border border-edge bg-surface-raised px-3 py-2 font-mono text-sm text-primary"
-          placeholder="192.168.1.1"
+          placeholder={t("placeholder.recordValue")}
           required
         />
       </div>
       <div className="space-y-1">
-        <label className="font-mono text-xs text-muted">TTL</label>
+        <label className="font-mono text-xs text-muted">{t("form.ttl")}</label>
         <input
           type="number"
           value={ttl}
@@ -82,7 +84,7 @@ export default function RecordEditor({
         type="submit"
         className="cursor-pointer rounded-md border border-accent/30 bg-accent/10 px-3 py-2 font-mono text-sm text-accent transition-colors hover:bg-accent/20"
       >
-        {submitLabel}
+        {submitLabel ?? t("addRecord")}
       </button>
     </form>
   );

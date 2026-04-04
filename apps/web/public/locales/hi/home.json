@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "title": "TNP — The Network Protocol",
+    "description": "आपका इंटरनेट। आपके नियम। The Network Protocol पर डोमेन पंजीकृत करें — ICANN से बाहर, आपकी Oxy पहचान से जुड़ा।"
+  },
+  "heroTitle": "The Network Protocol",
+  "heroDescription": "एक वैकल्पिक इंटरनेट नेमस्पेस पर डोमेन पंजीकृत करें। TLD खोजें, DNS रिकॉर्ड प्रबंधित करें, और TNP पर अपनी जगह बनाएं।",
+  "searchPlaceholder": "yourname.ox",
+  "checking": "जांच रहा है...",
+  "check": "जांचें",
+  "domainAvailable": "{{domain}} उपलब्ध है",
+  "domainTaken": "{{domain}} पहले से लिया गया है",
+  "registerNow": "अभी पंजीकृत करें",
+  "signInWithOxy": "Oxy से साइन इन करें",
+  "learnMore": "और जानें",
+  "quickLinks": {
+    "explore": {
+      "title": "TLD खोजें",
+      "desc": "उपलब्ध TLD और हाल ही में पंजीकृत डोमेन ब्राउज़ करें।"
+    },
+    "register": {
+      "title": "डोमेन पंजीकृत करें",
+      "desc": ".ox, .app, .com या किसी भी सक्रिय TLD पर अपना नाम दावा करें।"
+    },
+    "propose": {
+      "title": "TLD प्रस्तावित करें",
+      "desc": "नए TLD का सुझाव दें और समुदाय को वोट करने दें।"
+    },
+    "install": {
+      "title": "TNP इंस्टॉल करें",
+      "desc": "अपने डिवाइस पर TNP डोमेन हल करने के लिए एक कमांड।"
+    }
+  }
+}

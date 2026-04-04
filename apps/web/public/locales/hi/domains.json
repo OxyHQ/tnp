@@ -1,0 +1,9 @@
+{
+  "meta": {
+    "title": "सभी डोमेन",
+    "description": "The Network Protocol पर सभी पंजीकृत डोमेन देखें। पूर्ण TNP डोमेन निर्देशिका खोजें और ब्राउज़ करें।",
+    "ogDescription": "The Network Protocol पर सभी पंजीकृत डोमेन देखें।"
+  },
+  "title": "सभी डोमेन",
+  "domainsRegistered": "{{total}} डोमेन पंजीकृत"
+}

@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "title": "TLD प्रस्तावित करें",
+    "description": "The Network Protocol के लिए नए टॉप-लेवल डोमेन का प्रस्ताव दें और समुदाय को वोट करने दें। TNP नेमस्पेस को आकार दें।",
+    "ogDescription": "The Network Protocol के लिए नए टॉप-लेवल डोमेन का प्रस्ताव दें और समुदाय को वोट करने दें।"
+  },
+  "title": "TLD प्रस्तावित करें",
+  "subtitle": "क्या दुनिया को .dev, .music, या .pizza की जरूरत है? प्रस्ताव दें और समुदाय को वोट करने दें।",
+  "tldPlaceholder": "music",
+  "reasonPlaceholder": "यह TLD क्यों होना चाहिए?",
+  "proposing": "प्रस्तावित कर रहा है...",
+  "proposeTld": "TLD प्रस्तावित करें",
+  "proposeSuccess": ".{{tld}} सफलतापूर्वक प्रस्तावित!",
+  "proposeFailed": "TLD प्रस्तावित करने में विफल",
+  "signInPrompt": "नया TLD प्रस्तावित करने के लिए साइन इन करें।",
+  "openProposals": "खुले प्रस्ताव",
+  "noProposals": "अभी कोई प्रस्ताव नहीं। पहले बनें!",
+  "upvote": "ऊपर वोट",
+  "downvote": "नीचे वोट",
+  "statusOpen": "खुला",
+  "statusApproved": "स्वीकृत",
+  "statusRejected": "अस्वीकृत"
+}

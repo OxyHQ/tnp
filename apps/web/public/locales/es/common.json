@@ -1,0 +1,72 @@
+{
+  "nav": {
+    "explore": "explorar",
+    "domains": "dominios",
+    "network": "red",
+    "propose": "proponer",
+    "install": "instalar",
+    "dashboard": "panel"
+  },
+  "auth": {
+    "signIn": "iniciar sesión",
+    "signOut": "cerrar sesión",
+    "startForFree": "Empieza gratis",
+    "signInWithOxy": "iniciar sesión con oxy"
+  },
+  "footer": {
+    "tnp": "TNP",
+    "resources": "Recursos",
+    "oxy": "Oxy",
+    "legal": "Legal",
+    "home": "Inicio",
+    "explore": "Explorar",
+    "domains": "Dominios",
+    "aboutTnp": "Sobre TNP",
+    "install": "Instalar",
+    "proposeTld": "Proponer un TLD",
+    "github": "GitHub",
+    "oxySo": "oxy.so",
+    "accounts": "Cuentas",
+    "tnpOnOxy": "TNP en Oxy",
+    "privacy": "Privacidad",
+    "terms": "Términos",
+    "madeWithLove": "Hecho con amor por Oxy."
+  },
+  "form": {
+    "type": "Tipo",
+    "name": "Nombre",
+    "value": "Valor",
+    "ttl": "TTL"
+  },
+  "addRecord": "Agregar registro",
+  "copy": "Copiar",
+  "copied": "Copiado",
+  "loading": "Cargando...",
+  "delete": "eliminar",
+  "prev": "anterior",
+  "next": "siguiente",
+  "noDomainsFound": "No se encontraron dominios",
+  "searchPlaceholder": "Buscar dominios...",
+  "pagination": "{{page}} / {{totalPages}}",
+  "confirmReleaseDomain": "¿Estás seguro de que quieres liberar este dominio?",
+  "recordCount_one": "{{count}} registro",
+  "recordCount_other": "{{count}} registros",
+  "releaseDomain": "liberar dominio",
+  "placeholder": {
+    "recordName": "@",
+    "recordValue": "192.168.1.1"
+  },
+  "status": {
+    "active": "activo",
+    "pending": "pendiente",
+    "online": "en línea",
+    "offline": "fuera de línea",
+    "checking": "verificando",
+    "noNode": "sin nodo"
+  },
+  "errors": {
+    "registrationFailed": "Error en el registro",
+    "loadFailed": "Error al cargar",
+    "genericError": "Ocurrió un error"
+  }
+}

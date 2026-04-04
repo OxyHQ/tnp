@@ -1,0 +1,9 @@
+{
+  "meta": {
+    "title": "Tous les domaines",
+    "description": "Voir tous les domaines enregistrés sur The Network Protocol. Recherchez et parcourez le répertoire complet des domaines TNP.",
+    "ogDescription": "Voir tous les domaines enregistrés sur The Network Protocol."
+  },
+  "title": "Tous les domaines",
+  "domainsRegistered": "{{total}} domaines enregistrés"
+}

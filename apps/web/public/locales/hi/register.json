@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "title": "डोमेन पंजीकृत करें",
+    "description": "The Network Protocol पर अपना नाम दावा करें। TLD चुनें और अपने Oxy खाते से तुरंत डोमेन पंजीकृत करें।",
+    "ogDescription": "The Network Protocol पर अपना नाम दावा करें। TLD चुनें और तुरंत पंजीकृत करें।",
+    "descriptionForm": "The Network Protocol पर अपना डोमेन पंजीकृत करें।"
+  },
+  "title": "डोमेन पंजीकृत करें",
+  "signInPrompt": "TNP डोमेन पंजीकृत करने के लिए अपने Oxy खाते से साइन इन करें।",
+  "placeholder": "yourname",
+  "domainAvailable": "{{domain}} उपलब्ध है",
+  "domainTaken": "{{domain}} पहले से लिया गया है",
+  "checkingAvailability": "उपलब्धता जांच रहा है...",
+  "registerButton": "{{domain}} पंजीकृत करें",
+  "registering": "पंजीकृत कर रहा है...",
+  "registerSuccess": "{{domain}} सफलतापूर्वक पंजीकृत!",
+  "registrationFailed": "पंजीकरण विफल"
+}

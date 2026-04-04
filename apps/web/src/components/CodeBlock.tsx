@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface CodeBlockProps {
   code: string;
@@ -6,6 +7,7 @@ interface CodeBlockProps {
 }
 
 export default function CodeBlock({ code, className = "" }: CodeBlockProps) {
+  const { t } = useTranslation("common");
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
@@ -23,7 +25,7 @@ export default function CodeBlock({ code, className = "" }: CodeBlockProps) {
         onClick={copy}
         className="ml-3 cursor-pointer rounded-[10px] border border-border px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
       >
-        {copied ? "Copied" : "Copy"}
+        {copied ? t("copied") : t("copy")}
       </button>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
+import { useTranslation } from "react-i18next";
 import { apiFetch } from "../lib/api";
 
 interface Relay {
@@ -10,7 +11,14 @@ interface Relay {
   status: "active" | "inactive";
 }
 
+const FILTER_KEYS = {
+  all: "filterAll",
+  oxy: "filterOxy",
+  community: "filterCommunity",
+} as const;
+
 export default function Network() {
+  const { t } = useTranslation("network");
   const [relays, setRelays] = useState<Relay[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "oxy" | "community">("all");
@@ -45,35 +53,35 @@ export default function Network() {
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
       <Helmet>
-        <title>Network Status — TNP</title>
+        <title>{t("meta.title")} — TNP</title>
         <meta
           name="description"
-          content="Live status of the TNP overlay network. See active relays, operators, and network health."
+          content={t("meta.description")}
         />
         <link rel="canonical" href="https://tnp.network/network" />
-        <meta property="og:title" content="Network Status — TNP" />
+        <meta property="og:title" content={`${t("meta.title")} — TNP`} />
         <meta
           property="og:description"
-          content="Live status of the TNP overlay network."
+          content={t("meta.ogDescription")}
         />
         <meta property="og:url" content="https://tnp.network/network" />
       </Helmet>
 
-      <h1 className="mb-2 font-pixel text-xl text-accent">Network Status</h1>
+      <h1 className="mb-2 font-pixel text-xl text-accent">{t("title")}</h1>
       <p className="mb-8 font-mono text-sm text-muted">
-        Live overview of the TNP overlay network infrastructure.
+        {t("subtitle")}
       </p>
 
       {loading ? (
         <p className="font-mono text-sm text-muted">
-          Loading network status...
+          {t("loadingStatus")}
         </p>
       ) : (
         <>
           <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-lg border border-edge bg-surface-card p-4">
               <p className="font-mono text-xs uppercase tracking-wider text-muted">
-                Active Relays
+                {t("activeRelays")}
               </p>
               <p className="mt-1 font-pixel text-2xl text-accent">
                 {activeRelays.length}
@@ -81,7 +89,7 @@ export default function Network() {
             </div>
             <div className="rounded-lg border border-edge bg-surface-card p-4">
               <p className="font-mono text-xs uppercase tracking-wider text-muted">
-                Oxy-Operated
+                {t("oxyOperated")}
               </p>
               <p className="mt-1 font-pixel text-2xl text-primary">
                 {oxyCount}
@@ -89,7 +97,7 @@ export default function Network() {
             </div>
             <div className="rounded-lg border border-edge bg-surface-card p-4">
               <p className="font-mono text-xs uppercase tracking-wider text-muted">
-                Community
+                {t("community")}
               </p>
               <p className="mt-1 font-pixel text-2xl text-primary">
                 {communityCount}
@@ -108,14 +116,14 @@ export default function Network() {
                     : "border border-edge text-muted hover:text-secondary"
                 }`}
               >
-                {f === "all" ? "All" : f === "oxy" ? "Oxy" : "Community"}
+                {t(FILTER_KEYS[f])}
               </button>
             ))}
           </div>
 
           {filteredRelays.length === 0 ? (
             <p className="font-mono text-sm text-muted">
-              No relays match the current filter.
+              {t("noRelaysMatch")}
             </p>
           ) : (
             <div className="space-y-3">

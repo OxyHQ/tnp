@@ -1,0 +1,17 @@
+{
+  "meta": {
+    "title": "Estado de la red",
+    "description": "Estado en vivo de la red superpuesta de TNP. Ve los relays activos, operadores y la salud de la red.",
+    "ogDescription": "Estado en vivo de la red superpuesta de TNP."
+  },
+  "title": "Estado de la red",
+  "subtitle": "Vista en vivo de la infraestructura de la red superpuesta de TNP.",
+  "loadingStatus": "Cargando estado de la red...",
+  "activeRelays": "Relays activos",
+  "oxyOperated": "Operados por Oxy",
+  "community": "Comunidad",
+  "filterAll": "Todos",
+  "filterOxy": "Oxy",
+  "filterCommunity": "Comunidad",
+  "noRelaysMatch": "Ningún relay coincide con el filtro actual."
+}

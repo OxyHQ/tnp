@@ -1,0 +1,146 @@
+{
+  "meta": {
+    "title": "Installer TNP -- The Network Protocol",
+    "description": "Configurez TNP pour résoudre les domaines TNP sur n'importe quel appareil. Changez votre DNS ou installez le client TNP.",
+    "ogTitle": "Installer TNP -- The Network Protocol",
+    "ogDescription": "Configurez TNP pour résoudre les domaines TNP sur n'importe quel appareil."
+  },
+  "title": "Configurer TNP",
+  "subtitle": "Résolvez les domaines TNP sur n'importe quel appareil. Choisissez une méthode ci-dessous.",
+  "methods": {
+    "dns": "Changer le DNS (sans installation)",
+    "client": "Installer le client TNP",
+    "serve": "Héberger un service",
+    "relay": "Exécuter un relais"
+  },
+  "dns": {
+    "intro": "Pointez le DNS de votre appareil vers le résolveur TNP. Les domaines TNP sont résolus nativement, tout le reste est transféré vers Cloudflare (1.1.1.1).",
+    "android": {
+      "title": "Android",
+      "steps": [
+        "Ouvrez <accent>Paramètres</accent>",
+        "Appuyez sur <accent>Réseau et Internet</accent> (ou <accent>Connexions</accent>)",
+        "Appuyez sur <accent>DNS privé</accent>",
+        "Sélectionnez <accent>Nom d'hôte du fournisseur DNS privé</accent>",
+        "Entrez <code>{{dnsHost}}</code>",
+        "Appuyez sur <accent>Enregistrer</accent>"
+      ],
+      "note": "Nécessite Android 9+ avec support DNS privé (DNS-over-TLS). Vous pouvez aussi configurer le DNS de votre Wi-Fi sur <code>{{dnsIp}}</code>."
+    },
+    "ios": {
+      "title": "iOS / iPadOS",
+      "steps": [
+        "Ouvrez <accent>Réglages</accent>",
+        "Appuyez sur <accent>Wi-Fi</accent>",
+        "Appuyez sur le <accent>(i)</accent> à côté de votre réseau",
+        "Appuyez sur <accent>Configurer le DNS</accent>",
+        "Sélectionnez <accent>Manuel</accent>",
+        "Supprimez les serveurs existants, ajoutez <code>{{dnsIp}}</code>",
+        "Appuyez sur <accent>Enregistrer</accent>"
+      ],
+      "note": "Note : cela ne s'applique qu'au réseau Wi-Fi actuel. Pour un DNS système, installez le client TNP."
+    },
+    "windows": {
+      "title": "Windows",
+      "steps": [
+        "Ouvrez <accent>Paramètres > Réseau et Internet</accent>",
+        "Cliquez sur votre connexion active (Wi-Fi ou Ethernet)",
+        "Cliquez sur <accent>Propriétés du matériel</accent>",
+        "À côté de l'attribution du serveur DNS, cliquez sur <accent>Modifier</accent>",
+        "Sélectionnez <accent>Manuel</accent>, activez <accent>IPv4</accent>",
+        "Définissez le DNS préféré sur <code>{{dnsIp}}</code>",
+        "Cliquez sur <accent>Enregistrer</accent>"
+      ]
+    },
+    "macos": {
+      "title": "macOS",
+      "steps": [
+        "Ouvrez <accent>Réglages Système > Réseau</accent>",
+        "Sélectionnez votre connexion active (Wi-Fi ou Ethernet)",
+        "Cliquez sur <accent>Détails...</accent>",
+        "Cliquez sur <accent>DNS</accent> dans la barre latérale",
+        "Cliquez sur <accent>+</accent> et ajoutez <code>{{dnsIp}}</code>",
+        "Cliquez sur <accent>OK</accent>"
+      ]
+    },
+    "linux": {
+      "title": "Linux",
+      "systemdResolved": "systemd-resolved (Ubuntu, Fedora, etc.) :",
+      "resolvConf": "resolv.conf (manuel) :",
+      "networkManager": "NetworkManager :",
+      "networkManagerDesc": "Ouvrez Paramètres > Réseau > votre connexion > IPv4 > définissez le DNS sur <code>{{dnsIp}}</code>"
+    },
+    "router": {
+      "title": "Routeur",
+      "intro": "Configurer le DNS sur votre routeur applique la résolution TNP à tous les appareils de votre réseau -- téléphones, ordinateurs portables, smart TV, tout. Aucune configuration par appareil nécessaire.",
+      "steps": [
+        "Ouvrez le panneau d'administration de votre routeur (généralement <code1>192.168.1.1</code1> ou <code2>192.168.0.1</code2>)",
+        "Trouvez les paramètres <accent>DNS</accent> ou <accent>DHCP</accent>",
+        "Définissez le DNS primaire sur <code>{{dnsIp}}</code>",
+        "Définissez le DNS secondaire sur <code>1.1.1.1</code> (secours)",
+        "Enregistrez et redémarrez le routeur"
+      ],
+      "note": "Fonctionne avec tout routeur permettant de personnaliser les serveurs DNS. Après cela, tous les appareils du réseau résoudront automatiquement les domaines TNP."
+    }
+  },
+  "client": {
+    "latestVersion": "Dernière version : {{version}}",
+    "intro": "Le client n'intercepte que les domaines TNP -- votre DNS normal reste inchangé. C'est la configuration recommandée pour les appareils de bureau.",
+    "macos": {
+      "title": "macOS",
+      "description": "Le client exécute un proxy DNS local qui n'intercepte que les domaines TNP. Toutes les autres requêtes DNS passent par votre résolveur normal sans modification.",
+      "requirementsTitle": "Prérequis :",
+      "requirements": [
+        "macOS 12 Monterey ou ultérieur",
+        "Mot de passe administrateur (l'installateur configure un fichier de résolution)"
+      ]
+    },
+    "linux": {
+      "title": "Linux",
+      "description": "Fonctionne avec systemd-resolved, NetworkManager et les configurations resolv.conf autonomes. L'installateur détecte automatiquement votre configuration DNS.",
+      "requirementsTitle": "Prérequis :",
+      "requirements": [
+        "Toute distribution Linux moderne",
+        "Accès sudo"
+      ]
+    },
+    "windows": {
+      "title": "Windows",
+      "description": "Le support Windows arrive bientôt."
+    }
+  },
+  "serve": {
+    "intro": "Rendez n'importe quel service local accessible via le réseau overlay TNP. Pas de redirection de port, pas d'IP publique, pas de configuration de pare-feu.",
+    "heading": "Héberger un service",
+    "step1Title": "1. Installer le client TNP",
+    "step2Title": "2. S'authentifier avec votre compte Oxy",
+    "step2Desc": "Cela ouvre une fenêtre de navigateur pour le SSO. Votre jeton est stocké localement et réutilisé pour les commandes suivantes.",
+    "step3Title": "3. Démarrer le nœud de service",
+    "step3Desc": "Remplacez <code1>example.ox</code1> par votre domaine enregistré et <code2>localhost:80</code2> par l'adresse locale de votre service.",
+    "howItWorks": "Comment ça fonctionne",
+    "howItWorksList": [
+      "Le client se connecte à un serveur relais et enregistre votre domaine comme nœud de service.",
+      "Les requêtes entrantes vers votre domaine sont acheminées via le relais à travers un tunnel chiffré.",
+      "Votre service local reçoit le trafic comme s'il était servi localement -- sans exposition à l'Internet public.",
+      "La connexion est maintenue par des heartbeats périodiques. Si le client se déconnecte, le domaine passe hors ligne."
+    ]
+  },
+  "relay": {
+    "intro": "Les relais sont l'épine dorsale du réseau overlay TNP. Ils acheminent le trafic chiffré entre les clients et les nœuds de service.",
+    "whatRelaysDo": "Ce que font les relais",
+    "whatRelaysDoList": [
+      "Acceptent les connexions des nœuds de service et les maintiennent ouvertes comme tunnels.",
+      "Acheminent les requêtes entrantes des clients vers le bon nœud de service via ces tunnels.",
+      "Chiffrent tout le trafic de bout en bout -- le relais ne voit jamais de données en clair.",
+      "Signalent la disponibilité et la capacité au registre TNP pour l'équilibrage de charge."
+    ],
+    "communityRelay": "Exécuter un relais communautaire",
+    "communityRelayDesc": "Les relais communautaires aident à développer le réseau et à améliorer les performances pour tous. Vous avez besoin d'un serveur avec une IP publique et une connexion stable.",
+    "step1Title": "1. Cloner le serveur relais",
+    "step2Title": "2. Configurer et démarrer",
+    "step3Title": "3. S'enregistrer sur le réseau",
+    "step3Desc": "Le relais s'enregistre automatiquement auprès du registre TNP au démarrage. Il apparaîtra sur la <link>page d'état du réseau</link> une fois actif.",
+    "githubNote": "Consultez le <link>dépôt GitHub</link> pour la documentation complète et les options de configuration."
+  },
+  "learnMore": "en savoir plus sur TNP"
+}

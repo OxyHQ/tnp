@@ -1,0 +1,17 @@
+{
+  "meta": {
+    "title": "État du réseau",
+    "description": "État en direct du réseau overlay TNP. Voir les relais actifs, les opérateurs et la santé du réseau.",
+    "ogDescription": "État en direct du réseau overlay TNP."
+  },
+  "title": "État du réseau",
+  "subtitle": "Aperçu en direct de l'infrastructure du réseau overlay TNP.",
+  "loadingStatus": "Chargement de l'état du réseau...",
+  "activeRelays": "Relais actifs",
+  "oxyOperated": "Opérés par Oxy",
+  "community": "Communauté",
+  "filterAll": "Tous",
+  "filterOxy": "Oxy",
+  "filterCommunity": "Communauté",
+  "noRelaysMatch": "Aucun relais ne correspond au filtre actuel."
+}

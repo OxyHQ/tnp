@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "title": "Register a Domain",
+    "description": "Claim your name on The Network Protocol. Pick a TLD and register your domain instantly with your Oxy account.",
+    "ogDescription": "Claim your name on The Network Protocol. Pick a TLD and register instantly.",
+    "descriptionForm": "Register your domain on The Network Protocol."
+  },
+  "title": "Register a Domain",
+  "signInPrompt": "Sign in with your Oxy account to register a TNP domain.",
+  "placeholder": "yourname",
+  "domainAvailable": "{{domain}} is available",
+  "domainTaken": "{{domain}} is already taken",
+  "checkingAvailability": "Checking availability...",
+  "registerButton": "Register {{domain}}",
+  "registering": "Registering...",
+  "registerSuccess": "{{domain}} registered successfully!",
+  "registrationFailed": "Registration failed"
+}

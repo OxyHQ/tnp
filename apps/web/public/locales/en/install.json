@@ -1,0 +1,146 @@
+{
+  "meta": {
+    "title": "Install TNP -- The Network Protocol",
+    "description": "Set up TNP to resolve TNP domains on any device. Change your DNS or install the TNP client.",
+    "ogTitle": "Install TNP -- The Network Protocol",
+    "ogDescription": "Set up TNP to resolve TNP domains on any device."
+  },
+  "title": "Set Up TNP",
+  "subtitle": "Resolve TNP domains on any device. Pick a method below.",
+  "methods": {
+    "dns": "Change DNS (no install)",
+    "client": "Install TNP Client",
+    "serve": "Host a Service",
+    "relay": "Run a Relay"
+  },
+  "dns": {
+    "intro": "Point your device's DNS to the TNP resolver. TNP domains resolve natively, everything else forwards to Cloudflare (1.1.1.1).",
+    "android": {
+      "title": "Android",
+      "steps": [
+        "Open <accent>Settings</accent>",
+        "Tap <accent>Network & internet</accent> (or <accent>Connections</accent>)",
+        "Tap <accent>Private DNS</accent>",
+        "Select <accent>Private DNS provider hostname</accent>",
+        "Enter <code>{{dnsHost}}</code>",
+        "Tap <accent>Save</accent>"
+      ],
+      "note": "Requires Android 9+ with Private DNS support (DNS-over-TLS). Alternatively, set your Wi-Fi DNS to <code>{{dnsIp}}</code>."
+    },
+    "ios": {
+      "title": "iOS / iPadOS",
+      "steps": [
+        "Open <accent>Settings</accent>",
+        "Tap <accent>Wi-Fi</accent>",
+        "Tap the <accent>(i)</accent> next to your network",
+        "Tap <accent>Configure DNS</accent>",
+        "Select <accent>Manual</accent>",
+        "Remove existing servers, add <code>{{dnsIp}}</code>",
+        "Tap <accent>Save</accent>"
+      ],
+      "note": "Note: this only applies to the current Wi-Fi network. For system-wide DNS, install the TNP client instead."
+    },
+    "windows": {
+      "title": "Windows",
+      "steps": [
+        "Open <accent>Settings > Network & Internet</accent>",
+        "Click your active connection (Wi-Fi or Ethernet)",
+        "Click <accent>Hardware properties</accent>",
+        "Next to DNS server assignment, click <accent>Edit</accent>",
+        "Select <accent>Manual</accent>, enable <accent>IPv4</accent>",
+        "Set Preferred DNS to <code>{{dnsIp}}</code>",
+        "Click <accent>Save</accent>"
+      ]
+    },
+    "macos": {
+      "title": "macOS",
+      "steps": [
+        "Open <accent>System Settings > Network</accent>",
+        "Select your active connection (Wi-Fi or Ethernet)",
+        "Click <accent>Details...</accent>",
+        "Click <accent>DNS</accent> in the sidebar",
+        "Click <accent>+</accent> and add <code>{{dnsIp}}</code>",
+        "Click <accent>OK</accent>"
+      ]
+    },
+    "linux": {
+      "title": "Linux",
+      "systemdResolved": "systemd-resolved (Ubuntu, Fedora, etc.):",
+      "resolvConf": "resolv.conf (manual):",
+      "networkManager": "NetworkManager:",
+      "networkManagerDesc": "Open Settings > Network > your connection > IPv4 > set DNS to <code>{{dnsIp}}</code>"
+    },
+    "router": {
+      "title": "Router",
+      "intro": "Setting DNS on your router applies TNP resolution to every device on your network -- phones, laptops, smart TVs, everything. No per-device setup needed.",
+      "steps": [
+        "Open your router admin panel (usually <code1>192.168.1.1</code1> or <code2>192.168.0.1</code2>)",
+        "Find the <accent>DNS</accent> or <accent>DHCP</accent> settings",
+        "Set Primary DNS to <code>{{dnsIp}}</code>",
+        "Set Secondary DNS to <code>1.1.1.1</code> (fallback)",
+        "Save and reboot the router"
+      ],
+      "note": "Works with any router that lets you customize DNS servers. After this, all devices on the network will resolve TNP domains automatically."
+    }
+  },
+  "client": {
+    "latestVersion": "Latest version: {{version}}",
+    "intro": "The client only intercepts TNP domains -- your regular DNS stays unchanged. This is the recommended setup for desktop devices.",
+    "macos": {
+      "title": "macOS",
+      "description": "The client runs a local DNS proxy that intercepts only TNP domains. All other DNS queries go through your normal resolver untouched.",
+      "requirementsTitle": "Requirements:",
+      "requirements": [
+        "macOS 12 Monterey or later",
+        "Admin password (the installer sets up a resolver config)"
+      ]
+    },
+    "linux": {
+      "title": "Linux",
+      "description": "Works with systemd-resolved, NetworkManager, and standalone resolv.conf setups. The installer detects your DNS configuration automatically.",
+      "requirementsTitle": "Requirements:",
+      "requirements": [
+        "Any modern Linux distribution",
+        "sudo access"
+      ]
+    },
+    "windows": {
+      "title": "Windows",
+      "description": "Windows support is coming soon."
+    }
+  },
+  "serve": {
+    "intro": "Make any local service accessible over the TNP overlay network. No port forwarding, no public IP, no firewall configuration needed.",
+    "heading": "Host a Service",
+    "step1Title": "1. Install the TNP client",
+    "step2Title": "2. Authenticate with your Oxy account",
+    "step2Desc": "This opens a browser window for SSO. Your token is stored locally and reused for subsequent commands.",
+    "step3Title": "3. Start the service node",
+    "step3Desc": "Replace <code1>example.ox</code1> with your registered domain and <code2>localhost:80</code2> with the local address of your service.",
+    "howItWorks": "How it works",
+    "howItWorksList": [
+      "The client connects to a relay server and registers your domain as a service node.",
+      "Incoming requests to your domain are routed through the relay over an encrypted tunnel.",
+      "Your local service receives traffic as if it were served locally -- no exposure to the public internet.",
+      "The connection is kept alive with periodic heartbeats. If the client disconnects, the domain goes offline."
+    ]
+  },
+  "relay": {
+    "intro": "Relays are the backbone of the TNP overlay network. They route encrypted traffic between clients and service nodes.",
+    "whatRelaysDo": "What Relays Do",
+    "whatRelaysDoList": [
+      "Accept connections from service nodes and hold them open as tunnels.",
+      "Route incoming client requests to the correct service node over those tunnels.",
+      "Encrypt all traffic end-to-end -- the relay never sees plaintext data.",
+      "Report liveness and capacity to the TNP registry for load balancing."
+    ],
+    "communityRelay": "Run a Community Relay",
+    "communityRelayDesc": "Community relays help grow the network and improve performance for everyone. You need a server with a public IP and a stable connection.",
+    "step1Title": "1. Clone the relay server",
+    "step2Title": "2. Configure and start",
+    "step3Title": "3. Register with the network",
+    "step3Desc": "The relay automatically registers itself with the TNP registry on startup. It will appear on the <link>network status page</link> once active.",
+    "githubNote": "See the <link>GitHub repository</link> for full documentation and configuration options."
+  },
+  "learnMore": "learn more about tnp"
+}

@@ -1,0 +1,28 @@
+{
+  "meta": {
+    "title": "Nœuds de service -- TNP"
+  },
+  "tabs": {
+    "domains": "Domaines",
+    "serviceNodes": "Nœuds de service"
+  },
+  "heading": "Nœuds de service",
+  "subtitle": "Les nœuds de service rendent vos domaines accessibles via le réseau overlay TNP -- sans redirection de port ni IP publique.",
+  "loadingDomains": "Chargement des domaines...",
+  "emptyState": "Vous n'avez pas encore de domaines.",
+  "emptyStateRegister": "Enregistrez-en un",
+  "emptyStateToGetStarted": "pour commencer.",
+  "lastSeen": "vu pour la dernière fois {{time}}",
+  "publicKey": "Clé publique :",
+  "relay": "Relais :",
+  "noNodeConfigured": "Aucun nœud de service configuré. Consultez les instructions de configuration ci-dessous.",
+  "setup": {
+    "heading": "Instructions de configuration",
+    "intro": "Pour exposer un service local via le réseau overlay TNP, exécutez le client TNP en mode serveur. Votre service devient accessible à votre domaine sans redirection de port ni IP publique.",
+    "step1Title": "1. Installer le client TNP",
+    "step2Title": "2. Démarrer un nœud de service",
+    "step3Title": "3. Obtenir votre jeton d'authentification",
+    "step3Desc": "Exécutez <code>tnp auth login</code> pour vous authentifier avec votre compte Oxy. Le jeton est stocké localement et utilisé pour les commandes suivantes.",
+    "footer": "Le nœud de service s'enregistre auprès d'un serveur relais et accepte les connexions entrantes via des tunnels chiffrés. Remplacez <code1>example.ox</code1> par votre domaine réel et <code2>localhost:80</code2> par l'adresse locale de votre service."
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "meta": {
+    "title": "{{domain}} -- TNP",
+    "description": "{{domain}} 在 The Network Protocol 上的 DNS 记录、状态和详细信息。",
+    "ogTitle": "{{domain}} -- TNP",
+    "ogDescription": "{{domain}} 在 The Network Protocol 上的详细信息。"
+  },
+  "breadcrumb": {
+    "home": "首页",
+    "explore": "探索"
+  },
+  "registeredOnTnp": "在 The Network Protocol 上注册",
+  "sections": {
+    "details": "详情",
+    "dnsRecords": "DNS 记录",
+    "howToResolve": "如何解析"
+  },
+  "specs": {
+    "status": "状态",
+    "tld": "TLD",
+    "records": "记录",
+    "registered": "注册时间",
+    "expires": "过期时间",
+    "lastUpdated": "最后更新"
+  },
+  "noDnsRecords": "未配置 DNS 记录",
+  "howToResolveDesc": "要在你的设备上解析 <accent>{{domain}}</accent>，请安装 TNP 解析器。它会配置你的系统 DNS，使 TNP 域名查询 TNP 名称服务器，同时将其他查询转发到默认解析器。",
+  "installResolver": "安装 TNP 解析器",
+  "notFound": {
+    "title": "域名未找到",
+    "description": "{{domain}} 未在 TNP 上注册或可能已被释放。",
+    "registerLink": "注册此域名"
+  },
+  "neverExpires": "--"
+}

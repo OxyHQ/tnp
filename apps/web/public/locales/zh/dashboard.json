@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "title": "控制台 -- TNP"
+  },
+  "tabs": {
+    "domains": "域名",
+    "serviceNodes": "服务节点"
+  },
+  "heading": "你的域名",
+  "emptyState": "你还没有注册任何域名。",
+  "addRecord": "添加记录"
+}

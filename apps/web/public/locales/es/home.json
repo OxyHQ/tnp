@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "title": "TNP — The Network Protocol",
+    "description": "Tu internet. Tus reglas. Registra dominios en The Network Protocol — fuera de ICANN, vinculado a tu identidad Oxy."
+  },
+  "heroTitle": "The Network Protocol",
+  "heroDescription": "Registra dominios en un espacio de nombres alternativo de internet. Explora TLDs, gestiona registros DNS y reclama tu espacio en TNP.",
+  "searchPlaceholder": "tunombre.ox",
+  "checking": "Verificando...",
+  "check": "Verificar",
+  "domainAvailable": "{{domain}} está disponible",
+  "domainTaken": "{{domain}} está ocupado",
+  "registerNow": "Regístralo ahora",
+  "signInWithOxy": "iniciar sesión con oxy",
+  "learnMore": "más información",
+  "quickLinks": {
+    "explore": {
+      "title": "Explorar TLDs",
+      "desc": "Navega los TLDs disponibles y los dominios registrados recientemente."
+    },
+    "register": {
+      "title": "Registrar un dominio",
+      "desc": "Reclama tu nombre en .ox, .app, .com o cualquier TLD activo."
+    },
+    "propose": {
+      "title": "Proponer un TLD",
+      "desc": "Sugiere un nuevo TLD y deja que la comunidad vote."
+    },
+    "install": {
+      "title": "Instalar TNP",
+      "desc": "Un comando para resolver dominios TNP en tu dispositivo."
+    }
+  }
+}

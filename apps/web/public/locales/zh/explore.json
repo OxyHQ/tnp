@@ -1,0 +1,11 @@
+{
+  "meta": {
+    "title": "探索域名",
+    "description": "浏览 The Network Protocol 上可用的 TLD 和最近注册的域名。搜索 TNP 命名空间。",
+    "ogDescription": "浏览 The Network Protocol 上可用的 TLD 和最近注册的域名。"
+  },
+  "title": "探索",
+  "subtitle": "浏览 TLD 和最近注册的域名。",
+  "activeTlds": "活跃的 TLD",
+  "noDomainsRegistered": "暂无已注册的域名"
+}

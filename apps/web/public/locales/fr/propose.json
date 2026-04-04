@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "title": "Proposer un TLD",
+    "description": "Proposez un nouveau domaine de premier niveau pour The Network Protocol et laissez la communauté voter. Façonnez l'espace de noms TNP.",
+    "ogDescription": "Proposez un nouveau domaine de premier niveau pour The Network Protocol et laissez la communauté voter."
+  },
+  "title": "Proposer un TLD",
+  "subtitle": "Vous pensez que le monde a besoin de .dev, .music ou .pizza ? Proposez-le et laissez la communauté voter.",
+  "tldPlaceholder": "music",
+  "reasonPlaceholder": "Pourquoi ce TLD devrait-il exister ?",
+  "proposing": "Proposition en cours...",
+  "proposeTld": "Proposer un TLD",
+  "proposeSuccess": ".{{tld}} proposé avec succès !",
+  "proposeFailed": "Échec de la proposition de TLD",
+  "signInPrompt": "Connectez-vous pour proposer un nouveau TLD.",
+  "openProposals": "Propositions ouvertes",
+  "noProposals": "Aucune proposition pour le moment. Soyez le premier !",
+  "upvote": "Vote positif",
+  "downvote": "Vote négatif",
+  "statusOpen": "ouverte",
+  "statusApproved": "approuvée",
+  "statusRejected": "rejetée"
+}

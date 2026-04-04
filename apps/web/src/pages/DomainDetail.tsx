@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, useParams } from "react-router-dom";
+import { Trans, useTranslation } from "react-i18next";
 import { apiFetch } from "../lib/api";
+import { useLocaleFormatter } from "../lib/useLocaleFormatter";
 import TLDBadge from "../components/TLDBadge";
 
 interface DnsRecord {
@@ -24,16 +26,10 @@ interface DomainData {
   updatedAt: string;
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 export default function DomainDetail() {
   const { domain: domainParam } = useParams<{ domain: string }>();
+  const { t } = useTranslation(["domainDetail", "common"]);
+  const { formatDate } = useLocaleFormatter();
   const [domain, setDomain] = useState<DomainData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,18 +44,17 @@ export default function DomainDetail() {
         if (!ignore) setDomain(data);
       })
       .catch((err) => {
-        if (!ignore) setError(err instanceof Error ? err.message : "Failed to load domain");
+        if (!ignore) setError(err instanceof Error ? err.message : t("common:errors.loadFailed"));
       })
       .finally(() => {
         if (!ignore) setLoading(false);
       });
-    return () => { ignore = true; };
-  }, [domainParam]);
+  }, [domainParam, t]);
 
   if (loading) {
     return (
       <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
-        <p className="font-mono text-sm text-muted">Loading...</p>
+        <p className="font-mono text-sm text-muted">{t("common:loading")}</p>
       </div>
     );
   }
@@ -68,49 +63,51 @@ export default function DomainDetail() {
     return (
       <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
         <nav className="mb-6 font-mono text-xs text-muted">
-          <Link to="/" className="transition-colors hover:text-secondary">Home</Link>
+          <Link to="/" className="transition-colors hover:text-secondary">{t("domainDetail:breadcrumb.home")}</Link>
           <span className="mx-1.5">/</span>
-          <Link to="/explore" className="transition-colors hover:text-secondary">Explore</Link>
+          <Link to="/explore" className="transition-colors hover:text-secondary">{t("domainDetail:breadcrumb.explore")}</Link>
           <span className="mx-1.5">/</span>
           <span className="text-primary">{domainParam}</span>
         </nav>
-        <h1 className="mb-2 font-pixel text-xl text-accent">Domain not found</h1>
+        <h1 className="mb-2 font-pixel text-xl text-accent">{t("domainDetail:notFound.title")}</h1>
         <p className="mb-6 font-mono text-sm text-muted">
-          {domainParam} is not registered on TNP or may have been released.
+          {t("domainDetail:notFound.description", { domain: domainParam })}
         </p>
         <Link to="/register" className="font-mono text-sm text-accent transition-colors hover:text-accent/80">
-          [register this domain]
+          [{t("domainDetail:notFound.registerLink")}]
         </Link>
       </div>
     );
   }
 
+  const fullDomain = `${domain.name}.${domain.tld}`;
+
   const specs = [
-    { label: "Status", value: domain.status },
-    { label: "TLD", value: `.${domain.tld}` },
-    { label: "Records", value: `${domain.records.length}` },
-    { label: "Registered", value: formatDate(domain.createdAt) },
-    { label: "Expires", value: domain.expiresAt ? formatDate(domain.expiresAt) : "—" },
-    { label: "Last Updated", value: formatDate(domain.updatedAt) },
+    { label: t("domainDetail:specs.status"), value: domain.status },
+    { label: t("domainDetail:specs.tld"), value: `.${domain.tld}` },
+    { label: t("domainDetail:specs.records"), value: `${domain.records.length}` },
+    { label: t("domainDetail:specs.registered"), value: formatDate(domain.createdAt) },
+    { label: t("domainDetail:specs.expires"), value: domain.expiresAt ? formatDate(domain.expiresAt) : t("domainDetail:neverExpires") },
+    { label: t("domainDetail:specs.lastUpdated"), value: formatDate(domain.updatedAt) },
   ];
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
       <Helmet>
-        <title>{domainParam ?? "Domain"} — TNP</title>
-        <meta name="description" content={`DNS records, status, and details for ${domainParam ?? "domain"} on The Network Protocol.`} />
+        <title>{t("domainDetail:meta.title", { domain: domainParam ?? "Domain" })}</title>
+        <meta name="description" content={t("domainDetail:meta.description", { domain: domainParam ?? "domain" })} />
         <link rel="canonical" href={`https://tnp.network/d/${domainParam}`} />
-        <meta property="og:title" content={`${domainParam ?? "Domain"} — TNP`} />
-        <meta property="og:description" content={`Details for ${domainParam ?? "domain"} on The Network Protocol.`} />
+        <meta property="og:title" content={t("domainDetail:meta.ogTitle", { domain: domainParam ?? "Domain" })} />
+        <meta property="og:description" content={t("domainDetail:meta.ogDescription", { domain: domainParam ?? "domain" })} />
         <meta property="og:url" content={`https://tnp.network/d/${domainParam}`} />
       </Helmet>
       {/* Breadcrumb */}
       <nav className="mb-6 font-mono text-xs text-muted">
-        <Link to="/" className="transition-colors hover:text-secondary">Home</Link>
+        <Link to="/" className="transition-colors hover:text-secondary">{t("domainDetail:breadcrumb.home")}</Link>
         <span className="mx-1.5">/</span>
-        <Link to="/explore" className="transition-colors hover:text-secondary">Explore</Link>
+        <Link to="/explore" className="transition-colors hover:text-secondary">{t("domainDetail:breadcrumb.explore")}</Link>
         <span className="mx-1.5">/</span>
-        <span className="text-primary">{domain.name}.{domain.tld}</span>
+        <span className="text-primary">{fullDomain}</span>
       </nav>
 
       {/* Header */}
@@ -133,13 +130,13 @@ export default function DomainDetail() {
           <TLDBadge name={domain.tld} status="active" />
         </div>
         <p className="font-mono text-sm text-muted">
-          Registered on The Network Protocol
+          {t("domainDetail:registeredOnTnp")}
         </p>
       </div>
 
       {/* Specs grid */}
       <div className="mb-10">
-        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">Details</h2>
+        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">{t("domainDetail:sections.details")}</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {specs.map((spec) => (
             <div key={spec.label} className="rounded-lg border border-edge bg-surface-card p-3">
@@ -152,20 +149,20 @@ export default function DomainDetail() {
 
       {/* DNS Records */}
       <div className="mb-10">
-        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">DNS Records</h2>
+        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">{t("domainDetail:sections.dnsRecords")}</h2>
         {domain.records.length === 0 ? (
           <div className="rounded-lg border border-edge bg-surface-card p-6 text-center">
-            <p className="font-mono text-sm text-muted">No DNS records configured</p>
+            <p className="font-mono text-sm text-muted">{t("domainDetail:noDnsRecords")}</p>
           </div>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-edge bg-surface-card">
             <table className="w-full font-mono text-sm">
               <thead>
                 <tr className="border-b border-edge text-left text-xs text-muted">
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Value</th>
-                  <th className="px-4 py-3">TTL</th>
+                  <th className="px-4 py-3">{t("common:form.type")}</th>
+                  <th className="px-4 py-3">{t("common:form.name")}</th>
+                  <th className="px-4 py-3">{t("common:form.value")}</th>
+                  <th className="px-4 py-3">{t("common:form.ttl")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -185,18 +182,21 @@ export default function DomainDetail() {
 
       {/* How to resolve */}
       <div>
-        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">How to resolve</h2>
+        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">{t("domainDetail:sections.howToResolve")}</h2>
         <div className="rounded-lg border border-edge bg-surface-card p-5 space-y-3">
           <p className="font-mono text-sm text-secondary">
-            To resolve <span className="text-accent">{domain.name}.{domain.tld}</span> on your device,
-            install the TNP resolver. It configures your system DNS to query TNP nameservers for
-            TNP domains while forwarding everything else to your default resolver.
+            <Trans
+              i18nKey="domainDetail:howToResolveDesc"
+              t={t}
+              values={{ domain: fullDomain }}
+              components={{ accent: <span className="text-accent" /> }}
+            />
           </p>
           <Link
             to="/install"
             className="inline-block font-mono text-sm text-accent transition-colors hover:text-accent/80"
           >
-            [install tnp resolver]
+            [{t("domainDetail:installResolver")}]
           </Link>
         </div>
       </div>

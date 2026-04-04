@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "title": "Dashboard -- TNP"
+  },
+  "tabs": {
+    "domains": "Domains",
+    "serviceNodes": "Service Nodes"
+  },
+  "heading": "Your Domains",
+  "emptyState": "You have not registered any domains yet.",
+  "addRecord": "Add Record"
+}

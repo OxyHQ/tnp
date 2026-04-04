@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../lib/auth";
 import { apiFetch } from "../lib/api";
 
@@ -14,7 +15,14 @@ interface Proposal {
   createdAt: string;
 }
 
+const STATUS_KEYS = {
+  open: "statusOpen",
+  approved: "statusApproved",
+  rejected: "statusRejected",
+} as const;
+
 export default function Propose() {
+  const { t } = useTranslation(["propose", "common"]);
   const { isAuthenticated, signIn, user } = useAuth();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [tld, setTld] = useState("");
@@ -43,13 +51,13 @@ export default function Propose() {
         method: "POST",
         body: JSON.stringify({ tld, reason }),
       });
-      setSuccess(`.${tld} proposed successfully!`);
+      setSuccess(t("propose:proposeSuccess", { tld }));
       setTld("");
       setReason("");
       const updated = await apiFetch<Proposal[]>("/tlds/proposals");
       setProposals(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to propose TLD");
+      setError(err instanceof Error ? err.message : t("propose:proposeFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -99,18 +107,18 @@ export default function Propose() {
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
       <Helmet>
-        <title>Propose a TLD — TNP</title>
-        <meta name="description" content="Propose a new top-level domain for The Network Protocol and let the community vote. Shape the TNP namespace." />
+        <title>{t("propose:meta.title")} — TNP</title>
+        <meta name="description" content={t("propose:meta.description")} />
         <link rel="canonical" href="https://tnp.network/propose" />
-        <meta property="og:title" content="Propose a TLD — TNP" />
-        <meta property="og:description" content="Propose a new top-level domain for The Network Protocol and let the community vote." />
+        <meta property="og:title" content={`${t("propose:meta.title")} — TNP`} />
+        <meta property="og:description" content={t("propose:meta.ogDescription")} />
         <meta property="og:url" content="https://tnp.network/propose" />
       </Helmet>
       <h1 className="mb-2 font-pixel text-xl text-accent">
-        Propose a TLD
+        {t("propose:title")}
       </h1>
       <p className="mb-8 font-mono text-sm text-muted">
-        Think the world needs .dev, .music, or .pizza? Propose it and let the community vote.
+        {t("propose:subtitle")}
       </p>
 
       {isAuthenticated ? (
@@ -122,7 +130,7 @@ export default function Propose() {
                 type="text"
                 value={tld}
                 onChange={(e) => setTld(e.target.value.toLowerCase())}
-                placeholder="music"
+                placeholder={t("propose:tldPlaceholder")}
                 className="rounded-r-md bg-transparent px-2 py-2.5 font-mono text-sm text-primary placeholder:text-muted focus:outline-none"
                 required
               />
@@ -131,7 +139,7 @@ export default function Propose() {
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Why should this TLD exist?"
+              placeholder={t("propose:reasonPlaceholder")}
               className="flex-1 rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none transition-colors"
               required
               maxLength={500}
@@ -144,24 +152,24 @@ export default function Propose() {
             disabled={submitting}
             className="cursor-pointer rounded-md border border-accent/30 bg-accent/10 px-4 py-2.5 font-mono text-sm text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
           >
-            {submitting ? "Proposing..." : "Propose TLD"}
+            {submitting ? t("propose:proposing") : t("propose:proposeTld")}
           </button>
         </form>
       ) : (
         <div className="mb-12 rounded-lg border border-edge bg-surface-card p-6 text-center">
-          <p className="mb-4 font-mono text-sm text-muted">Sign in to propose a new TLD.</p>
+          <p className="mb-4 font-mono text-sm text-muted">{t("propose:signInPrompt")}</p>
           <button
             onClick={() => signIn()}
             className="cursor-pointer rounded-md border border-accent/30 bg-accent/10 px-4 py-2.5 font-mono text-sm text-accent transition-colors hover:bg-accent/20"
           >
-            [sign in with oxy]
+            [{t("common:auth.signInWithOxy")}]
           </button>
         </div>
       )}
 
-      <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">Open Proposals</h2>
+      <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">{t("propose:openProposals")}</h2>
       {proposals.length === 0 ? (
-        <p className="font-mono text-sm text-muted">No proposals yet. Be the first!</p>
+        <p className="font-mono text-sm text-muted">{t("propose:noProposals")}</p>
       ) : (
         <div className="space-y-3">
           {proposals.map((p) => (
@@ -178,7 +186,7 @@ export default function Propose() {
                         ? "text-accent"
                         : "text-muted hover:text-primary"
                     }`}
-                    aria-label="Upvote"
+                    aria-label={t("propose:upvote")}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 4l-8 8h5v8h6v-8h5z" />
@@ -196,7 +204,7 @@ export default function Propose() {
                         ? "text-red-400"
                         : "text-muted hover:text-primary"
                     }`}
-                    aria-label="Downvote"
+                    aria-label={t("propose:downvote")}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 20l8-8h-5V4H9v8H4z" />
@@ -226,7 +234,7 @@ export default function Propose() {
                       : "bg-red-500/10 text-red-400"
                 }`}
               >
-                {p.status}
+                {t(`propose:${STATUS_KEYS[p.status]}`)}
               </span>
             </div>
           ))}

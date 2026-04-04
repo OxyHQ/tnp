@@ -1,0 +1,35 @@
+{
+  "meta": {
+    "title": "{{domain}} -- TNP",
+    "description": "DNS records, status, and details for {{domain}} on The Network Protocol.",
+    "ogTitle": "{{domain}} -- TNP",
+    "ogDescription": "Details for {{domain}} on The Network Protocol."
+  },
+  "breadcrumb": {
+    "home": "Home",
+    "explore": "Explore"
+  },
+  "registeredOnTnp": "Registered on The Network Protocol",
+  "sections": {
+    "details": "Details",
+    "dnsRecords": "DNS Records",
+    "howToResolve": "How to resolve"
+  },
+  "specs": {
+    "status": "Status",
+    "tld": "TLD",
+    "records": "Records",
+    "registered": "Registered",
+    "expires": "Expires",
+    "lastUpdated": "Last Updated"
+  },
+  "noDnsRecords": "No DNS records configured",
+  "howToResolveDesc": "To resolve <accent>{{domain}}</accent> on your device, install the TNP resolver. It configures your system DNS to query TNP nameservers for TNP domains while forwarding everything else to your default resolver.",
+  "installResolver": "install tnp resolver",
+  "notFound": {
+    "title": "Domain not found",
+    "description": "{{domain}} is not registered on TNP or may have been released.",
+    "registerLink": "register this domain"
+  },
+  "neverExpires": "--"
+}
