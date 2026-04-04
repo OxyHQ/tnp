@@ -73,10 +73,11 @@ export default function Propose() {
     setProposals((prev) =>
       prev.map((p) => {
         if (p._id !== proposalId) return p;
+        const currentScore = p.score ?? 0;
         if (isToggle) {
           return {
             ...p,
-            score: p.score + (direction === "up" ? -1 : 1),
+            score: currentScore + (direction === "up" ? -1 : 1),
             userVote: null,
           };
         }
@@ -84,7 +85,7 @@ export default function Propose() {
           direction === "up"
             ? p.userVote === "down" ? 2 : 1
             : p.userVote === "up" ? -2 : -1;
-        return { ...p, score: p.score + scoreDelta, userVote: direction };
+        return { ...p, score: currentScore + scoreDelta, userVote: direction };
       })
     );
 
@@ -179,7 +180,8 @@ export default function Propose() {
             >
               {(() => {
                 const canVote = p.status === "open" && isAuthenticated && user?.id !== p.proposedBy?.oxyUserId;
-                const formattedScore = p.score > 0 ? `+${p.score}` : `${p.score}`;
+                const score = p.score ?? 0;
+                const formattedScore = score > 0 ? `+${score}` : `${score}`;
                 return (
                   <div className={`flex w-10 flex-col items-center gap-0.5${!canVote ? " justify-center" : ""}`}>
                     {canVote && (
@@ -198,7 +200,7 @@ export default function Propose() {
                       </button>
                     )}
                     <span className={`font-mono text-xs font-medium ${
-                      p.score > 0 ? "text-accent" : p.score < 0 ? "text-red-400" : "text-muted"
+                      score > 0 ? "text-accent" : score < 0 ? "text-red-400" : "text-muted"
                     }${!canVote ? " cursor-default" : ""}`}>
                       {formattedScore}
                     </span>
