@@ -113,9 +113,14 @@ router.get("/proposals", async (req: AuthRequest, res) => {
       {
         $addFields: {
           score: {
-            $subtract: [
-              { $size: { $filter: { input: "$votesDocs", cond: { $eq: ["$$this.direction", "up"] } } } },
-              { $size: { $filter: { input: "$votesDocs", cond: { $eq: ["$$this.direction", "down"] } } } },
+            $ifNull: [
+              {
+                $subtract: [
+                  { $size: { $filter: { input: { $ifNull: ["$votesDocs", []] }, cond: { $eq: ["$$this.direction", "up"] } } } },
+                  { $size: { $filter: { input: { $ifNull: ["$votesDocs", []] }, cond: { $eq: ["$$this.direction", "down"] } } } },
+                ],
+              },
+              0,
             ],
           },
           userVote: userId
@@ -124,7 +129,7 @@ router.get("/proposals", async (req: AuthRequest, res) => {
                   vars: {
                     myVote: {
                       $arrayElemAt: [
-                        { $filter: { input: "$votesDocs", cond: { $eq: ["$$this.user", userId] } } },
+                        { $filter: { input: { $ifNull: ["$votesDocs", []] }, cond: { $eq: ["$$this.user", userId] } } },
                         0,
                       ],
                     },
@@ -139,7 +144,7 @@ router.get("/proposals", async (req: AuthRequest, res) => {
           },
         },
       },
-      { $project: { votesDocs: 0, proposedByDoc: 0 } },
+      { $project: { votesDocs: 0, proposedByDoc: 0, votes: 0 } },
       { $sort: { score: -1, createdAt: -1 } },
     ]);
 
