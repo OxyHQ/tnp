@@ -16,6 +16,8 @@ export interface IDomain extends Document {
   oxyUserId: string;
   status: "active" | "pending" | "suspended";
   records: IRecord[];
+  serviceNodeId?: Types.ObjectId;
+  serviceNodePubKey?: string;
   createdAt: Date;
   expiresAt: Date;
   updatedAt: Date;
@@ -66,6 +68,13 @@ const DomainSchema = new Schema<IDomain>(
       default: "active",
     },
     records: [RecordSchema],
+    serviceNodeId: {
+      type: Schema.Types.ObjectId,
+      ref: "ServiceNode",
+    },
+    serviceNodePubKey: {
+      type: String,
+    },
     expiresAt: { type: Date },
   },
   { timestamps: true }

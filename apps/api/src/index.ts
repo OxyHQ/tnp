@@ -9,6 +9,8 @@ import tldsRouter from "./routes/tlds.js";
 import domainsRouter from "./routes/domains.js";
 import clientRouter from "./routes/client.js";
 import dnsRouter from "./routes/dns.js";
+import nodesRouter from "./routes/nodes.js";
+import relaysRouter from "./routes/relays.js";
 
 const app = express();
 
@@ -45,6 +47,8 @@ const optionalAuth: express.RequestHandler = (req, res, next) => {
 
 app.use("/tlds", optionalAuth, tldsRouter);
 app.use("/domains", optionalAuth, domainsRouter);
+app.use("/nodes", optionalAuth, nodesRouter);
+app.use("/relays", optionalAuth, relaysRouter);
 
 async function start() {
   await mongoose.connect(config.mongoUri, { dbName: config.dbName });

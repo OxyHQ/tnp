@@ -4,6 +4,7 @@ import { useAuth } from "../lib/auth";
 const navLinks = [
   { label: "explore", href: "/explore" },
   { label: "domains", href: "/domains" },
+  { label: "network", href: "/network" },
   { label: "propose", href: "/propose" },
   { label: "install", href: "/install" },
 ];

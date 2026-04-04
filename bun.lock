@@ -30,6 +30,10 @@
         "dns2": "^2.1.0",
       },
     },
+    "apps/relay": {
+      "name": "@tnp/relay",
+      "version": "1.0.0",
+    },
     "apps/web": {
       "name": "@tnp/web",
       "version": "1.0.0",
@@ -61,6 +65,7 @@
       },
       "dependencies": {
         "dns2": "^2.1.0",
+        "tweetnacl": "^1.0.3",
       },
     },
   },
@@ -280,6 +285,8 @@
     "@tnp/client": ["@tnp/client@workspace:packages/client"],
 
     "@tnp/dns-server": ["@tnp/dns-server@workspace:apps/dns-server"],
+
+    "@tnp/relay": ["@tnp/relay@workspace:apps/relay"],
 
     "@tnp/web": ["@tnp/web@workspace:apps/web"],
 
@@ -952,6 +959,8 @@
     "tree-kill": ["tree-kill@1.2.2", "", { "bin": { "tree-kill": "cli.js" } }, "sha512-L0Orpi8qGpRG//Nd+H90vFB+3iHnue1zSSGmNOOCh1GLJ7rUKVwV2HvijphGQS2UmhUZewS9VgvxYIdgr+fG1A=="],
 
     "tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
+    "tweetnacl": ["tweetnacl@1.0.3", "", {}, "sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw=="],
 
     "type-detect": ["type-detect@4.0.8", "", {}, "sha512-0fr/mIH1dlO+x7TlcMy+bIDqKPsw/70tVyeHW787goQjhmqaZe10uwLujubK9q9Lg6Fiho1KUKDYz0Z7k7g5/g=="],
 

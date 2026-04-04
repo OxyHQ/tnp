@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
+import { Link } from "react-router-dom";
 import { apiFetch } from "../lib/api";
 import RecordEditor from "../components/RecordEditor";
 
@@ -63,6 +64,21 @@ export default function Dashboard() {
         <title>Dashboard — TNP</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
+      <div className="mb-8 flex gap-3">
+        <Link
+          to="/dashboard"
+          className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-accent/30 bg-accent/10 text-accent"
+        >
+          Domains
+        </Link>
+        <Link
+          to="/service-nodes"
+          className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-edge text-muted hover:text-secondary"
+        >
+          Service Nodes
+        </Link>
+      </div>
+
       <h1 className="mb-8 font-pixel text-xl text-accent">
         Your Domains
       </h1>

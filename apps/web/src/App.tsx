@@ -7,6 +7,8 @@ import Explore from "./pages/Explore";
 import Register from "./pages/Register";
 import Domains from "./pages/Domains";
 import Dashboard from "./pages/Dashboard";
+import ServiceNodes from "./pages/ServiceNodes";
+import Network from "./pages/Network";
 import Propose from "./pages/Propose";
 import Install from "./pages/Install";
 import DomainDetail from "./pages/DomainDetail";
@@ -32,6 +34,15 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/service-nodes"
+            element={
+              <ProtectedRoute>
+                <ServiceNodes />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/network" element={<Network />} />
           <Route path="/propose" element={<Propose />} />
           <Route path="/install" element={<Install />} />
         </Route>

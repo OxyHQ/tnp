@@ -8,15 +8,11 @@ export interface TnpConfig {
   apiBaseUrl: string;
   upstreamDns: string;
   cacheTtlSeconds: number;
+  privacyLevel: "access" | "private";
+  socksPort: number;
+  relayPreference: "oxy" | "community" | "any";
+  identityKeyPath: string;
 }
-
-const DEFAULT_CONFIG: TnpConfig = {
-  listenAddr: "127.0.0.1",
-  listenPort: 5354,
-  apiBaseUrl: "https://api.tnp.network",
-  upstreamDns: "1.1.1.1",
-  cacheTtlSeconds: 300,
-};
 
 export function configDir(): string {
   switch (process.platform) {
@@ -52,6 +48,18 @@ export function logPath(): string {
       return "/var/log/tnp-resolver.log";
   }
 }
+
+const DEFAULT_CONFIG: TnpConfig = {
+  listenAddr: "127.0.0.1",
+  listenPort: 5354,
+  apiBaseUrl: "https://api.tnp.network",
+  upstreamDns: "1.1.1.1",
+  cacheTtlSeconds: 300,
+  privacyLevel: "access",
+  socksPort: 1080,
+  relayPreference: "oxy",
+  identityKeyPath: join(dataDir(), "identity.key"),
+};
 
 export function loadConfig(): TnpConfig {
   const path = configPath();

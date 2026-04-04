@@ -1,6 +1,7 @@
 import { Router } from "express";
 import Domain from "../models/Domain.js";
 import TLD from "../models/TLD.js";
+import ServiceNode from "../models/ServiceNode.js";
 
 const router = Router();
 
@@ -66,7 +67,20 @@ router.get("/resolve", async (req, res) => {
         ttl: r.ttl,
       }));
 
-    res.json({ name: fqdn, type: qtype, answers });
+    const response: Record<string, unknown> = { name: fqdn, type: qtype, answers };
+
+    if (domain.serviceNodeId) {
+      const serviceNode = await ServiceNode.findById(domain.serviceNodeId);
+      if (serviceNode && serviceNode.status === "online") {
+        response.overlay = {
+          serviceNodePubKey: serviceNode.publicKey,
+          relay: serviceNode.connectedRelay,
+          available: true,
+        };
+      }
+    }
+
+    res.json(response);
   } catch (err) {
     console.error("DNS resolve error:", err);
     res.status(500).json({ error: "Failed to resolve" });

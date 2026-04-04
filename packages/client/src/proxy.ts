@@ -1,4 +1,4 @@
-import { TnpApiClient, type DnsAnswer } from "./api";
+import { TnpApiClient, type DnsAnswer, type ResolveResponse } from "./api";
 import type { TnpConfig } from "./config";
 import dgram from "dgram";
 import net from "net";
@@ -43,10 +43,43 @@ export class DnsProxy {
   private tcpServer: net.Server | null = null;
   private config: TnpConfig;
 
+  /**
+   * Overlay info cache. When a domain has an active service node, the DNS proxy
+   * returns 127.0.0.1 so traffic goes through the local SOCKS5 proxy.
+   * The SOCKS5 proxy reads from this cache to find the relay + pubkey.
+   */
+  private overlayCache = new Map<string, { pubKey: string; relay: string }>();
+
+  /** Whether overlay routing is enabled (set when SOCKS5 proxy is running) */
+  private overlayEnabled = false;
+
   constructor(config: TnpConfig) {
     this.config = config;
     this.apiClient = new TnpApiClient(config.apiBaseUrl);
     this.cacheTtlMs = config.cacheTtlSeconds * 1000;
+  }
+
+  /** Enable overlay routing (DNS returns 127.0.0.1 for overlay domains). */
+  enableOverlay(): void {
+    this.overlayEnabled = true;
+  }
+
+  /** Disable overlay routing. */
+  disableOverlay(): void {
+    this.overlayEnabled = false;
+  }
+
+  /**
+   * Get overlay info for a domain. Used by the SOCKS5 proxy.
+   */
+  getOverlayInfo(domain: string): { pubKey: string; relay: string } | undefined {
+    const clean = domain.replace(/\.$/, "").toLowerCase();
+    return this.overlayCache.get(clean);
+  }
+
+  /** Expose the API client for shared use by other components. */
+  getApiClient(): TnpApiClient {
+    return this.apiClient;
   }
 
   setTlds(tlds: string[]) {
@@ -91,9 +124,36 @@ export class DnsProxy {
     const cacheKey = `${clean}:${type}`;
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() < cached.expiresAt) return cached.answers;
-    const answers = await this.apiClient.resolve(clean, type);
-    this.cache.set(cacheKey, { answers, expiresAt: Date.now() + this.cacheTtlMs });
-    return answers;
+
+    // Fetch full resolve response with overlay info
+    const response = await this.apiClient.resolveWithOverlay(clean, type);
+
+    // If overlay is enabled and the domain has an active service node,
+    // cache the overlay info and return 127.0.0.1 to route through SOCKS5
+    if (this.overlayEnabled && response.overlay?.available) {
+      this.overlayCache.set(clean, {
+        pubKey: response.overlay.serviceNodePubKey,
+        relay: response.overlay.relay,
+      });
+
+      // Return a synthetic A record pointing to localhost
+      if (type === "A" || type === "ANY") {
+        const syntheticAnswers: DnsAnswer[] = [
+          { name: clean, type: "A", value: "127.0.0.1", ttl: 60 },
+        ];
+        this.cache.set(cacheKey, {
+          answers: syntheticAnswers,
+          expiresAt: Date.now() + this.cacheTtlMs,
+        });
+        return syntheticAnswers;
+      }
+    }
+
+    this.cache.set(cacheKey, {
+      answers: response.answers,
+      expiresAt: Date.now() + this.cacheTtlMs,
+    });
+    return response.answers;
   }
 
   /**
@@ -111,11 +171,7 @@ export class DnsProxy {
 
     const res = await fetch(
       `https://8.8.8.8/resolve?name=${encodeURIComponent(qname)}&type=${qtype}`,
-      {
-        signal: AbortSignal.timeout(4000),
-        // @ts-expect-error Bun supports tls option on fetch
-        tls: { rejectUnauthorized: false },
-      }
+      { signal: AbortSignal.timeout(4000) },
     );
 
     if (!res.ok) throw new Error(`DoH returned ${res.status}`);
@@ -311,7 +367,7 @@ export class DnsProxy {
       setTimeout(() => {
         self.handleQuery(Buffer.from(msg))
           .then((response) => {
-            self.udpServer!.send(response, 0, response.length, rinfo.port, rinfo.address);
+            self.udpServer?.send(response, 0, response.length, rinfo.port, rinfo.address);
           })
           .catch((err) => {
             console.error(`[tnp] udp error: ${err instanceof Error ? err.stack : err}`);
