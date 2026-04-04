@@ -1,7 +1,9 @@
 import { Router } from "express";
+import mongoose from "mongoose";
 import TLD from "../models/TLD.js";
 import TLDProposal from "../models/TLDProposal.js";
 import User from "../models/User.js";
+import Vote from "../models/Vote.js";
 import { requireAuth } from "../middleware/auth.js";
 import type { AuthRequest } from "../middleware/auth.js";
 
@@ -55,7 +57,11 @@ router.post("/propose", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
 
-    const oxyUserId = req.user!.id;
+    const oxyUserId = req.user?.id;
+    if (!oxyUserId) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
     const user = await findOrCreateUser(oxyUserId);
 
     const proposal = await TLDProposal.create({
@@ -77,16 +83,166 @@ router.post("/propose", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// GET /tlds/proposals -- list all proposals
-router.get("/proposals", async (_req, res) => {
+// GET /tlds/proposals -- list all proposals with scores
+router.get("/proposals", async (req: AuthRequest, res) => {
   try {
-    const proposals = await TLDProposal.find()
-      .sort({ votes: -1, createdAt: -1 })
-      .populate("proposedBy", "oxyUserId");
+    let userId: mongoose.Types.ObjectId | null = null;
+    if (req.user?.id) {
+      const user = await User.findOne({ oxyUserId: req.user.id });
+      if (user) userId = user._id;
+    }
+
+    const proposals = await TLDProposal.aggregate([
+      {
+        $lookup: {
+          from: "votes",
+          localField: "_id",
+          foreignField: "proposal",
+          as: "votesDocs",
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "proposedBy",
+          foreignField: "_id",
+          as: "proposedByDoc",
+        },
+      },
+      { $unwind: { path: "$proposedByDoc", preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          score: {
+            $subtract: [
+              { $size: { $filter: { input: "$votesDocs", cond: { $eq: ["$$this.direction", "up"] } } } },
+              { $size: { $filter: { input: "$votesDocs", cond: { $eq: ["$$this.direction", "down"] } } } },
+            ],
+          },
+          userVote: userId
+            ? {
+                $let: {
+                  vars: {
+                    myVote: {
+                      $arrayElemAt: [
+                        { $filter: { input: "$votesDocs", cond: { $eq: ["$$this.user", userId] } } },
+                        0,
+                      ],
+                    },
+                  },
+                  in: { $ifNull: ["$$myVote.direction", null] },
+                },
+              }
+            : null,
+          proposedBy: {
+            _id: "$proposedByDoc._id",
+            oxyUserId: "$proposedByDoc.oxyUserId",
+          },
+        },
+      },
+      { $project: { votesDocs: 0, proposedByDoc: 0 } },
+      { $sort: { score: -1, createdAt: -1 } },
+    ]);
+
     res.json(proposals);
   } catch (err) {
     console.error("List proposals error:", err);
     res.status(500).json({ error: "Failed to list proposals" });
+  }
+});
+
+// POST /tlds/proposals/:id/vote -- upvote or downvote (auth required)
+router.post("/proposals/:id/vote", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { direction } = req.body;
+
+    if (direction !== "up" && direction !== "down") {
+      res.status(400).json({ error: "direction must be 'up' or 'down'" });
+      return;
+    }
+
+    const proposal = await TLDProposal.findById(req.params.id);
+    if (!proposal) {
+      res.status(404).json({ error: "Proposal not found" });
+      return;
+    }
+    if (proposal.status !== "open") {
+      res.status(400).json({ error: "Can only vote on open proposals" });
+      return;
+    }
+
+    const oxyUserId = req.user?.id;
+    if (!oxyUserId) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+    const user = await findOrCreateUser(oxyUserId);
+
+    if (proposal.proposedBy.equals(user._id)) {
+      res.status(403).json({ error: "Cannot vote on your own proposal" });
+      return;
+    }
+
+    await Vote.findOneAndUpdate(
+      { proposal: proposal._id, user: user._id },
+      { direction },
+      { upsert: true }
+    );
+
+    const [counts] = await Vote.aggregate([
+      { $match: { proposal: proposal._id } },
+      {
+        $group: {
+          _id: null,
+          up: { $sum: { $cond: [{ $eq: ["$direction", "up"] }, 1, 0] } },
+          down: { $sum: { $cond: [{ $eq: ["$direction", "down"] }, 1, 0] } },
+        },
+      },
+    ]);
+
+    const score = counts ? counts.up - counts.down : 0;
+
+    res.json({ score, userVote: direction });
+  } catch (err) {
+    console.error("Vote error:", err);
+    res.status(500).json({ error: "Failed to vote" });
+  }
+});
+
+// DELETE /tlds/proposals/:id/vote -- remove vote (auth required)
+router.delete("/proposals/:id/vote", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const proposal = await TLDProposal.findById(req.params.id);
+    if (!proposal) {
+      res.status(404).json({ error: "Proposal not found" });
+      return;
+    }
+
+    const oxyUserId = req.user?.id;
+    if (!oxyUserId) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+    const user = await findOrCreateUser(oxyUserId);
+
+    await Vote.deleteOne({ proposal: proposal._id, user: user._id });
+
+    const [counts] = await Vote.aggregate([
+      { $match: { proposal: proposal._id } },
+      {
+        $group: {
+          _id: null,
+          up: { $sum: { $cond: [{ $eq: ["$direction", "up"] }, 1, 0] } },
+          down: { $sum: { $cond: [{ $eq: ["$direction", "down"] }, 1, 0] } },
+        },
+      },
+    ]);
+
+    const score = counts ? counts.up - counts.down : 0;
+
+    res.json({ score, userVote: null });
+  } catch (err) {
+    console.error("Remove vote error:", err);
+    res.status(500).json({ error: "Failed to remove vote" });
   }
 });
 
