@@ -7,13 +7,15 @@ interface Proposal {
   _id: string;
   tld: string;
   reason: string;
-  votes: number;
+  score: number;
+  userVote: "up" | "down" | null;
   status: "open" | "approved" | "rejected";
+  proposedBy: { _id: string; oxyUserId: string };
   createdAt: string;
 }
 
 export default function Propose() {
-  const { isAuthenticated, signIn } = useAuth();
+  const { isAuthenticated, signIn, user } = useAuth();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [tld, setTld] = useState("");
   const [reason, setReason] = useState("");
@@ -50,6 +52,47 @@ export default function Propose() {
       setError(err instanceof Error ? err.message : "Failed to propose TLD");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleVote = async (proposalId: string, direction: "up" | "down") => {
+    const proposal = proposals.find((p) => p._id === proposalId);
+    if (!proposal) return;
+
+    const isToggle = proposal.userVote === direction;
+
+    // Optimistic update
+    setProposals((prev) =>
+      prev.map((p) => {
+        if (p._id !== proposalId) return p;
+        if (isToggle) {
+          return {
+            ...p,
+            score: p.score + (direction === "up" ? -1 : 1),
+            userVote: null,
+          };
+        }
+        const scoreDelta =
+          direction === "up"
+            ? p.userVote === "down" ? 2 : 1
+            : p.userVote === "up" ? -2 : -1;
+        return { ...p, score: p.score + scoreDelta, userVote: direction };
+      })
+    );
+
+    try {
+      if (isToggle) {
+        await apiFetch(`/tlds/proposals/${proposalId}/vote`, { method: "DELETE" });
+      } else {
+        await apiFetch(`/tlds/proposals/${proposalId}/vote`, {
+          method: "POST",
+          body: JSON.stringify({ direction }),
+        });
+      }
+    } catch {
+      // Revert on error
+      const updated = await apiFetch<Proposal[]>("/tlds/proposals");
+      setProposals(updated);
     }
   };
 
@@ -124,26 +167,67 @@ export default function Propose() {
           {proposals.map((p) => (
             <div
               key={p._id}
-              className="flex items-center justify-between rounded-lg border border-edge bg-surface-card p-4"
+              className="flex items-center gap-4 rounded-lg border border-edge bg-surface-card p-4"
             >
-              <div>
+              {p.status === "open" && isAuthenticated && user?.id !== p.proposedBy?.oxyUserId && (
+                <div className="flex flex-col items-center gap-0.5">
+                  <button
+                    onClick={() => handleVote(p._id, "up")}
+                    className={`cursor-pointer rounded p-1 transition-colors ${
+                      p.userVote === "up"
+                        ? "text-accent"
+                        : "text-muted hover:text-primary"
+                    }`}
+                    aria-label="Upvote"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 4l-8 8h5v8h6v-8h5z" />
+                    </svg>
+                  </button>
+                  <span className={`font-mono text-xs font-medium ${
+                    p.score > 0 ? "text-accent" : p.score < 0 ? "text-red-400" : "text-muted"
+                  }`}>
+                    {p.score}
+                  </span>
+                  <button
+                    onClick={() => handleVote(p._id, "down")}
+                    className={`cursor-pointer rounded p-1 transition-colors ${
+                      p.userVote === "down"
+                        ? "text-red-400"
+                        : "text-muted hover:text-primary"
+                    }`}
+                    aria-label="Downvote"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 20l8-8h-5V4H9v8H4z" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {(p.status !== "open" || !isAuthenticated || user?.id === p.proposedBy?.oxyUserId) && (
+                <div className="flex flex-col items-center justify-center w-8">
+                  <span className={`font-mono text-xs font-medium ${
+                    p.score > 0 ? "text-accent" : p.score < 0 ? "text-red-400" : "text-muted"
+                  }`}>
+                    {p.score}
+                  </span>
+                </div>
+              )}
+              <div className="flex-1">
                 <span className="font-mono text-accent">.{p.tld}</span>
                 <p className="mt-1 font-mono text-xs text-muted">{p.reason}</p>
               </div>
-              <div className="flex items-center gap-3 font-mono text-xs">
-                <span
-                  className={`rounded-md px-2.5 py-0.5 font-medium ${
-                    p.status === "open"
-                      ? "bg-accent/10 text-accent"
-                      : p.status === "approved"
-                        ? "bg-green-500/10 text-green-400"
-                        : "bg-red-500/10 text-red-400"
-                  }`}
-                >
-                  {p.status}
-                </span>
-                <span className="text-muted">{p.votes} votes</span>
-              </div>
+              <span
+                className={`rounded-md px-2.5 py-0.5 font-mono text-xs font-medium ${
+                  p.status === "open"
+                    ? "bg-accent/10 text-accent"
+                    : p.status === "approved"
+                      ? "bg-green-500/10 text-green-400"
+                      : "bg-red-500/10 text-red-400"
+                }`}
+              >
+                {p.status}
+              </span>
             </div>
           ))}
         </div>
