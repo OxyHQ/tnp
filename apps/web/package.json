@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@oxyhq/auth": "^2.0.3",
-    "@oxyhq/core": "^1.11.6",
+    "@oxyhq/auth": "^2.0.4",
+    "@oxyhq/core": "^1.11.10",
     "@react-native-async-storage/async-storage": "^3.0.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
