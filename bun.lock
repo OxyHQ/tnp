@@ -12,7 +12,7 @@
       "name": "@tnp/api",
       "version": "1.0.0",
       "dependencies": {
-        "@oxyhq/core": "^1.11.10",
+        "@oxyhq/core": "^1.11.11",
         "cors": "^2.8.6",
         "dotenv": "^17.3.1",
         "express": "^5.2.1",
@@ -35,7 +35,7 @@
       "version": "1.0.0",
       "dependencies": {
         "@oxyhq/auth": "^2.0.4",
-        "@oxyhq/core": "^1.11.10",
+        "@oxyhq/core": "^1.11.11",
         "@react-native-async-storage/async-storage": "^3.0.1",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
@@ -177,7 +177,7 @@
 
     "@oxyhq/auth": ["@oxyhq/auth@2.0.4", "", { "dependencies": { "@tanstack/react-query": "^5.90.20", "sonner": "^2.0.4", "zustand": "^5.0.9" }, "peerDependencies": { "@oxyhq/core": "*", "react": ">=18.0.0", "socket.io-client": "^4.8.1" }, "optionalPeers": ["socket.io-client"] }, "sha512-FpfmcmyVk66rvwBblAqoRSKJTkQb8wLQ8lLHbIoT7Xgn+7DhXXRc+yP9gFnvLafiFV6C7o3fgkNq9G91JKzC5A=="],
 
-    "@oxyhq/core": ["@oxyhq/core@1.11.10", "", { "dependencies": { "bip39": "^3.1.0", "buffer": "^6.0.3", "elliptic": "^6.6.1", "invariant": "^2.2.4", "jwt-decode": "^4.0.0", "socket.io-client": "^4.8.1", "zod": "^3.25.64" } }, "sha512-BbZHrzuyf21i966B00LwK0vUwveBnoEfeo4xQl+Jps19jR+V8SpfHGTYYxmn3QkCC1W3+jqTOsVbuzU+n+oFOQ=="],
+    "@oxyhq/core": ["@oxyhq/core@1.11.11", "", { "dependencies": { "bip39": "^3.1.0", "buffer": "^6.0.3", "elliptic": "^6.6.1", "invariant": "^2.2.4", "jwt-decode": "^4.0.0", "socket.io-client": "^4.8.1", "zod": "^3.25.64" } }, "sha512-LLAJTeEfqoCVlc4F14U6cQr3/KJBeamMtyHobiAm23/LiSdlVizO7Rvgr5BGCN5SIVZfUH/ApmESkUHFEE0iDA=="],
 
     "@react-native-async-storage/async-storage": ["@react-native-async-storage/async-storage@3.0.2", "", { "dependencies": { "idb": "8.0.3" }, "peerDependencies": { "react": "*", "react-native": "*" } }, "sha512-XP0zDIl+1XoeuQ7f878qXKdl77zLwzLALPpxvNRc7ZtDh9ew36WSvOdQOhFkexMySapFAWxEbZxS8K8J2DU4eg=="],
 
