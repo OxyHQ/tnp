@@ -177,50 +177,49 @@ export default function Propose() {
               key={p._id}
               className="flex items-center gap-4 rounded-lg border border-edge bg-surface-card p-4"
             >
-              {p.status === "open" && isAuthenticated && user?.id !== p.proposedBy?.oxyUserId && (
-                <div className="flex flex-col items-center gap-0.5">
-                  <button
-                    onClick={() => handleVote(p._id, "up")}
-                    className={`cursor-pointer rounded p-1 transition-colors ${
-                      p.userVote === "up"
-                        ? "text-accent"
-                        : "text-muted hover:text-primary"
-                    }`}
-                    aria-label={t("propose:upvote")}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 4l-8 8h5v8h6v-8h5z" />
-                    </svg>
-                  </button>
-                  <span className={`font-mono text-xs font-medium ${
-                    p.score > 0 ? "text-accent" : p.score < 0 ? "text-red-400" : "text-muted"
-                  }`}>
-                    {p.score}
-                  </span>
-                  <button
-                    onClick={() => handleVote(p._id, "down")}
-                    className={`cursor-pointer rounded p-1 transition-colors ${
-                      p.userVote === "down"
-                        ? "text-red-400"
-                        : "text-muted hover:text-primary"
-                    }`}
-                    aria-label={t("propose:downvote")}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 20l8-8h-5V4H9v8H4z" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-              {(p.status !== "open" || !isAuthenticated || user?.id === p.proposedBy?.oxyUserId) && (
-                <div className="flex flex-col items-center justify-center w-8">
-                  <span className={`font-mono text-xs font-medium ${
-                    p.score > 0 ? "text-accent" : p.score < 0 ? "text-red-400" : "text-muted"
-                  }`}>
-                    {p.score}
-                  </span>
-                </div>
-              )}
+              {(() => {
+                const canVote = p.status === "open" && isAuthenticated && user?.id !== p.proposedBy?.oxyUserId;
+                const formattedScore = p.score > 0 ? `+${p.score}` : `${p.score}`;
+                return (
+                  <div className={`flex w-10 flex-col items-center gap-0.5${!canVote ? " justify-center" : ""}`}>
+                    {canVote && (
+                      <button
+                        onClick={() => handleVote(p._id, "up")}
+                        className={`cursor-pointer rounded p-1.5 transition-all duration-150 ${
+                          p.userVote === "up"
+                            ? "bg-accent/10 text-accent"
+                            : "text-muted hover:bg-white/5 hover:text-primary"
+                        }`}
+                        aria-label={t("propose:upvote")}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 4l-8 8h5v8h6v-8h5z" />
+                        </svg>
+                      </button>
+                    )}
+                    <span className={`font-mono text-xs font-medium ${
+                      p.score > 0 ? "text-accent" : p.score < 0 ? "text-red-400" : "text-muted"
+                    }${!canVote ? " cursor-default" : ""}`}>
+                      {formattedScore}
+                    </span>
+                    {canVote && (
+                      <button
+                        onClick={() => handleVote(p._id, "down")}
+                        className={`cursor-pointer rounded p-1.5 transition-all duration-150 ${
+                          p.userVote === "down"
+                            ? "bg-red-400/10 text-red-400"
+                            : "text-muted hover:bg-white/5 hover:text-primary"
+                        }`}
+                        aria-label={t("propose:downvote")}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 20l8-8h-5V4H9v8H4z" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="flex-1">
                 <span className="font-mono text-accent">.{p.tld}</span>
                 <p className="mt-1 font-mono text-xs text-muted">{p.reason}</p>
