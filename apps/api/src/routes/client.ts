@@ -54,7 +54,7 @@ API_URL="https://api.tnp.network"
 REPO="OxyHQ/tnp"
 INSTALL_DIR="/usr/local/bin"
 BINARY_NAME="tnp"
-DNS_IP="206.189.96.213"
+DNS_IP="174.138.10.81"
 DNS_HOST="dns.tnp.network"
 
 # ── Welcome banner ───────────────────────────────────────────────────────────
@@ -451,7 +451,7 @@ $ApiUrl      = "https://api.tnp.network"
 $Repo        = "OxyHQ/tnp"
 $InstallDir  = "$env:ProgramFiles\\tnp"
 $BinaryName  = "tnp.exe"
-$DnsIp       = "206.189.96.213"
+$DnsIp       = "174.138.10.81"
 $DnsHost     = "dns.tnp.network"
 
 # ── Logging helpers ──────────────────────────────────────────────────────────
@@ -512,8 +512,8 @@ function Get-Platform {
     $arch = $env:PROCESSOR_ARCHITECTURE
     switch ($arch) {
         "AMD64"   { return "windows-x64" }
+        "ARM64"   { Write-Info "ARM64 detected -- using x64 binary (runs via emulation)"; return "windows-x64" }
         "x86"     { Exit-Fatal "32-bit Windows is not supported." }
-        "ARM64"   { Exit-Fatal "ARM64 Windows is not yet supported. Coming soon." }
         default   { Exit-Fatal "Unknown architecture: $arch" }
     }
 }

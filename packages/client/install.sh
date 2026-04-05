@@ -43,7 +43,7 @@ API_URL="https://api.tnp.network"
 REPO="OxyHQ/tnp"
 INSTALL_DIR="/usr/local/bin"
 BINARY_NAME="tnp"
-DNS_IP="206.189.96.213"
+DNS_IP="174.138.10.81"
 DNS_HOST="dns.tnp.network"
 
 # ── Welcome banner ───────────────────────────────────────────────────────────
