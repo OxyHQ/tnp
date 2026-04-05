@@ -50,7 +50,12 @@ router.get("/resolve", async (req, res) => {
     });
 
     if (!domain) {
-      res.json({ name: fqdn, type: qtype, answers: [] });
+      // Domain not registered — return parking IP so the browser shows the "available" page
+      const answers: DnsAnswer[] = [];
+      if (config.parkingIp && (qtype === "A" || qtype === "ANY")) {
+        answers.push({ name: fqdn, type: "A", value: config.parkingIp, ttl: 300 });
+      }
+      res.json({ name: fqdn, type: qtype, answers });
       return;
     }
 

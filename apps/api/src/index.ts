@@ -74,8 +74,8 @@ app.use(async (req, res, next) => {
   const isRegistered = !!domain;
   const hasRecords = domain ? domain.records.length > 0 : false;
 
-  // If domain has records, let it pass (user should have a service node handling it)
-  if (hasRecords) return next();
+  // If domain has a service node, let it pass (overlay handles it)
+  if (domain?.serviceNodeId) return next();
 
   const title = isRegistered
     ? `${host} — Registered on TNP`
