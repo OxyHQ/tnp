@@ -27,7 +27,8 @@ apps/
   dns-server/     @tnp/dns-server   DNS daemon (dns2 library)
   relay/          @tnp/relay        WebSocket relay server for overlay network
 packages/
-  client/         @tnp/client       CLI client & local DNS proxy (compiles to binary)
+  client/         @tnp/client       Interactive CLI, DNS proxy, SOCKS5 proxy, tunnel manager,
+                                    service node, embedded relay (compiles to standalone binary)
 ```
 
 ## How It Works
@@ -65,9 +66,37 @@ The web app supports 5 languages via `react-i18next`:
 - **DB**: DigitalOcean managed MongoDB (`db-oxy` cluster), database `tnp-production`
 - **Installer**: `curl -fsSL https://get.tnp.network | sh` (served by API via Host header routing)
 
+## Client CLI
+
+Interactive menu when run with no args (`tnp`). Also supports direct commands:
+
+```
+tnp                  # Interactive menu (arrow keys, settings, status, become a node)
+tnp run              # DNS resolver daemon (foreground)
+tnp connect          # Overlay client (DNS + SOCKS5 proxy)
+tnp serve            # Host a service on a TNP domain
+tnp relay            # Run as a community relay node
+tnp install          # Install as system service
+tnp uninstall        # Remove system service
+tnp status           # Check resolver status
+tnp test <domain>    # Test domain resolution
+```
+
+### Key client modules (packages/client/src/)
+- `interactive.ts` — Interactive terminal menu (ASCII UI, arrow navigation, settings editor)
+- `proxy.ts` — DNS proxy (returns 127.0.0.1 for overlay domains → routes to SOCKS5)
+- `socks.ts` — SOCKS5 proxy (RFC 1928, routes TNP domains through encrypted tunnels)
+- `tunnel.ts` — WebSocket tunnel manager (circuit multiplexing, E2E encryption)
+- `crypto.ts` — NaCl crypto (X25519 + XSalsa20-Poly1305 via tweetnacl, pure JS)
+- `service-node.ts` — Service node mode (`tnp serve`)
+- `relay-node.ts` — Embedded relay node (from interactive menu → "Become a Node")
+- `frames.ts` — Binary frame protocol (DATA/OPEN/OPENED/CLOSE/ERROR, matches apps/relay)
+
 ## Dependencies
 
 - `@oxyhq/core`, `@oxyhq/auth` — Oxy platform integration (SSO, auth)
+- `tweetnacl` — Pure JS crypto (X25519, XSalsa20-Poly1305) in client package
+- `dns2` — DNS packet encoding/decoding in client package
 - `react-i18next`, `i18next` — Internationalization
 - `i18next-http-backend` — Lazy-load translation files
 - `i18next-browser-languagedetector` — Browser language detection
