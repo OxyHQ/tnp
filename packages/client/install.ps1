@@ -165,9 +165,24 @@ function Install-Binary {
 
     # Stop any running TNP process before overwriting
     Get-Process -Name "tnp" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
 
-    # Move binary
-    Move-Item -Path $TmpFile -Destination $target -Force
+    # Remove existing binary first (Move-Item -Force can fail if file is locked)
+    if (Test-Path $target) {
+        try {
+            Remove-Item $target -Force
+        }
+        catch {
+            # If still locked, try renaming the old file aside and clean up later
+            $oldTarget = "$target.old"
+            Rename-Item $target $oldTarget -Force -ErrorAction SilentlyContinue
+            Write-Warn "Moved old binary to $oldTarget (will be cleaned up)"
+        }
+    }
+
+    # Copy new binary into place
+    Copy-Item -Path $TmpFile -Destination $target -Force
+    Remove-Item $TmpFile -Force -ErrorAction SilentlyContinue
 
     # Add to PATH if not already there
     $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
