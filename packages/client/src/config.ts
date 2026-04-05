@@ -16,6 +16,8 @@ export interface TnpConfig {
   relayLocation: string;
   relayMaxConnections: number;
   relayAuthToken: string;
+  autoConnect: boolean;
+  killSwitch: boolean;
 }
 
 export function configDir(): string {
@@ -67,6 +69,8 @@ const DEFAULT_CONFIG: TnpConfig = {
   relayLocation: "",
   relayMaxConnections: 100,
   relayAuthToken: "",
+  autoConnect: false,
+  killSwitch: false,
 };
 
 export function loadConfig(): TnpConfig {

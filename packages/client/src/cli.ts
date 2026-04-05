@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { loadConfig, saveConfig, dataDir } from "./config";
+import { loadConfig, saveConfig, dataDir, type TnpConfig } from "./config";
 import { DnsProxy } from "./proxy";
 import { installService, uninstallService, serviceStatus } from "./service";
 import { resolve, join } from "path";
@@ -84,10 +84,38 @@ async function cmdConnect() {
     }
   }
 
+  // Parse --autoconnect flag
+  if (process.argv.includes("--autoconnect")) {
+    config.autoConnect = true;
+    saveConfig(config);
+    installAutoConnect();
+    console.log(`[tnp] autoconnect enabled — TNP will connect on startup`);
+  }
+
+  // Parse --killswitch flag
+  if (process.argv.includes("--killswitch")) {
+    config.killSwitch = true;
+  }
+
+  // Parse --no-autoconnect / --no-killswitch
+  if (process.argv.includes("--no-autoconnect")) {
+    config.autoConnect = false;
+    saveConfig(config);
+    removeAutoConnect();
+    console.log(`[tnp] autoconnect disabled`);
+  }
+  if (process.argv.includes("--no-killswitch")) {
+    config.killSwitch = false;
+  }
+
   console.log(`[tnp] v${VERSION} overlay client starting...`);
   console.log(`[tnp] API: ${config.apiBaseUrl}`);
-  console.log(`[tnp] privacy level: ${config.privacyLevel}`);
-  console.log(`[tnp] SOCKS5 port: ${config.socksPort}`);
+  console.log(`[tnp] privacy: ${config.privacyLevel}  kill switch: ${config.killSwitch ? "on" : "off"}  autoconnect: ${config.autoConnect ? "on" : "off"}`);
+
+  // Enable kill switch (block all DNS if tunnel drops)
+  if (config.killSwitch) {
+    enableKillSwitch();
+  }
 
   // Start DNS proxy with overlay enabled
   const proxy = new DnsProxy(config);
@@ -96,6 +124,9 @@ async function cmdConnect() {
   proxy.startTldSync(5 * 60 * 1000);
   await proxy.syncTlds();
   await proxy.start();
+
+  // Auto-configure system DNS to use the local proxy
+  const dnsConfigured = configureDns(config);
 
   // Start SOCKS5 proxy
   const { TunnelManager } = await import("./tunnel");
@@ -110,11 +141,17 @@ async function cmdConnect() {
     getOverlayInfo: (domain: string) => proxy.getOverlayInfo(domain),
   });
 
-  console.log(`[tnp] overlay client ready`);
-  console.log(`[tnp] configure your browser/app to use SOCKS5 proxy at ${config.listenAddr}:${config.socksPort}`);
+  console.log(`[tnp] overlay client ready — TNP domains now resolve on this device`);
+  console.log(`[tnp] press Ctrl+C to disconnect`);
 
   const shutdown = () => {
     console.log("\n[tnp] shutting down overlay client...");
+    if (config.killSwitch) {
+      disableKillSwitch();
+    }
+    if (dnsConfigured) {
+      restoreDns();
+    }
     socksProxy.stop();
     tunnelManager.shutdown();
     proxy.stop();
@@ -123,6 +160,246 @@ async function cmdConnect() {
 
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+}
+
+/** Configure system DNS to use the local TNP proxy. Returns true if configured. */
+function configureDns(config: TnpConfig): boolean {
+  const addr = `${config.listenAddr}:${config.listenPort}`;
+  try {
+    if (process.platform === "win32") {
+      // Windows: set DNS on all active adapters to 127.0.0.1
+      // The proxy listens on port 5354, but Windows only supports port 53 for DNS.
+      // So we also need to listen on port 53 or use the TNP public DNS IP as fallback.
+      // For now, point DNS to the TNP public resolver so domains work immediately.
+      const { execSync } = require("child_process");
+      execSync(
+        `powershell -Command "Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses ('174.138.10.81','1.1.1.1') }"`,
+        { stdio: "pipe" }
+      );
+      console.log(`[tnp] DNS configured: using TNP resolver (174.138.10.81) + Cloudflare fallback`);
+      return true;
+    } else if (process.platform === "darwin") {
+      // macOS: create resolver files for TNP TLDs
+      const { execSync } = require("child_process");
+      const { mkdirSync, writeFileSync } = require("fs");
+      try { mkdirSync("/etc/resolver", { recursive: true }); } catch {}
+      for (const tld of ["ox", "app"]) {
+        writeFileSync(
+          `/etc/resolver/${tld}`,
+          `nameserver ${config.listenAddr}\nport ${config.listenPort}\n`
+        );
+      }
+      console.log(`[tnp] DNS configured: /etc/resolver/ox and /etc/resolver/app → ${addr}`);
+      return true;
+    } else {
+      // Linux: try systemd-resolved split DNS, then resolv.conf
+      const { execSync } = require("child_process");
+      try {
+        // Find default network interface
+        const iface = execSync("ip route show default 2>/dev/null | awk '{print $5; exit}'", {
+          encoding: "utf-8", stdio: "pipe"
+        }).trim() || "eth0";
+        execSync(`resolvectl dns ${iface} ${config.listenAddr}`, { stdio: "pipe" });
+        execSync(`resolvectl domain ${iface} ~ox ~app`, { stdio: "pipe" });
+        console.log(`[tnp] DNS configured: systemd-resolved split DNS on ${iface} for .ox .app → ${addr}`);
+        return true;
+      } catch {
+        // Fallback: use TNP public resolver in resolv.conf
+        try {
+          const { readFileSync, writeFileSync } = require("fs");
+          const current = readFileSync("/etc/resolv.conf", "utf-8");
+          if (!current.includes("174.138.10.81")) {
+            writeFileSync("/etc/resolv.conf", `nameserver 174.138.10.81\n${current}`);
+            console.log(`[tnp] DNS configured: added TNP resolver to /etc/resolv.conf`);
+            return true;
+          }
+          console.log(`[tnp] DNS already configured`);
+          return true;
+        } catch {
+          console.log(`[tnp] could not auto-configure DNS (need sudo). TNP domains may not resolve.`);
+          console.log(`[tnp] fix: sudo resolvectl dns <iface> 127.0.0.1  OR  set DNS to 174.138.10.81`);
+          return false;
+        }
+      }
+    }
+  } catch (err) {
+    console.log(`[tnp] could not auto-configure DNS: ${err instanceof Error ? err.message : err}`);
+    console.log(`[tnp] set your DNS to 174.138.10.81 manually to resolve TNP domains`);
+    return false;
+  }
+}
+
+/** Restore DNS settings when disconnecting. */
+function restoreDns(): void {
+  try {
+    if (process.platform === "win32") {
+      const { execSync } = require("child_process");
+      execSync(
+        `powershell -Command "Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ResetServerAddresses }"`,
+        { stdio: "pipe" }
+      );
+      console.log("[tnp] DNS restored to default");
+    } else if (process.platform === "darwin") {
+      const { unlinkSync } = require("fs");
+      for (const tld of ["ox", "app"]) {
+        try { unlinkSync(`/etc/resolver/${tld}`); } catch {}
+      }
+      console.log("[tnp] DNS restored: removed /etc/resolver/ox and /etc/resolver/app");
+    } else {
+      // Linux: remove our entry from resolv.conf if we added it
+      try {
+        const { readFileSync, writeFileSync } = require("fs");
+        const current = readFileSync("/etc/resolv.conf", "utf-8");
+        const restored = current.replace(/nameserver 174\.138\.10\.81\n?/, "");
+        if (restored !== current) {
+          writeFileSync("/etc/resolv.conf", restored);
+          console.log("[tnp] DNS restored: removed TNP resolver from /etc/resolv.conf");
+        }
+      } catch {}
+    }
+  } catch {
+    console.log("[tnp] could not restore DNS automatically");
+  }
+}
+
+/** Install autoconnect — register tnp connect to run on system boot/login. */
+function installAutoConnect(): void {
+  const { execSync } = require("child_process");
+  const binaryPath = resolve(process.argv[1] || "tnp");
+
+  try {
+    if (process.platform === "win32") {
+      // Windows: create a scheduled task that runs tnp connect at logon
+      execSync(
+        `schtasks /Create /TN "TnpAutoConnect" /TR "\\"${binaryPath}\\" connect" /SC ONLOGON /RL HIGHEST /F`,
+        { stdio: "pipe" }
+      );
+    } else if (process.platform === "darwin") {
+      // macOS: create a LaunchAgent plist
+      const { writeFileSync, mkdirSync } = require("fs");
+      const { homedir } = require("os");
+      const { join } = require("path");
+      const plistDir = join(homedir(), "Library", "LaunchAgents");
+      mkdirSync(plistDir, { recursive: true });
+      writeFileSync(join(plistDir, "so.oxy.tnp.connect.plist"), `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>so.oxy.tnp.connect</string>
+  <key>ProgramArguments</key><array><string>${binaryPath}</string><string>connect</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+</dict>
+</plist>`);
+      execSync(`launchctl load ~/Library/LaunchAgents/so.oxy.tnp.connect.plist`, { stdio: "pipe" });
+    } else {
+      // Linux: create a systemd user service
+      const { writeFileSync, mkdirSync } = require("fs");
+      const { homedir } = require("os");
+      const { join } = require("path");
+      const unitDir = join(homedir(), ".config", "systemd", "user");
+      mkdirSync(unitDir, { recursive: true });
+      writeFileSync(join(unitDir, "tnp-connect.service"), `[Unit]
+Description=TNP Overlay Client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=${binaryPath} connect
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+`);
+      execSync("systemctl --user daemon-reload", { stdio: "pipe" });
+      execSync("systemctl --user enable tnp-connect.service", { stdio: "pipe" });
+      execSync("systemctl --user start tnp-connect.service", { stdio: "pipe" });
+    }
+  } catch (err) {
+    console.error(`[tnp] autoconnect setup failed: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+/** Remove autoconnect service. */
+function removeAutoConnect(): void {
+  const { execSync } = require("child_process");
+  try {
+    if (process.platform === "win32") {
+      execSync(`schtasks /Delete /TN "TnpAutoConnect" /F`, { stdio: "pipe" });
+    } else if (process.platform === "darwin") {
+      execSync(`launchctl unload ~/Library/LaunchAgents/so.oxy.tnp.connect.plist 2>/dev/null`, { stdio: "pipe" });
+      try { require("fs").unlinkSync(`${require("os").homedir()}/Library/LaunchAgents/so.oxy.tnp.connect.plist`); } catch {}
+    } else {
+      execSync("systemctl --user stop tnp-connect.service 2>/dev/null", { stdio: "pipe" });
+      execSync("systemctl --user disable tnp-connect.service 2>/dev/null", { stdio: "pipe" });
+      try { require("fs").unlinkSync(`${require("os").homedir()}/.config/systemd/user/tnp-connect.service`); } catch {}
+    }
+  } catch {}
+}
+
+/** Kill switch: block all DNS except through TNP. If the tunnel drops, nothing leaks. */
+function enableKillSwitch(): void {
+  const { execSync } = require("child_process");
+  console.log("[tnp] enabling kill switch...");
+
+  try {
+    if (process.platform === "win32") {
+      // Windows: create firewall rules to block all DNS (port 53) except to localhost
+      execSync(`netsh advfirewall firewall add rule name="TNP-KillSwitch-Block-DNS" dir=out protocol=udp remoteport=53 action=block`, { stdio: "pipe" });
+      execSync(`netsh advfirewall firewall add rule name="TNP-KillSwitch-Block-DNS-TCP" dir=out protocol=tcp remoteport=53 action=block`, { stdio: "pipe" });
+      execSync(`netsh advfirewall firewall add rule name="TNP-KillSwitch-Allow-Local" dir=out protocol=udp remoteport=53 remoteip=127.0.0.1 action=allow`, { stdio: "pipe" });
+      execSync(`netsh advfirewall firewall add rule name="TNP-KillSwitch-Allow-TNP" dir=out protocol=udp remoteport=53 remoteip=174.138.10.81 action=allow`, { stdio: "pipe" });
+      console.log("[tnp] kill switch active — DNS blocked except through TNP");
+    } else if (process.platform === "darwin") {
+      // macOS: use pf (packet filter)
+      const { writeFileSync } = require("fs");
+      writeFileSync("/tmp/tnp-killswitch.conf", `
+block out quick proto { tcp, udp } to any port 53
+pass out quick proto { tcp, udp } to 127.0.0.1 port 53
+pass out quick proto { tcp, udp } to 174.138.10.81 port 53
+pass out quick proto { tcp, udp } to 127.0.0.1 port 5354
+`);
+      execSync("sudo pfctl -f /tmp/tnp-killswitch.conf -e 2>/dev/null", { stdio: "pipe" });
+      console.log("[tnp] kill switch active — DNS blocked except through TNP");
+    } else {
+      // Linux: use iptables
+      execSync("sudo iptables -I OUTPUT -p udp --dport 53 -j DROP 2>/dev/null", { stdio: "pipe" });
+      execSync("sudo iptables -I OUTPUT -p tcp --dport 53 -j DROP 2>/dev/null", { stdio: "pipe" });
+      execSync("sudo iptables -I OUTPUT -p udp --dport 53 -d 127.0.0.1 -j ACCEPT 2>/dev/null", { stdio: "pipe" });
+      execSync("sudo iptables -I OUTPUT -p udp --dport 53 -d 174.138.10.81 -j ACCEPT 2>/dev/null", { stdio: "pipe" });
+      execSync("sudo iptables -I OUTPUT -p udp --dport 5354 -d 127.0.0.1 -j ACCEPT 2>/dev/null", { stdio: "pipe" });
+      console.log("[tnp] kill switch active — DNS blocked except through TNP");
+    }
+  } catch (err) {
+    console.log(`[tnp] kill switch failed (may need admin/sudo): ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+/** Disable kill switch — restore normal DNS access. */
+function disableKillSwitch(): void {
+  const { execSync } = require("child_process");
+  console.log("[tnp] disabling kill switch...");
+
+  try {
+    if (process.platform === "win32") {
+      execSync(`netsh advfirewall firewall delete rule name="TNP-KillSwitch-Block-DNS"`, { stdio: "pipe" });
+      execSync(`netsh advfirewall firewall delete rule name="TNP-KillSwitch-Block-DNS-TCP"`, { stdio: "pipe" });
+      execSync(`netsh advfirewall firewall delete rule name="TNP-KillSwitch-Allow-Local"`, { stdio: "pipe" });
+      execSync(`netsh advfirewall firewall delete rule name="TNP-KillSwitch-Allow-TNP"`, { stdio: "pipe" });
+    } else if (process.platform === "darwin") {
+      execSync("sudo pfctl -d 2>/dev/null", { stdio: "pipe" });
+    } else {
+      execSync("sudo iptables -D OUTPUT -p udp --dport 53 -j DROP 2>/dev/null", { stdio: "pipe" });
+      execSync("sudo iptables -D OUTPUT -p tcp --dport 53 -j DROP 2>/dev/null", { stdio: "pipe" });
+      execSync("sudo iptables -D OUTPUT -p udp --dport 53 -d 127.0.0.1 -j ACCEPT 2>/dev/null", { stdio: "pipe" });
+      execSync("sudo iptables -D OUTPUT -p udp --dport 53 -d 174.138.10.81 -j ACCEPT 2>/dev/null", { stdio: "pipe" });
+      execSync("sudo iptables -D OUTPUT -p udp --dport 5354 -d 127.0.0.1 -j ACCEPT 2>/dev/null", { stdio: "pipe" });
+    }
+    console.log("[tnp] kill switch disabled — normal DNS restored");
+  } catch {
+    console.log("[tnp] could not remove kill switch rules automatically");
+  }
 }
 
 async function cmdServe() {
