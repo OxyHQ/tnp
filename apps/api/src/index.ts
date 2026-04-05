@@ -47,16 +47,29 @@ app.get("/health", (_req, res) => {
 // Routes with mixed auth -- oxy.auth() sets req.user if token present,
 // individual handlers use requireAuth for write operations.
 // Wrapping in optionalAuth so GET requests work without a token.
-const optionalAuth: express.RequestHandler = (req, res, next) => {
+const optionalAuth: express.RequestHandler = (req, _res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return next();
   }
-  oxyAuth(req, res, (err?: unknown) => {
-    if (err) {
-      (req as Record<string, unknown>).user = undefined;
+  // Intercept oxyAuth: if auth fails, skip auth and continue.
+  // oxyAuth may write 401 directly to res, so we use a dummy response
+  // that absorbs the error and calls next() instead.
+  let resolved = false;
+  const dummyRes = {
+    status: () => dummyRes,
+    json: () => { if (!resolved) { resolved = true; (req as Record<string, unknown>).user = undefined; next(); } return dummyRes; },
+    send: () => { if (!resolved) { resolved = true; (req as Record<string, unknown>).user = undefined; next(); } return dummyRes; },
+    end: () => { if (!resolved) { resolved = true; (req as Record<string, unknown>).user = undefined; next(); } return dummyRes; },
+    setHeader: () => dummyRes,
+    getHeader: () => undefined,
+    headersSent: false,
+  };
+  oxyAuth(req, dummyRes as unknown as express.Response, () => {
+    if (!resolved) {
+      resolved = true;
+      next();
     }
-    next();
   });
 };
 
