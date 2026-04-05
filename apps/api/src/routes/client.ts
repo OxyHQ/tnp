@@ -2,7 +2,7 @@ import { Router } from "express";
 
 const router = Router();
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 const REPO = "OxyHQ/tnp";
 const BASE = `https://github.com/${REPO}/releases/download/v${VERSION}`;
 
@@ -511,7 +511,7 @@ function Show-Banner {
 function Get-Platform {
     $arch = $env:PROCESSOR_ARCHITECTURE
     switch ($arch) {
-        "AMD64"   { return "win32-x64" }
+        "AMD64"   { return "windows-x64" }
         "x86"     { Exit-Fatal "32-bit Windows is not supported." }
         "ARM64"   { Exit-Fatal "ARM64 Windows is not yet supported. Coming soon." }
         default   { Exit-Fatal "Unknown architecture: $arch" }
@@ -778,7 +778,7 @@ router.get("/latest", (_req, res) => {
       "darwin-x64": `${BASE}/tnp-darwin-x64`,
       "linux-x64": `${BASE}/tnp-linux-x64`,
       "linux-arm64": `${BASE}/tnp-linux-arm64`,
-      "win32-x64": `${BASE}/tnp-win32-x64.exe`,
+      "windows-x64": `${BASE}/tnp-windows-x64.exe`,
     },
     install: {
       unix: "curl -fsSL https://get.tnp.network | sh",

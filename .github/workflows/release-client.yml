@@ -7,6 +7,9 @@ on:
       - 'packages/client/**'
   workflow_dispatch:
 
+env:
+  VERSION: "0.2.0"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,7 +23,7 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: cd packages/client && bun install
+        run: bun install
 
       - name: Build all platforms
         run: |
@@ -30,30 +33,39 @@ jobs:
           bun build src/cli.ts --compile --target=bun-linux-arm64 --outfile dist/tnp-linux-arm64
           bun build src/cli.ts --compile --target=bun-darwin-x64 --outfile dist/tnp-darwin-x64
           bun build src/cli.ts --compile --target=bun-darwin-arm64 --outfile dist/tnp-darwin-arm64
-          bun build src/cli.ts --compile --target=bun-windows-x64 --outfile dist/tnp-win32-x64.exe
+          bun build src/cli.ts --compile --target=bun-windows-x64 --outfile dist/tnp-windows-x64.exe
 
       - name: Create or update release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.0
-          name: TNP Client v0.1.0
+          tag_name: v${{ env.VERSION }}
+          name: TNP Client v${{ env.VERSION }}
           body: |
-            TNP DNS resolver daemon v0.1.0
+            TNP Client v${{ env.VERSION }} — overlay network with encrypted tunnels
 
-            **Install:**
-            ```
+            **Install (one command):**
+            ```bash
             # macOS / Linux
-            curl -fsSL https://tnp.network/install.sh | sh
+            curl -fsSL https://get.tnp.network | sh
 
-            # Windows (PowerShell as Administrator)
-            irm https://tnp.network/install.ps1 | iex
+            # Windows (PowerShell)
+            irm https://get.tnp.network/ps | iex
             ```
+
+            **Platforms:** linux-x64, linux-arm64, darwin-x64, darwin-arm64, windows-x64
+
+            **What's new:**
+            - Interactive CLI menu (`tnp` with no args)
+            - Overlay network: SOCKS5 proxy + encrypted WebSocket tunnels
+            - Service node mode (`tnp serve`)
+            - Become a relay node from the menu
+            - Cross-platform installer scripts
           files: |
             packages/client/dist/tnp-linux-x64
             packages/client/dist/tnp-linux-arm64
             packages/client/dist/tnp-darwin-x64
             packages/client/dist/tnp-darwin-arm64
-            packages/client/dist/tnp-win32-x64.exe
+            packages/client/dist/tnp-windows-x64.exe
           make_latest: true
           prerelease: false
         env:
