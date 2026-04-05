@@ -512,8 +512,8 @@ function Get-Platform {
     $arch = $env:PROCESSOR_ARCHITECTURE
     switch ($arch) {
         "AMD64"   { return "windows-x64" }
-        "ARM64"   { Write-Info "ARM64 detected -- using x64 binary (runs via emulation)"; return "windows-x64" }
         "x86"     { Exit-Fatal "32-bit Windows is not supported." }
+        "ARM64"   { Write-Info "ARM64 detected -- using x64 binary (runs via emulation)"; return "windows-x64" }
         default   { Exit-Fatal "Unknown architecture: $arch" }
     }
 }
