@@ -64,24 +64,7 @@ export default function DomainDetail() {
   }
 
   if (error || !domain) {
-    return (
-      <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
-        <nav className="mb-6 font-mono text-xs text-muted">
-          <Link to="/" className="transition-colors hover:text-secondary">{t("domainDetail:breadcrumb.home")}</Link>
-          <span className="mx-1.5">/</span>
-          <Link to="/explore" className="transition-colors hover:text-secondary">{t("domainDetail:breadcrumb.explore")}</Link>
-          <span className="mx-1.5">/</span>
-          <span className="text-primary">{domainParam}</span>
-        </nav>
-        <h1 className="mb-2 font-pixel text-xl text-accent">{t("domainDetail:notFound.title")}</h1>
-        <p className="mb-6 font-mono text-sm text-muted">
-          {t("domainDetail:notFound.description", { domain: domainParam })}
-        </p>
-        <Link to="/register" className="font-mono text-sm text-accent transition-colors hover:text-accent/80">
-          [{t("domainDetail:notFound.registerLink")}]
-        </Link>
-      </div>
-    );
+    return <Navigate to={`/park/${domainParam}`} replace />;
   }
 
   const fullDomain = `${domain.name}.${domain.tld}`;
