@@ -9,7 +9,7 @@ export const config = {
   mongoUri: process.env.MONGODB_URI || "mongodb://localhost:27017",
   dbName: `${APP_NAME}-${env}`,
   oxyApiUrl: process.env.OXY_API_URL || "https://api.oxy.so",
-  parkingIp: process.env.TNP_PARKING_IP || "206.189.96.213",
+  parkingIp: process.env.TNP_PARKING_IP || "174.138.10.81",
   corsOrigins: [
     "http://localhost:5173",
     "https://tnp.network",
