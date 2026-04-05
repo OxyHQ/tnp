@@ -1,10 +1,10 @@
-FROM oven/bun:1.3.11
+FROM oven/bun:latest
 WORKDIR /app
 
 COPY package.json bun.lock ./
 COPY packages/client/package.json packages/client/
 COPY apps/dns-server/package.json apps/dns-server/
-RUN bun install --production
+RUN bun install --no-save
 
 COPY packages/client packages/client
 COPY apps/dns-server apps/dns-server
