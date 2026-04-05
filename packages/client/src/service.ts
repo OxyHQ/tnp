@@ -2,11 +2,10 @@ import { existsSync, mkdirSync, writeFileSync, unlinkSync } from "fs";
 import { execSync } from "child_process";
 import { join } from "path";
 import type { TnpConfig } from "./config";
-import { logPath } from "./config";
+import { logPath, getDefaultInterface } from "./config";
 
 const LAUNCHD_LABEL = "so.oxy.tnp.resolver";
 const SYSTEMD_UNIT = "tnp-resolver.service";
-const WIN_SERVICE_NAME = "TnpResolver";
 const WIN_TASK_NAME = "TnpResolver";
 
 const platform = process.platform;
@@ -79,9 +78,6 @@ function statusDarwin(): boolean {
 // ── Linux (systemd) ──
 
 function installLinux(binaryPath: string, cfg: TnpConfig): void {
-  // Force port 53 so systemd-resolved can use it as a DNS server
-  cfg.listenPort = 53;
-
   writeFileSync(`/etc/systemd/system/${SYSTEMD_UNIT}`, `[Unit]
 Description=TNP DNS Resolver
 After=network.target
@@ -98,9 +94,6 @@ RestartSec=5
 WantedBy=multi-user.target
 `);
 
-  // Configure systemd-resolved to use our resolver for ALL domains (~.)
-  // This ensures custom TLDs like .ox are resolved via TNP, while the
-  // TNP resolver forwards non-TNP queries to the upstream DNS (1.1.1.1).
   if (existsSync("/etc/systemd/resolved.conf") || existsSync("/run/systemd/resolve")) {
     const dir = "/etc/systemd/resolved.conf.d";
     mkdirSync(dir, { recursive: true });
@@ -116,15 +109,13 @@ DNSStubListener=yes
   run(`systemctl enable ${SYSTEMD_UNIT}`);
   run(`systemctl start ${SYSTEMD_UNIT}`);
 
-  // Set the active network interface to use our resolver
-  try {
-    const route = run("ip route show default").trim();
-    const iface = route.split(/\s+/)[4];
-    if (iface) {
-      runSilent(`resolvectl dns ${iface} ${cfg.listenAddr}`);
-      runSilent(`resolvectl domain ${iface} '~.'`);
-    }
-  } catch {}
+  const iface = getDefaultInterface();
+  if (iface) {
+    runSilent(`resolvectl dns ${iface} ${cfg.listenAddr}`);
+    runSilent(`resolvectl domain ${iface} '~.'`);
+  } else {
+    console.warn("[tnp] could not detect default network interface; resolvectl DNS not configured");
+  }
 }
 
 function uninstallLinux(): void {
@@ -135,14 +126,12 @@ function uninstallLinux(): void {
   runSilent("systemctl daemon-reload");
   runSilent("systemctl restart systemd-resolved");
 
-  // Restore default DNS on active interface
-  try {
-    const route = run("ip route show default").trim();
-    const iface = route.split(/\s+/)[4];
-    if (iface) {
-      runSilent(`resolvectl revert ${iface}`);
-    }
-  } catch {}
+  const iface = getDefaultInterface();
+  if (iface) {
+    runSilent(`resolvectl revert ${iface}`);
+  } else {
+    console.warn("[tnp] could not detect default network interface; resolvectl DNS not reverted");
+  }
 }
 
 function statusLinux(): boolean {
@@ -261,5 +250,33 @@ export function serviceStatus(): boolean {
     case "linux":   return statusLinux();
     case "win32":   return statusWindows();
     default:        return false;
+  }
+}
+
+export function stopService(): void {
+  switch (platform) {
+    case "linux":
+      runSilent(`systemctl stop ${SYSTEMD_UNIT}`);
+      break;
+    case "darwin":
+      runSilent(`launchctl unload /Library/LaunchDaemons/${LAUNCHD_LABEL}.plist`);
+      break;
+    case "win32":
+      runSilent(`schtasks /End /TN "${WIN_TASK_NAME}"`);
+      break;
+  }
+}
+
+export function startService(): void {
+  switch (platform) {
+    case "linux":
+      run(`systemctl start ${SYSTEMD_UNIT}`);
+      break;
+    case "darwin":
+      run(`launchctl load /Library/LaunchDaemons/${LAUNCHD_LABEL}.plist`);
+      break;
+    case "win32":
+      runSilent(`schtasks /Run /TN "${WIN_TASK_NAME}"`);
+      break;
   }
 }

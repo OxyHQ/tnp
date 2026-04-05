@@ -13,8 +13,6 @@ interface DnsAnswer {
   ttl: number;
 }
 
-// GET /dns/resolve?name=example.ox&type=A
-// Returns DNS records for a TNP domain. Used by the TNP resolver daemon.
 router.get("/resolve", async (req, res) => {
   try {
     const fqdn = String(req.query.name || "").toLowerCase().trim().replace(/\.$/, "");
@@ -106,7 +104,6 @@ router.get("/resolve", async (req, res) => {
   }
 });
 
-// GET /dns/tlds -- returns list of active TNP TLDs (for daemon TLD sync)
 router.get("/tlds", async (_req, res) => {
   try {
     const tlds = await TLD.find({ status: "active" }).select("name custom");

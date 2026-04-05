@@ -11,6 +11,8 @@ import clientRouter from "./routes/client.js";
 import dnsRouter from "./routes/dns.js";
 import nodesRouter from "./routes/nodes.js";
 import relaysRouter from "./routes/relays.js";
+import TLD from "./models/TLD.js";
+import Domain from "./models/Domain.js";
 
 const app = express();
 
@@ -67,9 +69,6 @@ app.use(async (req, res, next) => {
   const tld = parts[parts.length - 1];
   const name = parts.slice(0, -1).join(".");
 
-  // Check TLD and domain
-  const TLD = (await import("./models/TLD.js")).default;
-  const Domain = (await import("./models/Domain.js")).default;
   const tldDoc = await TLD.findOne({ name: tld, status: "active" }).catch(() => null);
 
   // Not a TNP TLD — don't serve parking page

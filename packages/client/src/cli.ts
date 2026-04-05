@@ -5,13 +5,11 @@ import {
   loadConfig,
   saveConfig,
   KILLSWITCH_MARKER_PATH,
+  getDefaultInterface,
   type TnpConfig,
 } from "./config";
 import { DnsProxy } from "./proxy";
-import { installService, uninstallService, serviceStatus } from "./service";
-
-/** Regex to validate network interface names, preventing command injection. */
-const VALID_IFACE_RE = /^[a-zA-Z0-9_.-]+$/;
+import { installService, uninstallService, serviceStatus, stopService, startService } from "./service";
 
 const VERSION = "0.2.0";
 
@@ -84,7 +82,6 @@ async function cmdRun() {
     console.warn(`[tnp] initial TLD sync failed, will retry: ${err}`);
   });
 
-  // Re-sync TLDs every 5 minutes
   proxy.startTldSync(5 * 60 * 1000);
 
   // Handle shutdown
@@ -241,21 +238,16 @@ function configureDns(config: TnpConfig): boolean {
 function configureLinuxDns(config: TnpConfig, addr: string, dnsIp: string): boolean {
   const { execSync } = require("child_process");
 
-  // Try systemd-resolved first
+  const iface = getDefaultInterface();
+  if (!iface) {
+    console.warn("[tnp] could not detect network interface, falling back to resolv.conf");
+    return configureLinuxResolvConf(dnsIp);
+  }
+
   try {
-    const rawIface = execSync("ip route show default 2>/dev/null | awk '{print $5; exit}'", {
-      encoding: "utf-8", stdio: "pipe"
-    }).trim() || "eth0";
-
-    // Validate interface name to prevent command injection
-    if (!VALID_IFACE_RE.test(rawIface)) {
-      console.warn(`[tnp] invalid network interface name "${rawIface}", falling back to resolv.conf`);
-      return configureLinuxResolvConf(dnsIp);
-    }
-
-    execSync(`resolvectl dns ${rawIface} ${config.listenAddr}`, { stdio: "pipe" });
-    execSync(`resolvectl domain ${rawIface} ~ox ~app`, { stdio: "pipe" });
-    console.log(`[tnp] DNS configured: systemd-resolved split DNS on ${rawIface} for .ox .app -> ${addr}`);
+    execSync(`resolvectl dns ${iface} ${config.listenAddr}`, { stdio: "pipe" });
+    execSync(`resolvectl domain ${iface} ~ox ~app`, { stdio: "pipe" });
+    console.log(`[tnp] DNS configured: systemd-resolved split DNS on ${iface} for .ox .app -> ${addr}`);
     return true;
   } catch (err) {
     console.warn(`[tnp] systemd-resolved not available, trying resolv.conf: ${err instanceof Error ? err.message : String(err)}`);
@@ -650,34 +642,28 @@ async function cmdUpdate() {
 
     const dlRes = await fetch(platformInfo.url);
     if (!dlRes.ok) throw new Error(`Download failed: ${dlRes.status}`);
-    const binary = Buffer.from(await dlRes.arrayBuffer());
 
     const currentPath = resolve(process.argv[1] || "/usr/local/bin/tnp");
     const tmpPath = `${currentPath}.tmp`;
 
-    // Stop service, replace binary, restart
-    const { execSync } = await import("child_process");
-    const isLinux = process.platform === "linux";
-    const isDarwin = process.platform === "darwin";
-
-    if (isLinux) {
-      try { execSync("systemctl stop tnp-resolver", { stdio: "pipe" }); } catch {}
-    } else if (isDarwin) {
-      try { execSync("launchctl unload /Library/LaunchDaemons/so.oxy.tnp.resolver.plist", { stdio: "pipe" }); } catch {}
+    try {
+      stopService();
+    } catch (err) {
+      console.warn(`[tnp] could not stop service before update: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    writeFileSync(tmpPath, binary, { mode: 0o755 });
-    const { renameSync } = await import("fs");
+    await Bun.write(tmpPath, dlRes);
+    const { chmodSync, renameSync } = require("fs");
+    chmodSync(tmpPath, 0o755);
     renameSync(tmpPath, currentPath);
 
     console.log(`[tnp] updated to v${data.version}`);
 
-    if (isLinux) {
-      try { execSync("systemctl start tnp-resolver", { stdio: "pipe" }); } catch {}
+    try {
+      startService();
       console.log("[tnp] service restarted");
-    } else if (isDarwin) {
-      try { execSync("launchctl load /Library/LaunchDaemons/so.oxy.tnp.resolver.plist", { stdio: "pipe" }); } catch {}
-      console.log("[tnp] service restarted");
+    } catch (err) {
+      console.warn(`[tnp] could not restart service after update: ${err instanceof Error ? err.message : String(err)}`);
     }
   } catch (err) {
     console.error(`[tnp] update failed: ${err}`);

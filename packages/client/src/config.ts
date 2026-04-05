@@ -105,3 +105,28 @@ export function saveConfig(cfg: TnpConfig): void {
   mkdirSync(dir, { recursive: true });
   writeFileSync(configPath(), JSON.stringify(cfg, null, 2) + "\n", { mode: 0o600 });
 }
+
+/** Regex to validate network interface names, preventing command injection. */
+export const VALID_IFACE_RE = /^[a-zA-Z0-9_.-]+$/;
+
+/**
+ * Parse `ip route show default` to get the active network interface name.
+ * Returns the validated interface name, or null if detection fails.
+ */
+export function getDefaultInterface(): string | null {
+  try {
+    const { execSync } = require("child_process");
+    const route = execSync("ip route show default", {
+      encoding: "utf-8",
+      stdio: "pipe",
+    }).trim();
+    const iface = route.split(/\s+/)[4];
+    if (!iface || !VALID_IFACE_RE.test(iface)) {
+      return null;
+    }
+    return iface;
+  } catch (err) {
+    console.warn(`[tnp] failed to detect default network interface: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+}
