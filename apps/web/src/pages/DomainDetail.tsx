@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { Trans, useTranslation } from "react-i18next";
 import { apiFetch } from "../lib/api";
 import { useLocaleFormatter } from "../lib/useLocaleFormatter";
@@ -57,6 +57,10 @@ export default function DomainDetail() {
         <p className="font-mono text-sm text-muted">{t("common:loading")}</p>
       </div>
     );
+  }
+
+  if (domain && domain.records.length === 0) {
+    return <Navigate to={`/park/${domain.name}.${domain.tld}`} replace />;
   }
 
   if (error || !domain) {
