@@ -28,7 +28,6 @@ jobs:
             docker run -d \
               --name tnp-api \
               --restart unless-stopped \
-              -p 80:8080 \
-              -p 8080:8080 \
+              --network host \
               --env-file .env \
               tnp-api
