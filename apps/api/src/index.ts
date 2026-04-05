@@ -22,6 +22,21 @@ app.use(
 );
 app.use(express.json());
 
+// Serve installer scripts when accessed via get.tnp.network
+// curl -fsSL https://get.tnp.network | sh  →  serves install.sh
+// irm https://get.tnp.network/ps | iex     →  serves install.ps1
+app.use((req, res, next) => {
+  const host = req.hostname;
+  if (host !== "get.tnp.network") return next();
+
+  if (req.path === "/" || req.path === "/install.sh") {
+    req.url = "/client/install.sh";
+  } else if (req.path === "/ps" || req.path === "/install.ps1") {
+    req.url = "/client/install.ps1";
+  }
+  next();
+});
+
 // Public routes -- no auth needed at all
 app.use("/dns", dnsRouter);
 app.use("/client", clientRouter);
