@@ -8,13 +8,13 @@
   "title": "设置 TNP",
   "subtitle": "在任何设备上解析 TNP 域名。选择以下方法。",
   "methods": {
-    "dns": "更改 DNS（无需安装）",
-    "client": "安装 TNP 客户端",
+    "dns": "更改 DNS（高级）",
+    "client": "安装 TNP 客户端（推荐）",
     "serve": "托管服务",
     "relay": "运行中继"
   },
   "dns": {
-    "intro": "将设备的 DNS 指向 TNP 解析器。TNP 域名原生解析，其他所有请求转发到 Cloudflare (1.1.1.1)。",
+    "intro": "将设备的 DNS 指向 TNP 解析器的 5353 端口。注意：大多数操作系统仅支持 53 端口的 DNS。要获得最简单的设置，请使用安装 TNP 客户端方法。TNP 解析器运行在 {{dnsIp}} 的 {{dnsPort}} 端口。",
     "android": {
       "title": "Android",
       "steps": [

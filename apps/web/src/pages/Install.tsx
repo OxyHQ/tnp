@@ -23,6 +23,7 @@ const clientPlatforms: { id: Platform; label: string }[] = [
 ];
 
 const DNS_IP = "174.138.10.81";
+const DNS_PORT = "5353";
 const DNS_HOST = "dns.tnp.network";
 const INSTALL_CMD_UNIX = "curl -fsSL https://get.tnp.network | sh";
 const INSTALL_CMD_WINDOWS = "irm https://get.tnp.network/ps | iex";
@@ -95,7 +96,7 @@ export default function Install() {
       {method === "dns" && (
         <>
           <p className="mb-6 font-mono text-xs text-muted">
-            {t("install:dns.intro")}
+            {t("install:dns.intro", { dnsPort: DNS_PORT, dnsIp: DNS_IP })}
           </p>
 
           <div className="mb-6 flex flex-wrap gap-2">
@@ -220,13 +221,13 @@ export default function Install() {
                     </code>
                     <p className="mb-1 text-xs text-muted">Then configure DNS:</p>
                     <code className="block rounded bg-surface px-3 py-2 text-xs text-accent">
-                      sudo resolvectl dns eth0 {DNS_IP}
+                      sudo resolvectl dns eth0 {DNS_IP} && sudo resolvectl dnsovertls eth0 no
                     </code>
                   </div>
                   <div>
                     <p className="mb-1 font-medium text-secondary">resolv.conf (any distro):</p>
                     <code className="block rounded bg-surface px-3 py-2 text-xs text-accent">
-                      echo "nameserver {DNS_IP}" | sudo tee /etc/resolv.conf
+                      echo "nameserver {DNS_IP}" | sudo tee /etc/resolv.conf  # port 53 only
                     </code>
                   </div>
                   <div>

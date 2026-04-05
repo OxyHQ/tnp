@@ -8,13 +8,13 @@
   "title": "Configurer TNP",
   "subtitle": "Résolvez les domaines TNP sur n'importe quel appareil. Choisissez une méthode ci-dessous.",
   "methods": {
-    "dns": "Changer le DNS (sans installation)",
-    "client": "Installer le client TNP",
+    "dns": "Changer le DNS (avancé)",
+    "client": "Installer le client TNP (recommandé)",
     "serve": "Héberger un service",
     "relay": "Exécuter un relais"
   },
   "dns": {
-    "intro": "Pointez le DNS de votre appareil vers le résolveur TNP. Les domaines TNP sont résolus nativement, tout le reste est transféré vers Cloudflare (1.1.1.1).",
+    "intro": "Pointez le DNS de votre appareil vers le résolveur TNP sur le port 5353. Note : la plupart des systèmes d'exploitation ne supportent que le DNS sur le port 53. Pour la configuration la plus simple, utilisez la méthode Installer le client TNP. Le résolveur TNP fonctionne sur le port {{dnsPort}} à {{dnsIp}}.",
     "android": {
       "title": "Android",
       "steps": [

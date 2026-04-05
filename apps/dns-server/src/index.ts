@@ -3,7 +3,7 @@ import type { TnpConfig } from "../../../packages/client/src/config";
 
 const config: TnpConfig = {
   listenAddr: process.env.TNP_LISTEN_ADDR || "0.0.0.0",
-  listenPort: Number(process.env.TNP_LISTEN_PORT) || 53,
+  listenPort: Number(process.env.TNP_LISTEN_PORT) || 5353,
   apiBaseUrl: process.env.TNP_API_URL || "https://api.tnp.network",
   upstreamDns: process.env.TNP_UPSTREAM_DNS || "1.1.1.1",
   cacheTtlSeconds: Number(process.env.TNP_CACHE_TTL) || 300,
