@@ -3,12 +3,16 @@ import { config } from "./config.js";
 import TLD from "./models/TLD.js";
 
 const initialTLDs = [
-  { name: "ox", status: "active" as const },
-  { name: "app", status: "active" as const },
-  { name: "com", status: "active" as const },
+  { name: "ox", status: "active" as const, custom: true },
+  { name: "app", status: "active" as const, custom: false },
+  { name: "com", status: "active" as const, custom: false },
 ];
 
 export async function runSeed() {
+  // Ensure existing TLDs have the custom flag set
+  await TLD.updateMany({ name: { $in: ["com", "app"] }, custom: { $exists: false } }, { $set: { custom: false } });
+  await TLD.updateMany({ custom: { $exists: false } }, { $set: { custom: true } });
+
   const count = await TLD.countDocuments();
   if (count > 0) return;
 

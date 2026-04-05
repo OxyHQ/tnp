@@ -67,12 +67,20 @@ app.use(async (req, res, next) => {
   const tld = parts[parts.length - 1];
   const name = parts.slice(0, -1).join(".");
 
-  // Check if this is a registered TNP domain
+  // Check TLD and domain
+  const TLD = (await import("./models/TLD.js")).default;
   const Domain = (await import("./models/Domain.js")).default;
-  const domain = await Domain.findOne({ name, tld, status: "active" }).catch(() => null);
+  const tldDoc = await TLD.findOne({ name: tld, status: "active" }).catch(() => null);
 
+  // Not a TNP TLD — don't serve parking page
+  if (!tldDoc) return next();
+
+  const domain = await Domain.findOne({ name, tld, status: "active" }).catch(() => null);
   const isRegistered = !!domain;
-  const hasRecords = domain ? domain.records.length > 0 : false;
+  const isCustomTld = tldDoc.custom;
+
+  // Standard TLD + not registered on TNP — don't serve parking page (let real DNS handle it)
+  if (!isCustomTld && !isRegistered) return next();
 
   // If domain has a service node, let it pass (overlay handles it)
   if (domain?.serviceNodeId) return next();

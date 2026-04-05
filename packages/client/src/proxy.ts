@@ -37,6 +37,7 @@ interface CacheEntry {
 export class DnsProxy {
   private apiClient: TnpApiClient;
   private tlds = new Set<string>();
+  private customTlds = new Set<string>();
   private cache = new Map<string, CacheEntry>();
   private cacheTtlMs: number;
   private udpServer: dgram.Socket | null = null;
@@ -85,9 +86,23 @@ export class DnsProxy {
     return this.apiClient;
   }
 
-  setTlds(tlds: string[]) {
-    this.tlds = new Set(tlds.map((t) => t.toLowerCase()));
-    console.log(`[tnp] loaded ${this.tlds.size} TLDs: ${tlds.join(", ")}`);
+  setTlds(tlds: Array<string | { name: string; custom?: boolean }>) {
+    this.tlds = new Set<string>();
+    this.customTlds = new Set<string>();
+    for (const t of tlds) {
+      const name = typeof t === "string" ? t : t.name;
+      const custom = typeof t === "string" ? true : (t.custom ?? true);
+      this.tlds.add(name.toLowerCase());
+      if (custom) this.customTlds.add(name.toLowerCase());
+    }
+    console.log(`[tnp] loaded ${this.tlds.size} TLDs: ${[...this.tlds].join(", ")}`);
+  }
+
+  isCustomTld(name: string): boolean {
+    const clean = name.replace(/\.$/, "").toLowerCase();
+    const parts = clean.split(".");
+    if (parts.length < 2) return false;
+    return this.customTlds.has(parts[parts.length - 1]);
   }
 
   private isTnpDomain(name: string): boolean {
@@ -258,12 +273,24 @@ export class DnsProxy {
       const typeStr = this.typeToString(type);
       try {
         const answers = await this.resolveTnp(name, typeStr);
+
+        // For standard TLDs (.com, .app): if TNP returns no answers,
+        // the domain isn't registered on TNP — forward to upstream DNS
+        // so it resolves normally on the public internet.
+        if (answers.length === 0 && !this.isCustomTld(name)) {
+          return await this.forwardUpstreamRaw(queryBuf);
+        }
+
         const response = Packet.createResponseFromRequest(request);
         for (const ans of answers) {
           response.answers.push(this.answerToRecord(name, ans));
         }
         return this.writeResponse(response);
       } catch (err) {
+        // If TNP API fails for a standard TLD, forward upstream
+        if (!this.isCustomTld(name)) {
+          try { return await this.forwardUpstreamRaw(queryBuf); } catch {}
+        }
         console.error(`[tnp] resolve error for ${name}: ${err}`);
         return this.writeEmptyResponse(request);
       }

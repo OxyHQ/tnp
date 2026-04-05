@@ -50,9 +50,10 @@ router.get("/resolve", async (req, res) => {
     });
 
     if (!domain) {
-      // Domain not registered — return parking IP so the browser shows the "available" page
+      // For custom TNP TLDs (.ox): return parking IP so browser shows "available" page.
+      // For standard TLDs (.com, .app): return empty so the client forwards to upstream DNS.
       const answers: DnsAnswer[] = [];
-      if (config.parkingIp && (qtype === "A" || qtype === "ANY")) {
+      if (tldDoc.custom && config.parkingIp && (qtype === "A" || qtype === "ANY")) {
         answers.push({ name: fqdn, type: "A", value: config.parkingIp, ttl: 300 });
       }
       res.json({ name: fqdn, type: qtype, answers });
@@ -108,8 +109,8 @@ router.get("/resolve", async (req, res) => {
 // GET /dns/tlds -- returns list of active TNP TLDs (for daemon TLD sync)
 router.get("/tlds", async (_req, res) => {
   try {
-    const tlds = await TLD.find({ status: "active" }).select("name");
-    res.json(tlds.map((t) => t.name));
+    const tlds = await TLD.find({ status: "active" }).select("name custom");
+    res.json(tlds.map((t) => ({ name: t.name, custom: t.custom ?? true })));
   } catch (err) {
     console.error("DNS TLDs error:", err);
     res.status(500).json({ error: "Failed to list TLDs" });

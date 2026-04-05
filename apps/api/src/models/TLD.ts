@@ -4,6 +4,7 @@ export interface ITLD extends Document {
   _id: Types.ObjectId;
   name: string;
   status: "active" | "proposed" | "pending";
+  custom: boolean;
   proposedBy?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -23,6 +24,10 @@ const TLDSchema = new Schema<ITLD>(
       type: String,
       enum: ["active", "proposed", "pending"],
       default: "proposed",
+    },
+    custom: {
+      type: Boolean,
+      default: true,
     },
     proposedBy: {
       type: Schema.Types.ObjectId,

@@ -161,6 +161,16 @@ router.post("/register", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
 
+    // Standard TLDs (.com, .app): restricted to admin users only
+    if (!tldDoc.custom) {
+      const ALLOWED_USERS = ["nate", "oxy"];
+      const username = ((req.user as Record<string, unknown>)?.username as string || "").toLowerCase();
+      if (!ALLOWED_USERS.includes(username)) {
+        res.status(403).json({ error: `Registration on .${cleanTld} is restricted` });
+        return;
+      }
+    }
+
     const existing = await Domain.findOne({ name: cleanName, tld: cleanTld });
     if (existing) {
       res.status(409).json({ error: `${cleanName}.${cleanTld} is already registered` });

@@ -61,7 +61,7 @@ export class TnpApiClient {
     return (await res.json()) as ResolveResponse;
   }
 
-  async fetchTlds(): Promise<string[]> {
+  async fetchTlds(): Promise<Array<{ name: string; custom: boolean }>> {
     const url = `${this.baseUrl}/dns/tlds`;
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
 
@@ -69,7 +69,11 @@ export class TnpApiClient {
       throw new Error(`TNP API returned ${res.status}`);
     }
 
-    return (await res.json()) as string[];
+    const data = await res.json() as Array<string | { name: string; custom?: boolean }>;
+    // Handle both old format (string[]) and new format ({ name, custom }[])
+    return data.map((t) =>
+      typeof t === "string" ? { name: t, custom: true } : { name: t.name, custom: t.custom ?? true }
+    );
   }
 
   /**

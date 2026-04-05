@@ -15,6 +15,20 @@ const VALID_IFACE_RE = /^[a-zA-Z0-9_.-]+$/;
 
 const VERSION = "0.2.0";
 
+function resolveRealBinaryPath(): string {
+  try {
+    if (process.platform === "linux" && existsSync("/proc/self/exe")) {
+      const { readlinkSync } = require("fs");
+      const real = readlinkSync("/proc/self/exe");
+      if (!real.includes("bunfs")) return real;
+    }
+    const { execSync } = require("child_process");
+    return execSync("which tnp", { encoding: "utf-8", stdio: "pipe" }).trim();
+  } catch {
+    return "/usr/local/bin/tnp";
+  }
+}
+
 function usage() {
   console.log(`
 tnp v${VERSION} -- The Network Protocol resolver & overlay client
@@ -26,6 +40,7 @@ Usage:
   tnp relay            Start a community relay (see apps/relay)
   tnp install          Install as a system service and configure DNS
   tnp uninstall        Remove the system service and DNS configuration
+  tnp update           Update to the latest version
   tnp status           Check if the resolver service is running
   tnp test <domain>    Test resolving a TNP domain
   tnp version          Print version
@@ -58,14 +73,19 @@ async function cmdRun() {
 
   const proxy = new DnsProxy(config);
 
-  // Sync TLDs from API every 5 minutes
-  proxy.startTldSync(5 * 60 * 1000);
-
-  // Wait for initial TLD sync before starting
-  await proxy.syncTlds();
-
-  // Start the DNS proxy
+  // Start the DNS proxy FIRST so upstream forwarding works immediately.
+  // This is critical when system DNS points to us (127.0.0.1) — we need
+  // to be able to forward non-TNP queries before syncing TLDs from the API.
   await proxy.start();
+
+  // Now sync TLDs from API (this uses fetch which goes through system DNS,
+  // which now routes through us and we forward to upstream 1.1.1.1)
+  await proxy.syncTlds().catch((err: unknown) => {
+    console.warn(`[tnp] initial TLD sync failed, will retry: ${err}`);
+  });
+
+  // Re-sync TLDs every 5 minutes
+  proxy.startTldSync(5 * 60 * 1000);
 
   // Handle shutdown
   const shutdown = () => {
@@ -306,7 +326,7 @@ function restoreDns(): void {
 /** Install autoconnect — register tnp connect to run on system boot/login. */
 function installAutoConnect(): void {
   const { execSync } = require("child_process");
-  const binaryPath = resolve(process.argv[1] || "tnp");
+  const binaryPath = resolveRealBinaryPath();
 
   try {
     if (process.platform === "win32") {
@@ -584,9 +604,12 @@ async function cmdRelay() {
 
 function cmdInstall() {
   const config = loadConfig();
+  // Force port 53 for system DNS integration
+  config.listenPort = 53;
+  config.listenAddr = "127.0.0.1";
   saveConfig(config);
 
-  const binaryPath = resolve(process.argv[1] || "tnp");
+  const binaryPath = resolveRealBinaryPath();
   console.log(`[tnp] installing service...`);
   console.log(`[tnp] binary: ${binaryPath}`);
   console.log(`[tnp] listen: ${config.listenAddr}:${config.listenPort}`);
@@ -597,6 +620,67 @@ function cmdInstall() {
     console.log("[tnp] TNP domains (.ox, .app, .com) will now resolve on this device");
   } catch (err) {
     console.error(`[tnp] install failed: ${err}`);
+    console.error("[tnp] you may need to run this command with sudo");
+    process.exit(1);
+  }
+}
+
+async function cmdUpdate() {
+  const api = `https://api.tnp.network/client/latest`;
+  console.log("[tnp] checking for updates...");
+
+  try {
+    const res = await fetch(api);
+    if (!res.ok) throw new Error(`API returned ${res.status}`);
+    const data = await res.json() as { version: string; platforms: Record<string, { url: string } | null> };
+
+    if (data.version === VERSION) {
+      console.log(`[tnp] already on latest version (v${VERSION})`);
+      return;
+    }
+
+    console.log(`[tnp] updating v${VERSION} → v${data.version}...`);
+
+    const platformKey = `${process.platform === "darwin" ? "darwin" : process.platform === "win32" ? "windows" : "linux"}-${process.arch === "arm64" ? "arm64" : "x64"}`;
+    const platformInfo = data.platforms[platformKey];
+    if (!platformInfo) {
+      console.error(`[tnp] no binary available for ${platformKey}`);
+      process.exit(1);
+    }
+
+    const dlRes = await fetch(platformInfo.url);
+    if (!dlRes.ok) throw new Error(`Download failed: ${dlRes.status}`);
+    const binary = Buffer.from(await dlRes.arrayBuffer());
+
+    const currentPath = resolve(process.argv[1] || "/usr/local/bin/tnp");
+    const tmpPath = `${currentPath}.tmp`;
+
+    // Stop service, replace binary, restart
+    const { execSync } = await import("child_process");
+    const isLinux = process.platform === "linux";
+    const isDarwin = process.platform === "darwin";
+
+    if (isLinux) {
+      try { execSync("systemctl stop tnp-resolver", { stdio: "pipe" }); } catch {}
+    } else if (isDarwin) {
+      try { execSync("launchctl unload /Library/LaunchDaemons/so.oxy.tnp.resolver.plist", { stdio: "pipe" }); } catch {}
+    }
+
+    writeFileSync(tmpPath, binary, { mode: 0o755 });
+    const { renameSync } = await import("fs");
+    renameSync(tmpPath, currentPath);
+
+    console.log(`[tnp] updated to v${data.version}`);
+
+    if (isLinux) {
+      try { execSync("systemctl start tnp-resolver", { stdio: "pipe" }); } catch {}
+      console.log("[tnp] service restarted");
+    } else if (isDarwin) {
+      try { execSync("launchctl load /Library/LaunchDaemons/so.oxy.tnp.resolver.plist", { stdio: "pipe" }); } catch {}
+      console.log("[tnp] service restarted");
+    }
+  } catch (err) {
+    console.error(`[tnp] update failed: ${err}`);
     console.error("[tnp] you may need to run this command with sudo");
     process.exit(1);
   }
@@ -703,6 +787,9 @@ switch (command) {
     break;
   case "uninstall":
     cmdUninstall();
+    break;
+  case "update":
+    await cmdUpdate();
     break;
   case "status":
     cmdStatus();

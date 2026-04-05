@@ -79,10 +79,14 @@ function statusDarwin(): boolean {
 // ── Linux (systemd) ──
 
 function installLinux(binaryPath: string, cfg: TnpConfig): void {
+  // Force port 53 so systemd-resolved can use it as a DNS server
+  cfg.listenPort = 53;
+
   writeFileSync(`/etc/systemd/system/${SYSTEMD_UNIT}`, `[Unit]
 Description=TNP DNS Resolver
 After=network.target
 Wants=network-online.target
+Before=systemd-resolved.service
 
 [Service]
 Type=simple
@@ -94,18 +98,33 @@ RestartSec=5
 WantedBy=multi-user.target
 `);
 
-  if (existsSync("/etc/systemd/resolved.conf")) {
+  // Configure systemd-resolved to use our resolver for ALL domains (~.)
+  // This ensures custom TLDs like .ox are resolved via TNP, while the
+  // TNP resolver forwards non-TNP queries to the upstream DNS (1.1.1.1).
+  if (existsSync("/etc/systemd/resolved.conf") || existsSync("/run/systemd/resolve")) {
     const dir = "/etc/systemd/resolved.conf.d";
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "tnp.conf"), `[Resolve]
-DNS=${cfg.listenAddr}:${cfg.listenPort}
-Domains=~ox ~app ~com
+DNS=${cfg.listenAddr}
+Domains=~.
+DNSStubListener=yes
 `);
+    runSilent("systemctl restart systemd-resolved");
   }
 
   run("systemctl daemon-reload");
   run(`systemctl enable ${SYSTEMD_UNIT}`);
   run(`systemctl start ${SYSTEMD_UNIT}`);
+
+  // Set the active network interface to use our resolver
+  try {
+    const route = run("ip route show default").trim();
+    const iface = route.split(/\s+/)[4];
+    if (iface) {
+      runSilent(`resolvectl dns ${iface} ${cfg.listenAddr}`);
+      runSilent(`resolvectl domain ${iface} '~.'`);
+    }
+  } catch {}
 }
 
 function uninstallLinux(): void {
@@ -114,6 +133,16 @@ function uninstallLinux(): void {
   safeUnlink(`/etc/systemd/system/${SYSTEMD_UNIT}`);
   safeUnlink("/etc/systemd/resolved.conf.d/tnp.conf");
   runSilent("systemctl daemon-reload");
+  runSilent("systemctl restart systemd-resolved");
+
+  // Restore default DNS on active interface
+  try {
+    const route = run("ip route show default").trim();
+    const iface = route.split(/\s+/)[4];
+    if (iface) {
+      runSilent(`resolvectl revert ${iface}`);
+    }
+  } catch {}
 }
 
 function statusLinux(): boolean {
