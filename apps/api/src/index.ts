@@ -52,18 +52,72 @@ app.use("/domains", oxyAuthOptional, domainsRouter);
 app.use("/nodes", oxyAuthOptional, nodesRouter);
 app.use("/relays", oxyAuthOptional, relaysRouter);
 
-// Catch-all: if the Host header is a TNP domain (not the API itself),
-// redirect to the parking page on the web frontend.
-app.use((req, res, next) => {
+// Serve parking page directly for TNP domain Host headers.
+// When a user visits "nate.ox" in their browser and the domain has no
+// service node, DNS points to this server and we render the parking page
+// inline — no redirect, URL stays as "nate.ox".
+app.use(async (req, res, next) => {
   const host = req.hostname;
   if (!host || host === "localhost" || host.endsWith("tnp.network") || host.endsWith("oxy.so") || host.endsWith("pages.dev")) {
     return next();
   }
-  if (host.includes(".")) {
-    res.redirect(302, `https://tnp.network/park/${host}`);
-    return;
-  }
-  next();
+  if (!host.includes(".")) return next();
+
+  const parts = host.split(".");
+  const tld = parts[parts.length - 1];
+  const name = parts.slice(0, -1).join(".");
+
+  // Check if this is a registered TNP domain
+  const Domain = (await import("./models/Domain.js")).default;
+  const domain = await Domain.findOne({ name, tld, status: "active" }).catch(() => null);
+
+  const isRegistered = !!domain;
+  const hasRecords = domain ? domain.records.length > 0 : false;
+
+  // If domain has records, let it pass (user should have a service node handling it)
+  if (hasRecords) return next();
+
+  const title = isRegistered
+    ? `${host} — Registered on TNP`
+    : `${host} — Available on TNP`;
+  const subtitle = isRegistered
+    ? "This domain is registered on The Network Protocol."
+    : "This domain is available. Register it on The Network Protocol.";
+  const ctaText = isRegistered ? "View domain details" : "Register this domain";
+  const ctaHref = isRegistered
+    ? `https://tnp.network/d/${host}`
+    : "https://tnp.network/register";
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>${title}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;color:#e0e0e0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;text-align:center;padding:2rem}
+    h1{font-size:2.5rem;color:#00ffa3;margin-bottom:1rem;letter-spacing:-0.02em}
+    p{font-size:0.875rem;color:#888;margin-bottom:2rem}
+    a{color:#00ffa3;text-decoration:none;font-size:0.875rem;transition:color .2s}
+    a:hover{color:#fff}
+    .links{display:flex;flex-direction:column;gap:0.75rem}
+    .footer{position:fixed;bottom:2rem;font-size:0.75rem;color:#444}
+    .footer a{color:#555;font-size:0.75rem}
+  </style>
+</head>
+<body>
+  <h1>${host}</h1>
+  <p>${subtitle}</p>
+  <div class="links">
+    <a href="${ctaHref}">[${ctaText}]</a>
+    <a href="https://oxy.so/tnp">[What is TNP?]</a>
+  </div>
+  <div class="footer">Powered by <a href="https://tnp.network">TNP</a> · <a href="https://oxy.so">Oxy</a></div>
+</body>
+</html>`);
 });
 
 async function start() {
