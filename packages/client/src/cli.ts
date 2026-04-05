@@ -295,10 +295,15 @@ function getFlag(name: string): string | undefined {
 // Main
 // ---------------------------------------------------------------------------
 
-const command = process.argv[2] || "help";
+const command = process.argv[2] || "interactive";
 const arg = process.argv[3];
 
 switch (command) {
+  case "interactive": {
+    const { startInteractive } = await import("./interactive");
+    startInteractive();
+    break;
+  }
   case "run":
     cmdRun();
     break;
