@@ -1,0 +1,33 @@
+name: Deploy API to Droplet
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'Dockerfile.api'
+      - 'package.json'
+      - 'bun.lock'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /root/tnp || cd /opt/tnp || cd /app
+            git pull origin main
+            docker build -f Dockerfile.api -t tnp-api .
+            docker stop tnp-api || true
+            docker rm tnp-api || true
+            docker run -d \
+              --name tnp-api \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              --env-file .env \
+              tnp-api

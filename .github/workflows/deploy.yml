@@ -13,15 +13,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
-        run: npm install --workspace=apps/web
+        run: bun install --filter '@tnp/web'
 
       - name: Build
-        run: npm run build --workspace=apps/web
+        run: cd apps/web && bun run build
         env:
           VITE_API_URL: https://api.tnp.network
 
