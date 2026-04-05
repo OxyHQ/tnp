@@ -162,7 +162,15 @@ function installWindows(binaryPath: string, cfg: TnpConfig): void {
     process.env.TEMP || process.env.TMP || "C:\\Windows\\Temp",
     "tnp-task.xml"
   );
-  writeFileSync(tmpXml, taskXml, "utf-16le");
+  // Windows Task Scheduler requires UTF-16LE XML.
+  // Bun doesn't support "utf-16le" encoding in writeFileSync,
+  // so we encode manually with a BOM.
+  const utf16Bytes: number[] = [0xFF, 0xFE]; // BOM
+  for (let i = 0; i < taskXml.length; i++) {
+    const code = taskXml.charCodeAt(i);
+    utf16Bytes.push(code & 0xFF, (code >> 8) & 0xFF);
+  }
+  writeFileSync(tmpXml, Buffer.from(utf16Bytes));
   run(`schtasks /Create /TN "${WIN_TASK_NAME}" /XML "${tmpXml}" /F`);
   safeUnlink(tmpXml);
 
