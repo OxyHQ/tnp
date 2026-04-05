@@ -1,6 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { homedir } from "os";
+import { homedir, tmpdir } from "os";
+
+/** Default TNP public DNS resolver IP. Used as fallback when local proxy is unavailable. */
+export const TNP_PUBLIC_DNS = "174.138.10.81";
+
+/** Path to the kill switch marker file. Presence means firewall rules are active. */
+export const KILLSWITCH_MARKER_PATH = join(tmpdir(), "tnp-killswitch-active");
 
 export interface TnpConfig {
   listenAddr: string;
@@ -18,6 +24,7 @@ export interface TnpConfig {
   relayAuthToken: string;
   autoConnect: boolean;
   killSwitch: boolean;
+  publicDnsIp: string;
 }
 
 export function configDir(): string {
@@ -71,6 +78,7 @@ const DEFAULT_CONFIG: TnpConfig = {
   relayAuthToken: "",
   autoConnect: false,
   killSwitch: false,
+  publicDnsIp: TNP_PUBLIC_DNS,
 };
 
 export function loadConfig(): TnpConfig {
@@ -80,12 +88,20 @@ export function loadConfig(): TnpConfig {
   }
 
   const raw = readFileSync(path, "utf-8");
-  const saved = JSON.parse(raw) as Partial<TnpConfig>;
+  let saved: Partial<TnpConfig>;
+  try {
+    saved = JSON.parse(raw) as Partial<TnpConfig>;
+  } catch (err) {
+    console.warn(
+      `[tnp] failed to parse config at ${path}, using defaults: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return { ...DEFAULT_CONFIG };
+  }
   return { ...DEFAULT_CONFIG, ...saved };
 }
 
 export function saveConfig(cfg: TnpConfig): void {
   const dir = configDir();
   mkdirSync(dir, { recursive: true });
-  writeFileSync(configPath(), JSON.stringify(cfg, null, 2) + "\n");
+  writeFileSync(configPath(), JSON.stringify(cfg, null, 2) + "\n", { mode: 0o600 });
 }

@@ -274,7 +274,6 @@ async function settingsSubmenu(): Promise<void> {
       const isSelected = i === selectedIndex;
 
       if (isSelected) {
-        const content = `  ${BOLD}${WHITE}\u25B8 ${field.label.padEnd(20)}${RESET} ${CYAN}${value}${RESET}`;
         write(`${BG_CYAN}${BLACK}${padToWidth(`  \u25B8 ${field.label.padEnd(20)} ${value}`, width)}${RESET}\n`);
       } else {
         write(`    ${DIM}${field.label.padEnd(20)}${RESET} ${DIM}${value}${RESET}\n`);
@@ -505,8 +504,8 @@ async function actionStartRelay(): Promise<void> {
     config.relayAuthToken = authToken;
     try {
       saveConfig(config);
-    } catch {
-      // Non-fatal: config write may fail without sudo
+    } catch (err) {
+      write(`  ${DIM}Could not save config (may need sudo): ${err instanceof Error ? err.message : String(err)}${RESET}\n`);
     }
   } else {
     write(`  ${DIM}Using saved auth token${RESET}\n`);
@@ -530,8 +529,8 @@ async function actionStartRelay(): Promise<void> {
   config.relayLocation = location;
   try {
     saveConfig(config);
-  } catch {
-    // Non-fatal
+  } catch (err) {
+    write(`  ${DIM}Could not save config (may need sudo): ${err instanceof Error ? err.message : String(err)}${RESET}\n`);
   }
 
   write(`\n  ${DIM}Starting relay node on port ${port}...${RESET}\n`);

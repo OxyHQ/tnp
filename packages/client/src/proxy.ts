@@ -53,6 +53,9 @@ export class DnsProxy {
   /** Whether overlay routing is enabled (set when SOCKS5 proxy is running) */
   private overlayEnabled = false;
 
+  /** Handle for the periodic TLD sync interval, so it can be cleared on stop. */
+  private tldSyncInterval: ReturnType<typeof setInterval> | null = null;
+
   constructor(config: TnpConfig) {
     this.config = config;
     this.apiClient = new TnpApiClient(config.apiBaseUrl);
@@ -303,7 +306,9 @@ export class DnsProxy {
     try {
       const writerFn = (Packet as Record<string, unknown>).write as ((r: unknown) => Buffer) | undefined;
       if (writerFn) return writerFn(response);
-    } catch {}
+    } catch (err) {
+      console.warn(`[tnp] dns2 Packet.write failed, using manual serialization: ${err instanceof Error ? err.message : String(err)}`);
+    }
 
     // Manual serialization of a simple A response
     const resp = response as {
@@ -380,10 +385,28 @@ export class DnsProxy {
     this.udpServer.bind(listenPort, listenAddr);
 
     // TCP server (for DNS-over-TLS via stunnel)
+    // DNS TCP messages have a 2-byte length prefix. Max DNS message is 65535 bytes.
+    const TCP_MAX_BUFFER = 65535 + 2; // max message + length prefix
+    const TCP_IDLE_TIMEOUT_MS = 10_000;
+
     this.tcpServer = net.createServer((socket) => {
       let buffer = Buffer.alloc(0);
+
+      socket.setTimeout(TCP_IDLE_TIMEOUT_MS);
+      socket.on("timeout", () => {
+        socket.destroy();
+      });
+
       socket.on("data", (data: Buffer) => {
         buffer = Buffer.concat([buffer, data]);
+
+        // Protect against memory exhaustion from oversized or malicious input
+        if (buffer.length > TCP_MAX_BUFFER) {
+          console.warn("[tnp] tcp client exceeded max buffer size, closing connection");
+          socket.destroy();
+          return;
+        }
+
         // TCP DNS uses 2-byte length prefix
         const processNext = () => {
           if (buffer.length < 2) return;
@@ -412,6 +435,10 @@ export class DnsProxy {
   }
 
   stop() {
+    if (this.tldSyncInterval) {
+      clearInterval(this.tldSyncInterval);
+      this.tldSyncInterval = null;
+    }
     this.udpServer?.close();
     this.tcpServer?.close();
   }
@@ -426,7 +453,10 @@ export class DnsProxy {
   }
 
   startTldSync(intervalMs: number = 5 * 60 * 1000) {
-    this.syncTlds();
-    setInterval(() => this.syncTlds(), intervalMs);
+    // Callers control the initial sync via proxy.syncTlds() -- this only sets up the recurring timer.
+    if (this.tldSyncInterval) {
+      clearInterval(this.tldSyncInterval);
+    }
+    this.tldSyncInterval = setInterval(() => this.syncTlds(), intervalMs);
   }
 }
