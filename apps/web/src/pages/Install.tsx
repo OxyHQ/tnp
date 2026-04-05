@@ -22,7 +22,7 @@ const clientPlatforms: { id: Platform; label: string }[] = [
   { id: "windows", label: "Windows" },
 ];
 
-const DNS_IP = "206.189.96.213";
+const DNS_IP = "174.138.10.81";
 const DNS_HOST = "dns.tnp.network";
 const INSTALL_CMD_UNIX = "curl -fsSL https://get.tnp.network | sh";
 const INSTALL_CMD_WINDOWS = "irm https://get.tnp.network/ps | iex";
