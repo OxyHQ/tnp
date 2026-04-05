@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { Trans, useTranslation } from "react-i18next";
 import { apiFetch } from "../lib/api";
 
 type Platform = "macos" | "linux" | "windows" | "android" | "ios" | "router";
 type SetupMethod = "dns" | "client" | "serve" | "relay";
+type CopiedField = "unix" | "windows" | null;
 
 const dnsPlatforms: { id: Platform; label: string }[] = [
   { id: "android", label: "Android" },
@@ -23,6 +24,8 @@ const clientPlatforms: { id: Platform; label: string }[] = [
 
 const DNS_IP = "206.189.96.213";
 const DNS_HOST = "dns.tnp.network";
+const INSTALL_CMD_UNIX = "curl -fsSL https://get.tnp.network | sh";
+const INSTALL_CMD_WINDOWS = "irm https://get.tnp.network/ps | iex";
 
 interface ClientInfo {
   version: string;
@@ -36,8 +39,7 @@ export default function Install() {
   const [dnsPlatform, setDnsPlatform] = useState<Platform>("android");
   const [clientPlatform, setClientPlatform] = useState<Platform>("macos");
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
-  const [copied, setCopied] = useState(false);
-  const installCommand = "curl -fsSL https://get.tnp.network | sh";
+  const [copied, setCopied] = useState<CopiedField>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -49,11 +51,11 @@ export default function Install() {
     return () => { ignore = true; };
   }, []);
 
-  const copyCommand = () => {
-    navigator.clipboard.writeText(installCommand);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const copyCommand = useCallback((command: string, field: CopiedField) => {
+    navigator.clipboard.writeText(command);
+    setCopied(field);
+    setTimeout(() => setCopied(null), 2000);
+  }, []);
 
   const methodKeys: SetupMethod[] = ["dns", "client", "serve", "relay"];
 
@@ -209,19 +211,26 @@ export default function Install() {
                 <h3 className="font-mono text-sm font-medium text-primary">{t("install:dns.linux.title")}</h3>
                 <div className="space-y-3">
                   <div>
-                    <p className="mb-1 font-medium text-secondary">{t("install:dns.linux.systemdResolved")}</p>
+                    <p className="mb-1 font-medium text-secondary">systemd-resolved (Ubuntu, Fedora, Debian):</p>
+                    <p className="mb-2 text-xs text-muted">
+                      If <code className="rounded bg-surface px-1.5 py-0.5 text-accent">resolvectl</code> is not found, install it first:
+                    </p>
+                    <code className="block rounded bg-surface px-3 py-2 text-xs text-accent mb-2">
+                      sudo apt install systemd-resolved   # Debian/Ubuntu
+                    </code>
+                    <p className="mb-1 text-xs text-muted">Then configure DNS:</p>
                     <code className="block rounded bg-surface px-3 py-2 text-xs text-accent">
                       sudo resolvectl dns eth0 {DNS_IP}
                     </code>
                   </div>
                   <div>
-                    <p className="mb-1 font-medium text-secondary">{t("install:dns.linux.resolvConf")}</p>
+                    <p className="mb-1 font-medium text-secondary">resolv.conf (any distro):</p>
                     <code className="block rounded bg-surface px-3 py-2 text-xs text-accent">
                       echo "nameserver {DNS_IP}" | sudo tee /etc/resolv.conf
                     </code>
                   </div>
                   <div>
-                    <p className="mb-1 font-medium text-secondary">{t("install:dns.linux.networkManager")}</p>
+                    <p className="mb-1 font-medium text-secondary">NetworkManager (GUI):</p>
                     <p className="text-xs text-muted">
                       <Trans
                         i18nKey="install:dns.linux.networkManagerDesc"
@@ -274,14 +283,32 @@ export default function Install() {
             </p>
           )}
 
-          <div className="mb-8 flex items-center justify-between rounded-lg border border-edge bg-surface-card px-4 py-3">
-            <code className="font-mono text-sm text-accent">{installCommand}</code>
-            <button
-              onClick={copyCommand}
-              className="ml-3 cursor-pointer font-mono text-xs text-muted transition-colors hover:text-secondary"
-            >
-              [{copied ? t("common:copied") : t("common:copy")}]
-            </button>
+          <div className="mb-8 space-y-3">
+            <div className="rounded-lg border border-edge bg-surface-card px-4 py-3">
+              <p className="mb-2 font-mono text-xs font-medium text-secondary">macOS / Linux</p>
+              <div className="flex items-center justify-between">
+                <code className="font-mono text-sm text-accent">{INSTALL_CMD_UNIX}</code>
+                <button
+                  onClick={() => copyCommand(INSTALL_CMD_UNIX, "unix")}
+                  className="ml-3 shrink-0 cursor-pointer font-mono text-xs text-muted transition-colors hover:text-secondary"
+                >
+                  [{copied === "unix" ? t("common:copied") : t("common:copy")}]
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-edge bg-surface-card px-4 py-3">
+              <p className="mb-2 font-mono text-xs font-medium text-secondary">Windows (PowerShell)</p>
+              <div className="flex items-center justify-between">
+                <code className="font-mono text-sm text-accent">{INSTALL_CMD_WINDOWS}</code>
+                <button
+                  onClick={() => copyCommand(INSTALL_CMD_WINDOWS, "windows")}
+                  className="ml-3 shrink-0 cursor-pointer font-mono text-xs text-muted transition-colors hover:text-secondary"
+                >
+                  [{copied === "windows" ? t("common:copied") : t("common:copy")}]
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="mb-6 flex gap-2">
