@@ -155,4 +155,56 @@ export class TnpApiClient {
       throw new Error(body.error ?? `TNP API returned ${res.status}`);
     }
   }
+
+  /**
+   * Register this machine as a relay node (auth required).
+   */
+  async registerRelay(
+    port: number,
+    location: string,
+    authToken: string,
+  ): Promise<{ relayId: string }> {
+    const url = `${this.baseUrl}/relays/register`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ port, location }),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? `TNP API returned ${res.status}`);
+    }
+
+    return (await res.json()) as { relayId: string };
+  }
+
+  /**
+   * Send relay heartbeat (auth required).
+   */
+  async sendRelayHeartbeat(
+    relayId: string,
+    stats: { serviceNodes: number; activeCircuits: number },
+    authToken: string,
+  ): Promise<void> {
+    const url = `${this.baseUrl}/relays/heartbeat`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ relayId, ...stats }),
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? `TNP API returned ${res.status}`);
+    }
+  }
 }

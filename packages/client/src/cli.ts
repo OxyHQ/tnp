@@ -186,14 +186,52 @@ async function cmdServe() {
   );
 }
 
-function cmdRelay() {
-  console.log("[tnp] community relay mode");
-  console.log("");
-  console.log("To run a relay, use the relay server directly:");
-  console.log("  cd apps/relay && bun run dev");
-  console.log("");
-  console.log("Or deploy the relay binary to a server.");
-  console.log("See https://tnp.network/relay for setup instructions.");
+async function cmdRelay() {
+  const config = loadConfig();
+
+  const port = Number(getFlag("--port") ?? config.relayPort);
+  const host = getFlag("--host") ?? "0.0.0.0";
+  const location = getFlag("--location") ?? config.relayLocation;
+  const authToken = getFlag("--token") ?? config.relayAuthToken;
+  const maxConn = Number(getFlag("--max-connections") ?? config.relayMaxConnections);
+
+  if (!authToken) {
+    console.error("[tnp] --token is required (Oxy auth token)");
+    console.error("Example: tnp relay --token <auth-token>");
+    process.exit(1);
+  }
+
+  console.log(`[tnp] v${VERSION} relay node starting...`);
+  console.log(`[tnp] listen: ${host}:${port}`);
+  console.log(`[tnp] location: ${location || "(not set)"}`);
+  console.log(`[tnp] max connections: ${maxConn}`);
+
+  const { RelayNode } = await import("./relay-node");
+  const { TnpApiClient } = await import("./api");
+
+  const apiClient = new TnpApiClient(config.apiBaseUrl);
+
+  const relay = new RelayNode({
+    port,
+    host,
+    maxConnections: maxConn,
+    authToken,
+    location,
+    apiBaseUrl: config.apiBaseUrl,
+  });
+
+  await relay.start(apiClient);
+
+  console.log(`[tnp] relay node ready on ${host}:${port}`);
+
+  const shutdown = () => {
+    console.log("\n[tnp] shutting down relay node...");
+    relay.stop();
+    process.exit(0);
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
 
 function cmdInstall() {

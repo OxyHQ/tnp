@@ -12,6 +12,10 @@ export interface TnpConfig {
   socksPort: number;
   relayPreference: "oxy" | "community" | "any";
   identityKeyPath: string;
+  relayPort: number;
+  relayLocation: string;
+  relayMaxConnections: number;
+  relayAuthToken: string;
 }
 
 export function configDir(): string {
@@ -59,6 +63,10 @@ const DEFAULT_CONFIG: TnpConfig = {
   socksPort: 1080,
   relayPreference: "oxy",
   identityKeyPath: join(dataDir(), "identity.key"),
+  relayPort: 8080,
+  relayLocation: "",
+  relayMaxConnections: 100,
+  relayAuthToken: "",
 };
 
 export function loadConfig(): TnpConfig {
