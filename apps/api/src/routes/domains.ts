@@ -161,11 +161,10 @@ router.post("/register", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
 
-    // Standard TLDs (.com, .app): restricted to admin users only
+    // Standard TLDs (.com, .app): restricted to admin Oxy accounts only
     if (!tldDoc.custom) {
-      const ALLOWED_USERS = ["nate", "oxy"];
-      const username = ((req.user as Record<string, unknown>)?.username as string || "").toLowerCase();
-      if (!ALLOWED_USERS.includes(username)) {
+      const ADMIN_OXY_IDS = ["6981c9178fcdefaf81988ffb"];
+      if (!ADMIN_OXY_IDS.includes(req.user!.id)) {
         res.status(403).json({ error: `Registration on .${cleanTld} is restricted` });
         return;
       }

@@ -18,9 +18,16 @@ async function findOrCreateUser(oxyUserId: string) {
 }
 
 // GET /tlds -- list all active TLDs
-router.get("/", async (_req, res) => {
+// Standard TLDs are only visible to admin users; everyone else sees custom TLDs only.
+router.get("/", async (req: AuthRequest, res) => {
   try {
-    const tlds = await TLD.find({ status: "active" }).sort({ name: 1 });
+    const ADMIN_OXY_IDS = ["6981c9178fcdefaf81988ffb"];
+    const isAdmin = req.user?.id && ADMIN_OXY_IDS.includes(req.user.id);
+    const filter: Record<string, unknown> = { status: "active" };
+    if (!isAdmin) {
+      filter.custom = { $ne: false };
+    }
+    const tlds = await TLD.find(filter).sort({ name: 1 });
     res.json(tlds);
   } catch (err) {
     console.error("List TLDs error:", err);
