@@ -753,7 +753,7 @@ const arg = process.argv[3];
 switch (command) {
   case "interactive": {
     const { startInteractive } = await import("./interactive");
-    startInteractive();
+    await startInteractive();
     break;
   }
   case "run":
