@@ -1,5 +1,6 @@
 {
   "name": "tnp",
+  "version": "0.1.0",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -9,9 +10,25 @@
     "dev": "concurrently \"bun run dev:api\" \"bun run dev:web\"",
     "dev:api": "cd apps/api && bun run dev",
     "dev:web": "cd apps/web && bun run dev",
-    "seed": "cd apps/api && bun run seed"
+    "seed": "cd apps/api && bun run seed",
+    "release": "release-it"
+  },
+  "release-it": {
+    "git": {
+      "tagName": "tnp@${version}",
+      "tagAnnotation": "Release tnp@${version}",
+      "commitMessage": "chore: release tnp@${version}"
+    },
+    "github": {
+      "release": true,
+      "releaseName": "tnp@${version}"
+    },
+    "npm": {
+      "publish": false
+    }
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.1.0",
+    "release-it": "^19.0.6"
   }
 }
