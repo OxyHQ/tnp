@@ -76,7 +76,7 @@ The serialisation is hand-rolled with `Packet.Writer` from the `dns2` package be
 
 A simple `Map<cacheKey, { answers, expiresAt }>` keyed by `name:type`, TTL-bounded by `cacheTtlSeconds`. The cache is intentionally per-process and never persisted:
 
-- On the public resolver, restarts are cheap (containers come up in <1s and `syncTlds()` only fetches a small JSON array).
+- On the public resolver, restarts are cheap (containers come up in `<1s` and `syncTlds()` only fetches a small JSON array).
 - On the client, cache survives only between hot reloads — a fresh `tnp run` always re-asks the API.
 
 Caching the **overlay info** (`{ serviceNodePubKey, relay }`) is separate, in `overlayCache`, and queried synchronously by the SOCKS5 proxy on every outbound connection.
