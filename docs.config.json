@@ -1,0 +1,11 @@
+{
+  "package": "tnp",
+  "displayName": "TNP",
+  "shortName": "tnp",
+  "repo": "https://github.com/OxyHQ/tnp",
+  "category": "service",
+  "versions": ["main"],
+  "defaultVersion": "main",
+  "docsPath": "docs/",
+  "description": "Alternative DNS / namespace system — Vite web + Bun API + DNS server"
+}

@@ -1,0 +1,181 @@
+---
+title: TNP
+description: The Network Protocol — an alternative internet namespace controlled by Oxy, with custom TLDs, a public DNS resolver, and an optional encrypted overlay.
+order: 0
+---
+
+# TNP (The Network Protocol)
+
+TNP is an alternative internet namespace controlled by Oxy. Anyone can register domains on TLDs that only exist inside the TNP network — `.ox`, `.app`, `.com`, and community-proposed TLDs — and resolve them from any device.
+
+<Badge variant="success">Service</Badge> <Badge>DNS</Badge> <Badge>Overlay</Badge>
+
+## What it is
+
+TNP is **DNS-only**. It does not route traffic, does not act as a VPN, and does not touch anything except name resolution. Install the TNP client once, point a device at the public TNP resolver, or run the local proxy — and every TNP domain resolves natively on your device. Browsers, CLI tools, APIs, everything.
+
+Domains are tied to your Oxy account. Register at [tnp.network](https://tnp.network), manage your DNS records from the web dashboard, and propose new TLDs to the community.
+
+On top of pure DNS, TNP also ships an optional **end-to-end encrypted overlay** built around the same domains: register a service node, run `tnp serve` on a port, and clients connect through community-operated relays without exposing your IP. Overlay traffic is multiplexed over WebSockets and encrypted with NaCl (X25519 + XSalsa20-Poly1305).
+
+## Architecture
+
+TNP is a Bun-based monorepo of four runtimes plus one client SDK:
+
+```
+apps/
+  web/            @tnp/web          Vite 8 + React 19 + Tailwind 4 + react-i18next
+  api/            @tnp/api          Bun + Express 5 + Mongoose 9 + @oxyhq/core
+  dns-server/     @tnp/dns-server   Public DNS resolver (UDP + TCP, dns2)
+  relay/          @tnp/relay        WebSocket relay server for the encrypted overlay
+packages/
+  client/         @tnp/client       Cross-platform CLI: local DNS proxy, SOCKS5 proxy,
+                                    tunnel manager, service node, embedded relay.
+                                    Compiles to a standalone single-file binary with Bun.
+```
+
+The pieces are intentionally decoupled — the public DNS server (`apps/dns-server`) just embeds the same `DnsProxy` class the client CLI uses, talking to the API over HTTPS for TLD list + per-domain resolution.
+
+```
+  ┌───────────────┐         ┌────────────┐         ┌──────────────┐
+  │  Browser /    │   DNS   │  TNP local │   HTTPS │              │
+  │  CLI tool     │ ──────▶ │  proxy or  │ ──────▶ │   tnp-api    │
+  │               │         │  public DNS│         │  (MongoDB)   │
+  └───────────────┘         └────────────┘         └──────────────┘
+                                  │
+                                  │ overlay enabled?  (tnp connect)
+                                  ▼
+                            ┌──────────┐  WSS   ┌────────────────┐
+                            │ SOCKS5   │ ─────▶ │   tnp-relay    │
+                            │ proxy    │        │ (Oxy or comm.) │
+                            └──────────┘        └────────────────┘
+                                                        │
+                                                        ▼
+                                                ┌────────────────┐
+                                                │ service node   │
+                                                │ (tnp serve)    │
+                                                └────────────────┘
+```
+
+## Install
+
+The fastest path on Linux or macOS:
+
+```sh
+curl -fsSL https://get.tnp.network | sh
+```
+
+Windows (PowerShell, run as Administrator):
+
+```powershell
+irm https://get.tnp.network/ps | iex
+```
+
+The installer detects platform/arch, downloads the right `tnp` binary from the latest GitHub release, installs it to `/usr/local/bin/tnp` (or `%ProgramFiles%\tnp\tnp.exe`), and prompts you to either:
+
+1. **Install the TNP service** (recommended) — runs a local DNS proxy on `127.0.0.1:5354` and configures system DNS to use it. Only TNP domains are affected; standard DNS continues to work via fallback to `1.1.1.1`.
+2. **Switch system DNS to the public TNP resolver** (`174.138.10.81`, `dns.tnp.network`) — every DNS query goes through TNP.
+3. **Skip** — manual setup later.
+
+No client needed if you just want resolution: point any device's DNS at `174.138.10.81` and TNP domains resolve from the public resolver.
+
+## Quick start
+
+### 1. Register a domain
+
+```sh
+# Browser
+open https://tnp.network/register
+```
+
+Sign in with Oxy SSO, pick a name, pick a TLD (`.ox` is the default community TLD), submit. Custom TNP TLDs are first-come, first-served and free; standard mirrors (`.com`, `.app`) are restricted to admin accounts.
+
+### 2. Add DNS records
+
+From the web dashboard at `https://tnp.network/d/your.ox`:
+
+```
+A     @     203.0.113.10     3600
+AAAA  @     2001:db8::1      3600
+CNAME www   your.ox          3600
+TXT   _verify  oxy-domain-verify=abc123   300
+MX    @     mail.example.com  3600
+```
+
+Records are stored as a subdocument on the `Domain` model. Supported types: `A`, `AAAA`, `CNAME`, `TXT`, `MX`, `NS`. TTLs default to `3600` seconds.
+
+### 3. Resolve
+
+```sh
+# Using the installed client
+tnp test your.ox
+
+# Or via dig against the public resolver
+dig @174.138.10.81 your.ox A
+
+# Or just open it in a browser if the client/system DNS is configured
+open http://your.ox
+```
+
+### 4. (Optional) Serve a real app over the overlay
+
+```sh
+# Register a service node for your domain
+tnp serve --domain your.ox --target localhost:8080 --token <oxy-token>
+
+# Anyone running `tnp connect` resolves your.ox to 127.0.0.1, the SOCKS5
+# proxy picks up the connection, and traffic flows encrypted end-to-end
+# through the relay to your service node. Your origin IP is never exposed.
+```
+
+## Core concepts
+
+### Names
+
+A TNP name is `<label>.<tld>` where `<label>` is `[a-z0-9](-[a-z0-9])*`, 1–63 chars, and `<tld>` is one of the active TNP TLDs. Subdomains are supported on resolve (`www.your.ox`) and stored per-record by name (`@` = apex).
+
+### TLDs
+
+The `TLD` model has two flavours:
+
+- `custom: true` — community TNP TLDs (`.ox` is the canonical one). Resolve **inside** the TNP network only. Unregistered names on custom TLDs return a synthetic A record pointing to the parking IP, which renders an "available — register on TNP" page (served by the API for direct host header hits, or as a redirect via the public DNS resolver).
+- `custom: false` — standard internet TLDs (`.com`, `.app`) that TNP mirrors for select Oxy use cases. Unregistered names fall through to upstream DNS (`8.8.8.8` DoH) so the public internet continues to work. Registration on these is restricted to admin Oxy accounts.
+
+New TLDs come from the community: `POST /tlds/propose` creates a proposal, `POST /tlds/proposals/:id/vote` upvotes / downvotes, and an Oxy admin promotes the winners to `status: 'active'`.
+
+### Resolution flow
+
+`GET /dns/resolve?name=foo.ox&type=A` is the single source of truth. The flow on the API side:
+
+1. Split `name` into `subdomain`, `domainName`, `tld`.
+2. Look up the TLD. If not a TNP TLD → return `{ answers: [] }` and the client forwards to upstream.
+3. Look up the domain. If not registered:
+   - **Custom TLD** → return parking IP A record.
+   - **Standard TLD** → return empty answers; client forwards to upstream.
+4. Filter the domain's stored records by `type` and matching subdomain (`@` or full FQDN).
+5. If the domain has an active service node, attach `overlay: { serviceNodePubKey, relay, available: true }` to the response — the overlay-enabled client uses this to route through the encrypted tunnel.
+
+### Caching
+
+Both the public DNS server and the local client cache responses for `cacheTtlSeconds` (default 300s). Standard-TLD queries that miss the cache go straight to upstream DoH — there's no extra round trip to the TNP API for `.com` lookups that aren't on TNP.
+
+### Authentication
+
+The API uses **Oxy SSO**. Every protected endpoint requires `Authorization: Bearer <oxy-token>`; the API verifies tokens against `https://api.oxy.so` via `@oxyhq/core`'s `oxy.auth()` middleware. Users are created lazily — first authenticated request creates the local `User` document keyed by `oxyUserId`.
+
+## Where to go next
+
+- [DNS Server](./dns-server) — how `dns-server` and the client's `DnsProxy` resolve names, cache, and forward upstream.
+- [Client SDK](./sdk) — the `tnp` CLI commands, the `DnsProxy` and `TnpApiClient` modules, the overlay (`tnp connect` / `tnp serve` / `tnp relay`).
+- [REST API](./api) — every endpoint exposed by `@tnp/api`.
+
+## Tech stack
+
+| Layer | Stack |
+|-------|-------|
+| Web | Vite 8, React 19, TypeScript, Tailwind CSS 4, React Router 7, react-i18next (5 locales: en, zh, es, hi, fr) |
+| API | Bun, Express 5, Mongoose 9, MongoDB, `@oxyhq/core` for Oxy SSO |
+| DNS | Bun runtime, `dns2` for packet encoding/decoding, raw UDP + TCP sockets |
+| Relay | Bun's native WebSocket server, binary frame protocol, in-memory connection registry |
+| Client | Bun (compiled to single-file binary per platform: linux-x64/arm64, darwin-x64/arm64, windows-x64), `tweetnacl` for X25519 + XSalsa20-Poly1305 |
+| Auth | Oxy SSO, JWTs verified by `@oxyhq/core` |

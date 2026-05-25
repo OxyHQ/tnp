@@ -1,0 +1,288 @@
+---
+title: Client SDK
+description: The tnp CLI, the DnsProxy and TnpApiClient modules, and the encrypted overlay (tnp connect / serve / relay).
+order: 2
+---
+
+# Client SDK
+
+`@tnp/client` is the cross-platform CLI for TNP. It bundles:
+
+- A local **DNS proxy** (the same `DnsProxy` class the public resolver uses).
+- A **SOCKS5 proxy** that intercepts TCP connections to TNP domains.
+- A **WebSocket tunnel manager** that multiplexes encrypted circuits over relays.
+- A **service-node** runtime (`tnp serve`) that exposes a local port to the TNP overlay.
+- An embedded **relay node** (`tnp relay`) so anyone can join the relay network.
+- An **interactive terminal UI** for status, settings, and operator features.
+
+It compiles to a single-file binary via `bun build --compile` and ships per-platform releases (`linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`, `windows-x64`).
+
+## Install
+
+The shell installer handles platform detection, download, install, and optional DNS setup:
+
+```sh
+# Linux / macOS
+curl -fsSL https://get.tnp.network | sh
+
+# Windows (PowerShell as Administrator)
+irm https://get.tnp.network/ps | iex
+```
+
+Direct download links live at `GET https://api.tnp.network/client/latest`:
+
+```json
+{
+  "version": "0.2.0",
+  "platforms": {
+    "darwin-arm64": "https://github.com/OxyHQ/tnp/releases/download/v0.2.0/tnp-darwin-arm64",
+    "darwin-x64":   "https://github.com/OxyHQ/tnp/releases/download/v0.2.0/tnp-darwin-x64",
+    "linux-x64":    "https://github.com/OxyHQ/tnp/releases/download/v0.2.0/tnp-linux-x64",
+    "linux-arm64":  "https://github.com/OxyHQ/tnp/releases/download/v0.2.0/tnp-linux-arm64",
+    "windows-x64":  "https://github.com/OxyHQ/tnp/releases/download/v0.2.0/tnp-windows-x64.exe"
+  }
+}
+```
+
+## CLI commands
+
+```
+tnp                        Interactive terminal menu (arrow keys, status, settings)
+tnp run                    Foreground DNS resolver (no overlay)
+tnp connect [flags]        Full overlay client: DNS proxy + SOCKS5 proxy
+tnp serve   [flags]        Run a service node for a domain you own
+tnp relay   [flags]        Run a community relay node
+tnp install                Install as a system service + configure system DNS
+tnp uninstall              Remove the system service + restore DNS
+tnp update                 Self-update to the latest release
+tnp status                 Is the resolver service running?
+tnp test <domain>          Resolve a domain through the local proxy and print results
+tnp version                Print version
+tnp help                   Show usage
+```
+
+### `tnp connect` flags
+
+| Flag | Description |
+|------|-------------|
+| `--privacy access\|private` | `access` = direct relay selection (fast); `private` = randomised path. Default `access`. |
+| `--autoconnect` | Persist the choice and start TNP on system boot. |
+| `--no-autoconnect` | Disable autoconnect. |
+| `--killswitch` | Block all DNS via iptables if the local proxy crashes (Linux only). |
+| `--no-killswitch` | Disable kill switch. |
+
+### `tnp serve` flags
+
+| Flag | Description |
+|------|-------------|
+| `--domain <name.tld>` | The TNP domain you own. Required. |
+| `--target <host:port>` | Local target to forward circuits to. Default `localhost:80`. |
+| `--relay <wss://…>` | Specific relay endpoint. Defaults to picking from the API. |
+| `--token <oxy-token>` | Bearer token for `/nodes/register` and `/nodes/heartbeat`. |
+
+## Configuration file
+
+`tnp` reads `<configDir>/config.json`:
+
+| Platform | Config dir | Data dir |
+|----------|-----------|----------|
+| Linux | `/etc/tnp` | `/var/lib/tnp` |
+| macOS | `/usr/local/etc/tnp` | `~/Library/Application Support/tnp` |
+| Windows | `%PROGRAMDATA%\tnp` | `%LOCALAPPDATA%\tnp` |
+
+The `TnpConfig` shape (see `packages/client/src/config.ts`):
+
+```ts
+interface TnpConfig {
+  listenAddr: string;           // default "127.0.0.1"
+  listenPort: number;           // default 5354
+  apiBaseUrl: string;           // default "https://api.tnp.network"
+  upstreamDns: string;          // default "1.1.1.1"
+  cacheTtlSeconds: number;      // default 300
+  privacyLevel: "access" | "private";
+  socksPort: number;            // default 1080
+  relayPreference: "oxy" | "community" | "any";
+  identityKeyPath: string;      // <dataDir>/identity.key
+  relayPort: number;            // default 8080 (for `tnp relay`)
+  relayLocation: string;
+  relayMaxConnections: number;  // default 100
+  relayAuthToken: string;
+  autoConnect: boolean;
+  killSwitch: boolean;
+  publicDnsIp: string;          // fallback DNS when local proxy is unavailable
+}
+```
+
+Defaults are merged with the on-disk file every load, so adding new fields to the schema doesn't break existing installations.
+
+## Modules
+
+Each piece is exposed as an importable TypeScript module so other tools in the monorepo (notably `apps/dns-server`) can compose them.
+
+### `DnsProxy` — `packages/client/src/proxy.ts`
+
+The DNS engine. Same class that powers the public resolver. See [DNS Server](./dns-server) for the full request flow. Public methods:
+
+```ts
+class DnsProxy {
+  constructor(config: TnpConfig);
+
+  /** Bind UDP + TCP sockets on `listenAddr:listenPort`. */
+  start(): Promise<void>;
+
+  /** Close sockets, stop the recurring TLD sync. */
+  stop(): void;
+
+  /** Pull the TLD list from /dns/tlds once. */
+  syncTlds(): Promise<void>;
+
+  /** Start a recurring sync (default 5 minutes). */
+  startTldSync(intervalMs?: number): void;
+
+  /** Enable overlay routing: returns 127.0.0.1 for domains with service nodes. */
+  enableOverlay(): void;
+  disableOverlay(): void;
+
+  /** Read overlay info cached during the last resolve. */
+  getOverlayInfo(domain: string): { pubKey: string; relay: string } | undefined;
+
+  /** Shared API client; safe to reuse from a sibling module. */
+  getApiClient(): TnpApiClient;
+}
+```
+
+### `TnpApiClient` — `packages/client/src/api.ts`
+
+Typed wrapper around the JSON API. Returns plain typed shapes, no extra layer.
+
+```ts
+class TnpApiClient {
+  constructor(baseUrl: string);
+
+  resolve(name: string, type: string): Promise<DnsAnswer[]>;
+  resolveWithOverlay(name: string, type: string): Promise<ResolveResponse>;
+  fetchTlds(): Promise<Array<{ name: string; custom: boolean }>>;
+
+  // Overlay primitives (auth required for register/heartbeat)
+  getServiceNode(domain: string): Promise<ServiceNodeInfo | null>;
+  getRelays(operator?: "oxy" | "community"): Promise<RelayInfo[]>;
+  registerServiceNode(domainId: string, publicKey: string, token: string): Promise<void>;
+  sendHeartbeat(domainId: string, connectedRelay: string, token: string): Promise<void>;
+  registerRelay(port: number, location: string, token: string): Promise<{ relayId: string }>;
+  sendRelayHeartbeat(relayId: string, stats: { serviceNodes: number; activeCircuits: number }, token: string): Promise<void>;
+}
+```
+
+Every call uses an `AbortSignal.timeout(...)` so a stuck request can't deadlock the resolver.
+
+### Overlay primitives
+
+```
+packages/client/src/
+  crypto.ts        NaCl helpers (Ed25519 identity, X25519 ephemeral, XSalsa20-Poly1305 encrypt/decrypt)
+  frames.ts        Binary frame protocol: [circuitId u32][type u8][payload …]
+  tunnel.ts        TunnelManager + TunnelCircuit: multiplex circuits over a WSS connection
+  socks.ts         SOCKS5 server (RFC 1928); routes TNP domains through the tunnel manager
+  proxy.ts         DnsProxy with `enableOverlay()` to return 127.0.0.1 for service-backed domains
+  service-node.ts  `tnp serve` runtime
+  relay-node.ts    Embedded `tnp relay` runtime
+```
+
+### Crypto layer (`crypto.ts`)
+
+```ts
+import {
+  generateIdentity,          // Ed25519 signing keypair (service node identity)
+  loadOrCreateIdentity,      // persistent on disk with 0o600 permissions
+  generateEphemeralKeypair,  // X25519, per circuit
+  computeSharedKey,          // X25519 ECDH → 32-byte symmetric key
+  encrypt, decrypt,          // XSalsa20-Poly1305 via nacl.secretbox
+  toBase64, fromBase64,
+} from "@tnp/client/crypto"; // (internal module import; client is private to the monorepo)
+```
+
+Identity files are stored at `~/Library/Application Support/tnp/identity.key` (macOS), `/var/lib/tnp/identity.key` (Linux), or `%LOCALAPPDATA%\tnp\identity.key` (Windows) with `0o600` perms.
+
+### Frame protocol (`frames.ts`)
+
+Every WebSocket frame between client ↔ relay ↔ service node is binary:
+
+```
+┌──────────────┬──────┬────────────────────────────┐
+│ circuitId u32│ type │ payload (encrypted or raw) │
+│   4 bytes    │  1 B │       N bytes              │
+└──────────────┴──────┴────────────────────────────┘
+
+Type codes:
+  0x01 DATA     encrypted payload
+  0x02 OPEN     request to open a circuit to <domain>
+  0x03 OPENED   relay confirms circuit is established
+  0x04 CLOSE    teardown
+  0x05 ERROR    UTF-8 reason string
+```
+
+The relay never decrypts payloads — it only routes by `circuitId`. End-to-end confidentiality is guaranteed by X25519 between the client and the service node; the relay sees ciphertext only.
+
+### Tunnel manager (`tunnel.ts`)
+
+```ts
+import { TunnelManager } from "@tnp/client/tunnel";
+
+const tunnels = new TunnelManager();
+
+// Open a circuit to example.ox via the given relay + service-node pubkey.
+const circuit = await tunnels.openCircuit({
+  relayUrl: "wss://relay1.tnp.network",
+  serviceNodePubKey: "<base64>",
+  domain: "example.ox",
+});
+
+circuit.onData((bytes) => process.stdout.write(bytes));
+circuit.send(Buffer.from("GET / HTTP/1.1\r\nHost: example.ox\r\n\r\n"));
+
+await new Promise<void>((r) => circuit.onClose(r));
+```
+
+A single `TunnelManager` keeps one WebSocket per relay and multiplexes any number of circuits over it. Reconnection is automatic and bounded; circuits opened during a reconnect wait up to `OPEN_TIMEOUT_MS` (10s) for the relay to come back.
+
+### SOCKS5 proxy (`socks.ts`)
+
+Standard SOCKS5 (RFC 1928, no auth). For each incoming `CONNECT` request, the proxy:
+
+1. Looks up the destination domain in `DnsProxy.getOverlayInfo(domain)` (synchronous cache lookup).
+2. If it's an overlay-backed TNP domain → opens a tunnel circuit through the registered relay and pipes bytes both ways.
+3. Otherwise → falls back to a direct `net.connect()` so SOCKS5 still works for non-TNP traffic.
+
+Browsers can be pointed at `127.0.0.1:1080` (SOCKS5) and use TNP overlay routing transparently.
+
+## Building from source
+
+```sh
+cd packages/client
+
+# Native binary for the current platform
+bun run build
+
+# All five release binaries
+bun run build:all
+```
+
+The build outputs to `packages/client/dist/`. Output binaries are fully self-contained (Bun runtime included); they have no runtime dependencies.
+
+## Running the dev resolver
+
+If you just want to develop against the resolver without installing it:
+
+```sh
+cd /home/nate/Oxy/tnp
+bun run dev:api   # API at http://localhost:3000
+
+# In another terminal
+bun packages/client/src/cli.ts run
+# Resolver listens on 127.0.0.1:5354 by default. Override with TNP_LISTEN_*.
+
+# Test
+dig @127.0.0.1 -p 5354 yourname.ox A
+```
+
+The dev resolver hot-reloads via `bun --watch` if you start it with `bun run dev` from `packages/client`.

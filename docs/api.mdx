@@ -1,0 +1,165 @@
+---
+title: REST API
+description: Every HTTP endpoint exposed by the TNP API — DNS resolution, TLDs, domains, records, service nodes, relays, client distribution.
+order: 3
+---
+
+# REST API
+
+Base URL (production): `https://api.tnp.network`
+Base URL (dev): `http://localhost:3000`
+
+The API is plain JSON over HTTPS, served by Bun + Express 5. Mutating endpoints require an Oxy SSO token in `Authorization: Bearer <token>`; the token is verified against `https://api.oxy.so` by `@oxyhq/core`'s `oxy.auth()` middleware. The local `User` document is created lazily on the first authenticated request, keyed by `oxyUserId`.
+
+CORS is enabled for `https://tnp.network`, `https://www.tnp.network`, the Cloudflare Pages preview origin, and `http://localhost:5173`.
+
+All responses follow `{ error: 'human readable message' }` on failure with the appropriate HTTP status. Successful responses return the resource directly (no envelope).
+
+## Health
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/health` | none | Liveness probe. Returns `{ ok: true, service: 'tnp-api' }`. |
+
+## DNS resolution (`/dns`)
+
+These endpoints are public — anyone can ask the API to resolve a domain. They are the single source of truth that both `apps/dns-server` and the local `tnp` client query.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/dns/resolve?name=&type=` | none | Resolve a domain. `type` is `A`, `AAAA`, `CNAME`, `TXT`, `MX`, `NS`, or `ANY` (default `A`). |
+| GET | `/dns/tlds` | none | Active TLDs. Returns `Array<{ name, custom }>`. |
+
+`/dns/resolve` response shape:
+
+```json
+{
+  "name": "example.ox",
+  "type": "A",
+  "answers": [
+    { "name": "example.ox", "type": "A", "value": "203.0.113.10", "ttl": 3600 }
+  ],
+  "overlay": {
+    "serviceNodePubKey": "<base64>",
+    "relay": "wss://relay1.tnp.network",
+    "available": true
+  }
+}
+```
+
+`overlay` is only present when the domain has an active service node and the service node has heartbeated within the recent timeout window. The overlay-enabled client uses it to route through the encrypted tunnel.
+
+If the name isn't on a TNP TLD, the response is `{ answers: [] }` so the caller can fall through to upstream DNS. If a name is on a **custom** TNP TLD but not registered, the response includes a synthetic A record to the parking IP (`TNP_PARKING_IP`, default `174.138.10.81`) so the browser shows the "available — register on TNP" page.
+
+## TLDs (`/tlds`)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/tlds` | optional | List active TLDs. Non-admin callers only see `custom: true` TLDs; admin Oxy accounts see all. |
+| POST | `/tlds/propose` | required | Propose a new TLD. Body: `{ tld, reason }`. |
+| GET | `/tlds/proposals` | optional | List proposals sorted by score (upvotes − downvotes). If authenticated, includes `userVote: "up" \| "down" \| null` for each proposal. |
+| POST | `/tlds/proposals/:id/vote` | required | Upvote / downvote a proposal. Body: `{ direction: "up" \| "down" }`. Cannot vote on your own. |
+| DELETE | `/tlds/proposals/:id/vote` | required | Remove your vote. |
+
+`tld` must match `^[a-z][a-z0-9]{0,19}$`. Creating a proposal also creates a `TLD` document with `status: 'proposed'`, so the namespace is reserved while the community votes.
+
+## Domains (`/domains`)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/domains?page=&limit=` | optional | Public directory. Default `page=1`, `limit=50`, max `limit=100`. Returns `{ domains, total, page, pages }`. |
+| GET | `/domains/search?q=` | optional | Substring search by name. Max 50 results. |
+| GET | `/domains/check/:name/:tld` | optional | Availability check. Returns `{ domain, available }`. |
+| GET | `/domains/check/:domain` | optional | Same, but `:domain` is `name.tld`. |
+| GET | `/domains/lookup/:domain` | optional | Public detail view. 404 if not registered. Omits `ownerId`. |
+| POST | `/domains/register` | required | Register a domain. Body: `{ name, tld }`. Standard (non-custom) TLDs are admin-only. |
+| GET | `/domains/mine` | required | Current user's domains, newest first. |
+| DELETE | `/domains/:id` | required | Release a domain (must be owner). |
+
+### DNS records (per-domain)
+
+All record routes require auth and ownership of the parent domain.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/domains/:id/records` | List all records for a domain. |
+| POST | `/domains/:id/records` | Add a record. Body: `{ type, name, value, ttl? }`. `type` ∈ `A \| AAAA \| CNAME \| TXT \| MX \| NS`. Default `ttl: 3600`. |
+| PUT | `/domains/:id/records/:rid` | Update fields on a record. |
+| DELETE | `/domains/:id/records/:rid` | Delete a record. |
+
+Records use Mongoose subdocuments, so `:rid` is the auto-generated `_id` returned by the create call.
+
+`name` validation: 1–63 lowercase alphanumeric/hyphen, may not start or end with a hyphen. Apex is stored as `name: '@'` on records.
+
+## Service nodes (`/nodes`)
+
+Service nodes register a domain in the overlay network so `tnp connect` clients can reach it through encrypted tunnels.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/nodes/register` | required | Register or update a service node. Body: `{ domainId, publicKey }`. Must own the domain. Upserts by `domainId`. |
+| GET | `/nodes/:domain` | none | Look up a service node by `name.tld`. Returns `{ publicKey, connectedRelay, status }` or 404. |
+| POST | `/nodes/heartbeat` | required | Mark online. Body: `{ domainId, connectedRelay }`. Updates `lastSeen`, sets `status: 'online'`. |
+
+The `serviceNodeId` is also written back onto the `Domain` document so a single resolve call can return both DNS records and overlay info without an extra round trip.
+
+## Relays (`/relays`)
+
+Relays are operated by Oxy or by the community and brokered by the API. Their endpoints are advertised over a public list.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/relays?operator=` | none | List active relays. Optional `operator=oxy\|community` filter. Excludes `status: offline`. |
+| POST | `/relays/register` | required | Register or update a relay. Body: `{ endpoint, publicKey, operator: 'oxy' \| 'community', capacity: { maxConnections, bandwidth }, location? }`. Upserts by `endpoint`. |
+| POST | `/relays/heartbeat` | required | Mark active. Body: `{ endpoint }`. Must be the registered operator. |
+
+## Client distribution (`/client`)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/client/latest` | none | Latest TNP CLI release. Returns `{ version, platforms: { 'darwin-arm64', 'darwin-x64', 'linux-x64', 'linux-arm64', 'windows-x64' }, install: { unix, windows } }`. |
+| GET | `/client/install.sh` | none | The Unix installer script. Served as `text/plain`. |
+| GET | `/client/install.ps1` | none | The Windows installer script. Served as `text/plain`. |
+
+In production the API also responds to `https://get.tnp.network` — when the `Host` header is `get.tnp.network`, the API rewrites `/` and `/install.sh` to `/client/install.sh`, and `/ps` and `/install.ps1` to `/client/install.ps1`. That's how `curl -fsSL https://get.tnp.network | sh` works.
+
+## Parking middleware
+
+For requests whose `Host` is a TNP domain (e.g., `nate.ox`), the API serves an inline HTML "registered on / available on TNP" page **at the original URL** — no redirect. The page is rendered server-side based on whether the name exists in MongoDB and whether the TLD is a custom TNP TLD. Hosts that match `localhost`, `*.tnp.network`, `*.oxy.so`, or `*.pages.dev` are passed through to the regular router.
+
+This is why directly visiting `nate.ox` in a browser (after pointing DNS at the TNP resolver) shows the parking page at `nate.ox` instead of redirecting away.
+
+## Auth model
+
+The middleware is built once and reused across routes:
+
+```ts
+import { OxyServices } from "@oxyhq/core";
+const oxy = new OxyServices({ baseURL: process.env.OXY_API_URL });
+export const oxyAuth = oxy.auth();
+export const oxyAuthOptional = oxy.auth({ optional: true });
+```
+
+Public DNS routes (`/dns/*`, `/client/*`, `/health`) use no auth. Mixed routes (`/tlds`, `/domains`, `/nodes`, `/relays`) use `oxyAuthOptional` so GETs work without a token, then individual handlers wrap mutating actions with a `requireAuth` guard:
+
+```ts
+function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
+  if (!req.user?.id) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  next();
+}
+```
+
+`req.user.id` is the `oxyUserId` returned by the Oxy SSO token. The local `User` document is created lazily on the first authenticated call by `findOrCreateUser(oxyUserId)`.
+
+## Environment
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | API listen port. |
+| `MONGODB_URI` | `mongodb://localhost:27017` | MongoDB connection string. Database name is `tnp-<NODE_ENV>` (e.g., `tnp-production`). |
+| `NODE_ENV` | `development` | Used to derive the database name. |
+| `OXY_API_URL` | `https://api.oxy.so` | Oxy SSO base URL. |
+| `TNP_PARKING_IP` | `174.138.10.81` | A-record value returned for unregistered names on custom TLDs and as a fallback for record-less registered domains. |
