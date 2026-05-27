@@ -12,5 +12,8 @@
   "deprecatedVersions": [],
   "defaultVersion": "main",
   "docsPath": "docs/",
+  "docsIgnore": [
+    "superpowers"
+  ],
   "description": "Alternative DNS / namespace system — Vite web + Bun API + DNS server"
 }
