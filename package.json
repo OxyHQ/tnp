@@ -32,6 +32,6 @@
     "release-it": "^19.0.6"
   },
   "dependencies": {
-    "@oxyhq/auth": "^3.1.0"
+    "@oxyhq/auth": "^4.1.0"
   }
 }
