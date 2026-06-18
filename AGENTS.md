@@ -94,7 +94,7 @@ tnp test <domain>    # Test domain resolution
 
 ## Dependencies
 
-- `@oxyhq/core`, `@oxyhq/auth` — Oxy platform integration (SSO, auth)
+- `@oxyhq/core ^3.4.5`, `@oxyhq/auth ^4.1.1`, `@oxyhq/bloom ^0.8.5` — Oxy platform integration (SSO, auth)
 - `tweetnacl` — Pure JS crypto (X25519, XSalsa20-Poly1305) in client package
 - `dns2` — DNS packet encoding/decoding in client package
 - `react-i18next`, `i18next` — Internationalization

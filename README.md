@@ -11,14 +11,14 @@ Domains are tied to your Oxy account. Register at [tnp.network](https://tnp.netw
 - **Frontend**: Vite + React 19 + TypeScript + Tailwind CSS
 - **Backend**: Bun + Express 5 + TypeScript + MongoDB (Mongoose 9)
 - **Client**: Go DNS resolver daemon (scaffold)
-- **Auth**: Oxy SSO with JWT sessions
+- **Auth**: Oxy web auth via `@oxyhq/auth` and API validation via `@oxyhq/core`
 
 ## Getting started
 
 ### Prerequisites
 
 - Node.js 20+
-- Bun (for the API server)
+- Bun
 - MongoDB (local or remote)
 
 ### Setup
@@ -29,17 +29,17 @@ git clone https://github.com/OxyHQ/tnp.git
 cd tnp
 
 # Install dependencies
-npm install
+bun install
 
 # Configure environment
 cp apps/api/.env.example apps/api/.env
 # Edit apps/api/.env with your MongoDB URI and secrets
 
 # Seed the database with initial TLDs
-npm run seed
+bun run seed
 
 # Start both frontend and API
-npm run dev
+bun run dev
 ```
 
 The frontend runs at `http://localhost:5173` and the API at `http://localhost:3000`.
@@ -51,8 +51,7 @@ The frontend runs at `http://localhost:5173` and the API at `http://localhost:30
 | Variable | Description | Default |
 |---|---|---|
 | `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
-| `JWT_SECRET` | Secret for signing JWTs | (required) |
-| `OXY_SSO_SECRET` | Secret for verifying Oxy SSO tokens | (required) |
+| `JWT_SECRET` | Secret for TNP API sessions | (required) |
 | `PORT` | API server port | `3000` |
 | `NODE_ENV` | Environment name (used in DB name) | `development` |
 
@@ -66,9 +65,7 @@ The frontend runs at `http://localhost:5173` and the API at `http://localhost:30
 
 ### Auth
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/auth/oxy` | No | Oxy SSO callback. Body: `{ oxyUserId }`. Returns JWT token. |
+The web app uses `WebOxyProvider` from `@oxyhq/auth`; SSO callback handling is owned by the SDK. The API validates Oxy access tokens through `@oxyhq/core` and does not implement a local `/__oxy/sso-callback` route.
 
 ### TLDs
 
