@@ -94,9 +94,16 @@ tnp test <domain>    # Test domain resolution
 
 ## Dependencies
 
-- `@oxyhq/core ^3.4.5`, `@oxyhq/auth ^4.1.1`, `@oxyhq/bloom ^0.8.5` — Oxy platform integration (SSO, auth)
+- `@oxyhq/core ^3.4.13`, `@oxyhq/auth ^4.1.1`, `@oxyhq/bloom ^0.8.5` — Oxy platform integration (SSO, auth)
 - `tweetnacl` — Pure JS crypto (X25519, XSalsa20-Poly1305) in client package
 - `dns2` — DNS packet encoding/decoding in client package
 - `react-i18next`, `i18next` — Internationalization
 - `i18next-http-backend` — Lazy-load translation files
 - `i18next-browser-languagedetector` — Browser language detection
+
+## Oxy Auth / Session Contract
+
+- Web auth uses `WebOxyProvider` with a registered `clientId`; SDK cold boot owns callback consumption, stored-session restore, FedCM/silent restore, and SSO bounce.
+- Do not add local `/__oxy/sso-callback` routes, copied SSO helpers, token providers, auth interceptors, manual `Authorization` plumbing, refresh retries, or app-local session invalidation.
+- Backend APIs use `@oxyhq/core/server` (`createOxyAuthMiddleware`, `createOptionalOxyAuth`, `createOxyRateLimit`, `requireOxyAuth`, `getRequiredOxyUserId`, `authSocket`) and must not define local `AuthRequest`, `requireAuth`, `getUserId`, bearer parsers, or token-decoding middleware.
+- Bearer-authenticated writes do not fetch app-local CSRF tokens; CSRF remains for ambient cookie credentials and cookie-only writes.
