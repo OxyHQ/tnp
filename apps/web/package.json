@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@oxyhq/auth": "^4.1.1",
-    "@oxyhq/bloom": "^0.8.5",
-    "@oxyhq/core": "^3.4.5",
+    "@oxyhq/bloom": "^0.9.1",
+    "@oxyhq/core": "^3.7.1",
     "@react-native-async-storage/async-storage": "^3.0.1",
     "i18next": "^26.0.3",
     "i18next-browser-languagedetector": "^8.2.1",
