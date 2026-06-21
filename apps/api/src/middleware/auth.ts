@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { OxyServices } from "@oxyhq/core";
 import { config } from "../config.js";
 
-export interface AuthRequest extends Request {
+export interface AuthRequest<P = Record<string, string>> extends Request<P> {
   user?: {
     id: string;
   };

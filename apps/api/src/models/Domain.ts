@@ -15,7 +15,7 @@ export interface IDomain extends Document {
   ownerId: Types.ObjectId;
   oxyUserId: string;
   status: "active" | "pending" | "suspended";
-  records: IRecord[];
+  records: Types.DocumentArray<IRecord>;
   serviceNodeId?: Types.ObjectId;
   serviceNodePubKey?: string;
   createdAt: Date;
