@@ -295,64 +295,72 @@ router.post("/:id/records", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // PUT /domains/:id/records/:rid -- update a DNS record
-router.put("/:id/records/:rid", requireAuth, async (req: AuthRequest, res) => {
-  try {
-    const domain = await Domain.findById(req.params.id);
-    if (!domain) {
-      res.status(404).json({ error: "Domain not found" });
-      return;
-    }
-    if (domain.oxyUserId !== req.user!.id) {
-      res.status(403).json({ error: "You do not own this domain" });
-      return;
-    }
+router.put(
+  "/:id/records/:rid",
+  requireAuth,
+  async (req: AuthRequest<{ id: string; rid: string }>, res) => {
+    try {
+      const domain = await Domain.findById(req.params.id);
+      if (!domain) {
+        res.status(404).json({ error: "Domain not found" });
+        return;
+      }
+      if (domain.oxyUserId !== req.user!.id) {
+        res.status(403).json({ error: "You do not own this domain" });
+        return;
+      }
 
-    const record = domain.records.id(req.params.rid);
-    if (!record) {
-      res.status(404).json({ error: "Record not found" });
-      return;
+      const record = domain.records.id(req.params.rid);
+      if (!record) {
+        res.status(404).json({ error: "Record not found" });
+        return;
+      }
+
+      const { type, name, value, ttl } = req.body;
+      if (type) record.type = type;
+      if (name) record.name = name;
+      if (value) record.value = value;
+      if (ttl !== undefined) record.ttl = ttl;
+
+      await domain.save();
+      res.json(record);
+    } catch (err) {
+      console.error("Update record error:", err);
+      res.status(500).json({ error: "Failed to update record" });
     }
-
-    const { type, name, value, ttl } = req.body;
-    if (type) record.type = type;
-    if (name) record.name = name;
-    if (value) record.value = value;
-    if (ttl !== undefined) record.ttl = ttl;
-
-    await domain.save();
-    res.json(record);
-  } catch (err) {
-    console.error("Update record error:", err);
-    res.status(500).json({ error: "Failed to update record" });
   }
-});
+);
 
 // DELETE /domains/:id/records/:rid -- delete a DNS record
-router.delete("/:id/records/:rid", requireAuth, async (req: AuthRequest, res) => {
-  try {
-    const domain = await Domain.findById(req.params.id);
-    if (!domain) {
-      res.status(404).json({ error: "Domain not found" });
-      return;
-    }
-    if (domain.oxyUserId !== req.user!.id) {
-      res.status(403).json({ error: "You do not own this domain" });
-      return;
-    }
+router.delete(
+  "/:id/records/:rid",
+  requireAuth,
+  async (req: AuthRequest<{ id: string; rid: string }>, res) => {
+    try {
+      const domain = await Domain.findById(req.params.id);
+      if (!domain) {
+        res.status(404).json({ error: "Domain not found" });
+        return;
+      }
+      if (domain.oxyUserId !== req.user!.id) {
+        res.status(403).json({ error: "You do not own this domain" });
+        return;
+      }
 
-    const record = domain.records.id(req.params.rid);
-    if (!record) {
-      res.status(404).json({ error: "Record not found" });
-      return;
-    }
+      const record = domain.records.id(req.params.rid);
+      if (!record) {
+        res.status(404).json({ error: "Record not found" });
+        return;
+      }
 
-    record.deleteOne();
-    await domain.save();
-    res.json({ message: "Record deleted" });
-  } catch (err) {
-    console.error("Delete record error:", err);
-    res.status(500).json({ error: "Failed to delete record" });
+      record.deleteOne();
+      await domain.save();
+      res.json({ message: "Record deleted" });
+    } catch (err) {
+      console.error("Delete record error:", err);
+      res.status(500).json({ error: "Failed to delete record" });
+    }
   }
-});
+);
 
 export default router;
