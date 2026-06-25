@@ -23,17 +23,41 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install
+        # --cpu=* --os=* fetches every platform-gated optional dependency
+        # (e.g. @opentui/core native binaries) on this linux-x64 runner so
+        # that `bun build --compile` can resolve all cross-compile targets.
+        run: bun install --frozen-lockfile --cpu='*' --os='*'
 
       - name: Build all platforms
         run: |
           cd packages/client
           mkdir -p dist
-          bun build src/cli.ts --compile --target=bun-linux-x64 --outfile dist/tnp-linux-x64
-          bun build src/cli.ts --compile --target=bun-linux-arm64 --outfile dist/tnp-linux-arm64
-          bun build src/cli.ts --compile --target=bun-darwin-x64 --outfile dist/tnp-darwin-x64
-          bun build src/cli.ts --compile --target=bun-darwin-arm64 --outfile dist/tnp-darwin-arm64
-          bun build src/cli.ts --compile --target=bun-windows-x64 --outfile dist/tnp-windows-x64.exe
+          failed=()
+          build_target() {
+            local target="$1" outfile="$2"
+            echo "::group::Build $target"
+            if bun build src/cli.ts --compile --target="$target" --outfile "dist/$outfile"; then
+              echo "Built $outfile"
+            else
+              echo "::error::Failed to build $target"
+              failed+=("$target")
+            fi
+            echo "::endgroup::"
+          }
+          build_target bun-linux-x64      tnp-linux-x64
+          build_target bun-linux-arm64    tnp-linux-arm64
+          build_target bun-darwin-x64     tnp-darwin-x64
+          build_target bun-darwin-arm64   tnp-darwin-arm64
+          build_target bun-windows-x64    tnp-windows-x64.exe
+          built=$(ls -1 dist 2>/dev/null | wc -l)
+          echo "Built $built artifact(s); failed targets: ${failed[*]:-none}"
+          if [ "$built" -eq 0 ]; then
+            echo "::error::No artifacts were built"
+            exit 1
+          fi
+          if [ "${#failed[@]}" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Create or update release
         uses: softprops/action-gh-release@v2
