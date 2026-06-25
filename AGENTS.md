@@ -92,9 +92,19 @@ tnp test <domain>    # Test domain resolution
 - `relay-node.ts` — Embedded relay node (from interactive menu → "Become a Node")
 - `frames.ts` — Binary frame protocol (DATA/OPEN/OPENED/CLOSE/ERROR, matches apps/relay)
 
+## Oxy SDK Conventions
+
+- **Versions**: `@oxyhq/core ^3.10.0`, `@oxyhq/auth ^5.0.1`, `@oxyhq/bloom ^0.19.1`, `@oxyhq/contracts ^0.2.1` (transitive via core).
+- **Media**: avatars/images resolve ONLY through `oxyServices.getFileDownloadUrl(id, variant)` + bloom's variant-aware `<Avatar source={fileId} variant="thumb">`. Never hardcode `cloud.oxy.so` or `/media/` URLs.
+- **Display names**: render `name.displayName` directly. No local name fallbacks.
+- **Backend auth**: `@oxyhq/core/server` only — `createOxyAuthMiddleware`/`getRequiredOxyUserId`. No local auth middleware.
+- **SSRF**: `safeFetch` from `@oxyhq/core/server` for all outbound HTTP in the API.
+- **DNS/parking IP (CRITICAL)**: parking IP is env-driven — `TNP_PARKING_IP` and `TNP_PUBLIC_DNS` MUST be set to the AWS NLB EIP at deploy time. Hardcoding IP values is forbidden.
+- **`packages/client` typecheck gate**: `packages/client` has a typecheck CI gate — `bun run tsc --noEmit` must pass before merge.
+
 ## Dependencies
 
-- `@oxyhq/core ^3.4.13`, `@oxyhq/auth ^4.1.1`, `@oxyhq/bloom ^0.8.5` — Oxy platform integration (SSO, auth)
+- `@oxyhq/core ^3.10.0`, `@oxyhq/auth ^5.0.1`, `@oxyhq/bloom ^0.19.1` — Oxy platform integration (SSO, auth)
 - `tweetnacl` — Pure JS crypto (X25519, XSalsa20-Poly1305) in client package
 - `dns2` — DNS packet encoding/decoding in client package
 - `react-i18next`, `i18next` — Internationalization
