@@ -1,26 +1,10 @@
-import type { Request, Response, NextFunction } from "express";
 import { OxyServices } from "@oxyhq/core";
+import { createOptionalOxyAuth } from "@oxyhq/core/server";
 import { config } from "../config.js";
-
-export interface AuthRequest<P = Record<string, string>> extends Request<P> {
-  user?: {
-    id: string;
-  };
-}
 
 const oxy = new OxyServices({ baseURL: config.oxyApiUrl });
 
-export const oxyAuth = oxy.auth();
-export const oxyAuthOptional = oxy.auth({ optional: true });
-
-export function requireAuth(
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): void {
-  if (!req.user?.id) {
-    res.status(401).json({ error: "Authentication required" });
-    return;
-  }
-  next();
-}
+// Optional Oxy auth: resolves req.userId / req.user when a valid bearer token
+// is present, but never rejects the request. Route handlers enforce auth with
+// `requireOxyAuth` from @oxyhq/core/server.
+export const oxyAuthOptional = createOptionalOxyAuth(oxy);

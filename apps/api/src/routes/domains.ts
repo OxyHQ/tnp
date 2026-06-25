@@ -1,9 +1,9 @@
 import { Router } from "express";
+import type { Request } from "express";
 import Domain from "../models/Domain.js";
 import TLD from "../models/TLD.js";
 import User from "../models/User.js";
-import { requireAuth } from "../middleware/auth.js";
-import type { AuthRequest } from "../middleware/auth.js";
+import { requireOxyAuth, getRequiredOxyUserId } from "@oxyhq/core/server";
 
 const router = Router();
 
@@ -131,8 +131,9 @@ router.get("/lookup/:domain", async (req, res) => {
 });
 
 // POST /domains/register -- register a domain (auth required)
-router.post("/register", requireAuth, async (req: AuthRequest, res) => {
+router.post("/register", requireOxyAuth, async (req, res) => {
   try {
+    const userId = getRequiredOxyUserId(req);
     const { name, tld } = req.body;
 
     if (!name || typeof name !== "string") {
@@ -164,7 +165,7 @@ router.post("/register", requireAuth, async (req: AuthRequest, res) => {
     // Standard TLDs (.com, .app): restricted to admin Oxy accounts only
     if (!tldDoc.custom) {
       const ADMIN_OXY_IDS = ["6981c9178fcdefaf81988ffb"];
-      if (!ADMIN_OXY_IDS.includes(req.user!.id)) {
+      if (!ADMIN_OXY_IDS.includes(userId)) {
         res.status(403).json({ error: `Registration on .${cleanTld} is restricted` });
         return;
       }
@@ -176,8 +177,7 @@ router.post("/register", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
 
-    const oxyUserId = req.user!.id;
-    const user = await findOrCreateUser(oxyUserId);
+    const user = await findOrCreateUser(userId);
 
     const expiresAt = new Date();
     expiresAt.setFullYear(expiresAt.getFullYear() + 1);
@@ -186,7 +186,7 @@ router.post("/register", requireAuth, async (req: AuthRequest, res) => {
       name: cleanName,
       tld: cleanTld,
       ownerId: user._id,
-      oxyUserId,
+      oxyUserId: userId,
       status: "active",
       records: [],
       expiresAt,
@@ -204,9 +204,9 @@ router.post("/register", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // GET /domains/mine -- get current user's domains (auth required)
-router.get("/mine", requireAuth, async (req: AuthRequest, res) => {
+router.get("/mine", requireOxyAuth, async (req, res) => {
   try {
-    const domains = await Domain.find({ oxyUserId: req.user!.id }).sort({
+    const domains = await Domain.find({ oxyUserId: getRequiredOxyUserId(req) }).sort({
       createdAt: -1,
     });
     res.json(domains);
@@ -217,22 +217,23 @@ router.get("/mine", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // DELETE /domains/:id -- release a domain (auth required, must be owner)
-router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
+router.delete("/:id", requireOxyAuth, async (req, res) => {
   try {
+    const userId = getRequiredOxyUserId(req);
     const domain = await Domain.findById(req.params.id);
     if (!domain) {
       res.status(404).json({ error: "Domain not found" });
       return;
     }
 
-    if (domain.oxyUserId !== req.user!.id) {
+    if (domain.oxyUserId !== userId) {
       res.status(403).json({ error: "You do not own this domain" });
       return;
     }
 
     await Domain.findByIdAndDelete(domain._id);
     await User.findOneAndUpdate(
-      { oxyUserId: req.user!.id },
+      { oxyUserId: userId },
       { $pull: { domains: domain._id } }
     );
 
@@ -246,14 +247,14 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
 // -- DNS Records --
 
 // GET /domains/:id/records (auth required, must be owner)
-router.get("/:id/records", requireAuth, async (req: AuthRequest, res) => {
+router.get("/:id/records", requireOxyAuth, async (req, res) => {
   try {
     const domain = await Domain.findById(req.params.id);
     if (!domain) {
       res.status(404).json({ error: "Domain not found" });
       return;
     }
-    if (domain.oxyUserId !== req.user!.id) {
+    if (domain.oxyUserId !== getRequiredOxyUserId(req)) {
       res.status(403).json({ error: "You do not own this domain" });
       return;
     }
@@ -265,14 +266,14 @@ router.get("/:id/records", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // POST /domains/:id/records -- add a DNS record (auth required, must be owner)
-router.post("/:id/records", requireAuth, async (req: AuthRequest, res) => {
+router.post("/:id/records", requireOxyAuth, async (req, res) => {
   try {
     const domain = await Domain.findById(req.params.id);
     if (!domain) {
       res.status(404).json({ error: "Domain not found" });
       return;
     }
-    if (domain.oxyUserId !== req.user!.id) {
+    if (domain.oxyUserId !== getRequiredOxyUserId(req)) {
       res.status(403).json({ error: "You do not own this domain" });
       return;
     }
@@ -297,15 +298,15 @@ router.post("/:id/records", requireAuth, async (req: AuthRequest, res) => {
 // PUT /domains/:id/records/:rid -- update a DNS record
 router.put(
   "/:id/records/:rid",
-  requireAuth,
-  async (req: AuthRequest<{ id: string; rid: string }>, res) => {
+  requireOxyAuth,
+  async (req: Request<{ id: string; rid: string }>, res) => {
     try {
       const domain = await Domain.findById(req.params.id);
       if (!domain) {
         res.status(404).json({ error: "Domain not found" });
         return;
       }
-      if (domain.oxyUserId !== req.user!.id) {
+      if (domain.oxyUserId !== getRequiredOxyUserId(req)) {
         res.status(403).json({ error: "You do not own this domain" });
         return;
       }
@@ -334,15 +335,15 @@ router.put(
 // DELETE /domains/:id/records/:rid -- delete a DNS record
 router.delete(
   "/:id/records/:rid",
-  requireAuth,
-  async (req: AuthRequest<{ id: string; rid: string }>, res) => {
+  requireOxyAuth,
+  async (req: Request<{ id: string; rid: string }>, res) => {
     try {
       const domain = await Domain.findById(req.params.id);
       if (!domain) {
         res.status(404).json({ error: "Domain not found" });
         return;
       }
-      if (domain.oxyUserId !== req.user!.id) {
+      if (domain.oxyUserId !== getRequiredOxyUserId(req)) {
         res.status(403).json({ error: "You do not own this domain" });
         return;
       }

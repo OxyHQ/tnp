@@ -46,9 +46,9 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "tnp-api" });
 });
 
-// Routes with mixed auth -- oxy.auth() sets req.user if token present,
-// individual handlers use requireAuth for write operations.
-// Wrapping in optionalAuth so GET requests work without a token.
+// Routes with mixed auth -- oxyAuthOptional resolves req.userId/req.user if a
+// token is present; individual write handlers enforce auth with requireOxyAuth
+// from @oxyhq/core/server. GET requests work without a token.
 app.use("/tlds", oxyAuthOptional, tldsRouter);
 app.use("/domains", oxyAuthOptional, domainsRouter);
 app.use("/nodes", oxyAuthOptional, nodesRouter);

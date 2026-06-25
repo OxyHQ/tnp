@@ -4,8 +4,7 @@ import TLD from "../models/TLD.js";
 import TLDProposal from "../models/TLDProposal.js";
 import User from "../models/User.js";
 import Vote from "../models/Vote.js";
-import { requireAuth } from "../middleware/auth.js";
-import type { AuthRequest } from "../middleware/auth.js";
+import { requireOxyAuth, getOxyUserId, getRequiredOxyUserId } from "@oxyhq/core/server";
 
 const router = Router();
 
@@ -19,10 +18,11 @@ async function findOrCreateUser(oxyUserId: string) {
 
 // GET /tlds -- list all active TLDs
 // Standard TLDs are only visible to admin users; everyone else sees custom TLDs only.
-router.get("/", async (req: AuthRequest, res) => {
+router.get("/", async (req, res) => {
   try {
     const ADMIN_OXY_IDS = ["6981c9178fcdefaf81988ffb"];
-    const isAdmin = req.user?.id && ADMIN_OXY_IDS.includes(req.user.id);
+    const callerId = getOxyUserId(req);
+    const isAdmin = callerId !== null && ADMIN_OXY_IDS.includes(callerId);
     const filter: Record<string, unknown> = { status: "active" };
     if (!isAdmin) {
       filter.custom = { $ne: false };
@@ -36,7 +36,7 @@ router.get("/", async (req: AuthRequest, res) => {
 });
 
 // POST /tlds/propose -- propose a new TLD (auth required)
-router.post("/propose", requireAuth, async (req: AuthRequest, res) => {
+router.post("/propose", requireOxyAuth, async (req, res) => {
   try {
     const { tld, reason } = req.body;
 
@@ -64,12 +64,7 @@ router.post("/propose", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
 
-    const oxyUserId = req.user?.id;
-    if (!oxyUserId) {
-      res.status(401).json({ error: "Authentication required" });
-      return;
-    }
-    const user = await findOrCreateUser(oxyUserId);
+    const user = await findOrCreateUser(getRequiredOxyUserId(req));
 
     const proposal = await TLDProposal.create({
       tld: name,
@@ -91,11 +86,12 @@ router.post("/propose", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // GET /tlds/proposals -- list all proposals with scores
-router.get("/proposals", async (req: AuthRequest, res) => {
+router.get("/proposals", async (req, res) => {
   try {
     let userId: mongoose.Types.ObjectId | null = null;
-    if (req.user?.id) {
-      const user = await User.findOne({ oxyUserId: req.user.id });
+    const callerId = getOxyUserId(req);
+    if (callerId) {
+      const user = await User.findOne({ oxyUserId: callerId });
       if (user) userId = user._id;
     }
 
@@ -163,7 +159,7 @@ router.get("/proposals", async (req: AuthRequest, res) => {
 });
 
 // POST /tlds/proposals/:id/vote -- upvote or downvote (auth required)
-router.post("/proposals/:id/vote", requireAuth, async (req: AuthRequest, res) => {
+router.post("/proposals/:id/vote", requireOxyAuth, async (req, res) => {
   try {
     const { direction } = req.body;
 
@@ -182,12 +178,7 @@ router.post("/proposals/:id/vote", requireAuth, async (req: AuthRequest, res) =>
       return;
     }
 
-    const oxyUserId = req.user?.id;
-    if (!oxyUserId) {
-      res.status(401).json({ error: "Authentication required" });
-      return;
-    }
-    const user = await findOrCreateUser(oxyUserId);
+    const user = await findOrCreateUser(getRequiredOxyUserId(req));
 
     if (proposal.proposedBy.equals(user._id)) {
       res.status(403).json({ error: "Cannot vote on your own proposal" });
@@ -221,7 +212,7 @@ router.post("/proposals/:id/vote", requireAuth, async (req: AuthRequest, res) =>
 });
 
 // DELETE /tlds/proposals/:id/vote -- remove vote (auth required)
-router.delete("/proposals/:id/vote", requireAuth, async (req: AuthRequest, res) => {
+router.delete("/proposals/:id/vote", requireOxyAuth, async (req, res) => {
   try {
     const proposal = await TLDProposal.findById(req.params.id);
     if (!proposal) {
@@ -229,12 +220,7 @@ router.delete("/proposals/:id/vote", requireAuth, async (req: AuthRequest, res) 
       return;
     }
 
-    const oxyUserId = req.user?.id;
-    if (!oxyUserId) {
-      res.status(401).json({ error: "Authentication required" });
-      return;
-    }
-    const user = await findOrCreateUser(oxyUserId);
+    const user = await findOrCreateUser(getRequiredOxyUserId(req));
 
     await Vote.deleteOne({ proposal: proposal._id, user: user._id });
 

@@ -1,7 +1,6 @@
 import { Router } from "express";
 import Relay from "../models/Relay.js";
-import { requireAuth } from "../middleware/auth.js";
-import type { AuthRequest } from "../middleware/auth.js";
+import { requireOxyAuth, getRequiredOxyUserId } from "@oxyhq/core/server";
 
 const router = Router();
 
@@ -30,7 +29,7 @@ router.get("/", async (req, res) => {
 });
 
 // POST /relays/register -- register a relay node (auth required)
-router.post("/register", requireAuth, async (req: AuthRequest, res) => {
+router.post("/register", requireOxyAuth, async (req, res) => {
   try {
     const { endpoint, publicKey, operator, capacity, location } = req.body;
 
@@ -63,7 +62,7 @@ router.post("/register", requireAuth, async (req: AuthRequest, res) => {
         endpoint,
         publicKey,
         operator,
-        operatorUserId: req.user!.id,
+        operatorUserId: getRequiredOxyUserId(req),
         capacity,
         location: location || "",
         lastSeen: new Date(),
@@ -79,7 +78,7 @@ router.post("/register", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // POST /relays/heartbeat -- update relay status (auth required)
-router.post("/heartbeat", requireAuth, async (req: AuthRequest, res) => {
+router.post("/heartbeat", requireOxyAuth, async (req, res) => {
   try {
     const { endpoint } = req.body;
 
@@ -94,7 +93,7 @@ router.post("/heartbeat", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
 
-    if (relay.operatorUserId !== req.user!.id) {
+    if (relay.operatorUserId !== getRequiredOxyUserId(req)) {
       res.status(403).json({ error: "You do not operate this relay" });
       return;
     }

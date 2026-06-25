@@ -203,6 +203,10 @@ function configureDns(config: TnpConfig): boolean {
     if (process.platform === "win32") {
       // Windows: set DNS on all active adapters to TNP public resolver.
       // The proxy listens on port 5354, but Windows only supports port 53 for DNS.
+      if (!dnsIp) {
+        console.warn("[tnp] no public DNS resolver configured (TNP_PUBLIC_DNS); skipping system DNS setup on Windows");
+        return false;
+      }
       const { execSync } = require("child_process");
       execSync(
         `powershell -Command "Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses ('${dnsIp}','1.1.1.1') }"`,
@@ -257,6 +261,10 @@ function configureLinuxDns(config: TnpConfig, addr: string, dnsIp: string): bool
 
 /** Fallback Linux DNS configuration via /etc/resolv.conf. */
 function configureLinuxResolvConf(dnsIp: string): boolean {
+  if (!dnsIp) {
+    console.warn("[tnp] no public DNS resolver configured (TNP_PUBLIC_DNS); skipping /etc/resolv.conf setup");
+    return false;
+  }
   try {
     const { readFileSync: readFileSyncFs, writeFileSync: writeFileSyncFs } = require("fs");
     const current = readFileSyncFs("/etc/resolv.conf", "utf-8") as string;
@@ -413,23 +421,29 @@ function enableKillSwitch(): void {
       execSync(`netsh advfirewall firewall add rule name="TNP-KillSwitch-Block-DNS" dir=out protocol=udp remoteport=53 action=block`, { stdio: "pipe" });
       execSync(`netsh advfirewall firewall add rule name="TNP-KillSwitch-Block-DNS-TCP" dir=out protocol=tcp remoteport=53 action=block`, { stdio: "pipe" });
       execSync(`netsh advfirewall firewall add rule name="TNP-KillSwitch-Allow-Local" dir=out protocol=udp remoteport=53 remoteip=127.0.0.1 action=allow`, { stdio: "pipe" });
-      execSync(`netsh advfirewall firewall add rule name="TNP-KillSwitch-Allow-TNP" dir=out protocol=udp remoteport=53 remoteip=${dnsIp} action=allow`, { stdio: "pipe" });
+      if (dnsIp) {
+        execSync(`netsh advfirewall firewall add rule name="TNP-KillSwitch-Allow-TNP" dir=out protocol=udp remoteport=53 remoteip=${dnsIp} action=allow`, { stdio: "pipe" });
+      }
     } else if (process.platform === "darwin") {
       // macOS: use pf anchor so we don't replace the entire ruleset
-      writeFileSync("/tmp/tnp-killswitch.conf", [
+      const pfRules = [
         "block out quick proto { tcp, udp } to any port 53",
         "pass out quick proto { tcp, udp } to 127.0.0.1 port 53",
-        `pass out quick proto { tcp, udp } to ${dnsIp} port 53`,
-        "pass out quick proto { tcp, udp } to 127.0.0.1 port 5354",
-        "",
-      ].join("\n"));
+      ];
+      if (dnsIp) {
+        pfRules.push(`pass out quick proto { tcp, udp } to ${dnsIp} port 53`);
+      }
+      pfRules.push("pass out quick proto { tcp, udp } to 127.0.0.1 port 5354", "");
+      writeFileSync("/tmp/tnp-killswitch.conf", pfRules.join("\n"));
       execSync("sudo pfctl -a tnp-killswitch -f /tmp/tnp-killswitch.conf 2>/dev/null", { stdio: "pipe" });
     } else {
       // Linux: use iptables
       execSync("sudo iptables -I OUTPUT -p udp --dport 53 -j DROP 2>/dev/null", { stdio: "pipe" });
       execSync("sudo iptables -I OUTPUT -p tcp --dport 53 -j DROP 2>/dev/null", { stdio: "pipe" });
       execSync("sudo iptables -I OUTPUT -p udp --dport 53 -d 127.0.0.1 -j ACCEPT 2>/dev/null", { stdio: "pipe" });
-      execSync(`sudo iptables -I OUTPUT -p udp --dport 53 -d ${dnsIp} -j ACCEPT 2>/dev/null`, { stdio: "pipe" });
+      if (dnsIp) {
+        execSync(`sudo iptables -I OUTPUT -p udp --dport 53 -d ${dnsIp} -j ACCEPT 2>/dev/null`, { stdio: "pipe" });
+      }
       execSync("sudo iptables -I OUTPUT -p udp --dport 5354 -d 127.0.0.1 -j ACCEPT 2>/dev/null", { stdio: "pipe" });
     }
 

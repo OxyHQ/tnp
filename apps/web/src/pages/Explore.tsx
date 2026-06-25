@@ -30,10 +30,10 @@ export default function Explore() {
     let ignore = false;
     apiFetch<TLD[]>("/tlds").then((data) => {
       if (!ignore) setTlds(data);
-    }).catch(() => {});
+    }).catch((err) => console.error("Failed to load TLDs:", err));
     apiFetch<{ domains: Domain[] }>("/domains?limit=20").then((data) => {
       if (!ignore) setDomains(data.domains);
-    }).catch(() => {});
+    }).catch((err) => console.error("Failed to load domains:", err));
     return () => { ignore = true; };
   }, []);
 
@@ -48,7 +48,7 @@ export default function Explore() {
         .then((data) => {
           if (!ignore) setSearchResults(data);
         })
-        .catch(() => {});
+        .catch((err) => console.error("Domain search failed:", err));
     }, 300);
     return () => { ignore = true; clearTimeout(timer); };
   }, [query]);

@@ -2,8 +2,19 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { homedir, tmpdir } from "os";
 
-/** Default TNP public DNS resolver IP. Used as fallback when local proxy is unavailable. */
-export const TNP_PUBLIC_DNS = "174.138.10.81";
+/**
+ * Default TNP public DNS resolver IP. Sourced from the TNP_PUBLIC_DNS env var at
+ * build/run time. There is intentionally NO hardcoded fallback: this address is
+ * what we point system DNS at and write into kill-switch firewall rules, so a
+ * stale literal (e.g. a retired host) would silently route DNS to a
+ * dead-or-attacker-controlled resolver. When empty, "change system DNS" /
+ * kill-switch paths are skipped in favour of the local proxy (see cli.ts).
+ *
+ * DEPLOY REQUIREMENT: set TNP_PUBLIC_DNS to the AWS NLB Elastic IP when building
+ * release binaries, once the dns-server NLB is provisioned (oxy-infra
+ * app-tnp.tf is pending).
+ */
+export const TNP_PUBLIC_DNS = process.env.TNP_PUBLIC_DNS?.trim() ?? "";
 
 /** Path to the kill switch marker file. Presence means firewall rules are active. */
 export const KILLSWITCH_MARKER_PATH = join(tmpdir(), "tnp-killswitch-active");

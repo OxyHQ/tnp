@@ -28,7 +28,7 @@ export default function Register() {
         setTlds(data);
         if (data.length > 0) setTld(data[0].name);
       }
-    }).catch(() => {});
+    }).catch((err) => console.error("Failed to load TLDs:", err));
     return () => { ignore = true; };
   }, []);
 
@@ -44,7 +44,8 @@ export default function Register() {
         .then((data) => {
           if (!ignore) setAvailable(data.available);
         })
-        .catch(() => {
+        .catch((err) => {
+          console.error("Domain availability check failed:", err);
           if (!ignore) setAvailable(null);
         })
         .finally(() => {

@@ -1,15 +1,20 @@
 import { Router } from "express";
+import { config } from "../config.js";
 
 const router = Router();
 
 const VERSION = "0.2.0";
 const REPO = "OxyHQ/tnp";
 const BASE = `https://github.com/${REPO}/releases/download/v${VERSION}`;
+const DNS_HOST = "dns.tnp.network";
 
-// Installer scripts embedded as constants so the API container is self-contained
-// and does not depend on files from packages/client/ at runtime.
+// Installer scripts embedded as builders so the API container is self-contained
+// and does not depend on files from packages/client/ at runtime. The public DNS
+// IP is injected from config.parkingIp (TNP_PARKING_IP) — there is no hardcoded
+// fallback, so installers always advertise the currently-configured resolver.
 
-const INSTALL_SH = `#!/bin/sh
+function buildInstallSh(dnsIp: string): string {
+  return `#!/bin/sh
 # TNP Installer -- https://tnp.network
 # Usage: curl -fsSL https://get.tnp.network | sh
 #
@@ -54,8 +59,8 @@ API_URL="https://api.tnp.network"
 REPO="OxyHQ/tnp"
 INSTALL_DIR="/usr/local/bin"
 BINARY_NAME="tnp"
-DNS_IP="174.138.10.81"
-DNS_HOST="dns.tnp.network"
+DNS_IP="${dnsIp}"
+DNS_HOST="${DNS_HOST}"
 
 # ── Welcome banner ───────────────────────────────────────────────────────────
 
@@ -249,6 +254,12 @@ run_elevated() {
 # ── DNS configuration ───────────────────────────────────────────────────────
 
 configure_dns_system() {
+  if [ -z "\${DNS_IP}" ]; then
+    warn "No public TNP DNS resolver is configured yet."
+    warn "Use option 1 (local TNP service) to resolve TNP domains."
+    return 1
+  fi
+
   info "Configuring system DNS to use TNP resolver (\${DNS_IP})..."
 
   if [ "$PLATFORM_OS" = "darwin" ]; then
@@ -435,8 +446,10 @@ main() {
 
 main
 `;
+}
 
-const INSTALL_PS1 = `# TNP Installer for Windows -- https://tnp.network
+function buildInstallPs1(dnsIp: string): string {
+  return `# TNP Installer for Windows -- https://tnp.network
 # Usage: irm https://get.tnp.network/ps | iex
 #
 # This script downloads and installs the TNP client binary,
@@ -451,8 +464,8 @@ $ApiUrl      = "https://api.tnp.network"
 $Repo        = "OxyHQ/tnp"
 $InstallDir  = "$env:ProgramFiles\\tnp"
 $BinaryName  = "tnp.exe"
-$DnsIp       = "174.138.10.81"
-$DnsHost     = "dns.tnp.network"
+$DnsIp       = "${dnsIp}"
+$DnsHost     = "${DNS_HOST}"
 
 # ── Logging helpers ──────────────────────────────────────────────────────────
 
@@ -641,6 +654,12 @@ function Install-Binary {
 # ── DNS configuration ───────────────────────────────────────────────────────
 
 function Set-SystemDns {
+    if ([string]::IsNullOrEmpty($DnsIp)) {
+        Write-Warn "No public TNP DNS resolver is configured yet."
+        Write-Warn "Use option 1 (local TNP service) to resolve TNP domains."
+        return
+    }
+
     Write-Info "Configuring system DNS to $DnsIp..."
 
     try {
@@ -783,11 +802,16 @@ function Main {
 
 Main
 `;
+}
 
 // GET /client/latest -- returns latest daemon version + download URLs per platform
 router.get("/latest", (_req, res) => {
   res.json({
     version: VERSION,
+    dns: {
+      ip: config.parkingIp,
+      host: DNS_HOST,
+    },
     platforms: {
       "darwin-arm64": `${BASE}/tnp-darwin-arm64`,
       "darwin-x64": `${BASE}/tnp-darwin-x64`,
@@ -804,12 +828,12 @@ router.get("/latest", (_req, res) => {
 
 // GET /client/install.sh -- serves the Unix installer script
 router.get("/install.sh", (_req, res) => {
-  res.type("text/plain").send(INSTALL_SH);
+  res.type("text/plain").send(buildInstallSh(config.parkingIp));
 });
 
 // GET /client/install.ps1 -- serves the Windows installer script
 router.get("/install.ps1", (_req, res) => {
-  res.type("text/plain").send(INSTALL_PS1);
+  res.type("text/plain").send(buildInstallPs1(config.parkingIp));
 });
 
 export default router;

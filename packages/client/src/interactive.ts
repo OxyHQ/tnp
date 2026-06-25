@@ -8,6 +8,8 @@ import {
   SelectRenderableEvents,
   InputRenderableEvents,
   type CliRenderer,
+  type InputRenderable,
+  type TextRenderable,
 } from "@opentui/core";
 import type { KeyEvent } from "@opentui/core";
 import { loadConfig, saveConfig, type TnpConfig } from "./config";
@@ -75,17 +77,28 @@ let renderer: CliRenderer;
 let activeRelayNode: import("./relay-node").RelayNode | null = null;
 let quitKeyHandler: ((key: KeyEvent) => void) | null = null;
 
-// Helper to access keyInput as a standard EventEmitter (the typed generic
-// EventEmitter doesn't expose .on/.removeListener in all TS configurations)
+// keyInput is a KeyHandler (EventEmitter<{ keypress: [KeyEvent], ... }>), so
+// .on/.removeListener are fully typed against the "keypress" event.
 function onKey(handler: (key: KeyEvent) => void): void {
-  (renderer.keyInput as any).on("keypress", handler);
+  renderer.keyInput.on("keypress", handler);
 }
 function offKey(handler: (key: KeyEvent) => void): void {
-  (renderer.keyInput as any).removeListener("keypress", handler);
+  renderer.keyInput.removeListener("keypress", handler);
 }
 
-// Helper to register events on ProxiedVNode constructs
-function onEvent(vnode: any, event: string, handler: (...args: any[]) => void): void {
+// Minimal view of the event-emitting surface shared by ProxiedVNode constructs
+// (Select/Input emit via `.on`). The opentui composition functions return
+// proxied vnodes whose `.on` is typed per-renderable; this narrows to the one
+// method we use for registering item/enter handlers.
+interface EventfulNode<Args extends unknown[]> {
+  on(event: string, handler: (...args: Args) => void): unknown;
+}
+
+function onEvent<Args extends unknown[]>(
+  vnode: EventfulNode<Args>,
+  event: string,
+  handler: (...args: Args) => void,
+): void {
   vnode.on(event, handler);
 }
 
@@ -208,7 +221,7 @@ function promptInput(label: string, defaultValue = ""): Promise<string> {
       let val = defaultValue;
       for (const child of children) {
         if ("value" in child && "placeholder" in child) {
-          val = (child as any).value?.trim() || defaultValue;
+          val = (child as InputRenderable).value?.trim() || defaultValue;
           break;
         }
       }
@@ -234,7 +247,7 @@ function buildStatusBar() {
     config.privacyLevel === "private" ? YELLOW : GREEN;
 
   return Box(
-    { width: "100%" as any, flexDirection: "row", gap: 2, paddingLeft: 2, paddingTop: 1 },
+    { width: "100%", flexDirection: "row", gap: 2, paddingLeft: 2, paddingTop: 1 },
     Text({ content: `Service: ${serviceLabel}`, fg: serviceColor }),
     Text({ content: "│", fg: DIM }),
     Text({
@@ -794,22 +807,17 @@ async function actionStartRelay(): Promise<void> {
     addLine("");
     addLine("Press Ctrl+C to stop and return to menu", DIM);
 
-    // Live stats display
-    const statsNode = Text({ content: "", fg: CYAN });
-    renderer.root.add(statsNode);
+    // Live stats display. The stats Text is the last child we add, so each tick
+    // we update the content of the last materialized renderable in the tree.
+    renderer.root.add(Text({ content: "", fg: CYAN }));
 
     const statsInterval = setInterval(() => {
       const stats = relay.getStats();
-      // Update the text content on the materialized renderable
       const children = renderer.root.getChildren();
-      for (const child of children) {
-        if ((child as any)._id === (statsNode as any).__pendingCalls?.[0]?.args?.[0] ||
-            child === children[children.length - 1]) {
-          try {
-            (child as any).content = `  ▸ Nodes: ${stats.serviceNodes}  Circuits: ${stats.activeCircuits}  Traffic: ${formatBytes(stats.bytesRelayed)}  Uptime: ${formatUptime(stats.uptimeSeconds)}`;
-          } catch {}
-          break;
-        }
+      const statsRenderable = children[children.length - 1];
+      // Only Text renderables expose a settable `content`; guard before writing.
+      if (statsRenderable && "content" in statsRenderable) {
+        (statsRenderable as TextRenderable).content = `  ▸ Nodes: ${stats.serviceNodes}  Circuits: ${stats.activeCircuits}  Traffic: ${formatBytes(stats.bytesRelayed)}  Uptime: ${formatUptime(stats.uptimeSeconds)}`;
       }
     }, 1000);
 
@@ -1304,7 +1312,7 @@ function showMainMenu(): void {
       fg: DIM,
       paddingTop: 1,
       paddingLeft: 2,
-    } as any),
+    }),
   );
 
   // 'q' to quit

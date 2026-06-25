@@ -29,7 +29,9 @@ export default function Dashboard() {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const fetchDomains = useCallback(() => {
-    apiFetch<Domain[]>("/domains/mine").then(setDomains).catch(() => {});
+    apiFetch<Domain[]>("/domains/mine").then(setDomains).catch((err) =>
+      console.error("Failed to load your domains:", err)
+    );
   }, []);
 
   useEffect(() => {

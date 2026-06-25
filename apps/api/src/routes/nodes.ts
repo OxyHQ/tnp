@@ -2,14 +2,14 @@ import { Router } from "express";
 import Domain from "../models/Domain.js";
 import TLD from "../models/TLD.js";
 import ServiceNode from "../models/ServiceNode.js";
-import { requireAuth } from "../middleware/auth.js";
-import type { AuthRequest } from "../middleware/auth.js";
+import { requireOxyAuth, getRequiredOxyUserId } from "@oxyhq/core/server";
 
 const router = Router();
 
 // POST /nodes/register -- register a service node for a domain (auth required)
-router.post("/register", requireAuth, async (req: AuthRequest, res) => {
+router.post("/register", requireOxyAuth, async (req, res) => {
   try {
+    const userId = getRequiredOxyUserId(req);
     const { domainId, publicKey } = req.body;
 
     if (!domainId || typeof domainId !== "string") {
@@ -27,7 +27,7 @@ router.post("/register", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
 
-    if (domain.oxyUserId !== req.user!.id) {
+    if (domain.oxyUserId !== userId) {
       res.status(403).json({ error: "You do not own this domain" });
       return;
     }
@@ -36,7 +36,7 @@ router.post("/register", requireAuth, async (req: AuthRequest, res) => {
       { domainId: domain._id },
       {
         domainId: domain._id,
-        oxyUserId: req.user!.id,
+        oxyUserId: userId,
         publicKey,
         lastSeen: new Date(),
       },
@@ -103,7 +103,7 @@ router.get("/:domain", async (req, res) => {
 });
 
 // POST /nodes/heartbeat -- update service node status (auth required)
-router.post("/heartbeat", requireAuth, async (req: AuthRequest, res) => {
+router.post("/heartbeat", requireOxyAuth, async (req, res) => {
   try {
     const { domainId, connectedRelay } = req.body;
 
@@ -122,7 +122,7 @@ router.post("/heartbeat", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
 
-    if (node.oxyUserId !== req.user!.id) {
+    if (node.oxyUserId !== getRequiredOxyUserId(req)) {
       res.status(403).json({ error: "You do not own this service node" });
       return;
     }

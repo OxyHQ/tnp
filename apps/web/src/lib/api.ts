@@ -1,39 +1,40 @@
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
+import type { LinkedHttpClient } from "@oxyhq/core";
 
-// Token getter set by AuthBridge component from the React context
-let getToken: (() => string | null) | null = null;
+type TnpApiClient = LinkedHttpClient["client"];
 
-export function setTokenGetter(getter: () => string | null) {
-  getToken = getter;
+// The TNP backend client, registered by AuthBridge from the linked client that
+// @oxyhq/core mints off the OxyServices session. It targets TNP's own API
+// (VITE_API_URL) while keeping its bearer token in lockstep with the Oxy
+// session and delegating 401 refresh back to that session. No manual
+// Authorization plumbing — the SDK owns the token.
+let client: TnpApiClient | null = null;
+
+export function setApiClient(next: TnpApiClient | null) {
+  client = next;
 }
 
 export async function apiFetch<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  const token = getToken?.();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  if (!client) {
+    throw new Error("TNP API client is not ready");
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      ...headers,
-      ...(options?.headers as Record<string, string>),
-    },
-  });
+  const method = (options?.method ?? "GET").toUpperCase();
+  const data =
+    typeof options?.body === "string" ? JSON.parse(options.body) : options?.body;
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(
-      (body as Record<string, string>).error || `API error ${res.status}`
-    );
+  switch (method) {
+    case "POST":
+      return client.post<T>(path, data);
+    case "PUT":
+      return client.put<T>(path, data);
+    case "PATCH":
+      return client.patch<T>(path, data);
+    case "DELETE":
+      return client.delete<T>(path);
+    default:
+      return client.get<T>(path);
   }
-
-  return res.json() as Promise<T>;
 }

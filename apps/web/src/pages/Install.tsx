@@ -22,7 +22,6 @@ const clientPlatforms: { id: Platform; label: string }[] = [
   { id: "windows", label: "Windows" },
 ];
 
-const DNS_IP = "174.138.10.81";
 const DNS_PORT = "5353";
 const DNS_HOST = "dns.tnp.network";
 const INSTALL_CMD_UNIX = "curl -fsSL https://get.tnp.network | sh";
@@ -31,6 +30,7 @@ const INSTALL_CMD_WINDOWS = "irm https://get.tnp.network/ps | iex";
 interface ClientInfo {
   version: string;
   changelog: string;
+  dns?: { ip: string; host: string };
   platforms: Record<string, { url: string; sha256: string } | null>;
 }
 
@@ -42,13 +42,19 @@ export default function Install() {
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
   const [copied, setCopied] = useState<CopiedField>(null);
 
+  // The public DNS resolver IP is owned by the API (config.parkingIp /
+  // TNP_PARKING_IP) and served via /client/latest. Never hardcode it here — a
+  // stale literal would tell users to point their DNS at a dead/wrong host. Fall
+  // back to the resolver hostname for display until the value loads.
+  const DNS_IP = clientInfo?.dns?.ip || DNS_HOST;
+
   useEffect(() => {
     let ignore = false;
     apiFetch<ClientInfo>("/client/latest")
       .then((data) => {
         if (!ignore) setClientInfo(data);
       })
-      .catch(() => {});
+      .catch((err) => console.error("Failed to load client release info:", err));
     return () => { ignore = true; };
   }, []);
 

@@ -38,7 +38,7 @@ export default function Domains() {
             setTotal(data.length);
           }
         })
-        .catch(() => {});
+        .catch((err) => console.error("Domain search failed:", err));
     } else {
       apiFetch<DomainsResponse>(`/domains?page=${page}&limit=50`)
         .then((data) => {
@@ -48,7 +48,7 @@ export default function Domains() {
             setTotal(data.total);
           }
         })
-        .catch(() => {});
+        .catch((err) => console.error("Failed to load domains:", err));
     }
     return () => { ignore = true; };
   }, [query, page]);

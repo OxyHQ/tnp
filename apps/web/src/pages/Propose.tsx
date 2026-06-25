@@ -37,7 +37,7 @@ export default function Propose() {
       .then((data) => {
         if (!ignore) setProposals(data);
       })
-      .catch(() => {});
+      .catch((err) => console.error("Failed to load proposals:", err));
     return () => { ignore = true; };
   }, []);
 

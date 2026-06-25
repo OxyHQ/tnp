@@ -17,11 +17,18 @@ function run(cmd: string): string {
 function runSilent(cmd: string): void {
   try {
     execSync(cmd, { encoding: "utf-8", stdio: "pipe" });
-  } catch {}
+  } catch {
+    // Best-effort teardown command (e.g. stopping a unit that isn't loaded).
+    // Failure is expected and non-fatal — intentionally ignored.
+  }
 }
 
 function safeUnlink(path: string): void {
-  try { unlinkSync(path); } catch {}
+  try {
+    unlinkSync(path);
+  } catch {
+    // File may already be absent; removal is best-effort and non-fatal.
+  }
 }
 
 // ── macOS (launchd) ──

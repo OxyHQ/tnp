@@ -4,7 +4,51 @@ import dgram from "dgram";
 import net from "net";
 import dns2 from "dns2";
 
-const { Packet } = dns2;
+// dns2 wire-format types. @types/dns2 models the high-level client/server API
+// but omits the low-level `Packet` members the proxy relies on for manual
+// (de)serialization, so we type exactly the surface we use here instead of `any`.
+interface DnsWireQuestion {
+  name: string;
+  type: number;
+  class?: number;
+}
+
+interface DnsWireRecord {
+  name: string;
+  type: number;
+  class: number;
+  ttl: number;
+  address?: string;
+  domain?: string;
+  data?: string;
+  exchange?: string;
+  priority?: number;
+  ns?: string;
+}
+
+interface DnsWirePacket {
+  header: { id: number };
+  questions: DnsWireQuestion[];
+  answers: DnsWireRecord[];
+}
+
+interface DnsPacketWriter {
+  /** Append `value` as a big-endian field of `bits` bits (8/16/32). */
+  write(value: number, bits: number): void;
+  toBuffer(): Buffer | Uint8Array;
+}
+
+interface Dns2Packet {
+  TYPE: typeof dns2.Packet.TYPE;
+  CLASS: typeof dns2.Packet.CLASS;
+  parse(buffer: Buffer | Uint8Array): DnsWirePacket;
+  createResponseFromRequest(request: DnsWirePacket): DnsWirePacket;
+  /** Internal serializer; present at runtime but not always exposed. */
+  write?: (response: DnsWirePacket) => Buffer;
+  Writer: new () => DnsPacketWriter;
+}
+
+const Packet = dns2.Packet as unknown as Dns2Packet;
 
 function encodeDnsName(name: string): number[] {
   const bytes: number[] = [];
@@ -122,7 +166,7 @@ export class DnsProxy {
     return map[type] || "A";
   }
 
-  private answerToRecord(qname: string, ans: DnsAnswer): Record<string, unknown> {
+  private answerToRecord(qname: string, ans: DnsAnswer): DnsWireRecord {
     const base = { name: qname, ttl: ans.ttl || 3600, class: Packet.CLASS.IN };
     switch (ans.type.toUpperCase()) {
       case "A":     return { ...base, type: Packet.TYPE.A, address: ans.value };
@@ -314,9 +358,9 @@ export class DnsProxy {
     }
   }
 
-  private writeEmptyResponse(request: Record<string, unknown>): Buffer {
+  private writeEmptyResponse(request: DnsWirePacket): Buffer {
     // Build a minimal NXDOMAIN/empty response
-    const id = (request as { header: { id: number } }).header.id;
+    const id = request.header.id;
     const writer = new Packet.Writer();
     writer.write(id, 16);
     writer.write(0x8180, 16); // Response, RD, RA
@@ -325,7 +369,7 @@ export class DnsProxy {
     writer.write(0, 16); // NSCOUNT
     writer.write(0, 16); // ARCOUNT
     // Copy question section from original query
-    const q = (request as { questions: Array<{ name: string; type: number; class: number }> }).questions[0];
+    const q = request.questions[0];
     const cleanName = q.name.replace(/\.$/, "");
     for (const label of cleanName.split(".")) {
       writer.write(label.length, 8);
@@ -337,21 +381,16 @@ export class DnsProxy {
     return Buffer.from(writer.toBuffer());
   }
 
-  private writeResponse(response: Record<string, unknown>): Buffer {
+  private writeResponse(response: DnsWirePacket): Buffer {
     // Use dns2 internal write if available, otherwise fall back to raw
     try {
-      const writerFn = (Packet as Record<string, unknown>).write as ((r: unknown) => Buffer) | undefined;
-      if (writerFn) return writerFn(response);
+      if (Packet.write) return Packet.write(response);
     } catch (err) {
       console.warn(`[tnp] dns2 Packet.write failed, using manual serialization: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     // Manual serialization of a simple A response
-    const resp = response as {
-      header: { id: number };
-      questions: Array<{ name: string; type: number; class: number }>;
-      answers: Array<{ name: string; type: number; class: number; ttl: number; address?: string }>;
-    };
+    const resp = response;
     const writer = new Packet.Writer();
     writer.write(resp.header.id, 16);
     writer.write(0x8180, 16);
