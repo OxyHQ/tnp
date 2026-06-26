@@ -94,7 +94,7 @@ tnp test <domain>    # Test domain resolution
 
 ## Oxy SDK Conventions
 
-- **Versions**: `@oxyhq/core ^3.10.0`, `@oxyhq/auth ^5.0.1`, `@oxyhq/bloom ^0.19.1`, `@oxyhq/contracts ^0.2.1` (transitive via core).
+- **Versions**: `@oxyhq/core ^3.11.0`, `@oxyhq/auth ^5.1.1`, `@oxyhq/bloom ^0.19.1`, `@oxyhq/contracts ^0.3.0` (transitive via core). **3.11.0 / auth 5.1.1:** self-sovereign identity layer (did:web, signed records, export, domain verify) + "Sign in with Oxy" (shared-keychain SSO + cross-device QR/deep-link handoff via `Commons by Oxy`). **Accounts is now keyless "Accounts by Oxy"** (management-only; identity creation moved to Commons).
 - **Media**: avatars/images resolve ONLY through `oxyServices.getFileDownloadUrl(id, variant)` + bloom's variant-aware `<Avatar source={fileId} variant="thumb">`. Never hardcode `cloud.oxy.so` or `/media/` URLs.
 - **Display names**: render `name.displayName` directly. No local name fallbacks.
 - **Backend auth**: `@oxyhq/core/server` only — `createOxyAuthMiddleware`/`getRequiredOxyUserId`. No local auth middleware.
@@ -104,7 +104,7 @@ tnp test <domain>    # Test domain resolution
 
 ## Dependencies
 
-- `@oxyhq/core ^3.10.0`, `@oxyhq/auth ^5.0.1`, `@oxyhq/bloom ^0.19.1` — Oxy platform integration (SSO, auth)
+- `@oxyhq/core ^3.11.0`, `@oxyhq/auth ^5.1.1`, `@oxyhq/bloom ^0.19.1` — Oxy platform integration (SSO, auth)
 - `tweetnacl` — Pure JS crypto (X25519, XSalsa20-Poly1305) in client package
 - `dns2` — DNS packet encoding/decoding in client package
 - `react-i18next`, `i18next` — Internationalization
