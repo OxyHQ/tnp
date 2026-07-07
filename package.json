@@ -30,8 +30,5 @@
   "devDependencies": {
     "concurrently": "^9.1.0",
     "release-it": "^19.0.6"
-  },
-  "dependencies": {
-    "@oxyhq/auth": "^5.0.2"
   }
 }

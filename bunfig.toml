@@ -1,0 +1,8 @@
+# Hoisted install layout so the web bundler (rolldown-vite via
+# vite-plugin-react-native-web) can resolve @oxyhq/services' transitive runtime
+# imports (e.g. `color` via react-native-paper) from the services file
+# locations. The default isolated linker nests those under each package and
+# rolldown, resolving relative to the importing file, cannot reach them.
+# This mirrors how the Oxy monorepo hoists for its own Vite apps (Console).
+[install]
+linker = "hoisted"

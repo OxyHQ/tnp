@@ -1,6 +1,6 @@
 import { StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
-import { WebOxyProvider } from "@oxyhq/auth";
+import { OxyProvider } from "@oxyhq/services";
 import { BloomThemeProvider } from "@oxyhq/bloom/theme";
 import "./lib/i18n";
 import App from "./App";
@@ -22,9 +22,9 @@ createRoot(rootElement).render(
   <StrictMode>
     <BloomThemeProvider mode="dark" colorPreset="oxy">
       <Suspense fallback={<div className="min-h-screen bg-[#000]" />}>
-        <WebOxyProvider baseURL={OXY_API} clientId={OXY_CLIENT_ID}>
+        <OxyProvider baseURL={OXY_API} clientId={OXY_CLIENT_ID}>
           <App />
-        </WebOxyProvider>
+        </OxyProvider>
       </Suspense>
     </BloomThemeProvider>
   </StrictMode>

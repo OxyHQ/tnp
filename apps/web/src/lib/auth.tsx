@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useAuth as useOxyAuth } from "@oxyhq/auth";
+import { useAuth as useOxyAuth } from "@oxyhq/services";
 import { setApiClient } from "./api";
 
 export { useOxyAuth as useAuth };
@@ -12,7 +12,7 @@ const TNP_API_BASE = import.meta.env.VITE_API_URL || "/api";
  * Mints a linked backend client off the session owner (see
  * `oxyServices.createLinkedClient`): it targets TNP's own API origin but its
  * bearer token stays in lockstep with the Oxy session and its 401 refresh path
- * delegates back to that session. Place inside WebOxyProvider so the session is
+ * delegates back to that session. Place inside OxyProvider so the session is
  * available. No app-local token providers, Authorization headers, or refresh
  * retries — the SDK owns all of that.
  */
