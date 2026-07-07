@@ -88,7 +88,7 @@ No client needed if you just want resolution: point any device's DNS at `174.138
 open https://tnp.network/register
 ```
 
-Sign in with Oxy SSO, pick a name, pick a TLD (`.ox` is the default community TLD), submit. Custom TNP TLDs are first-come, first-served and free; standard mirrors (`.com`, `.app`) are restricted to admin accounts.
+Sign in with Oxy, pick a name, pick a TLD (`.ox` is the default community TLD), submit. Custom TNP TLDs are first-come, first-served and free; standard mirrors (`.com`, `.app`) are restricted to admin accounts.
 
 ### 2. Add DNS records
 
@@ -161,7 +161,7 @@ Both the public DNS server and the local client cache responses for `cacheTtlSec
 
 ### Authentication
 
-The API uses **Oxy SSO**. Every protected endpoint requires `Authorization: Bearer <oxy-token>`; the API verifies tokens against `https://api.oxy.so` via `@oxyhq/core`'s `oxy.auth()` middleware. Users are created lazily — first authenticated request creates the local `User` document keyed by `oxyUserId`.
+The API uses **Oxy authentication** (device-first, zero-cookie). Every protected endpoint requires `Authorization: Bearer <oxy-token>`; the API verifies tokens against `https://api.oxy.so` via `@oxyhq/core`'s `oxy.auth()` middleware. Users are created lazily — first authenticated request creates the local `User` document keyed by `oxyUserId`.
 
 ## Where to go next
 
@@ -174,8 +174,8 @@ The API uses **Oxy SSO**. Every protected endpoint requires `Authorization: Bear
 | Layer | Stack |
 |-------|-------|
 | Web | Vite 8, React 19, TypeScript, Tailwind CSS 4, React Router 7, react-i18next (5 locales: en, zh, es, hi, fr) |
-| API | Bun, Express 5, Mongoose 9, MongoDB, `@oxyhq/core` for Oxy SSO |
+| API | Bun, Express 5, Mongoose 9, MongoDB, `@oxyhq/core` for Oxy auth |
 | DNS | Bun runtime, `dns2` for packet encoding/decoding, raw UDP + TCP sockets |
 | Relay | Bun's native WebSocket server, binary frame protocol, in-memory connection registry |
 | Client | Bun (compiled to single-file binary per platform: linux-x64/arm64, darwin-x64/arm64, windows-x64), `tweetnacl` for X25519 + XSalsa20-Poly1305 |
-| Auth | Oxy SSO, JWTs verified by `@oxyhq/core` |
+| Auth | Device-first Oxy sign-in (`@oxyhq/services`), tokens verified by `@oxyhq/core` |

@@ -30,7 +30,7 @@ packages/
 
 ## How It Works
 
-1. User registers at TNP web via Oxy SSO
+1. User registers at TNP web via device-first Oxy sign-in (`OxyProvider` from `@oxyhq/services`)
 2. User registers domains on custom TLDs (.ox, .app, etc.)
 3. User manages DNS records via web dashboard
 4. Client CLI daemon resolves TNP domains locally (intercepts DNS queries)

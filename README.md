@@ -11,7 +11,7 @@ Domains are tied to your Oxy account. Register at [tnp.network](https://tnp.netw
 - **Frontend**: Vite + React 19 + TypeScript + Tailwind CSS
 - **Backend**: Bun + Express 5 + TypeScript + MongoDB (Mongoose 9)
 - **Client**: Go DNS resolver daemon (scaffold)
-- **Auth**: Oxy web auth via `@oxyhq/auth` and API validation via `@oxyhq/core`
+- **Auth**: Device-first Oxy sign-in via `@oxyhq/services` (`OxyProvider`), API token validation via `@oxyhq/core`
 
 ## Getting started
 
@@ -65,7 +65,7 @@ The frontend runs at `http://localhost:5173` and the API at `http://localhost:30
 
 ### Auth
 
-The web app uses `WebOxyProvider` from `@oxyhq/auth`; SSO callback handling is owned by the SDK. The API validates Oxy access tokens through `@oxyhq/core` and does not implement a local `/__oxy/sso-callback` route.
+The web app mounts a single `OxyProvider` from `@oxyhq/services` (device-first, zero-cookie) with a registered `clientId`; session restore and interactive sign-in are owned by the SDK. The API validates Oxy access tokens through `@oxyhq/core` (`createLinkedClient` mints tokens off the shared session) — there is no local auth-callback route.
 
 ### TLDs
 
