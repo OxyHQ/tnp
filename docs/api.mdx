@@ -9,7 +9,7 @@ order: 3
 Base URL (production): `https://api.tnp.network`
 Base URL (dev): `http://localhost:3000`
 
-The API is plain JSON over HTTPS, served by Bun + Express 5. Mutating endpoints require an Oxy SSO token in `Authorization: Bearer <token>`; the token is verified against `https://api.oxy.so` by `@oxyhq/core`'s `oxy.auth()` middleware. The local `User` document is created lazily on the first authenticated request, keyed by `oxyUserId`.
+The API is plain JSON over HTTPS, served by Bun + Express 5. Mutating endpoints require an Oxy access token in `Authorization: Bearer <token>`; the token is verified against `https://api.oxy.so` by `@oxyhq/core`'s `oxy.auth()` middleware. The local `User` document is created lazily on the first authenticated request, keyed by `oxyUserId`.
 
 CORS is enabled for `https://tnp.network`, `https://www.tnp.network`, the Cloudflare Pages preview origin, and `http://localhost:5173`.
 
@@ -152,7 +152,7 @@ function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void 
 }
 ```
 
-`req.user.id` is the `oxyUserId` returned by the Oxy SSO token. The local `User` document is created lazily on the first authenticated call by `findOrCreateUser(oxyUserId)`.
+`req.user.id` is the `oxyUserId` returned by the Oxy access token. The local `User` document is created lazily on the first authenticated call by `findOrCreateUser(oxyUserId)`.
 
 ## Environment
 
@@ -161,5 +161,5 @@ function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void 
 | `PORT` | `3000` | API listen port. |
 | `MONGODB_URI` | `mongodb://localhost:27017` | MongoDB connection string. Database name is `tnp-<NODE_ENV>` (e.g., `tnp-production`). |
 | `NODE_ENV` | `development` | Used to derive the database name. |
-| `OXY_API_URL` | `https://api.oxy.so` | Oxy SSO base URL. |
+| `OXY_API_URL` | `https://api.oxy.so` | Oxy API base URL (token verification). |
 | `TNP_PARKING_IP` | `174.138.10.81` | A-record value returned for unregistered names on custom TLDs and as a fallback for record-less registered domains. |
