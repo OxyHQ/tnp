@@ -9,11 +9,11 @@
     "seed": "bun src/seed.ts"
   },
   "dependencies": {
-    "@oxyhq/core": "^10.2.0",
+    "@oxyhq/core": "^11.0.1",
     "express": "^5.2.1",
     "cors": "^2.8.6",
-    "mongoose": "^9.3.1",
-    "dotenv": "^17.3.1"
+    "mongoose": "^9.7.4",
+    "dotenv": "^17.4.2"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

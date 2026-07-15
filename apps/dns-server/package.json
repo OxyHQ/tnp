@@ -8,6 +8,6 @@
     "dev": "bun --watch src/index.ts"
   },
   "dependencies": {
-    "dns2": "^2.1.0"
+    "dns2": "^3.0.0"
   }
 }
