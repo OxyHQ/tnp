@@ -10,7 +10,7 @@
  * (circuitId + type) to route traffic.
  */
 
-import { decodeFrame, encodeFrame, FrameType } from "./frames";
+import { decodeFrame, encodeFrame, FrameType } from "@tnp/protocol";
 import type { TnpApiClient } from "./api";
 
 // ---------------------------------------------------------------------------

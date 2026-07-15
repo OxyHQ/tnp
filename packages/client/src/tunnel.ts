@@ -17,7 +17,7 @@ import {
   fromBase64,
   toBase64,
 } from "./crypto";
-import { encodeFrame, decodeFrame, FrameType } from "./frames";
+import { encodeFrame, decodeFrame, FrameType } from "@tnp/protocol";
 
 const OPEN_TIMEOUT_MS = 10_000;
 const RELAY_CONNECT_TIMEOUT_MS = 8_000;

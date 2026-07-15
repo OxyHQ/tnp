@@ -6,5 +6,8 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts"
+  },
+  "dependencies": {
+    "@tnp/protocol": "workspace:*"
   }
 }

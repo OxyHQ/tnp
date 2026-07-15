@@ -1,0 +1,17 @@
+{
+  "name": "@tnp/protocol",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/frames.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.14",
+    "typescript": "~7.0.2"
+  }
+}

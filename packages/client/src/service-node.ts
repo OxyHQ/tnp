@@ -20,7 +20,7 @@ import {
   toBase64,
   fromBase64,
 } from "./crypto";
-import { encodeFrame, decodeFrame, FrameType } from "./frames";
+import { encodeFrame, decodeFrame, FrameType } from "@tnp/protocol";
 import type { TnpApiClient } from "./api";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
