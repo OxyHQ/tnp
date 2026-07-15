@@ -30,7 +30,7 @@ export function encodeFrame(
   circuitId: number,
   type: FrameType,
   payload: Uint8Array,
-): Uint8Array {
+): Uint8Array<ArrayBuffer> {
   const frame = new Uint8Array(HEADER_SIZE + payload.byteLength);
   const view = new DataView(frame.buffer);
 
