@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/*
+ * On web, react-native-css (NativeWind 5 preview) emits real CSS utility classes
+ * for the className layout props (`flex-1`, `flex-row`, `gap-*`, `items-center`,
+ * arbitrary `[Npx]`, …) used across @oxyhq/services + @oxyhq/bloom screens (the
+ * OxyProvider account dialog, sign-in surfaces, Bloom components). Tailwind v4
+ * does NOT scan node_modules by default, so without these @source globs those
+ * utilities are never generated and the SDK's layout classes are inert on web
+ * (RN-Web's base View reset shows through). Paths are relative to this file.
+ */
+@source "../../../node_modules/@oxyhq/services/lib/**/*.{js,jsx}";
+@source "../../../node_modules/@oxyhq/bloom/lib/**/*.{js,jsx}";
+
 @font-face {
   font-family: "Geist Sans";
   src: url("/fonts/Geist-Light.woff2") format("woff2");
