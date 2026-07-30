@@ -23,13 +23,16 @@ if (!parkingIp) {
 }
 
 export const config = {
-  port: parseInt(process.env.PORT || "3000", 10),
+  // Local dev default only — ECS injects PORT explicitly (oxy-infra
+  // terraform-uswest2/app-tnp.tf sets it to 8080). 4170 is TNP's slot in the
+  // per-app port map so several Oxy backends can run side by side.
+  port: parseInt(process.env.PORT || "4170", 10),
   mongoUri: process.env.MONGODB_URI || "mongodb://localhost:27017",
   dbName: `${APP_NAME}-${env}`,
   oxyApiUrl: process.env.OXY_API_URL || "https://api.oxy.so",
   parkingIp,
   corsOrigins: [
-    "http://localhost:5173",
+    "http://localhost:8170",
     "https://tnp.network",
     "https://www.tnp.network",
     "https://tnp-9uk.pages.dev",
