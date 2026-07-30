@@ -42,7 +42,7 @@ bun run seed
 bun run dev
 ```
 
-The frontend runs at `http://localhost:5173` and the API at `http://localhost:3000`.
+The frontend runs at `http://localhost:8170` and the API at `http://localhost:4170`.
 
 ### Environment variables
 
@@ -59,7 +59,7 @@ The frontend runs at `http://localhost:5173` and the API at `http://localhost:30
 
 | Variable | Description | Default |
 |---|---|---|
-| `VITE_API_URL` | API base URL | `http://localhost:3000` |
+| `VITE_API_URL` | API base URL | `http://localhost:4170` |
 
 ## API reference
 

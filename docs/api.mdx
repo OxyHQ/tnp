@@ -7,11 +7,11 @@ order: 3
 # REST API
 
 Base URL (production): `https://api.tnp.network`
-Base URL (dev): `http://localhost:3000`
+Base URL (dev): `http://localhost:4170`
 
 The API is plain JSON over HTTPS, served by Bun + Express 5. Mutating endpoints require an Oxy access token in `Authorization: Bearer <token>`; the token is verified against `https://api.oxy.so` by `@oxyhq/core`'s `oxy.auth()` middleware. The local `User` document is created lazily on the first authenticated request, keyed by `oxyUserId`.
 
-CORS is enabled for `https://tnp.network`, `https://www.tnp.network`, the Cloudflare Pages preview origin, and `http://localhost:5173`.
+CORS is enabled for `https://tnp.network`, `https://www.tnp.network`, the Cloudflare Pages preview origin, and `http://localhost:8170`.
 
 All responses follow `{ error: 'human readable message' }` on failure with the appropriate HTTP status. Successful responses return the resource directly (no envelope).
 

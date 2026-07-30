@@ -62,10 +62,12 @@ export default defineConfig(({ mode }) => ({
     "process.env.NODE_ENV": JSON.stringify(mode),
   },
   server: {
-    port: 5173,
+    // 8170 is TNP's slot in the per-app local dev port map, so several Oxy web
+    // dev servers can run side by side on one machine.
+    port: 8170,
     proxy: {
       "/api": {
-        target: "http://localhost:3000",
+        target: "http://localhost:4170",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
