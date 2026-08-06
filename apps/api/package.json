@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "bun src/db/migrate.ts",
     "seed": "bun src/seed.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
@@ -15,13 +17,15 @@
     "@tnp/namespace": "workspace:*",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
+    "drizzle-orm": "0.45.2",
     "express": "^5.2.1",
-    "mongoose": "^9.7.4"
+    "postgres": "3.4.9"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "bun-types": "^1.3.14",
+    "drizzle-kit": "0.31.10",
     "typescript": "~7.0.2"
   }
 }

@@ -1,86 +1,73 @@
-import mongoose from "mongoose";
-import dotenv from "dotenv";
-dotenv.config();
+/**
+ * Promote the highest-scoring open TLD proposals to active TLDs.
+ *
+ * Operator tool, run by hand. The reserved check runs here too: approval is the
+ * last gate before a label becomes servable, and a proposal created before the
+ * namespace policy landed could still be sitting in the table.
+ */
 
-import TLDProposal from "../models/TLDProposal.js";
-import TLD from "../models/TLD.js";
-import Vote from "../models/Vote.js";
+import { desc, eq, sql } from "drizzle-orm";
+import { validateNativeTld } from "@tnp/namespace";
+import { connectPostgres, closePostgres, getDb } from "../db/postgres.js";
+import { tldProposals, tlds, votes } from "../db/schema/index.js";
 
-const APP_NAME = "tnp";
-const env = process.env.NODE_ENV || "development";
-const mongoUri = process.env.MONGODB_URI || "mongodb://localhost:27017";
-const dbName = `${APP_NAME}-${env}`;
+const DEFAULT_LIMIT = 5;
+const MIN_SCORE = 1;
 
-async function approveTopProposals() {
-  await mongoose.connect(mongoUri, { dbName });
-  console.log(`Connected to MongoDB (${dbName})`);
+async function main(): Promise<void> {
+  const limit = parseInt(process.argv[2] ?? "", 10) || DEFAULT_LIMIT;
 
-  // Ensure the Vote model is registered so the "votes" collection is known
-  void Vote;
+  await connectPostgres();
+  const db = getDb();
 
-  const ranked = await TLDProposal.aggregate([
-    { $match: { status: "open" } },
-    {
-      $lookup: {
-        from: "votes",
-        localField: "_id",
-        foreignField: "proposal",
-        as: "votesDocs",
-      },
-    },
-    {
-      $addFields: {
-        score: {
-          $subtract: [
-            {
-              $size: {
-                $filter: {
-                  input: "$votesDocs",
-                  cond: { $eq: ["$$this.direction", "up"] },
-                },
-              },
-            },
-            {
-              $size: {
-                $filter: {
-                  input: "$votesDocs",
-                  cond: { $eq: ["$$this.direction", "down"] },
-                },
-              },
-            },
-          ],
-        },
-      },
-    },
-    { $match: { score: { $gt: 0 } } },
-    { $sort: { score: -1, createdAt: 1 } },
-    { $limit: 5 },
-    { $project: { _id: 1, tld: 1, score: 1 } },
-  ]);
+  const score = sql<number>`(
+    select coalesce(
+      count(*) filter (where ${votes.direction} = 'up')
+      - count(*) filter (where ${votes.direction} = 'down'), 0)
+    from ${votes}
+    where ${votes.proposalId} = ${tldProposals.id}
+  )::int`;
 
-  if (ranked.length === 0) {
-    console.log("No open proposals with positive score. Nothing to approve.");
-    await mongoose.disconnect();
-    return;
+  const candidates = await db
+    .select({ id: tldProposals.id, tld: tldProposals.tld, score })
+    .from(tldProposals)
+    .where(eq(tldProposals.status, "open"))
+    .orderBy(desc(score))
+    .limit(limit);
+
+  let approved = 0;
+
+  for (const candidate of candidates) {
+    if (candidate.score < MIN_SCORE) {
+      console.log(`  skip .${candidate.tld} — score ${candidate.score}`);
+      continue;
+    }
+
+    const policy = validateNativeTld(candidate.tld);
+    if (!policy.ok) {
+      console.log(`  REFUSED .${candidate.tld} — ${policy.detail}`);
+      await db
+        .update(tldProposals)
+        .set({ status: "rejected", updatedAt: sql`now()` })
+        .where(eq(tldProposals.id, candidate.id));
+      continue;
+    }
+
+    await db
+      .update(tlds)
+      .set({ status: "active", updatedAt: sql`now()` })
+      .where(eq(tlds.name, candidate.tld));
+    await db
+      .update(tldProposals)
+      .set({ status: "approved", updatedAt: sql`now()` })
+      .where(eq(tldProposals.id, candidate.id));
+
+    console.log(`  approved .${candidate.tld} (score ${candidate.score})`);
+    approved++;
   }
 
-  for (const entry of ranked) {
-    await TLDProposal.updateOne(
-      { _id: entry._id },
-      { $set: { status: "approved" } }
-    );
-    await TLD.updateOne(
-      { name: entry.tld },
-      { $set: { status: "active" } }
-    );
-    console.log(`Approved .${entry.tld} (score: ${entry.score})`);
-  }
-
-  console.log(`Approved ${ranked.length} proposal(s).`);
-  await mongoose.disconnect();
+  console.log(`Approved ${approved} of ${candidates.length} candidate(s)`);
+  await closePostgres();
 }
 
-approveTopProposals().catch((err) => {
-  console.error("Auto-approval failed:", err);
-  process.exit(1);
-});
+await main();

@@ -27,8 +27,12 @@ export const config = {
   // terraform-uswest2/app-tnp.tf sets it to 8080). 4170 is TNP's slot in the
   // per-app port map so several Oxy backends can run side by side.
   port: parseInt(process.env.PORT || "4170", 10),
-  mongoUri: process.env.MONGODB_URI || "mongodb://localhost:27017",
-  dbName: `${APP_NAME}-${env}`,
+  /**
+   * PostgreSQL connection string. No default: a wrong database is worse than a
+   * missing one, and every other Oxy backend fails fast on this too.
+   */
+  databaseUrl: process.env.DATABASE_URL ?? "",
+  postgresMaxPoolSize: parseInt(process.env.POSTGRES_MAX_POOL_SIZE || "10", 10),
   oxyApiUrl: process.env.OXY_API_URL || "https://api.oxy.so",
   parkingIp,
   corsOrigins: [

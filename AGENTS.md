@@ -35,7 +35,7 @@ Still uses `apps/` layout (not yet migrated to the `packages/` standard):
 
 ```
 apps/
-  api/            @tnp/api          Bun + Express 5.2 / Mongoose 9.3 / @oxyhq/core
+  api/            @tnp/api          Bun + Express 5.2 / drizzle-orm + PostgreSQL / @oxyhq/core
   web/            @tnp/web          Vite 8 / React 19 / TailwindCSS 4.2 / React Router 7 / react-i18next
   dns-server/     @tnp/dns-server   DNS daemon (dns2 library)
   relay/          @tnp/relay        WebSocket relay server for overlay network
@@ -59,15 +59,15 @@ Web app: `react-i18next`, 5 languages (en, zh, es, hi, fr). Translation files: `
 
 ## Models
 
-`User`, `Domain`, `TLD`, `TLDProposal`, `ServiceNode`, `Relay`
+`users`, `domains`, `dns_records`, `tlds`, `tld_proposals`, `service_nodes`, `relays`, `votes` (`apps/api/src/db/schema/`). DNS records are their own table, not a nested document: they are queried by `(domain_id, name, type)` on every resolve, and that is an index.
 
 ## Deployment
 
 - **Web**: CF Pages (`tnp.network`) via `deploy.yml`, gated on CI
 - **API**: **ECS Fargate in us-west-2**, behind the shared `oxy-alb` — like the other Oxy backends. `ci.yml` calls `deploy-aws.yml` after both gates pass on `main`. The old SSH-to-DigitalOcean-droplet deploy is gone; that droplet is retired and its workflow had failed on every recorded run since 2026-07-14.
 - **Infra is owned by `~/Oxy/oxy-infra`** (`terraform-uswest2/app-tnp.tf`): ECR repos `oxy/tnp-{api,dns,relay}`, ECS services on `oxy-cluster`, ALB target groups with `/health`. Do not create TNP AWS resources from this repo.
-- **BLOCKED**: `tnp-api` is deliberately at `desired_count = 0` until the SSM parameter `/oxy/tnp-api/MONGODB_URI` exists — every other Oxy app has one, TNP does not. Until then the deploy pushes an image and warns rather than pretending a rollout happened. `TNP_PARKING_IP` is also absent from the task definition's `environment`, so parking answers would be omitted in production.
-- **DB**: MongoDB, database `tnp-production`. Which instance is a pending decision — see the blocker above.
+- **BLOCKED**: `tnp-api` is deliberately at `desired_count = 0` until the SSM parameter `/oxy/tnp-api/DATABASE_URL` exists (the task definition still names `MONGODB_URI` and needs updating with it). Until then the deploy pushes an image and warns rather than pretending a rollout happened. `TNP_PARKING_IP` is also absent from the task definition's `environment`, so parking answers would be omitted in production.
+- **DB**: **PostgreSQL** via drizzle-orm + postgres.js, like Mention and oxy-api. Migrations in `apps/api/drizzle/`, applied by the app at startup (`src/db/migrate.ts`) so it cannot serve against a schema it has not migrated. `bun run db:generate` writes a migration; never hand-edit one. Mongoose is gone.
 - **SSL**: Cloudflare proxy (flexible mode)
 - **Installer**: `curl -fsSL https://get.tnp.network | sh` (served by API via Host header routing)
 
