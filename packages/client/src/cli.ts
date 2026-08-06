@@ -4,6 +4,7 @@ import { resolve, join } from "path";
 import {
   loadConfig,
   saveConfig,
+  parsePrivacyLevel,
   KILLSWITCH_MARKER_PATH,
   getDefaultInterface,
   type TnpConfig,
@@ -45,10 +46,12 @@ Usage:
   tnp help             Show this help
 
 Overlay commands:
-  tnp connect [--privacy access|private]
+  tnp connect [--privacy access]
     Starts both the DNS proxy and a SOCKS5 proxy. TNP domains with active
     service nodes are routed through encrypted tunnels via relay nodes.
-    Default privacy: "access" (direct relay selection).
+    Privacy level "access" means one relay hop: the relay cannot read your
+    traffic, but it sees your IP and which service you reach.
+    Multi-hop "private" routing is not implemented yet and is rejected.
 
   tnp serve --domain <domain> [--target <host:port>] [--relay <wss://url>] --token <token>
     Registers this machine as a service node for the given domain.
@@ -107,13 +110,12 @@ async function cmdConnect() {
   // Parse --privacy flag
   const privacyIdx = process.argv.indexOf("--privacy");
   if (privacyIdx !== -1) {
-    const val = process.argv[privacyIdx + 1];
-    if (val === "access" || val === "private") {
-      config.privacyLevel = val;
-    } else {
-      console.error(`[tnp] invalid privacy level: ${val}. Use "access" or "private".`);
+    const result = parsePrivacyLevel(String(process.argv[privacyIdx + 1]));
+    if (!result.ok) {
+      console.error(`[tnp] ${result.error}`);
       process.exit(1);
     }
+    config.privacyLevel = result.level;
   }
 
   // Parse --autoconnect flag

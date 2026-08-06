@@ -117,13 +117,14 @@ Detail: [`relays.md`](./relays.md).
 client and the destination.
 
 **Status: not implemented.** There is no multi-hop code in the repository.
-`tnp connect --privacy private` currently parses the flag, prints
-`privacy: private`, and builds exactly the same single-hop circuit as `access`
-(audit B5).
 
-**Required interim behaviour, landing in Phase 1:** the flag must be **rejected
-with a clear error** until Phase 6 ships. Silently giving a user single-hop
-routing after they asked for private routing is the worst available outcome.
+It used to parse the flag, print `privacy: private`, and build exactly the same
+single-hop circuit as `access` (audit B5). Since Phase 1 the flag is **rejected
+with an error naming Phase 6**, a stored `"private"` from an older build is
+normalized back to `"access"` with a warning, and `"private"` is not a member of
+the `PrivacyLevel` type — so nothing can quietly reintroduce it. Silently giving
+a user single-hop routing after they asked for private routing is the worst
+available outcome.
 
 Design: [`onion-routing.md`](./onion-routing.md). Honest limits: [`privacy-model.md`](./privacy-model.md).
 
