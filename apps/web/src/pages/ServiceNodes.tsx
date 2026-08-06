@@ -2,15 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { Trans, useTranslation } from "react-i18next";
+import type { ServiceNodeLookup } from "@tnp/shared-types";
 import { apiFetch } from "../lib/api";
 import { useLocaleFormatter } from "../lib/useLocaleFormatter";
-
-interface ServiceNode {
-  publicKey: string;
-  connectedRelay: string;
-  status: "online" | "offline";
-  lastSeen?: string;
-}
 
 interface Domain {
   _id: string;
@@ -22,7 +16,7 @@ interface Domain {
 
 interface DomainWithNode {
   domain: Domain;
-  node: ServiceNode | null;
+  node: ServiceNodeLookup | null;
   loading: boolean;
 }
 
@@ -43,7 +37,7 @@ export default function ServiceNodes() {
         setDomainsLoading(false);
 
         domains.forEach((domain) => {
-          apiFetch<ServiceNode>(`/nodes/${domain.name}.${domain.tld}`)
+          apiFetch<ServiceNodeLookup>(`/nodes/${domain.name}.${domain.tld}`)
             .then((node) => {
               setEntries((prev) =>
                 prev.map((e) =>

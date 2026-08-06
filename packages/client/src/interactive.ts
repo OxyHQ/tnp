@@ -12,6 +12,7 @@ import {
   type TextRenderable,
 } from "@opentui/core";
 import type { KeyEvent } from "@opentui/core";
+import { normalizeRelayEndpoint } from "@tnp/shared-types";
 import { loadConfig, saveConfig, parsePrivacyLevel, type TnpConfig } from "./config";
 import { serviceStatus } from "./service";
 
@@ -760,6 +761,20 @@ async function actionStartRelay(): Promise<void> {
     return;
   }
 
+  const endpointInput = await promptInput(
+    "Public endpoint (wss://...)",
+    config.relayEndpoint || "none",
+  );
+  const endpoint = endpointInput === "none" ? config.relayEndpoint : endpointInput;
+  if (normalizeRelayEndpoint(endpoint) === null) {
+    addLine("A public ws:// or wss:// endpoint is required to register a relay.", RED);
+    addLine("It is the URL other people's clients dial, not the bind address.", DIM);
+    renderer.root.add(Text({ content: "\n  Press any key to continue...", fg: DIM }));
+    await waitForKeypress();
+    showRelayMenu();
+    return;
+  }
+
   const locationInput = await promptInput(
     "Location label",
     config.relayLocation || "none",
@@ -767,6 +782,7 @@ async function actionStartRelay(): Promise<void> {
   const location = locationInput || config.relayLocation;
 
   config.relayPort = port;
+  config.relayEndpoint = endpoint;
   config.relayLocation = location;
   try {
     saveConfig(config);
@@ -788,10 +804,13 @@ async function actionStartRelay(): Promise<void> {
     const relay = new RelayNode({
       port,
       host: "0.0.0.0",
+      endpoint,
       maxConnections: config.relayMaxConnections,
+      bandwidth: config.relayBandwidth,
       authToken,
       location,
       apiBaseUrl: config.apiBaseUrl,
+      identityKeyPath: config.identityKeyPath,
     });
 
     await relay.start(apiClient);
@@ -799,6 +818,7 @@ async function actionStartRelay(): Promise<void> {
 
     addLine("✓ Relay node running", GREEN);
     addKeyValue("Port", String(port));
+    addKeyValue("Endpoint", endpoint);
     addKeyValue("Location", location || "(not set)");
     addKeyValue("Max conns", String(config.relayMaxConnections));
     addLine("");
@@ -866,6 +886,21 @@ async function actionConfigureRelay(): Promise<void> {
     config.relayPort = n;
   }
 
+  const endpointInput = await promptInput(
+    "Public endpoint (wss://...)",
+    config.relayEndpoint || "not set",
+  );
+  if (endpointInput && endpointInput !== "not set") {
+    if (normalizeRelayEndpoint(endpointInput) === null) {
+      addLine("Must be a ws:// or wss:// URL, e.g. wss://relay.example.com", RED);
+      renderer.root.add(Text({ content: "\n  Press any key to continue...", fg: DIM }));
+      await waitForKeypress();
+      showRelayMenu();
+      return;
+    }
+    config.relayEndpoint = endpointInput;
+  }
+
   const locationInput = await promptInput(
     "Location label",
     config.relayLocation || "none",
@@ -888,6 +923,22 @@ async function actionConfigureRelay(): Promise<void> {
       return;
     }
     config.relayMaxConnections = n;
+  }
+
+  const bandwidthInput = await promptInput(
+    "Advertised bandwidth (Mbit/s, 0 = not stated)",
+    String(config.relayBandwidth),
+  );
+  if (bandwidthInput) {
+    const n = parseInt(bandwidthInput, 10);
+    if (isNaN(n) || n < 0) {
+      addLine("Must be 0 or greater", RED);
+      renderer.root.add(Text({ content: "\n  Press any key to continue...", fg: DIM }));
+      await waitForKeypress();
+      showRelayMenu();
+      return;
+    }
+    config.relayBandwidth = n;
   }
 
   const tokenInput = await promptInput(

@@ -2,27 +2,29 @@ import { Router } from "express";
 import { and, eq, sql } from "drizzle-orm";
 import { requireOxyAuth, getRequiredOxyUserId } from "@oxyhq/core/server";
 import { isReservedTld } from "@tnp/namespace";
+import {
+  parseRegisterServiceNodeRequest,
+  parseServiceNodeHeartbeatRequest,
+  type ServiceNodeHeartbeatResponse,
+  type ServiceNodeLookup,
+  type ServiceNodeRegistration,
+} from "@tnp/shared-types";
 import { getDb } from "../db/postgres.js";
 import { domains, serviceNodes, tlds } from "../db/schema/index.js";
 
 const router = Router();
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 // POST /nodes/register -- register a service node for a domain (auth required)
 router.post("/register", requireOxyAuth, async (req, res) => {
   try {
     const userId = getRequiredOxyUserId(req);
-    const { domainId, publicKey } = req.body;
 
-    if (!domainId || typeof domainId !== "string" || !UUID_RE.test(domainId)) {
-      res.status(400).json({ error: "domainId is required" });
+    const parsed = parseRegisterServiceNodeRequest(req.body);
+    if (!parsed.ok) {
+      res.status(400).json({ error: parsed.error });
       return;
     }
-    if (!publicKey || typeof publicKey !== "string") {
-      res.status(400).json({ error: "publicKey is required" });
-      return;
-    }
+    const { domainId, publicKey } = parsed.value;
 
     const db = getDb();
 
@@ -51,7 +53,20 @@ router.post("/register", requireOxyAuth, async (req, res) => {
       })
       .returning();
 
-    res.status(201).json(node);
+    if (!node) {
+      res.status(500).json({ error: "Failed to register service node" });
+      return;
+    }
+
+    // Projected, not returned whole: the row also carries `oxyUserId`, which is
+    // not part of the contract.
+    const registration: ServiceNodeRegistration = {
+      domainId: node.domainId,
+      publicKey: node.publicKey,
+      connectedRelay: node.connectedRelay,
+      status: node.status,
+    };
+    res.status(201).json(registration);
   } catch (err) {
     console.error("Register service node error:", err);
     res.status(500).json({ error: "Failed to register service node" });
@@ -94,6 +109,7 @@ router.get("/:domain", async (req, res) => {
         publicKey: serviceNodes.publicKey,
         connectedRelay: serviceNodes.connectedRelay,
         status: serviceNodes.status,
+        lastSeen: serviceNodes.lastSeen,
       })
       .from(serviceNodes)
       .innerJoin(domains, eq(serviceNodes.domainId, domains.id))
@@ -105,7 +121,18 @@ router.get("/:domain", async (req, res) => {
       return;
     }
 
-    res.json(node);
+    // `lastSeen` is serialized here rather than left to `JSON.stringify`: the
+    // contract says ISO 8601 string, and a `Date` that only becomes one by way
+    // of the serializer is a shape no consumer's type can be checked against.
+    // The web dashboard has been rendering a "last seen" line conditionally
+    // since it was written, on a field this endpoint never sent.
+    const lookup: ServiceNodeLookup = {
+      publicKey: node.publicKey,
+      connectedRelay: node.connectedRelay,
+      status: node.status,
+      lastSeen: node.lastSeen.toISOString(),
+    };
+    res.json(lookup);
   } catch (err) {
     console.error("Lookup service node error:", err);
     res.status(500).json({ error: "Failed to look up service node" });
@@ -115,16 +142,12 @@ router.get("/:domain", async (req, res) => {
 // POST /nodes/heartbeat -- update service node status (auth required)
 router.post("/heartbeat", requireOxyAuth, async (req, res) => {
   try {
-    const { domainId, connectedRelay } = req.body;
-
-    if (!domainId || typeof domainId !== "string" || !UUID_RE.test(domainId)) {
-      res.status(400).json({ error: "domainId is required" });
+    const parsed = parseServiceNodeHeartbeatRequest(req.body);
+    if (!parsed.ok) {
+      res.status(400).json({ error: parsed.error });
       return;
     }
-    if (!connectedRelay || typeof connectedRelay !== "string") {
-      res.status(400).json({ error: "connectedRelay is required" });
-      return;
-    }
+    const { domainId, connectedRelay } = parsed.value;
 
     // The ownership predicate is in the UPDATE, so a node belonging to another
     // account cannot be touched even by guessing its domain id.
@@ -152,7 +175,8 @@ router.post("/heartbeat", requireOxyAuth, async (req, res) => {
       return;
     }
 
-    res.json({ status: "ok" });
+    const response: ServiceNodeHeartbeatResponse = { status: "ok" };
+    res.json(response);
   } catch (err) {
     console.error("Service node heartbeat error:", err);
     res.status(500).json({ error: "Failed to update heartbeat" });

@@ -75,7 +75,7 @@ change. No compatibility shims, no re-export barrels, no deprecated aliases.
 | Step | Extract | Trigger | Unblocks |
 |---|---|---|---|
 | 0 | `@tnp/namespace` | Phase 2 ✅ | Done. The namespace rule is one implementation shared by the registry and the resolver, so the two cannot drift on which names are TNP's. |
-| 1 | `@tnp/shared-types` | Phase 1 | Contracts stop being duplicated between API and client. Fixes the class of bug behind audit B2. |
+| 1 | `@tnp/shared-types` | Phase 1 ✅ | Done, for the relay and service-node endpoints. The request and response shapes are declared once; `apps/api` parses incoming bodies with those declarations and the client builds outgoing ones from them, so the two can no longer disagree without failing typecheck. Fixes audit B2 and the class of bug behind it. The remaining endpoints (`/domains`, `/tlds`, `/dns`) move as they are touched. |
 | 2 | `@tnp/resolver` | Phase 2 | `apps/dns-server` stops reaching across the workspace by relative path (B1). |
 | 3 | `@tnp/protocol` grows | Phase 3 | Protocol v1: limits, error codes, state machines. |
 | 4 | `@tnp/crypto` | Phase 3 | Key hierarchy and grants, shared by every component. |
@@ -109,9 +109,11 @@ Currently deployed: the web app on Cloudflare Pages, the API on a DigitalOcean
 droplet via SSH + Docker, and released client binaries for five targets.
 
 - API route contracts change only additively until the client that consumes them
-  ships. Where a contract must change incompatibly (relay registration, audit
-  B2), the API accepts the new shape and the client is released before the old
-  shape is removed — one release apart, not one PR apart.
+  ships. Relay registration (audit B2) was the exception that needed no
+  transition window at all: no deployed client had ever completed a
+  registration, so there was no working shape to keep accepting. A contract
+  that must change incompatibly and *does* have working callers still moves one
+  release apart, not one PR apart.
 - Deployed clients keep working through a protocol change because protocol v1
   refuses to talk to a v0 peer rather than misinterpreting it. Relays run both
   during the transition window, then drop v0.

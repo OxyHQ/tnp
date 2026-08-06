@@ -1,3 +1,13 @@
+import type {
+  RegisterRelayRequest,
+  RegisterServiceNodeRequest,
+  RelayDirectoryEntry,
+  RelayHeartbeatRequest,
+  RelayRegistration,
+  ServiceNodeHeartbeatRequest,
+  ServiceNodeLookup,
+} from "@tnp/shared-types";
+
 export interface DnsAnswer {
   name: string;
   type: string;
@@ -18,22 +28,45 @@ export interface ResolveResponse {
   overlay?: OverlayInfo;
 }
 
-export interface ServiceNodeInfo {
-  publicKey: string;
-  connectedRelay: string;
-  status: string;
-}
-
-export interface RelayInfo {
-  endpoint: string;
-  publicKey: string;
-  operator: string;
-  location?: string;
-  status?: string;
-}
+/** How long a write is given before the client gives up on it. */
+const WRITE_TIMEOUT_MS = 5000;
+const REGISTER_TIMEOUT_MS = 10_000;
 
 export class TnpApiClient {
   constructor(private baseUrl: string) {}
+
+  /**
+   * POST a request body defined by `@tnp/shared-types` to an authenticated
+   * endpoint.
+   *
+   * Every caller below passes a body whose type is the API's own request
+   * contract, so the shape sent is the shape the route parses. Before those
+   * contracts existed each of these methods hand-built its own object literal,
+   * and two of them built the wrong one.
+   */
+  private async postContract<TRequest, TResponse>(
+    path: string,
+    body: TRequest,
+    authToken: string,
+    timeoutMs: number,
+  ): Promise<TResponse> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+
+    if (!res.ok) {
+      const failure = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(failure.error ?? `TNP API returned ${res.status}`);
+    }
+
+    return (await res.json()) as TResponse;
+  }
 
   async resolve(name: string, type: string): Promise<DnsAnswer[]> {
     const url = `${this.baseUrl}/dns/resolve?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`;
@@ -80,7 +113,7 @@ export class TnpApiClient {
    * Get service node info for a domain (e.g., "example.ox").
    * Returns null if no service node is registered.
    */
-  async getServiceNode(domain: string): Promise<ServiceNodeInfo | null> {
+  async getServiceNode(domain: string): Promise<ServiceNodeLookup | null> {
     const url = `${this.baseUrl}/nodes/${encodeURIComponent(domain)}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
 
@@ -90,13 +123,13 @@ export class TnpApiClient {
       throw new Error(`TNP API returned ${res.status}`);
     }
 
-    return (await res.json()) as ServiceNodeInfo;
+    return (await res.json()) as ServiceNodeLookup;
   }
 
   /**
    * Get list of active relays.
    */
-  async getRelays(operator?: "oxy" | "community"): Promise<RelayInfo[]> {
+  async getRelays(operator?: "oxy" | "community"): Promise<RelayDirectoryEntry[]> {
     let url = `${this.baseUrl}/relays`;
     if (operator) {
       url += `?operator=${encodeURIComponent(operator)}`;
@@ -107,7 +140,7 @@ export class TnpApiClient {
       throw new Error(`TNP API returned ${res.status}`);
     }
 
-    return (await res.json()) as RelayInfo[];
+    return (await res.json()) as RelayDirectoryEntry[];
   }
 
   /**
@@ -118,21 +151,13 @@ export class TnpApiClient {
     publicKey: string,
     authToken: string,
   ): Promise<void> {
-    const url = `${this.baseUrl}/nodes/register`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${authToken}`,
-      },
-      body: JSON.stringify({ domainId, publicKey }),
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(body.error ?? `TNP API returned ${res.status}`);
-    }
+    const request: RegisterServiceNodeRequest = { domainId, publicKey };
+    await this.postContract(
+      "/nodes/register",
+      request,
+      authToken,
+      WRITE_TIMEOUT_MS,
+    );
   }
 
   /**
@@ -143,72 +168,49 @@ export class TnpApiClient {
     connectedRelay: string,
     authToken: string,
   ): Promise<void> {
-    const url = `${this.baseUrl}/nodes/heartbeat`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${authToken}`,
-      },
-      body: JSON.stringify({ domainId, connectedRelay }),
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(body.error ?? `TNP API returned ${res.status}`);
-    }
+    const request: ServiceNodeHeartbeatRequest = { domainId, connectedRelay };
+    await this.postContract(
+      "/nodes/heartbeat",
+      request,
+      authToken,
+      WRITE_TIMEOUT_MS,
+    );
   }
 
   /**
    * Register this machine as a relay node (auth required).
+   *
+   * Takes the request contract itself rather than a handful of positional
+   * arguments: the caller cannot omit the endpoint, the key, the operator or
+   * the capacity, because those are the contract, and the registry parses the
+   * same declaration.
    */
   async registerRelay(
-    port: number,
-    location: string,
+    request: RegisterRelayRequest,
     authToken: string,
-  ): Promise<{ relayId: string }> {
-    const url = `${this.baseUrl}/relays/register`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${authToken}`,
-      },
-      body: JSON.stringify({ port, location }),
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(body.error ?? `TNP API returned ${res.status}`);
-    }
-
-    return (await res.json()) as { relayId: string };
+  ): Promise<RelayRegistration> {
+    return this.postContract<RegisterRelayRequest, RelayRegistration>(
+      "/relays/register",
+      request,
+      authToken,
+      REGISTER_TIMEOUT_MS,
+    );
   }
 
   /**
    * Send relay heartbeat (auth required).
+   *
+   * A relay is identified in the directory by its endpoint, so that is what
+   * the heartbeat carries. It used to send a relay id it had never been given
+   * along with traffic counters the registry does not accept.
    */
-  async sendRelayHeartbeat(
-    relayId: string,
-    stats: { serviceNodes: number; activeCircuits: number },
-    authToken: string,
-  ): Promise<void> {
-    const url = `${this.baseUrl}/relays/heartbeat`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${authToken}`,
-      },
-      body: JSON.stringify({ relayId, ...stats }),
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(body.error ?? `TNP API returned ${res.status}`);
-    }
+  async sendRelayHeartbeat(endpoint: string, authToken: string): Promise<void> {
+    const request: RelayHeartbeatRequest = { endpoint };
+    await this.postContract(
+      "/relays/heartbeat",
+      request,
+      authToken,
+      WRITE_TIMEOUT_MS,
+    );
   }
 }

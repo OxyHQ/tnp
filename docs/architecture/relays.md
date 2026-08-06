@@ -4,7 +4,7 @@ A relay forwards frames between TNP nodes. It never decrypts payloads, never
 stores traffic, and never reaches the public internet — that last one is a
 separate role with separate consent ([`exit-nodes.md`](./exit-nodes.md)).
 
-**Status: prototype, and registration is broken.** See §7.
+**Status: prototype. Registration works; the rest of §7 does not.**
 
 ---
 
@@ -97,8 +97,9 @@ From the [audit](./audit-2026-08-06.md):
 
 | Issue | Detail |
 |---|---|
-| **Registration is non-functional** | The client sends `{port, location}`; the API requires `{endpoint, publicKey, operator, capacity}`. Heartbeat mismatches the same way. Every call 400s and `tnp relay` aborts at startup (B2). |
+| ~~**Registration is non-functional**~~ | Fixed. The client sent `{port, location}` where the API required `{endpoint, publicKey, operator, capacity}`, and the heartbeat mismatched the same way, so every call 400d and `tnp relay` aborted at startup (B2). Both shapes are now declared once in `@tnp/shared-types`, which the API parses with and the relay builds from. `tnp relay` takes `--endpoint`, the public URL clients dial, and registers with its identity key and its stated capacity. |
 | **No authentication** | `/service?domain=x` and `/tunnel` upgrade with no handshake at all (S2). |
+| **`operator` is self-asserted** | A relay says whether it is Oxy-operated or community and the registry believes it. Clients that prefer Oxy relays can therefore be steered to a relay that simply claimed the label. Closed by the registration authentication in §2, which is Phase 3. |
 | **Domain takeover** | Registering a domain evicts the incumbent service node and its circuits (S2). |
 | **Global circuit IDs** | §4 above (S1). |
 | **No limits** | No frame cap, no quotas, no backpressure, unbounded tables (S6). |

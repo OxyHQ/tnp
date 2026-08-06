@@ -11,7 +11,13 @@
  */
 
 import { decodeFrame, encodeFrame, FrameType } from "@tnp/protocol";
+import {
+  normalizeRelayEndpoint,
+  parseRegisterRelayRequest,
+  type RegisterRelayRequest,
+} from "@tnp/shared-types";
 import type { TnpApiClient } from "./api";
+import { loadOrCreateIdentity, toBase64 } from "./crypto";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,10 +51,23 @@ export interface RelayNodeStats {
 export interface RelayNodeConfig {
   port: number;
   host: string;
+  /**
+   * The public `ws://` or `wss://` URL other people's clients dial.
+   *
+   * Not derivable from `host`/`port`: those are the bind address, which is
+   * `0.0.0.0` by default and says nothing about the name, port or TLS
+   * termination the relay is actually reachable through. The registry
+   * publishes this value verbatim in the directory, so guessing it would
+   * publish a relay at an address that is not serving.
+   */
+  endpoint: string;
   maxConnections: number;
+  /** Advertised bandwidth ceiling in Mbit/s. 0 means the operator states none. */
+  bandwidth: number;
   authToken: string;
   location: string;
   apiBaseUrl: string;
+  identityKeyPath: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -139,6 +158,9 @@ class EmbeddedConnectionManager {
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
+/** How often a registered relay tells the registry it is still serving. */
+const HEARTBEAT_INTERVAL_MS = 30_000;
+
 export class RelayNode {
   private manager = new EmbeddedConnectionManager();
   private server: ReturnType<typeof Bun.serve> | null = null;
@@ -146,7 +168,8 @@ export class RelayNode {
   private startTime = 0;
   private totalConnections = 0;
   private bytesRelayed = 0;
-  private relayId: string | null = null;
+  /** Canonical endpoint the registry accepted, and the key the heartbeat uses. */
+  private registeredEndpoint: string | null = null;
   private running = false;
 
   constructor(private config: RelayNodeConfig) {}
@@ -165,28 +188,68 @@ export class RelayNode {
     };
   }
 
+  /**
+   * Build this relay's registration request.
+   *
+   * Separate from `start` so the request can be validated — and rejected —
+   * before the listener binds a port. It is typed as the API's own contract
+   * and then run through the API's own parser, so a field this relay stops
+   * sending is a typecheck failure and a value the registry would refuse is a
+   * local error naming the field, not a 400 from a round trip.
+   */
+  private buildRegistration(): RegisterRelayRequest {
+    const endpoint = normalizeRelayEndpoint(this.config.endpoint);
+    if (endpoint === null) {
+      throw new Error(
+        `Cannot register relay: endpoint ${JSON.stringify(this.config.endpoint)} is not a ws:// or wss:// URL. ` +
+          "Set the public URL clients dial, e.g. --endpoint wss://relay.example.com",
+      );
+    }
+
+    const identity = loadOrCreateIdentity(this.config.identityKeyPath);
+
+    const request: RegisterRelayRequest = {
+      endpoint,
+      publicKey: toBase64(identity.publicKey),
+      // A relay run from the `tnp` binary is community-operated by definition.
+      // The registry currently takes this claim on trust; authenticating it is
+      // relay authentication, which is Phase 3 work (docs/architecture/relays.md §2).
+      operator: "community",
+      capacity: {
+        maxConnections: this.config.maxConnections,
+        bandwidth: this.config.bandwidth,
+      },
+      location: this.config.location,
+    };
+
+    const parsed = parseRegisterRelayRequest(request);
+    if (!parsed.ok) {
+      throw new Error(`Cannot register relay: ${parsed.error}`);
+    }
+    return parsed.value;
+  }
+
   async start(apiClient: TnpApiClient): Promise<void> {
     if (this.running) {
       throw new Error("Relay node is already running");
     }
 
-    this.startTime = Date.now();
-    this.running = true;
-
-    // Register with the API
+    // Register with the API before binding anything. A relay that cannot be
+    // published is not a relay anyone can reach, and failing here leaves the
+    // node stopped rather than listening-but-invisible.
     if (this.config.authToken) {
+      const request = this.buildRegistration();
       try {
-        const result = await apiClient.registerRelay(
-          this.config.port,
-          this.config.location,
-          this.config.authToken,
-        );
-        this.relayId = result.relayId;
+        const registration = await apiClient.registerRelay(request, this.config.authToken);
+        this.registeredEndpoint = registration.endpoint;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to register relay: ${msg}`);
       }
     }
+
+    this.startTime = Date.now();
+    this.running = true;
 
     // Start the WebSocket server using Bun.serve
     const manager = this.manager;
@@ -285,23 +348,20 @@ export class RelayNode {
     });
 
     // Start heartbeat if registered
-    if (this.relayId && this.config.authToken) {
+    const registeredEndpoint = this.registeredEndpoint;
+    if (registeredEndpoint && this.config.authToken) {
       this.heartbeatTimer = setInterval(() => {
-        if (this.relayId) {
-          apiClient
-            .sendRelayHeartbeat(
-              this.relayId,
-              {
-                serviceNodes: this.manager.serviceNodeCount,
-                activeCircuits: this.manager.circuitCount,
-              },
-              this.config.authToken,
-            )
-            .catch(() => {
-              // Heartbeat failure is non-fatal
-            });
-        }
-      }, 30_000);
+        apiClient
+          .sendRelayHeartbeat(registeredEndpoint, this.config.authToken)
+          .catch((err: unknown) => {
+            // A missed heartbeat is not fatal — the registry degrades the relay
+            // and it recovers on the next one — but a run of them means the
+            // relay is quietly dropping out of the directory, so say so.
+            console.warn(
+              `[relay] heartbeat failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          });
+      }, HEARTBEAT_INTERVAL_MS);
     }
   }
 
@@ -315,7 +375,7 @@ export class RelayNode {
       this.server = null;
     }
     this.running = false;
-    this.relayId = null;
+    this.registeredEndpoint = null;
   }
 }
 
