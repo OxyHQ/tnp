@@ -4,8 +4,8 @@ How a name becomes an answer. The naming layer decides what a name *means*;
 this layer decides how a query gets answered on a device.
 
 **Status: mostly implemented.** Wire encoding, response codes, EDNS(0),
-truncation and configurable upstreams are done (audit B3 and B4 closed).
-Caching and DNSSEC are not (S8, S9).
+truncation, configurable upstreams and caching are done (audit B3, B4 and S9
+closed). DNSSEC and DoT are not (S8).
 
 ---
 
@@ -82,13 +82,20 @@ record sets in [`naming.md`](./naming.md) §5.
 
 ## 5. Caching
 
-| Rule | Why |
-|---|---|
-| Honour the record's own TTL | The current cache overrides every TTL with a fixed 300 s (audit S9). |
-| Cache negatives (RFC 2308), bounded by the SOA minimum | Otherwise every lookup of a nonexistent name is a fresh round trip. |
-| Bound the cache and evict | The current cache is an unbounded `Map` — a memory-exhaustion path (audit S6). |
-| Clamp TTLs to a sane floor and ceiling | Defends against both pinning and thrashing. |
-| Never serve a stale entry as fresh | Serve-stale, if ever added, is opt-in and marked. |
+Implemented in `packages/client/src/dns/cache.ts`.
+
+| Rule | Why | State |
+|---|---|---|
+| Honour the record's own TTL | The cache used to override every TTL with a fixed 300 s, so a 60 s record was served for 300 s and a 24 h record was re-fetched every 5 minutes (audit S9). | ✅ |
+| Expire a record set with its **shortest** member | Keeping the set past its earliest expiry serves a stale member of it. | ✅ |
+| Decrement the served TTL by the time held | Serving the original TTL is what lets a record outlive it — each downstream cache re-arms the full lifetime on every hop. | ✅ |
+| Cache negatives (RFC 2308), bounded by the SOA minimum | Otherwise every lookup of a nonexistent name is a fresh round trip. | ✅ |
+| Bound the cache and evict | An unbounded `Map` is a memory-exhaustion path for anyone who can send queries (audit S6). Expired entries are evicted before live ones. | ✅ |
+| Clamp TTLs to a sane floor and ceiling | Defends against both pinning and thrashing. Positive: 1 s–24 h. Negative: 1 s–1 h. | ✅ |
+| Never serve a stale entry as fresh | Serve-stale, if ever added, is opt-in and marked. | ✅ |
+
+Upstream (public-DNS) responses are **not** cached yet — only TNP-native
+answers are. That is a performance gap, not a correctness one.
 
 ## 6. Failure behaviour
 

@@ -8,7 +8,7 @@ function makeConfig(): TnpConfig {
     listenPort: 5354,
     apiBaseUrl: "https://api.example.test",
     upstreamDns: "1.1.1.1",
-    cacheTtlSeconds: 300,
+    cacheMaxEntries: 10_000,
     privacyLevel: "access",
     socksPort: 1080,
     relayPreference: "oxy",

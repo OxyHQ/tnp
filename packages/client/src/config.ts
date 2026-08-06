@@ -30,7 +30,11 @@ export interface DnsProxyConfig {
   listenAddr: string;
   listenPort: number;
   apiBaseUrl: string;
-  cacheTtlSeconds: number;
+  /**
+   * Maximum cached answers. Bounds the memory a stream of unique queries can
+   * cost; entries expire on their own record TTLs, not on a fixed lifetime.
+   */
+  cacheMaxEntries?: number;
   /**
    * Upstream resolvers for public-DNS names, comma-separated and tried in
    * order. An entry is an address (`1.1.1.1`, `1.1.1.1:5353`, `[2606:4700::1111]`)
@@ -141,7 +145,7 @@ const DEFAULT_CONFIG: TnpConfig = {
   listenPort: 5354,
   apiBaseUrl: "https://api.tnp.network",
   upstreamDns: "1.1.1.1",
-  cacheTtlSeconds: 300,
+  cacheMaxEntries: 10_000,
   privacyLevel: "access",
   socksPort: 1080,
   relayPreference: "oxy",
