@@ -5,7 +5,7 @@ const config: DnsProxyConfig = {
   listenAddr: process.env.TNP_LISTEN_ADDR || "0.0.0.0",
   listenPort: Number(process.env.TNP_LISTEN_PORT) || 5353,
   apiBaseUrl: process.env.TNP_API_URL || "https://api.tnp.network",
-  cacheTtlSeconds: Number(process.env.TNP_CACHE_TTL) || 300,
+  cacheMaxEntries: Number(process.env.TNP_CACHE_MAX_ENTRIES) || 10_000,
   upstreamDns: process.env.TNP_UPSTREAM_DNS || "1.1.1.1,8.8.8.8",
 };
 

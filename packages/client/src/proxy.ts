@@ -20,8 +20,17 @@ import {
   UpstreamError,
   type UpstreamConfig,
 } from "./dns/upstream";
+import { DnsCache } from "./dns/cache";
 import dgram from "dgram";
 import net from "net";
+
+/**
+ * TTL for the synthetic 127.0.0.1 answer that routes an overlay domain into the
+ * local SOCKS5 proxy. Short on purpose: it is valid only while this device's
+ * overlay client is running, so it must not outlive the session in a
+ * downstream cache.
+ */
+const OVERLAY_TTL_SECONDS = 60;
 
 /** Record types the TNP registry can serve. */
 const TNP_RECORD_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "NS"] as const;
@@ -37,17 +46,11 @@ type TnpRecordType = (typeof TNP_RECORD_TYPES)[number];
  */
 const DEFAULT_MX_PREFERENCE = 10;
 
-interface CacheEntry {
-  answers: DnsAnswer[];
-  expiresAt: number;
-}
-
 export class DnsProxy {
   private apiClient: TnpApiClient;
   /** TLD policy table: native TLD -> whether it is flagged custom by the registry. */
   private tlds = new Map<string, boolean>();
-  private cache = new Map<string, CacheEntry>();
-  private cacheTtlMs: number;
+  private cache: DnsCache<DnsAnswer>;
   private upstreams: UpstreamConfig[];
   private udpServer: dgram.Socket | null = null;
   private tcpServer: net.Server | null = null;
@@ -69,7 +72,7 @@ export class DnsProxy {
   constructor(config: DnsProxyConfig) {
     this.config = config;
     this.apiClient = new TnpApiClient(config.apiBaseUrl);
-    this.cacheTtlMs = config.cacheTtlSeconds * 1000;
+    this.cache = new DnsCache<DnsAnswer>({ maxEntries: config.cacheMaxEntries });
     this.upstreams = parseUpstreams(config.upstreamDns);
   }
 
@@ -122,6 +125,10 @@ export class DnsProxy {
       const custom = typeof t === "string" ? true : (t.custom ?? true);
       this.tlds.set(name, custom);
     }
+
+    // Classification depends on this table, so entries cached under the old
+    // one may now belong to the other namespace.
+    this.cache.clear();
 
     console.log(`[tnp] loaded ${this.tlds.size} TLDs: ${[...this.tlds.keys()].join(", ")}`);
     if (refused.length > 0) {
@@ -180,16 +187,25 @@ export class DnsProxy {
     }
   }
 
-  private async resolveTnp(name: string, type: string): Promise<DnsAnswer[]> {
+  /**
+   * Look up a TNP-native name, via the cache.
+   *
+   * Returns null when the registry says the name does not exist, which the
+   * caller turns into NXDOMAIN. The old code returned an empty array for both
+   * "no such name" and "no records of this type", so the two were
+   * indistinguishable by the time they reached the wire.
+   */
+  private async resolveTnp(name: string, type: string): Promise<DnsAnswer[] | null> {
     const clean = normalizeName(name);
-    const cacheKey = `${clean}:${type}`;
-    const cached = this.cache.get(cacheKey);
-    if (cached && Date.now() < cached.expiresAt) return cached.answers;
+
+    const cached = this.cache.get(clean, type);
+    if (cached) return cached.negative ? null : cached.records;
 
     const response = await this.apiClient.resolveWithOverlay(clean, type);
 
-    // If overlay is enabled and the domain has an active service node,
-    // cache the overlay info and return 127.0.0.1 to route through SOCKS5
+    // If overlay is enabled and the domain has an active service node, cache
+    // the overlay info and answer with 127.0.0.1 so the connection is picked up
+    // by the local SOCKS5 proxy.
     if (this.overlayEnabled && response.overlay?.available) {
       this.overlayCache.set(clean, {
         pubKey: response.overlay.serviceNodePubKey,
@@ -198,20 +214,21 @@ export class DnsProxy {
 
       if (type === "A" || type === "ANY") {
         const synthetic: DnsAnswer[] = [
-          { name: clean, type: "A", value: "127.0.0.1", ttl: 60 },
+          { name: clean, type: "A", value: "127.0.0.1", ttl: OVERLAY_TTL_SECONDS },
         ];
-        this.cache.set(cacheKey, {
-          answers: synthetic,
-          expiresAt: Date.now() + this.cacheTtlMs,
-        });
+        this.cache.set(clean, type, synthetic);
         return synthetic;
       }
     }
 
-    this.cache.set(cacheKey, {
-      answers: response.answers,
-      expiresAt: Date.now() + this.cacheTtlMs,
-    });
+    if (response.answers.length === 0) {
+      // Negative caching (RFC 2308). Without it every lookup of a nonexistent
+      // name is a fresh round trip to the registry.
+      this.cache.setNegative(clean, type);
+      return null;
+    }
+
+    this.cache.set(clean, type, response.answers);
     return response.answers;
   }
 
@@ -295,7 +312,7 @@ export class DnsProxy {
     qname: string,
     qtype: string,
   ): Promise<Packet> {
-    let records: DnsAnswer[];
+    let records: DnsAnswer[] | null;
     try {
       records = await this.resolveTnp(qname, qtype);
     } catch (err) {
@@ -308,18 +325,18 @@ export class DnsProxy {
       return buildResponse(query, { rcode: "SERVFAIL" });
     }
 
+    // The registry knows of no such name. NXDOMAIN is distinguishable from
+    // "exists, no records of this type"; the old resolver returned NOERROR for
+    // both, so a client could not tell them apart.
+    if (records === null) {
+      return buildResponse(query, { rcode: "NXDOMAIN", authoritative: true });
+    }
+
     const answers = records
       .map((record) => this.toAnswer(qname, record))
       .filter((answer): answer is NonNullable<typeof answer> => answer !== null);
 
-    // No records for a TNP-native name means the name does not exist here.
-    // NXDOMAIN is distinguishable from "exists, no records of this type";
-    // the old resolver returned NOERROR for both.
-    return buildResponse(query, {
-      rcode: answers.length > 0 ? "NOERROR" : "NXDOMAIN",
-      answers,
-      authoritative: true,
-    });
+    return buildResponse(query, { rcode: "NOERROR", answers, authoritative: true });
   }
 
   async start(): Promise<void> {
