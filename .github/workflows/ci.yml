@@ -46,3 +46,51 @@ jobs:
 
       - name: Test
         run: bun run test
+
+  # The API image broke when apps/api gained a workspace dependency and the
+  # Dockerfile was not updated to copy it. Nothing caught it: the deploy
+  # workflow had been failing for an unrelated reason for weeks, so a genuine
+  # build break was invisible. Building the image is the only check that sees
+  # this class of error.
+  docker:
+    name: API image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the API image
+        run: docker build -f Dockerfile.api -t tnp-api:ci .
+
+      - name: Start it against a throwaway MongoDB and check it answers
+        run: |
+          set -euo pipefail
+          docker network create tnp-ci
+          docker run -d --name mongo --network tnp-ci mongo:8
+          docker run -d --name api --network tnp-ci -p 8080:8080 \
+            -e MONGODB_URI=mongodb://mongo:27017 \
+            -e TNP_PARKING_IP=203.0.113.10 \
+            tnp-api:ci
+
+          # A container that starts and then dies looks identical to one that is
+          # still booting, so poll for a real answer rather than sleeping.
+          for i in $(seq 1 30); do
+            if curl -fsS -m 3 http://127.0.0.1:8080/health >/dev/null 2>&1; then
+              echo "API answered after ${i}s"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "::error::API did not answer /health within 30s"
+              docker logs api
+              exit 1
+            fi
+            sleep 1
+          done
+
+          # The namespace policy has to hold in the built image, not only in the
+          # test suite: a reserved TLD must not appear in the table clients cache.
+          tlds=$(curl -fsS -m 5 http://127.0.0.1:8080/dns/tlds)
+          echo "policy table: $tlds"
+          if printf '%s' "$tlds" | grep -qE '"(com|app|net|org|dev)"'; then
+            echo "::error::A reserved TLD is being published to clients"
+            exit 1
+          fi

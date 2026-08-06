@@ -33,8 +33,18 @@ jobs:
       - name: Test
         run: bun run test
 
+  image:
+    name: API image builds
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the API image
+        run: docker build -f Dockerfile.api -t tnp-api:deploy-check .
+
   deploy:
-    needs: verify
+    needs: [verify, image]
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH

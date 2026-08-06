@@ -1,16 +1,41 @@
-FROM oven/bun:latest
+# Bun is pinned, not `latest`. The lockfile is consumed here and in CI, and a
+# version mismatch between the two produces "lockfile had changes, but lockfile
+# is frozen" at build time — a failure that reads as a dependency problem and is
+# not.
+FROM oven/bun:1.3.14
 WORKDIR /app
 
+# The hoisted linker, or bun nests dependencies under each workspace and the
+# runtime cannot resolve them from the root.
+COPY bunfig.toml ./
 COPY package.json bun.lock ./
-COPY apps/api/package.json apps/api/
-COPY apps/web/package.json apps/web/
-COPY apps/dns-server/package.json apps/dns-server/
-RUN bun install --no-save
 
+# Every workspace manifest, because bun resolves the whole workspace graph
+# before installing anything. One missing package.json fails the install with
+# "@tnp/<name>@workspace:* failed to resolve", however unrelated that workspace
+# is to the API.
+COPY apps/api/package.json apps/api/
+COPY apps/dns-server/package.json apps/dns-server/
+COPY apps/relay/package.json apps/relay/
+COPY apps/web/package.json apps/web/
+COPY packages/client/package.json packages/client/
+COPY packages/namespace/package.json packages/namespace/
+COPY packages/protocol/package.json packages/protocol/
+
+RUN bun install --frozen-lockfile
+
+# Source for the API and every workspace package it imports at runtime. Bun runs
+# the TypeScript directly, so the source is the artefact — a build step would
+# only add a way for the two to diverge.
 COPY apps/api apps/api
+COPY packages/namespace packages/namespace
 
 ENV NODE_ENV=production
 ENV PORT=8080
 EXPOSE 8080
+
+# Lets the deploy target tell "the process is up" from "the process can answer".
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD bun -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["bun", "apps/api/src/index.ts"]
