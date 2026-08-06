@@ -52,27 +52,27 @@ export default function Park() {
       </Helmet>
 
       {state === "loading" && (
-        <div className="font-mono text-sm text-muted">...</div>
+        <div className="font-mono text-sm text-muted-foreground/70">...</div>
       )}
 
       {state === "parked" && (
         <>
-          <h1 className="mb-4 font-pixel text-3xl text-accent sm:text-4xl">
+          <h1 className="mb-4 font-pixel text-3xl text-primary-text sm:text-4xl">
             {domainName}
           </h1>
-          <p className="mb-8 font-mono text-sm text-secondary">
+          <p className="mb-8 font-mono text-sm text-muted-foreground">
             {t("registeredOn")}
           </p>
           <div className="flex flex-col items-center gap-3">
             <Link
               to={`/d/${domainParam}`}
-              className="font-mono text-sm text-accent transition-colors hover:text-primary"
+              className="font-mono text-sm text-primary-text transition-colors hover:text-foreground"
             >
               [{t("viewDetails")}]
             </Link>
             <a
               href="https://oxy.so/tnp"
-              className="font-mono text-sm text-muted transition-colors hover:text-secondary"
+              className="font-mono text-sm text-muted-foreground/70 transition-colors hover:text-muted-foreground"
             >
               [{t("whatIsTnp")}]
             </a>
@@ -82,15 +82,15 @@ export default function Park() {
 
       {state === "not-found" && (
         <>
-          <h1 className="mb-4 font-pixel text-xl text-muted">
+          <h1 className="mb-4 font-pixel text-xl text-muted-foreground/70">
             {domainName}
           </h1>
-          <p className="mb-6 font-mono text-sm text-muted">
+          <p className="mb-6 font-mono text-sm text-muted-foreground/70">
             {t("notRegistered")}
           </p>
           <Link
             to="/register"
-            className="font-mono text-sm text-accent transition-colors hover:text-primary"
+            className="font-mono text-sm text-primary-text transition-colors hover:text-foreground"
           >
             [{t("registerIt")}]
           </Link>

@@ -71,24 +71,24 @@ export default function Dashboard() {
       <div className="mb-8 flex gap-3">
         <Link
           to="/dashboard"
-          className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-accent/30 bg-accent/10 text-accent"
+          className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-primary/30 bg-primary/10 text-primary-text"
         >
           {t("dashboard:tabs.domains")}
         </Link>
         <Link
           to="/service-nodes"
-          className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-edge text-muted hover:text-secondary"
+          className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-edge text-muted-foreground/70 hover:text-muted-foreground"
         >
           {t("dashboard:tabs.serviceNodes")}
         </Link>
       </div>
 
-      <h1 className="mb-8 font-pixel text-xl text-accent">
+      <h1 className="mb-8 font-pixel text-xl text-primary-text">
         {t("dashboard:heading")}
       </h1>
 
       {domains.length === 0 ? (
-        <p className="font-mono text-sm text-muted">
+        <p className="font-mono text-sm text-muted-foreground/70">
           {t("dashboard:emptyState")}
         </p>
       ) : (
@@ -102,19 +102,19 @@ export default function Dashboard() {
                 <div className="flex items-center gap-3">
                   <span className="font-mono text-sm">
                     {domain.name}
-                    <span className="text-accent">.{domain.tld}</span>
+                    <span className="text-primary-text">.{domain.tld}</span>
                   </span>
                   <span
                     className={`rounded-md px-2.5 py-0.5 font-mono text-xs font-medium ${
                       domain.status === "active"
-                        ? "bg-accent/10 text-accent"
-                        : "bg-surface-hover text-muted"
+                        ? "bg-primary/10 text-primary-text"
+                        : "bg-surface-hover text-muted-foreground/70"
                     }`}
                   >
                     {domain.status}
                   </span>
                 </div>
-                <span className="font-mono text-xs text-muted">
+                <span className="font-mono text-xs text-muted-foreground/70">
                   {t("common:recordCount", { count: domain.records.length })}
                 </span>
               </button>
@@ -125,7 +125,7 @@ export default function Dashboard() {
                     <div className="overflow-x-auto">
                       <table className="w-full font-mono text-sm">
                         <thead>
-                          <tr className="text-left text-xs text-muted">
+                          <tr className="text-left text-xs text-muted-foreground/70">
                             <th className="pb-2 pr-4">{t("common:form.type")}</th>
                             <th className="pb-2 pr-4">{t("common:form.name")}</th>
                             <th className="pb-2 pr-4">{t("common:form.value")}</th>
@@ -136,10 +136,10 @@ export default function Dashboard() {
                         <tbody>
                           {domain.records.map((record) => (
                             <tr key={record._id} className="border-t border-edge-subtle">
-                              <td className="py-2 pr-4 text-xs text-secondary">{record.type}</td>
-                              <td className="py-2 pr-4 text-primary">{record.name}</td>
-                              <td className="py-2 pr-4 text-xs text-muted">{record.value}</td>
-                              <td className="py-2 pr-4 text-muted">{record.ttl}</td>
+                              <td className="py-2 pr-4 text-xs text-muted-foreground">{record.type}</td>
+                              <td className="py-2 pr-4 text-foreground">{record.name}</td>
+                              <td className="py-2 pr-4 text-xs text-muted-foreground/70">{record.value}</td>
+                              <td className="py-2 pr-4 text-muted-foreground/70">{record.ttl}</td>
                               <td className="py-2">
                                 <button
                                   onClick={() => deleteRecord(domain._id, record._id)}
@@ -156,7 +156,7 @@ export default function Dashboard() {
                   )}
 
                   <div>
-                    <h4 className="mb-3 font-mono text-xs uppercase tracking-wider text-muted">{t("dashboard:addRecord")}</h4>
+                    <h4 className="mb-3 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">{t("dashboard:addRecord")}</h4>
                     <RecordEditor onSubmit={(record) => addRecord(domain._id, record)} />
                   </div>
 

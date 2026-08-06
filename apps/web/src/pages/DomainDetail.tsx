@@ -54,7 +54,7 @@ export default function DomainDetail() {
   if (loading) {
     return (
       <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
-        <p className="font-mono text-sm text-muted">{t("common:loading")}</p>
+        <p className="font-mono text-sm text-muted-foreground/70">{t("common:loading")}</p>
       </div>
     );
   }
@@ -89,24 +89,24 @@ export default function DomainDetail() {
         <meta property="og:url" content={`https://tnp.network/d/${domainParam}`} />
       </Helmet>
       {/* Breadcrumb */}
-      <nav className="mb-6 font-mono text-xs text-muted">
-        <Link to="/" className="transition-colors hover:text-secondary">{t("domainDetail:breadcrumb.home")}</Link>
+      <nav className="mb-6 font-mono text-xs text-muted-foreground/70">
+        <Link to="/" className="transition-colors hover:text-muted-foreground">{t("domainDetail:breadcrumb.home")}</Link>
         <span className="mx-1.5">/</span>
-        <Link to="/explore" className="transition-colors hover:text-secondary">{t("domainDetail:breadcrumb.explore")}</Link>
+        <Link to="/explore" className="transition-colors hover:text-muted-foreground">{t("domainDetail:breadcrumb.explore")}</Link>
         <span className="mx-1.5">/</span>
-        <span className="text-primary">{fullDomain}</span>
+        <span className="text-foreground">{fullDomain}</span>
       </nav>
 
       {/* Header */}
       <div className="mb-8">
         <div className="flex flex-wrap items-center gap-3 mb-2">
-          <h1 className="font-pixel text-xl text-accent">
-            {domain.name}<span className="text-primary">.{domain.tld}</span>
+          <h1 className="font-pixel text-xl text-primary-text">
+            {domain.name}<span className="text-foreground">.{domain.tld}</span>
           </h1>
           <span
             className={`rounded-md px-2.5 py-0.5 font-mono text-xs font-medium ${
               domain.status === "active"
-                ? "bg-accent/10 text-accent"
+                ? "bg-primary/10 text-primary-text"
                 : domain.status === "pending"
                   ? "bg-warning-subtle text-warning-text"
                   : "bg-error-subtle text-error-text"
@@ -116,19 +116,19 @@ export default function DomainDetail() {
           </span>
           <TLDBadge name={domain.tld} status="active" />
         </div>
-        <p className="font-mono text-sm text-muted">
+        <p className="font-mono text-sm text-muted-foreground/70">
           {t("domainDetail:registeredOnTnp")}
         </p>
       </div>
 
       {/* Specs grid */}
       <div className="mb-10">
-        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">{t("domainDetail:sections.details")}</h2>
+        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">{t("domainDetail:sections.details")}</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {specs.map((spec) => (
             <div key={spec.label} className="rounded-lg border border-edge bg-surface-card p-3">
-              <p className="font-mono text-[11px] uppercase tracking-wider text-muted">{spec.label}</p>
-              <p className="mt-1 font-mono text-sm font-medium text-primary">{spec.value}</p>
+              <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70">{spec.label}</p>
+              <p className="mt-1 font-mono text-sm font-medium text-foreground">{spec.value}</p>
             </div>
           ))}
         </div>
@@ -136,16 +136,16 @@ export default function DomainDetail() {
 
       {/* DNS Records */}
       <div className="mb-10">
-        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">{t("domainDetail:sections.dnsRecords")}</h2>
+        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">{t("domainDetail:sections.dnsRecords")}</h2>
         {domain.records.length === 0 ? (
           <div className="rounded-lg border border-edge bg-surface-card p-6 text-center">
-            <p className="font-mono text-sm text-muted">{t("domainDetail:noDnsRecords")}</p>
+            <p className="font-mono text-sm text-muted-foreground/70">{t("domainDetail:noDnsRecords")}</p>
           </div>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-edge bg-surface-card">
             <table className="w-full font-mono text-sm">
               <thead>
-                <tr className="border-b border-edge text-left text-xs text-muted">
+                <tr className="border-b border-edge text-left text-xs text-muted-foreground/70">
                   <th className="px-4 py-3">{t("common:form.type")}</th>
                   <th className="px-4 py-3">{t("common:form.name")}</th>
                   <th className="px-4 py-3">{t("common:form.value")}</th>
@@ -155,10 +155,10 @@ export default function DomainDetail() {
               <tbody>
                 {domain.records.map((record) => (
                   <tr key={record._id} className="border-t border-edge-subtle">
-                    <td className="px-4 py-2.5 text-xs text-secondary">{record.type}</td>
-                    <td className="px-4 py-2.5 text-primary">{record.name}</td>
-                    <td className="px-4 py-2.5 text-xs text-muted">{record.value}</td>
-                    <td className="px-4 py-2.5 text-muted">{record.ttl}</td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{record.type}</td>
+                    <td className="px-4 py-2.5 text-foreground">{record.name}</td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground/70">{record.value}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground/70">{record.ttl}</td>
                   </tr>
                 ))}
               </tbody>
@@ -169,19 +169,19 @@ export default function DomainDetail() {
 
       {/* How to resolve */}
       <div>
-        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">{t("domainDetail:sections.howToResolve")}</h2>
+        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">{t("domainDetail:sections.howToResolve")}</h2>
         <div className="rounded-lg border border-edge bg-surface-card p-5 space-y-3">
-          <p className="font-mono text-sm text-secondary">
+          <p className="font-mono text-sm text-muted-foreground">
             <Trans
               i18nKey="domainDetail:howToResolveDesc"
               t={t}
               values={{ domain: fullDomain }}
-              components={{ accent: <span className="text-accent" /> }}
+              components={{ accent: <span className="text-primary-text" /> }}
             />
           </p>
           <Link
             to="/install"
-            className="inline-block font-mono text-sm text-accent transition-colors hover:text-accent/80"
+            className="inline-block font-mono text-sm text-primary-text transition-colors hover:text-primary-text/80"
           >
             [{t("domainDetail:installResolver")}]
           </Link>

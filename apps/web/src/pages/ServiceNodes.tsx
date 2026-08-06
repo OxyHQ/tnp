@@ -94,32 +94,32 @@ export default function ServiceNodes() {
       <div className="mb-8 flex gap-3">
         <Link
           to="/dashboard"
-          className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-edge text-muted hover:text-secondary"
+          className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-edge text-muted-foreground/70 hover:text-muted-foreground"
         >
           {t("serviceNodes:tabs.domains")}
         </Link>
         <Link
           to="/service-nodes"
-          className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-accent/30 bg-accent/10 text-accent"
+          className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-primary/30 bg-primary/10 text-primary-text"
         >
           {t("serviceNodes:tabs.serviceNodes")}
         </Link>
       </div>
 
-      <h1 className="mb-2 font-pixel text-xl text-accent">{t("serviceNodes:heading")}</h1>
-      <p className="mb-8 font-mono text-sm text-muted">
+      <h1 className="mb-2 font-pixel text-xl text-primary-text">{t("serviceNodes:heading")}</h1>
+      <p className="mb-8 font-mono text-sm text-muted-foreground/70">
         {t("serviceNodes:subtitle")}
       </p>
 
       {domainsLoading ? (
-        <p className="font-mono text-sm text-muted">{t("serviceNodes:loadingDomains")}</p>
+        <p className="font-mono text-sm text-muted-foreground/70">{t("serviceNodes:loadingDomains")}</p>
       ) : entries.length === 0 ? (
         <div className="rounded-lg border border-edge bg-surface-card p-6">
-          <p className="font-mono text-sm text-muted">
+          <p className="font-mono text-sm text-muted-foreground/70">
             {t("serviceNodes:emptyState")}{" "}
             <Link
               to="/register"
-              className="text-accent transition-colors hover:text-primary"
+              className="text-primary-text transition-colors hover:text-foreground"
             >
               {t("serviceNodes:emptyStateRegister")}
             </Link>{" "}
@@ -153,15 +153,15 @@ export default function ServiceNodes() {
                   />
                   <span className="font-mono text-sm">
                     {domain.name}
-                    <span className="text-accent">.{domain.tld}</span>
+                    <span className="text-primary-text">.{domain.tld}</span>
                   </span>
                   <span
                     className={`rounded-md px-2.5 py-0.5 font-mono text-xs font-medium ${
                       loading
-                        ? "bg-surface-hover text-muted"
+                        ? "bg-surface-hover text-muted-foreground/70"
                         : node?.status === "online"
-                          ? "bg-accent/10 text-accent"
-                          : "bg-surface-hover text-muted"
+                          ? "bg-primary/10 text-primary-text"
+                          : "bg-surface-hover text-muted-foreground/70"
                     }`}
                   >
                     {loading
@@ -172,7 +172,7 @@ export default function ServiceNodes() {
                   </span>
                 </div>
                 {node?.lastSeen && (
-                  <span className="font-mono text-xs text-muted">
+                  <span className="font-mono text-xs text-muted-foreground/70">
                     {t("serviceNodes:lastSeen", { time: formatRelativeTime(node.lastSeen) })}
                   </span>
                 )}
@@ -181,27 +181,27 @@ export default function ServiceNodes() {
               {node && !loading && (
                 <div className="mt-3 space-y-2 border-t border-edge pt-3">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-muted">
+                    <span className="font-mono text-xs text-muted-foreground/70">
                       {t("serviceNodes:publicKey")}
                     </span>
-                    <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-xs text-secondary">
+                    <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                       {truncateKey(node.publicKey)}
                     </code>
                     <button
                       onClick={() =>
                         copyToClipboard(node.publicKey, domain._id)
                       }
-                      className="cursor-pointer font-mono text-xs text-muted transition-colors hover:text-secondary"
+                      className="cursor-pointer font-mono text-xs text-muted-foreground/70 transition-colors hover:text-muted-foreground"
                     >
                       [{copied === domain._id ? t("common:copied") : t("common:copy")}]
                     </button>
                   </div>
                   {node.connectedRelay && (
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-muted">
+                      <span className="font-mono text-xs text-muted-foreground/70">
                         {t("serviceNodes:relay")}
                       </span>
-                      <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-xs text-secondary">
+                      <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                         {node.connectedRelay}
                       </code>
                     </div>
@@ -210,7 +210,7 @@ export default function ServiceNodes() {
               )}
 
               {!node && !loading && (
-                <p className="mt-3 border-t border-edge pt-3 font-mono text-xs text-muted">
+                <p className="mt-3 border-t border-edge pt-3 font-mono text-xs text-muted-foreground/70">
                   {t("serviceNodes:noNodeConfigured")}
                 </p>
               )}
@@ -220,52 +220,52 @@ export default function ServiceNodes() {
       )}
 
       <div className="mt-12 rounded-lg border border-edge bg-surface-card p-5 space-y-4">
-        <h2 className="font-pixel text-lg text-accent">{t("serviceNodes:setup.heading")}</h2>
-        <p className="font-mono text-xs text-muted">
+        <h2 className="font-pixel text-lg text-primary-text">{t("serviceNodes:setup.heading")}</h2>
+        <p className="font-mono text-xs text-muted-foreground/70">
           {t("serviceNodes:setup.intro")}
         </p>
 
         <div className="space-y-3">
           <div>
-            <p className="mb-1 font-mono text-xs font-medium text-secondary">
+            <p className="mb-1 font-mono text-xs font-medium text-muted-foreground">
               {t("serviceNodes:setup.step1Title")}
             </p>
-            <code className="block rounded bg-surface px-3 py-2 font-mono text-xs text-accent">
+            <code className="block rounded bg-surface px-3 py-2 font-mono text-xs text-primary-text">
               curl -fsSL https://get.tnp.network | sh
             </code>
           </div>
 
           <div>
-            <p className="mb-1 font-mono text-xs font-medium text-secondary">
+            <p className="mb-1 font-mono text-xs font-medium text-muted-foreground">
               {t("serviceNodes:setup.step2Title")}
             </p>
-            <code className="block rounded bg-surface px-3 py-2 font-mono text-xs text-accent">
+            <code className="block rounded bg-surface px-3 py-2 font-mono text-xs text-primary-text">
               tnp serve --domain example.ox --target localhost:80 --token
               &lt;your-token&gt;
             </code>
           </div>
 
           <div>
-            <p className="mb-1 font-mono text-xs font-medium text-secondary">
+            <p className="mb-1 font-mono text-xs font-medium text-muted-foreground">
               {t("serviceNodes:setup.step3Title")}
             </p>
-            <p className="font-mono text-xs text-muted">
+            <p className="font-mono text-xs text-muted-foreground/70">
               <Trans
                 i18nKey="serviceNodes:setup.step3Desc"
                 t={t}
-                components={{ code: <code className="rounded bg-surface px-1.5 py-0.5 text-accent" /> }}
+                components={{ code: <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text" /> }}
               />
             </p>
           </div>
         </div>
 
-        <p className="font-mono text-xs text-muted">
+        <p className="font-mono text-xs text-muted-foreground/70">
           <Trans
             i18nKey="serviceNodes:setup.footer"
             t={t}
             components={{
-              code1: <code className="rounded bg-surface px-1.5 py-0.5 text-accent" />,
-              code2: <code className="rounded bg-surface px-1.5 py-0.5 text-accent" />,
+              code1: <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text" />,
+              code2: <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text" />,
             }}
           />
         </p>

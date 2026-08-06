@@ -65,15 +65,15 @@ export default function Explore() {
         <meta property="og:description" content={t("explore:meta.ogDescription")} />
         <meta property="og:url" content="https://tnp.network/explore" />
       </Helmet>
-      <h1 className="mb-2 font-pixel text-xl text-accent">
+      <h1 className="mb-2 font-pixel text-xl text-primary-text">
         {t("explore:title")}
       </h1>
-      <p className="mb-8 font-mono text-sm text-muted">
+      <p className="mb-8 font-mono text-sm text-muted-foreground/70">
         {t("explore:subtitle")}
       </p>
 
       <div className="mb-12">
-        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">{t("explore:activeTlds")}</h2>
+        <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">{t("explore:activeTlds")}</h2>
         <div className="flex flex-wrap gap-2">
           {tlds.map((tld) => (
             <TLDBadge key={tld._id} name={tld.name} status={tld.status} />
@@ -87,13 +87,13 @@ export default function Explore() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("common:searchPlaceholder")}
-          className="w-full rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none transition-colors"
+          className="w-full rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
         />
       </div>
 
       <div className="space-y-2">
         {displayDomains.length === 0 ? (
-          <p className="font-mono text-sm text-muted">
+          <p className="font-mono text-sm text-muted-foreground/70">
             {searchResults !== null ? t("common:noDomainsFound") : t("explore:noDomainsRegistered")}
           </p>
         ) : (
