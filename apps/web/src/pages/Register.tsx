@@ -85,15 +85,15 @@ export default function Register() {
           <meta property="og:description" content={t("register:meta.ogDescription")} />
           <meta property="og:url" content="https://tnp.network/register" />
         </Helmet>
-        <h1 className="mb-4 font-pixel text-xl text-accent">
+        <h1 className="mb-4 font-pixel text-xl text-primary-text">
           {t("register:title")}
         </h1>
-        <p className="mb-8 font-mono text-sm text-muted">
+        <p className="mb-8 font-mono text-sm text-muted-foreground/70">
           {t("register:signInPrompt")}
         </p>
         <button
           onClick={() => signIn()}
-          className="cursor-pointer rounded-md border border-accent/30 bg-accent/10 px-4 py-2.5 font-mono text-sm text-accent transition-colors hover:bg-accent/20"
+          className="cursor-pointer rounded-md border border-primary/30 bg-primary/10 px-4 py-2.5 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20"
         >
           [{t("common:auth.signInWithOxy")}]
         </button>
@@ -107,7 +107,7 @@ export default function Register() {
         <title>{t("register:meta.title")} — TNP</title>
         <meta name="description" content={t("register:meta.descriptionForm")} />
       </Helmet>
-      <h1 className="mb-8 font-pixel text-xl text-accent">
+      <h1 className="mb-8 font-pixel text-xl text-primary-text">
         {t("register:title")}
       </h1>
 
@@ -118,13 +118,13 @@ export default function Register() {
             value={name}
             onChange={(e) => setName(e.target.value.toLowerCase())}
             placeholder={t("register:placeholder")}
-            className="flex-1 rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none transition-colors"
+            className="flex-1 rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
             required
           />
           <select
             value={tld}
             onChange={(e) => setTld(e.target.value)}
-            className="rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-primary"
+            className="rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-foreground"
           >
             {tlds.map((t) => (
               <option key={t._id} value={t.name}>
@@ -135,21 +135,21 @@ export default function Register() {
         </div>
 
         {name && !checking && available !== null && (
-          <p className={`font-mono text-sm ${available ? "text-accent" : "text-error-text"}`}>
+          <p className={`font-mono text-sm ${available ? "text-primary-text" : "text-error-text"}`}>
             {available ? t("register:domainAvailable", { domain: `${name}.${tld}` }) : t("register:domainTaken", { domain: `${name}.${tld}` })}
           </p>
         )}
         {checking && (
-          <p className="font-mono text-sm text-muted">{t("register:checkingAvailability")}</p>
+          <p className="font-mono text-sm text-muted-foreground/70">{t("register:checkingAvailability")}</p>
         )}
 
         {error && <p className="font-mono text-sm text-error-text">{error}</p>}
-        {success && <p className="font-mono text-sm text-accent">{success}</p>}
+        {success && <p className="font-mono text-sm text-primary-text">{success}</p>}
 
         <button
           type="submit"
           disabled={!available || registering}
-          className="w-full cursor-pointer rounded-md border border-accent/30 bg-accent/10 px-4 py-2.5 font-mono text-sm text-accent transition-colors hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full cursor-pointer rounded-md border border-primary/30 bg-primary/10 px-4 py-2.5 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {registering ? t("register:registering") : t("register:registerButton", { domain: `${name || "domain"}.${tld}` })}
         </button>

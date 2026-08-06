@@ -63,22 +63,22 @@ export default function Domains() {
         <meta property="og:description" content={t("domains:meta.ogDescription")} />
         <meta property="og:url" content="https://tnp.network/domains" />
       </Helmet>
-      <h1 className="mb-2 font-pixel text-xl text-accent">
+      <h1 className="mb-2 font-pixel text-xl text-primary-text">
         {t("domains:title")}
       </h1>
-      <p className="mb-8 font-mono text-sm text-muted">{t("domains:domainsRegistered", { total })}</p>
+      <p className="mb-8 font-mono text-sm text-muted-foreground/70">{t("domains:domainsRegistered", { total })}</p>
 
       <input
         type="text"
         value={query}
         onChange={(e) => { setQuery(e.target.value); setPage(1); }}
         placeholder={t("common:searchPlaceholder")}
-        className="mb-8 w-full rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none transition-colors"
+        className="mb-8 w-full rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
       />
 
       <div className="space-y-2">
         {domains.length === 0 ? (
-          <p className="font-mono text-sm text-muted">{t("common:noDomainsFound")}</p>
+          <p className="font-mono text-sm text-muted-foreground/70">{t("common:noDomainsFound")}</p>
         ) : (
           domains.map((d) => (
             <DomainCard key={d._id} name={d.name} tld={d.tld} status={d.status} oxyUserId={d.oxyUserId} />
@@ -91,17 +91,17 @@ export default function Domains() {
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
-            className="cursor-pointer font-mono text-sm text-secondary transition-colors hover:text-primary disabled:opacity-50"
+            className="cursor-pointer font-mono text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
           >
             [{t("common:prev")}]
           </button>
-          <span className="font-mono text-sm text-muted">
+          <span className="font-mono text-sm text-muted-foreground/70">
             {t("common:pagination", { page, totalPages })}
           </span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page >= totalPages}
-            className="cursor-pointer font-mono text-sm text-secondary transition-colors hover:text-primary disabled:opacity-50"
+            className="cursor-pointer font-mono text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
           >
             [{t("common:next")}]
           </button>

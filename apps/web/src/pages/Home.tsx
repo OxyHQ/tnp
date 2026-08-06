@@ -49,10 +49,10 @@ export default function Home() {
       {/* Hero */}
       <section className="py-24 sm:py-36">
         <div className="mx-auto max-w-[600px] px-4 text-center">
-          <h1 className="mb-6 font-pixel text-3xl tracking-tight text-accent sm:text-4xl">
+          <h1 className="mb-6 font-pixel text-3xl tracking-tight text-primary-text sm:text-4xl">
             {t("home:heroTitle")}
           </h1>
-          <p className="mb-10 font-mono text-sm leading-relaxed text-secondary">
+          <p className="mb-10 font-mono text-sm leading-relaxed text-muted-foreground">
             {t("home:heroDescription")}
           </p>
 
@@ -63,19 +63,19 @@ export default function Home() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("home:searchPlaceholder")}
-              className="flex-1 rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none transition-colors"
+              className="flex-1 rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
             />
             <button
               type="submit"
               disabled={checking}
-              className="cursor-pointer rounded-md border border-accent/30 bg-accent/10 px-5 py-2.5 font-mono text-sm text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+              className="cursor-pointer rounded-md border border-primary/30 bg-primary/10 px-5 py-2.5 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20 disabled:opacity-50"
             >
               {checking ? t("home:checking") : t("home:check")}
             </button>
           </form>
           {result && (
             <p
-              className={`mb-6 font-mono text-sm ${result.available ? "text-accent" : "text-error-text"}`}
+              className={`mb-6 font-mono text-sm ${result.available ? "text-primary-text" : "text-error-text"}`}
             >
               {result.available ? t("home:domainAvailable", { domain: result.domain }) : t("home:domainTaken", { domain: result.domain })}
               {result.available && (
@@ -93,21 +93,21 @@ export default function Home() {
             {isAuthenticated ? (
               <Link
                 to="/dashboard"
-                className="font-mono text-sm text-secondary transition-colors hover:text-primary"
+                className="font-mono text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 [dashboard]
               </Link>
             ) : (
               <button
                 onClick={() => signIn()}
-                className="cursor-pointer font-mono text-sm text-secondary transition-colors hover:text-primary"
+                className="cursor-pointer font-mono text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 [{t("home:signInWithOxy")}]
               </button>
             )}
             <a
               href="https://oxy.so/tnp"
-              className="font-mono text-sm text-muted transition-colors hover:text-secondary"
+              className="font-mono text-sm text-muted-foreground/70 transition-colors hover:text-muted-foreground"
             >
               [{t("home:learnMore")}]
             </a>
@@ -125,10 +125,10 @@ export default function Home() {
                 to={item.to}
                 className="group rounded-lg border border-edge bg-surface-card p-5 transition-colors hover:border-edge hover:bg-surface-hover"
               >
-                <h3 className="mb-1 font-mono text-sm font-medium text-primary group-hover:text-accent transition-colors">
+                <h3 className="mb-1 font-mono text-sm font-medium text-foreground group-hover:text-primary-text transition-colors">
                   {t(`home:quickLinks.${item.key}.title`)}
                 </h3>
-                <p className="font-mono text-xs text-muted">
+                <p className="font-mono text-xs text-muted-foreground/70">
                   {t(`home:quickLinks.${item.key}.desc`)}
                 </p>
               </Link>

@@ -115,10 +115,10 @@ export default function Propose() {
         <meta property="og:description" content={t("propose:meta.ogDescription")} />
         <meta property="og:url" content="https://tnp.network/propose" />
       </Helmet>
-      <h1 className="mb-2 font-pixel text-xl text-accent">
+      <h1 className="mb-2 font-pixel text-xl text-primary-text">
         {t("propose:title")}
       </h1>
-      <p className="mb-8 font-mono text-sm text-muted">
+      <p className="mb-8 font-mono text-sm text-muted-foreground/70">
         {t("propose:subtitle")}
       </p>
 
@@ -126,13 +126,13 @@ export default function Propose() {
         <form onSubmit={handleSubmit} className="mb-12 space-y-4">
           <div className="flex gap-2">
             <div className="flex items-center rounded-md border border-edge bg-surface-raised">
-              <span className="pl-4 font-mono text-muted">.</span>
+              <span className="pl-4 font-mono text-muted-foreground/70">.</span>
               <input
                 type="text"
                 value={tld}
                 onChange={(e) => setTld(e.target.value.toLowerCase())}
                 placeholder={t("propose:tldPlaceholder")}
-                className="rounded-r-md bg-transparent px-2 py-2.5 font-mono text-sm text-primary placeholder:text-muted focus:outline-none"
+                className="rounded-r-md bg-transparent px-2 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
                 required
               />
             </div>
@@ -141,36 +141,36 @@ export default function Propose() {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder={t("propose:reasonPlaceholder")}
-              className="flex-1 rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none transition-colors"
+              className="flex-1 rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
               required
               maxLength={500}
             />
           </div>
           {error && <p className="font-mono text-sm text-error-text">{error}</p>}
-          {success && <p className="font-mono text-sm text-accent">{success}</p>}
+          {success && <p className="font-mono text-sm text-primary-text">{success}</p>}
           <button
             type="submit"
             disabled={submitting}
-            className="cursor-pointer rounded-md border border-accent/30 bg-accent/10 px-4 py-2.5 font-mono text-sm text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+            className="cursor-pointer rounded-md border border-primary/30 bg-primary/10 px-4 py-2.5 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20 disabled:opacity-50"
           >
             {submitting ? t("propose:proposing") : t("propose:proposeTld")}
           </button>
         </form>
       ) : (
         <div className="mb-12 rounded-lg border border-edge bg-surface-card p-6 text-center">
-          <p className="mb-4 font-mono text-sm text-muted">{t("propose:signInPrompt")}</p>
+          <p className="mb-4 font-mono text-sm text-muted-foreground/70">{t("propose:signInPrompt")}</p>
           <button
             onClick={() => signIn()}
-            className="cursor-pointer rounded-md border border-accent/30 bg-accent/10 px-4 py-2.5 font-mono text-sm text-accent transition-colors hover:bg-accent/20"
+            className="cursor-pointer rounded-md border border-primary/30 bg-primary/10 px-4 py-2.5 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20"
           >
             [{t("common:auth.signInWithOxy")}]
           </button>
         </div>
       )}
 
-      <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted">{t("propose:openProposals")}</h2>
+      <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">{t("propose:openProposals")}</h2>
       {proposals.length === 0 ? (
-        <p className="font-mono text-sm text-muted">{t("propose:noProposals")}</p>
+        <p className="font-mono text-sm text-muted-foreground/70">{t("propose:noProposals")}</p>
       ) : (
         <div className="space-y-3">
           {proposals.map((p) => (
@@ -193,8 +193,8 @@ export default function Propose() {
                         onClick={() => handleVote(p._id, "up")}
                         className={`cursor-pointer rounded p-1.5 transition-all duration-150 ${
                           p.userVote === "up"
-                            ? "bg-accent/10 text-accent"
-                            : "text-muted hover:bg-white/5 hover:text-primary"
+                            ? "bg-primary/10 text-primary-text"
+                            : "text-muted-foreground/70 hover:bg-white/5 hover:text-foreground"
                         }`}
                         aria-label={t("propose:upvote")}
                       >
@@ -204,7 +204,7 @@ export default function Propose() {
                       </button>
                     )}
                     <span className={`font-mono text-xs font-medium ${
-                      score > 0 ? "text-accent" : score < 0 ? "text-error-text" : "text-muted"
+                      score > 0 ? "text-primary-text" : score < 0 ? "text-error-text" : "text-muted-foreground/70"
                     }${!canVote ? " cursor-default" : ""}`}>
                       {formattedScore}
                     </span>
@@ -214,7 +214,7 @@ export default function Propose() {
                         className={`cursor-pointer rounded p-1.5 transition-all duration-150 ${
                           p.userVote === "down"
                             ? "bg-error-subtle text-error-text"
-                            : "text-muted hover:bg-white/5 hover:text-primary"
+                            : "text-muted-foreground/70 hover:bg-white/5 hover:text-foreground"
                         }`}
                         aria-label={t("propose:downvote")}
                       >
@@ -227,13 +227,13 @@ export default function Propose() {
                 );
               })()}
               <div className="flex-1">
-                <span className="font-mono text-accent">.{p.tld}</span>
-                <p className="mt-1 font-mono text-xs text-muted">{p.reason}</p>
+                <span className="font-mono text-primary-text">.{p.tld}</span>
+                <p className="mt-1 font-mono text-xs text-muted-foreground/70">{p.reason}</p>
               </div>
               <span
                 className={`rounded-md px-2.5 py-0.5 font-mono text-xs font-medium ${
                   p.status === "open"
-                    ? "bg-accent/10 text-accent"
+                    ? "bg-primary/10 text-primary-text"
                     : p.status === "approved"
                       ? "bg-success-subtle text-success-text"
                       : "bg-error-subtle text-error-text"

@@ -67,39 +67,39 @@ export default function Network() {
         <meta property="og:url" content="https://tnp.network/network" />
       </Helmet>
 
-      <h1 className="mb-2 font-pixel text-xl text-accent">{t("title")}</h1>
-      <p className="mb-8 font-mono text-sm text-muted">
+      <h1 className="mb-2 font-pixel text-xl text-primary-text">{t("title")}</h1>
+      <p className="mb-8 font-mono text-sm text-muted-foreground/70">
         {t("subtitle")}
       </p>
 
       {loading ? (
-        <p className="font-mono text-sm text-muted">
+        <p className="font-mono text-sm text-muted-foreground/70">
           {t("loadingStatus")}
         </p>
       ) : (
         <>
           <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-lg border border-edge bg-surface-card p-4">
-              <p className="font-mono text-xs uppercase tracking-wider text-muted">
+              <p className="font-mono text-xs uppercase tracking-wider text-muted-foreground/70">
                 {t("activeRelays")}
               </p>
-              <p className="mt-1 font-pixel text-2xl text-accent">
+              <p className="mt-1 font-pixel text-2xl text-primary-text">
                 {activeRelays.length}
               </p>
             </div>
             <div className="rounded-lg border border-edge bg-surface-card p-4">
-              <p className="font-mono text-xs uppercase tracking-wider text-muted">
+              <p className="font-mono text-xs uppercase tracking-wider text-muted-foreground/70">
                 {t("oxyOperated")}
               </p>
-              <p className="mt-1 font-pixel text-2xl text-primary">
+              <p className="mt-1 font-pixel text-2xl text-foreground">
                 {oxyCount}
               </p>
             </div>
             <div className="rounded-lg border border-edge bg-surface-card p-4">
-              <p className="font-mono text-xs uppercase tracking-wider text-muted">
+              <p className="font-mono text-xs uppercase tracking-wider text-muted-foreground/70">
                 {t("community")}
               </p>
-              <p className="mt-1 font-pixel text-2xl text-primary">
+              <p className="mt-1 font-pixel text-2xl text-foreground">
                 {communityCount}
               </p>
             </div>
@@ -112,8 +112,8 @@ export default function Network() {
                 onClick={() => setFilter(f)}
                 className={`cursor-pointer rounded-md px-3 py-1.5 font-mono text-sm transition-colors ${
                   filter === f
-                    ? "border border-accent/30 bg-accent/10 text-accent"
-                    : "border border-edge text-muted hover:text-secondary"
+                    ? "border border-primary/30 bg-primary/10 text-primary-text"
+                    : "border border-edge text-muted-foreground/70 hover:text-muted-foreground"
                 }`}
               >
                 {t(FILTER_KEYS[f])}
@@ -122,7 +122,7 @@ export default function Network() {
           </div>
 
           {filteredRelays.length === 0 ? (
-            <p className="font-mono text-sm text-muted">
+            <p className="font-mono text-sm text-muted-foreground/70">
               {t("noRelaysMatch")}
             </p>
           ) : (
@@ -142,20 +142,20 @@ export default function Network() {
                         }`}
                         title={relay.status}
                       />
-                      <code className="font-mono text-sm text-primary">
+                      <code className="font-mono text-sm text-foreground">
                         {relay.endpoint}
                       </code>
                       <span
                         className={`rounded-md px-2.5 py-0.5 font-mono text-xs font-medium ${
                           relay.operator === "oxy"
-                            ? "bg-accent/10 text-accent"
-                            : "bg-surface-hover text-secondary"
+                            ? "bg-primary/10 text-primary-text"
+                            : "bg-surface-hover text-muted-foreground"
                         }`}
                       >
                         {relay.operator}
                       </span>
                     </div>
-                    <span className="font-mono text-xs text-muted">
+                    <span className="font-mono text-xs text-muted-foreground/70">
                       {relay.location}
                     </span>
                   </div>
