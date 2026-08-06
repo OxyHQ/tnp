@@ -1,78 +1,41 @@
-import { TnpApiClient, type DnsAnswer, type ResolveResponse } from "./api";
+import { TnpApiClient, type DnsAnswer } from "./api";
 import type { DnsProxyConfig } from "./config";
 import { classifyName, isReservedTld, normalizeName, type NamespaceType } from "@tnp/namespace";
+import {
+  buildResponse,
+  decodeQuery,
+  encode,
+  encodeForUdp,
+  encodeRawError,
+  rcodeOf,
+  RCODE,
+  type Answer,
+  type DecodedPacket,
+  type Packet,
+} from "./dns/wire";
+import {
+  parseUpstream,
+  queryUpstream,
+  queryUpstreamTcp,
+  UpstreamError,
+  type UpstreamConfig,
+} from "./dns/upstream";
 import dgram from "dgram";
 import net from "net";
-import dns2 from "dns2";
 
-// dns2 wire-format types. @types/dns2 models the high-level client/server API
-// but omits the low-level `Packet` members the proxy relies on for manual
-// (de)serialization, so we type exactly the surface we use here instead of `any`.
-interface DnsWireQuestion {
-  name: string;
-  type: number;
-  class?: number;
-}
+/** Record types the TNP registry can serve. */
+const TNP_RECORD_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "NS"] as const;
+type TnpRecordType = (typeof TNP_RECORD_TYPES)[number];
 
-interface DnsWireRecord {
-  name: string;
-  type: number;
-  class: number;
-  ttl: number;
-  address?: string;
-  domain?: string;
-  data?: string;
-  exchange?: string;
-  priority?: number;
-  ns?: string;
-}
-
-interface DnsWirePacket {
-  header: { id: number };
-  questions: DnsWireQuestion[];
-  answers: DnsWireRecord[];
-}
-
-interface DnsPacketWriter {
-  /** Append `value` as a big-endian field of `bits` bits (8/16/32). */
-  write(value: number, bits: number): void;
-  toBuffer(): Buffer | Uint8Array;
-}
-
-interface Dns2Packet {
-  TYPE: typeof dns2.Packet.TYPE;
-  CLASS: typeof dns2.Packet.CLASS;
-  parse(buffer: Buffer | Uint8Array): DnsWirePacket;
-  createResponseFromRequest(request: DnsWirePacket): DnsWirePacket;
-  /** Internal serializer; present at runtime but not always exposed. */
-  write?: (response: DnsWirePacket) => Buffer;
-  Writer: new () => DnsPacketWriter;
-}
-
-const Packet = dns2.Packet as unknown as Dns2Packet;
-
-function encodeDnsName(name: string): number[] {
-  const bytes: number[] = [];
-  for (const label of name.split(".")) {
-    bytes.push(label.length);
-    for (const c of label) bytes.push(c.charCodeAt(0));
-  }
-  bytes.push(0);
-  return bytes;
-}
-
-function expandIPv6(addr: string): number[] {
-  // Expand :: and parse into 8 x 16-bit words
-  let parts = addr.split(":");
-  const emptyIdx = parts.indexOf("");
-  if (emptyIdx !== -1) {
-    const before = parts.slice(0, emptyIdx);
-    const after = parts.slice(emptyIdx + 1).filter((p) => p !== "");
-    const missing = 8 - before.length - after.length;
-    parts = [...before, ...Array(missing).fill("0"), ...after];
-  }
-  return parts.map((p) => parseInt(p || "0", 16));
-}
+/**
+ * MX preference used when a stored record does not carry one.
+ *
+ * The registry's record model is `{ type, name, value, ttl }` with no
+ * preference field, so a bare exchange gets this value. A stored value of the
+ * form `"10 mail.example.ox"` is parsed instead. Giving MX a first-class
+ * preference belongs with the record-model work, not here.
+ */
+const DEFAULT_MX_PREFERENCE = 10;
 
 interface CacheEntry {
   answers: DnsAnswer[];
@@ -81,10 +44,11 @@ interface CacheEntry {
 
 export class DnsProxy {
   private apiClient: TnpApiClient;
-  /** Map of TLD name -> whether it is a custom (non-standard) TLD */
+  /** TLD policy table: native TLD -> whether it is flagged custom by the registry. */
   private tlds = new Map<string, boolean>();
   private cache = new Map<string, CacheEntry>();
   private cacheTtlMs: number;
+  private upstreams: UpstreamConfig[];
   private udpServer: dgram.Socket | null = null;
   private tcpServer: net.Server | null = null;
   private config: DnsProxyConfig;
@@ -106,6 +70,7 @@ export class DnsProxy {
     this.config = config;
     this.apiClient = new TnpApiClient(config.apiBaseUrl);
     this.cacheTtlMs = config.cacheTtlSeconds * 1000;
+    this.upstreams = parseUpstreams(config.upstreamDns);
   }
 
   /** Enable overlay routing (DNS returns 127.0.0.1 for overlay domains). */
@@ -122,13 +87,17 @@ export class DnsProxy {
    * Get overlay info for a domain. Used by the SOCKS5 proxy.
    */
   getOverlayInfo(domain: string): { pubKey: string; relay: string } | undefined {
-    const clean = domain.replace(/\.$/, "").toLowerCase();
-    return this.overlayCache.get(clean);
+    return this.overlayCache.get(normalizeName(domain));
   }
 
   /** Expose the API client for shared use by other components. */
   getApiClient(): TnpApiClient {
     return this.apiClient;
+  }
+
+  /** The upstream resolvers in use, in failover order. */
+  getUpstreams(): readonly UpstreamConfig[] {
+    return this.upstreams;
   }
 
   /**
@@ -171,38 +140,52 @@ export class DnsProxy {
     return classifyName(name, this.tlds.keys());
   }
 
-  private typeToString(type: number): string {
-    const map: Record<number, string> = {
-      [Packet.TYPE.A]: "A",
-      [Packet.TYPE.AAAA]: "AAAA",
-      [Packet.TYPE.CNAME]: "CNAME",
-      [Packet.TYPE.TXT]: "TXT",
-      [Packet.TYPE.MX]: "MX",
-      [Packet.TYPE.NS]: "NS",
-    };
-    return map[type] || "A";
-  }
+  /**
+   * Convert a registry record into a wire answer.
+   *
+   * Returns null for a record whose stored value does not fit its type, rather
+   * than emitting a structurally valid but wrong record — the previous encoder
+   * wrote `RDLENGTH 0` for everything that was not an A record, which produced
+   * empty answers that looked successful.
+   */
+  private toAnswer(qname: string, record: DnsAnswer): Answer | null {
+    const ttl = record.ttl > 0 ? record.ttl : 3600;
+    const name = qname;
+    const value = record.value.trim();
 
-  private answerToRecord(qname: string, ans: DnsAnswer): DnsWireRecord {
-    const base = { name: qname, ttl: ans.ttl || 3600, class: Packet.CLASS.IN };
-    switch (ans.type.toUpperCase()) {
-      case "A":     return { ...base, type: Packet.TYPE.A, address: ans.value };
-      case "AAAA":  return { ...base, type: Packet.TYPE.AAAA, address: ans.value };
-      case "CNAME": return { ...base, type: Packet.TYPE.CNAME, domain: ans.value };
-      case "TXT":   return { ...base, type: Packet.TYPE.TXT, data: ans.value };
-      case "MX":    return { ...base, type: Packet.TYPE.MX, exchange: ans.value, priority: 10 };
-      case "NS":    return { ...base, type: Packet.TYPE.NS, ns: ans.value };
-      default:      return { ...base, type: Packet.TYPE.A, address: ans.value };
+    switch (record.type.toUpperCase() as TnpRecordType) {
+      case "A":
+        return net.isIPv4(value) ? { type: "A", name, ttl, data: value } : null;
+      case "AAAA":
+        return net.isIPv6(value) ? { type: "AAAA", name, ttl, data: value } : null;
+      case "CNAME":
+        return { type: "CNAME", name, ttl, data: value };
+      case "NS":
+        return { type: "NS", name, ttl, data: value };
+      case "TXT":
+        return { type: "TXT", name, ttl, data: value };
+      case "MX": {
+        const match = /^(\d+)\s+(\S+)$/.exec(value);
+        return {
+          type: "MX",
+          name,
+          ttl,
+          data: match
+            ? { preference: Number(match[1]), exchange: match[2] }
+            : { preference: DEFAULT_MX_PREFERENCE, exchange: value },
+        };
+      }
+      default:
+        return null;
     }
   }
 
   private async resolveTnp(name: string, type: string): Promise<DnsAnswer[]> {
-    const clean = name.replace(/\.$/, "").toLowerCase();
+    const clean = normalizeName(name);
     const cacheKey = `${clean}:${type}`;
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() < cached.expiresAt) return cached.answers;
 
-    // Fetch full resolve response with overlay info
     const response = await this.apiClient.resolveWithOverlay(clean, type);
 
     // If overlay is enabled and the domain has an active service node,
@@ -213,16 +196,15 @@ export class DnsProxy {
         relay: response.overlay.relay,
       });
 
-      // Return a synthetic A record pointing to localhost
       if (type === "A" || type === "ANY") {
-        const syntheticAnswers: DnsAnswer[] = [
+        const synthetic: DnsAnswer[] = [
           { name: clean, type: "A", value: "127.0.0.1", ttl: 60 },
         ];
         this.cache.set(cacheKey, {
-          answers: syntheticAnswers,
+          answers: synthetic,
           expiresAt: Date.now() + this.cacheTtlMs,
         });
-        return syntheticAnswers;
+        return synthetic;
       }
     }
 
@@ -234,269 +216,175 @@ export class DnsProxy {
   }
 
   /**
-   * Forward a DNS query to Google's DoH JSON API.
-   * Returns a DNS wire-format response buffer.
-   * Uses fetch() to avoid Bun's dgram multi-socket limitation.
+   * Forward a public-DNS query upstream, in wire format end to end.
+   *
+   * Tries each configured upstream in order. A truncated UDP answer is retried
+   * over TCP: returning it as-is would hand the client a silently partial
+   * record set.
    */
-  private async forwardUpstreamRaw(queryBuf: Buffer): Promise<Buffer> {
-    const parsed = Packet.parse(queryBuf);
-    const q = parsed.questions?.[0];
-    if (!q) throw new Error("no question in query");
+  private async forwardUpstream(query: DecodedPacket, queryBuf: Buffer): Promise<Buffer> {
+    let lastError: Error | null = null;
 
-    const qname = q.name.replace(/\.$/, "");
-    const qtype = this.typeToString(q.type);
+    for (const upstream of this.upstreams) {
+      try {
+        let response = await queryUpstream(upstream, queryBuf);
 
-    const res = await fetch(
-      `https://8.8.8.8/resolve?name=${encodeURIComponent(qname)}&type=${qtype}`,
-      { signal: AbortSignal.timeout(4000) },
+        // Bit 9 of the flags word is TC.
+        if (response.byteLength >= 4 && (response.readUInt16BE(2) & 0x0200) !== 0) {
+          response = await queryUpstreamTcp(upstream, queryBuf);
+        }
+
+        return response;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        const where = err instanceof UpstreamError ? err.upstream : upstream.address;
+        console.warn(`[tnp] upstream ${where} failed: ${lastError.message}`);
+      }
+    }
+
+    // Every upstream failed. SERVFAIL is the honest answer; the old resolver
+    // returned an empty NOERROR here, which tells the client the name exists
+    // and simply has no records (audit B3).
+    console.error(
+      `[tnp] all ${this.upstreams.length} upstream(s) failed: ${lastError?.message ?? "unknown"}`,
     );
-
-    if (!res.ok) throw new Error(`DoH returned ${res.status}`);
-
-    const json = (await res.json()) as {
-      Answer?: Array<{ name: string; type: number; TTL: number; data: string }>;
-    };
-
-    // Build a DNS wire-format response
-    const writer = new Packet.Writer();
-    const id = queryBuf.readUInt16BE(0);
-    const answers = json.Answer || [];
-
-    writer.write(id, 16);         // ID
-    writer.write(0x8180, 16);     // Flags: QR, RD, RA
-    writer.write(1, 16);          // QDCOUNT
-    writer.write(answers.length, 16); // ANCOUNT
-    writer.write(0, 16);          // NSCOUNT
-    writer.write(0, 16);          // ARCOUNT
-
-    // Question section
-    for (const label of qname.split(".")) {
-      writer.write(label.length, 8);
-      for (const c of label) writer.write(c.charCodeAt(0), 8);
-    }
-    writer.write(0, 8);
-    writer.write(q.type, 16);
-    writer.write(q.class || 1, 16);
-
-    // Answer section
-    for (const ans of answers) {
-      const aname = (ans.name || qname).replace(/\.$/, "");
-      for (const label of aname.split(".")) {
-        writer.write(label.length, 8);
-        for (const c of label) writer.write(c.charCodeAt(0), 8);
-      }
-      writer.write(0, 8);
-      writer.write(ans.type, 16);
-      writer.write(1, 16); // CLASS IN
-      writer.write(ans.TTL, 32);
-
-      if (ans.type === 1) {
-        // A record
-        writer.write(4, 16);
-        for (const octet of ans.data.split(".")) {
-          writer.write(parseInt(octet, 10), 8);
-        }
-      } else if (ans.type === 28) {
-        // AAAA -- write 16 bytes
-        const expanded = expandIPv6(ans.data);
-        writer.write(16, 16);
-        for (const part of expanded) {
-          writer.write(part, 16);
-        }
-      } else if (ans.type === 5) {
-        // CNAME
-        const cname = ans.data.replace(/\.$/, "");
-        const cnameBytes = encodeDnsName(cname);
-        writer.write(cnameBytes.length, 16);
-        for (const b of cnameBytes) writer.write(b, 8);
-      } else {
-        // Other types -- write as raw string
-        const dataBytes = Buffer.from(ans.data, "utf-8");
-        writer.write(dataBytes.length, 16);
-        for (const b of dataBytes) writer.write(b, 8);
-      }
-    }
-
-    return Buffer.from(writer.toBuffer());
+    return encode(buildResponse(query, { rcode: "SERVFAIL" }));
   }
 
-  private async handleQuery(queryBuf: Buffer): Promise<Buffer> {
-    const request = Packet.parse(queryBuf);
-    const questions = request.questions || [];
+  /**
+   * Answer one query. Returns the raw wire response.
+   *
+   * `forUdp` decides whether an oversized response is truncated with TC set.
+   */
+  async handleQuery(queryBuf: Buffer, forUdp: boolean): Promise<Buffer> {
+    let query: DecodedPacket;
+    try {
+      query = decodeQuery(queryBuf);
+    } catch (err) {
+      console.warn(`[tnp] malformed query: ${err instanceof Error ? err.message : String(err)}`);
+      return encodeRawError(queryBuf, "FORMERR") ?? Buffer.alloc(0);
+    }
 
-    if (questions.length === 0) return queryBuf;
-
-    const { name, type } = questions[0];
+    const question = query.questions?.[0];
+    if (!question) {
+      return encode(buildResponse(query, { rcode: "FORMERR" }));
+    }
 
     // Classification happens first, offline, always. A public-dns name never
     // reaches the TNP API — that is both the namespace guarantee and a privacy
     // property, since it stops the API from learning the user's public
-    // browsing. The previous code asked the API about names under public TLDs
-    // and fell back upstream when the answer was empty (audit S4).
-    if (this.classify(name) === "tnp-native") {
-      const typeStr = this.typeToString(type);
-
-      try {
-        const answers = await this.resolveTnp(name, typeStr);
-
-        // No fallthrough to public DNS. A TNP-native name that does not exist
-        // is TNP's answer to give; forwarding it upstream would let a TNP
-        // registration outrank a public name by simply not existing yet.
-        const response = Packet.createResponseFromRequest(request);
-        for (const ans of answers) {
-          response.answers.push(this.answerToRecord(name, ans));
-        }
-        return this.writeResponse(response);
-      } catch (err) {
-        console.error(`[tnp] resolve error for ${name}: ${err}`);
-        return this.writeEmptyResponse(request);
-      }
+    // browsing (docs/architecture/naming.md rule N4).
+    if (this.classify(question.name) !== "tnp-native") {
+      const response = await this.forwardUpstream(query, queryBuf);
+      return forUdp ? capUdp(query, response) : response;
     }
 
-    try {
-      return await this.forwardUpstreamRaw(queryBuf);
-    } catch (err) {
-      console.error(`[tnp] upstream error for ${name}: ${err}`);
-      return this.writeEmptyResponse(request);
-    }
+    const packet = await this.resolveNative(query, question.name, question.type);
+    return forUdp ? encodeForUdp(query, packet) : encode(packet);
   }
 
-  private writeEmptyResponse(request: DnsWirePacket): Buffer {
-    // Build a minimal NXDOMAIN/empty response
-    const id = request.header.id;
-    const writer = new Packet.Writer();
-    writer.write(id, 16);
-    writer.write(0x8180, 16); // Response, RD, RA
-    writer.write(1, 16); // QDCOUNT
-    writer.write(0, 16); // ANCOUNT
-    writer.write(0, 16); // NSCOUNT
-    writer.write(0, 16); // ARCOUNT
-    // Copy question section from original query
-    const q = request.questions[0];
-    const cleanName = q.name.replace(/\.$/, "");
-    for (const label of cleanName.split(".")) {
-      writer.write(label.length, 8);
-      for (const c of label) writer.write(c.charCodeAt(0), 8);
-    }
-    writer.write(0, 8);
-    writer.write(q.type, 16);
-    writer.write(q.class || 1, 16);
-    return Buffer.from(writer.toBuffer());
-  }
-
-  private writeResponse(response: DnsWirePacket): Buffer {
-    // Use dns2 internal write if available, otherwise fall back to raw
+  /**
+   * Answer a TNP-native name from the registry.
+   *
+   * Never falls through to public DNS: forwarding a nonexistent TNP name
+   * upstream would let a TNP registration outrank a public one by simply not
+   * existing yet.
+   */
+  private async resolveNative(
+    query: DecodedPacket,
+    qname: string,
+    qtype: string,
+  ): Promise<Packet> {
+    let records: DnsAnswer[];
     try {
-      if (Packet.write) return Packet.write(response);
+      records = await this.resolveTnp(qname, qtype);
     } catch (err) {
-      console.warn(`[tnp] dns2 Packet.write failed, using manual serialization: ${err instanceof Error ? err.message : String(err)}`);
+      // The registry is unreachable or errored. SERVFAIL says "ask again";
+      // an empty NOERROR would say "this name has no such records", which is a
+      // claim we are not in a position to make.
+      console.error(
+        `[tnp] registry lookup failed for ${qname}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return buildResponse(query, { rcode: "SERVFAIL" });
     }
 
-    // Manual serialization of a simple A response
-    const resp = response;
-    const writer = new Packet.Writer();
-    writer.write(resp.header.id, 16);
-    writer.write(0x8180, 16);
-    writer.write(resp.questions.length, 16);
-    writer.write(resp.answers.length, 16);
-    writer.write(0, 16);
-    writer.write(0, 16);
+    const answers = records
+      .map((record) => this.toAnswer(qname, record))
+      .filter((answer): answer is NonNullable<typeof answer> => answer !== null);
 
-    // Question
-    for (const q of resp.questions) {
-      const cleanName = q.name.replace(/\.$/, "");
-      for (const label of cleanName.split(".")) {
-        writer.write(label.length, 8);
-        for (const c of label) writer.write(c.charCodeAt(0), 8);
-      }
-      writer.write(0, 8);
-      writer.write(q.type, 16);
-      writer.write(q.class || 1, 16);
-    }
-
-    // Answers
-    for (const a of resp.answers) {
-      const cleanName = a.name.replace(/\.$/, "");
-      for (const label of cleanName.split(".")) {
-        writer.write(label.length, 8);
-        for (const c of label) writer.write(c.charCodeAt(0), 8);
-      }
-      writer.write(0, 8);
-      writer.write(a.type, 16);
-      writer.write(a.class || 1, 16);
-      writer.write(a.ttl, 32);
-      if (a.type === Packet.TYPE.A && a.address) {
-        writer.write(4, 16); // RDLENGTH
-        for (const octet of a.address.split(".")) {
-          writer.write(parseInt(octet, 10), 8);
-        }
-      } else {
-        writer.write(0, 16); // RDLENGTH 0
-      }
-    }
-
-    return Buffer.from(writer.toBuffer());
+    // No records for a TNP-native name means the name does not exist here.
+    // NXDOMAIN is distinguishable from "exists, no records of this type";
+    // the old resolver returned NOERROR for both.
+    return buildResponse(query, {
+      rcode: answers.length > 0 ? "NOERROR" : "NXDOMAIN",
+      answers,
+      authoritative: true,
+    });
   }
 
   async start(): Promise<void> {
     const { listenAddr, listenPort } = this.config;
-    const self = this;
 
-    // UDP server
+    console.log(
+      `[tnp] upstream resolvers: ${this.upstreams
+        .map((u) => `${u.transport}:${u.address}`)
+        .join(", ")}`,
+    );
+
     this.udpServer = dgram.createSocket({ type: "udp4", reuseAddr: true });
 
-    const handleUdpMessage = function(msg: Buffer, rinfo: dgram.RemoteInfo) {
-      // Defer to next tick to unblock Bun's event loop for fetch()
+    this.udpServer.on("message", (msg: Buffer, rinfo: dgram.RemoteInfo) => {
+      // Defer to the next tick so a synchronous handler cannot block Bun's
+      // event loop while the upstream fetch is in flight.
       setTimeout(() => {
-        self.handleQuery(Buffer.from(msg))
+        this.handleQuery(Buffer.from(msg), true)
           .then((response) => {
-            self.udpServer?.send(response, 0, response.length, rinfo.port, rinfo.address);
+            if (response.byteLength === 0) return;
+            this.udpServer?.send(response, 0, response.length, rinfo.port, rinfo.address);
           })
           .catch((err) => {
             console.error(`[tnp] udp error: ${err instanceof Error ? err.stack : err}`);
           });
       }, 0);
-    };
+    });
 
-    this.udpServer.on("message", handleUdpMessage);
     this.udpServer.on("error", (err: Error) => console.error(`[tnp] udp server error: ${err}`));
     this.udpServer.bind(listenPort, listenAddr);
 
-    // TCP server (for DNS-over-TLS via stunnel)
-    // DNS TCP messages have a 2-byte length prefix. Max DNS message is 65535 bytes.
-    const TCP_MAX_BUFFER = 65535 + 2; // max message + length prefix
+    // TCP DNS frames each message with a two-byte length prefix.
+    const TCP_MAX_BUFFER = 65535 + 2;
     const TCP_IDLE_TIMEOUT_MS = 10_000;
 
     this.tcpServer = net.createServer((socket) => {
       let buffer = Buffer.alloc(0);
 
       socket.setTimeout(TCP_IDLE_TIMEOUT_MS);
-      socket.on("timeout", () => {
-        socket.destroy();
-      });
+      socket.on("timeout", () => socket.destroy());
+      socket.on("error", () => socket.destroy());
 
       socket.on("data", (data: Buffer) => {
         buffer = Buffer.concat([buffer, data]);
 
-        // Protect against memory exhaustion from oversized or malicious input
         if (buffer.length > TCP_MAX_BUFFER) {
           console.warn("[tnp] tcp client exceeded max buffer size, closing connection");
           socket.destroy();
           return;
         }
 
-        // TCP DNS uses 2-byte length prefix
         const processNext = () => {
           if (buffer.length < 2) return;
           const msgLen = buffer.readUInt16BE(0);
           if (buffer.length < 2 + msgLen) return;
           const queryBuf = Buffer.from(buffer.subarray(2, 2 + msgLen));
           buffer = buffer.subarray(2 + msgLen);
-          this.handleQuery(queryBuf)
+
+          this.handleQuery(queryBuf, false)
             .then((response) => {
-              const lenBuf = Buffer.alloc(2);
-              lenBuf.writeUInt16BE(response.length, 0);
-              socket.write(Buffer.concat([lenBuf, response]));
+              if (response.byteLength > 0) {
+                const lenBuf = Buffer.alloc(2);
+                lenBuf.writeUInt16BE(response.length, 0);
+                socket.write(Buffer.concat([lenBuf, response]));
+              }
               processNext();
             })
             .catch((err) => {
@@ -536,5 +424,57 @@ export class DnsProxy {
       clearInterval(this.tldSyncInterval);
     }
     this.tldSyncInterval = setInterval(() => this.syncTlds(), intervalMs);
+    this.tldSyncInterval.unref?.();
   }
 }
+
+/**
+ * Parse the configured upstream list.
+ *
+ * Comma-separated, tried in order on failure. `TnpConfig.upstreamDns` was
+ * previously settable, shown in the settings editor, and never read — every
+ * public query went to a hardcoded endpoint regardless (audit B4).
+ */
+export function parseUpstreams(spec: string): UpstreamConfig[] {
+  const entries = spec
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .map(parseUpstream);
+
+  if (entries.length === 0) {
+    throw new Error(
+      "No upstream DNS resolver configured. Set upstreamDns to an address " +
+        '(e.g. "1.1.1.1") or an RFC 8484 DoH URL.',
+    );
+  }
+
+  return entries;
+}
+
+/**
+ * Truncate an already-encoded upstream response that will not fit in the
+ * client's UDP budget. Re-encoding is avoided so upstream RDATA we do not model
+ * passes through untouched.
+ */
+function capUdp(query: DecodedPacket, response: Buffer): Buffer {
+  const limit = ednsLimit(query);
+  if (response.byteLength <= limit) return response;
+
+  // Header only, TC set: the client retries over TCP and gets the whole answer.
+  const header = Buffer.from(response.subarray(0, 12));
+  header.writeUInt16BE(header.readUInt16BE(2) | 0x0200, 2);
+  header.writeUInt16BE(0, 6); // ANCOUNT
+  header.writeUInt16BE(0, 8); // NSCOUNT
+  header.writeUInt16BE(0, 10); // ARCOUNT
+  header.writeUInt16BE(0, 4); // QDCOUNT — the question is dropped with the body
+  return header;
+}
+
+function ednsLimit(query: DecodedPacket): number {
+  const opt = query.additionals?.find((record) => record.type === "OPT");
+  if (opt && opt.type === "OPT") return Math.min(Math.max(opt.udpPayloadSize, 512), 4096);
+  return 512;
+}
+
+export { RCODE, rcodeOf };

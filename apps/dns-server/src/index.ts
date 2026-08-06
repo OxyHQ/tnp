@@ -6,6 +6,7 @@ const config: DnsProxyConfig = {
   listenPort: Number(process.env.TNP_LISTEN_PORT) || 5353,
   apiBaseUrl: process.env.TNP_API_URL || "https://api.tnp.network",
   cacheTtlSeconds: Number(process.env.TNP_CACHE_TTL) || 300,
+  upstreamDns: process.env.TNP_UPSTREAM_DNS || "1.1.1.1,8.8.8.8",
 };
 
 const proxy = new DnsProxy(config);
@@ -13,6 +14,7 @@ const proxy = new DnsProxy(config);
 console.log("[tnp-dns] starting public DNS server...");
 console.log(`[tnp-dns] listen: ${config.listenAddr}:${config.listenPort}`);
 console.log(`[tnp-dns] API: ${config.apiBaseUrl}`);
+console.log(`[tnp-dns] upstream: ${config.upstreamDns}`);
 
 proxy.startTldSync(5 * 60 * 1000);
 await proxy.syncTlds();

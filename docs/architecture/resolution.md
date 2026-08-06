@@ -3,8 +3,9 @@
 How a name becomes an answer. The naming layer decides what a name *means*;
 this layer decides how a query gets answered on a device.
 
-**Status: partial.** TNP-native lookups work. Public forwarding is incorrect on
-the wire (audit B3), hardcodes one upstream (B4), and has no DNSSEC (S8).
+**Status: mostly implemented.** Wire encoding, response codes, EDNS(0),
+truncation and configurable upstreams are done (audit B3 and B4 closed).
+Caching and DNSSEC are not (S8, S9).
 
 ---
 

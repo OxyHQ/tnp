@@ -24,7 +24,7 @@ This table is the honest state of the code. Full evidence:
 | Register TNP domains and manage records | ✅ Working |
 | Resolve TNP names on your device | ✅ Working |
 | Public DNS keeps working, unshadowed | ✅ Enforced — reserved TLDs are refused by the registry and by the client |
-| Forward public DNS to an upstream | ⚠️ Works, but re-encodes some answers incorrectly and ignores the configured upstream |
+| Forward public DNS to an upstream | ✅ Wire-format end to end, correct response codes, EDNS(0), TCP fallback, configurable upstreams |
 | Publish a service from behind NAT (`tnp serve`) | ⚠️ Prototype — the relay does not authenticate service nodes |
 | Reach a TNP service over SOCKS5 | ⚠️ Prototype — TNP destinations only, no IPv6, ignores the requested port |
 | Run a relay (`tnp relay`) | ❌ Broken — registration fails against the current API |

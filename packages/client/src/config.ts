@@ -31,6 +31,12 @@ export interface DnsProxyConfig {
   listenPort: number;
   apiBaseUrl: string;
   cacheTtlSeconds: number;
+  /**
+   * Upstream resolvers for public-DNS names, comma-separated and tried in
+   * order. An entry is an address (`1.1.1.1`, `1.1.1.1:5353`, `[2606:4700::1111]`)
+   * or an RFC 8484 DoH URL (`https://cloudflare-dns.com/dns-query`).
+   */
+  upstreamDns: string;
 }
 
 /**
@@ -82,7 +88,6 @@ export function parsePrivacyLevel(value: string): PrivacyLevelResult {
 }
 
 export interface TnpConfig extends DnsProxyConfig {
-  upstreamDns: string;
   privacyLevel: PrivacyLevel;
   socksPort: number;
   relayPreference: "oxy" | "community" | "any";
