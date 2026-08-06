@@ -5,7 +5,31 @@ on:
     branches: [main]
 
 jobs:
+  # Deploys used to run unconditionally on every push to main with nothing
+  # verifying the code first. The gates run here so a red main cannot ship.
+  verify:
+    name: Typecheck and test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --cpu='*' --os='*'
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun run test
+
   deploy:
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: read

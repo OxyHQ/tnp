@@ -11,6 +11,8 @@
     "dev:api": "cd apps/api && bun run dev",
     "dev:web": "cd apps/web && bun run dev",
     "seed": "cd apps/api && bun run seed",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun run --filter '*' test",
     "release": "release-it"
   },
   "release-it": {
