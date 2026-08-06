@@ -19,12 +19,22 @@ export const TNP_PUBLIC_DNS = process.env.TNP_PUBLIC_DNS?.trim() ?? "";
 /** Path to the kill switch marker file. Presence means firewall rules are active. */
 export const KILLSWITCH_MARKER_PATH = join(tmpdir(), "tnp-killswitch-active");
 
-export interface TnpConfig {
+/**
+ * The subset of configuration the DNS resolver actually consumes.
+ *
+ * `apps/dns-server` runs the resolver without any of the client's proxy,
+ * overlay, relay or service-node settings, so it configures this interface
+ * rather than fabricating a `TnpConfig` it cannot meaningfully populate.
+ */
+export interface DnsProxyConfig {
   listenAddr: string;
   listenPort: number;
   apiBaseUrl: string;
-  upstreamDns: string;
   cacheTtlSeconds: number;
+}
+
+export interface TnpConfig extends DnsProxyConfig {
+  upstreamDns: string;
   privacyLevel: "access" | "private";
   socksPort: number;
   relayPreference: "oxy" | "community" | "any";

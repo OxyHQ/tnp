@@ -47,8 +47,8 @@ const server = Bun.serve<WsData>({
       if (!domain) {
         return new Response("Missing ?domain query parameter", { status: 400 });
       }
-      const upgraded = server.upgrade<ServiceNodeData>(req, {
-        data: { domain },
+      const upgraded = server.upgrade(req, {
+        data: { domain } satisfies ServiceNodeData,
       });
       if (!upgraded) {
         return new Response("WebSocket upgrade failed", { status: 500 });
@@ -57,8 +57,8 @@ const server = Bun.serve<WsData>({
     }
 
     if (url.pathname === "/tunnel") {
-      const upgraded = server.upgrade<ClientData>(req, {
-        data: { type: "client" as const },
+      const upgraded = server.upgrade(req, {
+        data: { type: "client" } satisfies ClientData,
       });
       if (!upgraded) {
         return new Response("WebSocket upgrade failed", { status: 500 });

@@ -91,8 +91,8 @@ Key modules in `packages/client/src/`:
 ## Gotchas
 
 - **DNS/parking IP**: `TNP_PARKING_IP` and `TNP_PUBLIC_DNS` MUST be set to the AWS NLB EIP at deploy time. Never hardcode IP values.
-- **Typecheck/test gates are NOT in CI yet.** Only `packages/client`, `packages/protocol` and `apps/web` have a typecheck script at all; `apps/api`, `apps/relay` and `apps/dns-server` have none, and no workflow runs tests or typecheck on any of them. Run them by hand until Phase 1 lands the CI job — and expect `apps/dns-server` to fail, it builds a `TnpConfig` missing 13 required fields (audit B1).
-- **`apps/dns-server` imports `packages/client` by relative path** without declaring the dependency. That is why B1 was never caught. Do not add more cross-workspace relative imports; extract a package instead.
+- **Gates**: `bun run typecheck` and `bun run test` at the repo root fan out to every workspace with `bun run --filter '*'` and exit non-zero if any fails. `ci.yml` runs both on every PR, and both deploy workflows `needs:` them, so a red `main` cannot ship. Run them locally before pushing.
+- **`apps/dns-server` imports `packages/client` by relative path** without declaring the dependency. That is why audit B1 (a `TnpConfig` built with 5 of 18 required fields) went unnoticed for so long. The resolver now takes a narrow `DnsProxyConfig` instead, but the relative import stands until Phase 2 extracts `@tnp/resolver` — do not add more cross-workspace relative imports; extract a package instead.
 - **The relay implementation exists twice** — `apps/relay/src/` and `packages/client/src/relay-node.ts` — with the same bugs in both. A fix to one is not a fix.
 - **Client/API request bodies are hand-matched, and currently disagree.** `registerRelay` and `sendRelayHeartbeat` send shapes the API rejects (audit B2). Until `@tnp/shared-types` exists, check both sides when touching either.
 - **Key deps**: `tweetnacl` (X25519/XSalsa20 in client), `dns2` (DNS encoding in client), `react-i18next` + `i18next` + `i18next-http-backend` + `i18next-browser-languagedetector` (web i18n).

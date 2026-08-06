@@ -1,0 +1,48 @@
+# Typecheck and test every workspace.
+#
+# Before this existed, nothing in CI ran either — `AGENTS.md` claimed a
+# `packages/client` typecheck gate that did not exist, and `apps/api`,
+# `apps/relay` and `apps/dns-server` had no typecheck script at all. That is how
+# `apps/dns-server` came to build a `TnpConfig` with 5 of its 18 required fields
+# and ship (docs/architecture/audit-2026-08-06.md, finding B1).
+#
+# Both root scripts fan out with `bun run --filter '*'`, which exits non-zero if
+# any workspace fails — verified by mutation-testing a type error into
+# `apps/relay` and a failing assertion into `packages/protocol`, and confirming
+# each turned the whole run red.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # --cpu / --os fetch the platform-gated optional dependencies
+      # (@opentui/core native binaries) that packages/client imports.
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --cpu='*' --os='*'
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun run test

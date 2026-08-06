@@ -1,5 +1,5 @@
 import { TnpApiClient, type DnsAnswer, type ResolveResponse } from "./api";
-import type { TnpConfig } from "./config";
+import type { DnsProxyConfig } from "./config";
 import dgram from "dgram";
 import net from "net";
 import dns2 from "dns2";
@@ -86,7 +86,7 @@ export class DnsProxy {
   private cacheTtlMs: number;
   private udpServer: dgram.Socket | null = null;
   private tcpServer: net.Server | null = null;
-  private config: TnpConfig;
+  private config: DnsProxyConfig;
 
   /**
    * Overlay info cache. When a domain has an active service node, the DNS proxy
@@ -101,7 +101,7 @@ export class DnsProxy {
   /** Handle for the periodic TLD sync interval, so it can be cleared on stop. */
   private tldSyncInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor(config: TnpConfig) {
+  constructor(config: DnsProxyConfig) {
     this.config = config;
     this.apiClient = new TnpApiClient(config.apiBaseUrl);
     this.cacheTtlMs = config.cacheTtlSeconds * 1000;
