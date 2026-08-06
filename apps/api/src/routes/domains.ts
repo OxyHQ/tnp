@@ -4,6 +4,7 @@ import Domain from "../models/Domain.js";
 import TLD from "../models/TLD.js";
 import User from "../models/User.js";
 import { requireOxyAuth, getRequiredOxyUserId } from "@oxyhq/core/server";
+import { validateNativeTld } from "@tnp/namespace";
 
 const router = Router();
 
@@ -156,19 +157,22 @@ router.post("/register", requireOxyAuth, async (req, res) => {
       return;
     }
 
+    // Reserved TLDs are refused before the registry is consulted, so a stale
+    // row left over from an earlier seed cannot make one registrable. TNP is
+    // never authoritative for a label the public DNS root delegates
+    // (docs/architecture/naming.md, rule N1) — that is what keeps a public name
+    // resolving the same with TNP installed and without it. This replaces an
+    // admin-only bypass that existed to register `.com` and `.app`.
+    const tldPolicy = validateNativeTld(cleanTld);
+    if (!tldPolicy.ok && tldPolicy.reason === "reserved") {
+      res.status(403).json({ error: "TLD_RESERVED", detail: tldPolicy.detail });
+      return;
+    }
+
     const tldDoc = await TLD.findOne({ name: cleanTld, status: "active" });
     if (!tldDoc) {
       res.status(400).json({ error: `TLD .${cleanTld} is not available` });
       return;
-    }
-
-    // Standard TLDs (.com, .app): restricted to admin Oxy accounts only
-    if (!tldDoc.custom) {
-      const ADMIN_OXY_IDS = ["6981c9178fcdefaf81988ffb"];
-      if (!ADMIN_OXY_IDS.includes(userId)) {
-        res.status(403).json({ error: `Registration on .${cleanTld} is restricted` });
-        return;
-      }
     }
 
     const existing = await Domain.findOne({ name: cleanName, tld: cleanTld });

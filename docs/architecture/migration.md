@@ -39,6 +39,7 @@ apps/
   desktop/        desktop control UI             (Phase 10, if warranted)
 
 packages/
+  namespace/      TLD policy, reserved set, name classification
   protocol/       wire format, frame codec, error codes, limits
   crypto/         primitives, key hierarchy, grants, AEAD envelopes
   shared-types/   contracts shared by API, clients and apps
@@ -73,6 +74,7 @@ change. No compatibility shims, no re-export barrels, no deprecated aliases.
 
 | Step | Extract | Trigger | Unblocks |
 |---|---|---|---|
+| 0 | `@tnp/namespace` | Phase 2 ✅ | Done. The namespace rule is one implementation shared by the registry and the resolver, so the two cannot drift on which names are TNP's. |
 | 1 | `@tnp/shared-types` | Phase 1 | Contracts stop being duplicated between API and client. Fixes the class of bug behind audit B2. |
 | 2 | `@tnp/resolver` | Phase 2 | `apps/dns-server` stops reaching across the workspace by relative path (B1). |
 | 3 | `@tnp/protocol` grows | Phase 3 | Protocol v1: limits, error codes, state machines. |
@@ -126,5 +128,9 @@ droplet via SSH + Docker, and released client binaries for five targets.
 - The unused Ed25519 identity plumbing, once the key hierarchy replaces it.
 - `TnpConfig.upstreamDns` or the hardcoded DoH bypass — one of the two; a setting
   that is read and a setting that is ignored cannot both be right.
-- `.com` and `.app` from the TLD seed.
-- The `/etc/resolver/com` writer and the `Domains=~.` drop-in.
+- ~~`.com` and `.app` from the TLD seed.~~ Done.
+- ~~The `/etc/resolver/com` writer and the `Domains=~.` drop-in.~~ Done.
+- `TLD.custom`, once no reserved TLD can exist: with reserved labels refused
+  everywhere, every remaining TLD is native, so the `!custom` branches in the
+  parking-page fallback are unreachable. Left in place for now because removing
+  the field touches the web dashboard too.

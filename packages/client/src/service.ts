@@ -1,12 +1,54 @@
-import { existsSync, mkdirSync, writeFileSync, unlinkSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from "fs";
 import { execSync } from "child_process";
 import { join } from "path";
 import type { TnpConfig } from "./config";
 import { logPath, getDefaultInterface } from "./config";
+import { isReservedTld } from "@tnp/namespace";
 
 const LAUNCHD_LABEL = "so.oxy.tnp.resolver";
 const SYSTEMD_UNIT = "tnp-resolver.service";
 const WIN_TASK_NAME = "TnpResolver";
+
+/**
+ * TLDs the installer routes to the local resolver.
+ *
+ * Only TNP-native labels. Earlier versions also captured `.app` and `.com`,
+ * which pointed every lookup under those TLDs at TNP and is the namespace
+ * violation in docs/architecture/naming.md rule N1 (audit S4).
+ *
+ * Static rather than fetched: install must work offline, and a device that
+ * routes a TLD to TNP because an API said so is the same trust problem in a
+ * different place. New native TLDs are picked up by the running resolver's TLD
+ * sync; adding one to the *routing* layer is deliberately a release decision.
+ */
+export const NATIVE_TLDS = ["ox"] as const;
+
+/**
+ * Delete `/etc/resolver` entries an earlier version wrote for reserved TLDs.
+ *
+ * Upgrades must repair the machine, not merely stop making it worse: a user who
+ * installed before this change has `/etc/resolver/com` on disk, and until it is
+ * removed every `.com` lookup on that Mac still goes to TNP.
+ */
+export function removeReservedResolverFiles(): void {
+  if (!existsSync("/etc/resolver")) return;
+
+  for (const entry of readdirSync("/etc/resolver")) {
+    if (!isReservedTld(entry)) continue;
+
+    const path = join("/etc/resolver", entry);
+    // Only remove files this client wrote — a resolver entry pointing somewhere
+    // else belongs to another tool and is not ours to delete.
+    try {
+      if (!readFileSync(path, "utf-8").includes("nameserver 127.0.0.1")) continue;
+    } catch {
+      continue;
+    }
+
+    safeUnlink(path);
+    console.log(`[tnp] removed /etc/resolver/${entry} — .${entry} is public DNS, not TNP's`);
+  }
+}
 
 const platform = process.platform;
 
@@ -59,8 +101,10 @@ function installDarwin(binaryPath: string, cfg: TnpConfig): void {
 </dict>
 </plist>`);
 
+  removeReservedResolverFiles();
+
   mkdirSync("/etc/resolver", { recursive: true });
-  for (const tld of ["ox", "app", "com"]) {
+  for (const tld of NATIVE_TLDS) {
     writeFileSync(
       join("/etc/resolver", tld),
       `nameserver ${cfg.listenAddr}\nport ${cfg.listenPort}\n`
@@ -73,9 +117,10 @@ function installDarwin(binaryPath: string, cfg: TnpConfig): void {
 function uninstallDarwin(): void {
   runSilent(`launchctl unload /Library/LaunchDaemons/${LAUNCHD_LABEL}.plist`);
   safeUnlink(`/Library/LaunchDaemons/${LAUNCHD_LABEL}.plist`);
-  for (const tld of ["ox", "app", "com"]) {
+  for (const tld of NATIVE_TLDS) {
     safeUnlink(join("/etc/resolver", tld));
   }
+  removeReservedResolverFiles();
 }
 
 function statusDarwin(): boolean {
@@ -104,9 +149,14 @@ WantedBy=multi-user.target
   if (existsSync("/etc/systemd/resolved.conf") || existsSync("/run/systemd/resolve")) {
     const dir = "/etc/systemd/resolved.conf.d";
     mkdirSync(dir, { recursive: true });
+    // Route only TNP-native TLDs. This drop-in used to say `Domains=~.`, which
+    // makes TNP the routing domain for ALL DNS on the machine — every public
+    // name resolved through TNP (audit S4). An upgrade overwrites the old file,
+    // so the repair happens without extra cleanup here.
+    const routingDomains = NATIVE_TLDS.map((tld) => `~${tld}`).join(" ");
     writeFileSync(join(dir, "tnp.conf"), `[Resolve]
 DNS=${cfg.listenAddr}
-Domains=~.
+Domains=${routingDomains}
 DNSStubListener=yes
 `);
     runSilent("systemctl restart systemd-resolved");
@@ -119,7 +169,8 @@ DNSStubListener=yes
   const iface = getDefaultInterface();
   if (iface) {
     runSilent(`resolvectl dns ${iface} ${cfg.listenAddr}`);
-    runSilent(`resolvectl domain ${iface} '~.'`);
+    // Per-TLD routing domains, not `~.` — see the drop-in above.
+    runSilent(`resolvectl domain ${iface} ${NATIVE_TLDS.map((t) => `'~${t}'`).join(" ")}`);
   } else {
     console.warn("[tnp] could not detect default network interface; resolvectl DNS not configured");
   }

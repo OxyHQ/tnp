@@ -5,6 +5,7 @@ import TLDProposal from "../models/TLDProposal.js";
 import User from "../models/User.js";
 import Vote from "../models/Vote.js";
 import { requireOxyAuth, getOxyUserId, getRequiredOxyUserId } from "@oxyhq/core/server";
+import { isReservedTld, validateNativeTld } from "@tnp/namespace";
 
 const router = Router();
 
@@ -16,19 +17,17 @@ async function findOrCreateUser(oxyUserId: string) {
   return user;
 }
 
-// GET /tlds -- list all active TLDs
-// Standard TLDs are only visible to admin users; everyone else sees custom TLDs only.
-router.get("/", async (req, res) => {
+// GET /tlds -- list all active TNP-native TLDs
+//
+// Reserved TLDs are filtered out at read time, not only at write time: a
+// database seeded before the namespace policy landed still holds `.com` and
+// `.app` rows, and publishing those is what made clients shadow public names
+// (docs/architecture/naming.md §6, migration step M1). This makes the fix take
+// effect on existing deployments without waiting for a data migration.
+router.get("/", async (_req, res) => {
   try {
-    const ADMIN_OXY_IDS = ["6981c9178fcdefaf81988ffb"];
-    const callerId = getOxyUserId(req);
-    const isAdmin = callerId !== null && ADMIN_OXY_IDS.includes(callerId);
-    const filter: Record<string, unknown> = { status: "active" };
-    if (!isAdmin) {
-      filter.custom = { $ne: false };
-    }
-    const tlds = await TLD.find(filter).sort({ name: 1 });
-    res.json(tlds);
+    const tlds = await TLD.find({ status: "active" }).sort({ name: 1 });
+    res.json(tlds.filter((t) => !isReservedTld(t.name)));
   } catch (err) {
     console.error("List TLDs error:", err);
     res.status(500).json({ error: "Failed to list TLDs" });
@@ -51,10 +50,14 @@ router.post("/propose", requireOxyAuth, async (req, res) => {
 
     const name = tld.toLowerCase().replace(/^\./, "");
 
-    if (!/^[a-z][a-z0-9]{0,19}$/.test(name)) {
+    // Rule N3: a native TLD must pass the reserved check at proposal time as
+    // well as at approval time. Proposing `.com` should fail here, not survive
+    // to a vote and then be caught (or not) by whoever approves it.
+    const policy = validateNativeTld(name);
+    if (!policy.ok) {
       res
-        .status(400)
-        .json({ error: "TLD must be 1-20 lowercase alphanumeric characters" });
+        .status(policy.reason === "reserved" ? 403 : 400)
+        .json({ error: policy.reason === "reserved" ? "TLD_RESERVED" : "TLD_INVALID", detail: policy.detail });
       return;
     }
 

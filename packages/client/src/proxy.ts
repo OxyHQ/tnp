@@ -1,5 +1,6 @@
 import { TnpApiClient, type DnsAnswer, type ResolveResponse } from "./api";
 import type { DnsProxyConfig } from "./config";
+import { classifyName, isReservedTld, normalizeName, type NamespaceType } from "@tnp/namespace";
 import dgram from "dgram";
 import net from "net";
 import dns2 from "dns2";
@@ -130,28 +131,44 @@ export class DnsProxy {
     return this.apiClient;
   }
 
+  /**
+   * Load the TLD policy table.
+   *
+   * Reserved TLDs are dropped rather than stored. The server already filters
+   * them, but a resolver that shadows public names on the server's say-so is
+   * one compromised or stale API away from redirecting `google.com` — so the
+   * client enforces the namespace rule itself (docs/architecture/naming.md,
+   * rule N1).
+   */
   setTlds(tlds: Array<string | { name: string; custom?: boolean }>) {
     this.tlds = new Map<string, boolean>();
+    const refused: string[] = [];
+
     for (const t of tlds) {
-      const name = typeof t === "string" ? t : t.name;
+      const name = normalizeName(typeof t === "string" ? t : t.name);
+      if (isReservedTld(name)) {
+        refused.push(name);
+        continue;
+      }
       const custom = typeof t === "string" ? true : (t.custom ?? true);
-      this.tlds.set(name.toLowerCase(), custom);
+      this.tlds.set(name, custom);
     }
+
     console.log(`[tnp] loaded ${this.tlds.size} TLDs: ${[...this.tlds.keys()].join(", ")}`);
+    if (refused.length > 0) {
+      console.warn(
+        `[tnp] refused ${refused.length} reserved TLD(s) offered by the API: ${refused.join(", ")}. ` +
+          `These are delegated by the public DNS root and are resolved upstream, not by TNP.`,
+      );
+    }
   }
 
-  isCustomTld(name: string): boolean {
-    const clean = name.replace(/\.$/, "").toLowerCase();
-    const parts = clean.split(".");
-    if (parts.length < 2) return false;
-    return this.tlds.get(parts[parts.length - 1]) === true;
-  }
-
-  private isTnpDomain(name: string): boolean {
-    const clean = name.replace(/\.$/, "").toLowerCase();
-    const parts = clean.split(".");
-    if (parts.length < 2) return false;
-    return this.tlds.has(parts[parts.length - 1]);
+  /**
+   * Which authority owns this name. Pure, offline, and independent of whether
+   * the name is registered — see docs/architecture/naming.md §1.
+   */
+  classify(name: string): NamespaceType {
+    return classifyName(name, this.tlds.keys());
   }
 
   private typeToString(type: number): string {
@@ -311,40 +328,26 @@ export class DnsProxy {
 
     const { name, type } = questions[0];
 
-    if (this.isTnpDomain(name)) {
+    // Classification happens first, offline, always. A public-dns name never
+    // reaches the TNP API — that is both the namespace guarantee and a privacy
+    // property, since it stops the API from learning the user's public
+    // browsing. The previous code asked the API about names under public TLDs
+    // and fell back upstream when the answer was empty (audit S4).
+    if (this.classify(name) === "tnp-native") {
       const typeStr = this.typeToString(type);
-
-      // For standard (non-custom) TLDs, skip the TNP API call unless we
-      // already have a positive cache hit. This avoids a round-trip to the
-      // API for every .com/.app query that is not registered on TNP.
-      if (!this.isCustomTld(name)) {
-        const cacheKey = `${name.replace(/\.$/, "").toLowerCase()}:${typeStr}`;
-        const cached = this.cache.get(cacheKey);
-        if (!cached || Date.now() >= cached.expiresAt) {
-          return await this.forwardUpstreamRaw(queryBuf);
-        }
-      }
 
       try {
         const answers = await this.resolveTnp(name, typeStr);
 
-        if (answers.length === 0 && !this.isCustomTld(name)) {
-          return await this.forwardUpstreamRaw(queryBuf);
-        }
-
+        // No fallthrough to public DNS. A TNP-native name that does not exist
+        // is TNP's answer to give; forwarding it upstream would let a TNP
+        // registration outrank a public name by simply not existing yet.
         const response = Packet.createResponseFromRequest(request);
         for (const ans of answers) {
           response.answers.push(this.answerToRecord(name, ans));
         }
         return this.writeResponse(response);
       } catch (err) {
-        if (!this.isCustomTld(name)) {
-          try {
-            return await this.forwardUpstreamRaw(queryBuf);
-          } catch (upstreamErr) {
-            console.error(`[tnp] upstream fallback also failed for ${name}: ${upstreamErr}`);
-          }
-        }
         console.error(`[tnp] resolve error for ${name}: ${err}`);
         return this.writeEmptyResponse(request);
       }

@@ -10,7 +10,15 @@ import {
   type TnpConfig,
 } from "./config";
 import { DnsProxy } from "./proxy";
-import { installService, uninstallService, serviceStatus, stopService, startService } from "./service";
+import {
+  installService,
+  uninstallService,
+  serviceStatus,
+  stopService,
+  startService,
+  removeReservedResolverFiles,
+  NATIVE_TLDS,
+} from "./service";
 
 const VERSION = "0.2.0";
 
@@ -220,14 +228,15 @@ function configureDns(config: TnpConfig): boolean {
       // macOS: create resolver files for TNP TLDs
       const { execSync } = require("child_process");
       const { mkdirSync: mkdirSyncFs, writeFileSync: writeFileSyncFs } = require("fs");
+      removeReservedResolverFiles();
       mkdirSyncFs("/etc/resolver", { recursive: true });
-      for (const tld of ["ox", "app"]) {
+      for (const tld of NATIVE_TLDS) {
         writeFileSyncFs(
           `/etc/resolver/${tld}`,
           `nameserver ${config.listenAddr}\nport ${config.listenPort}\n`
         );
       }
-      console.log(`[tnp] DNS configured: /etc/resolver/ox and /etc/resolver/app -> ${addr}`);
+      console.log(`[tnp] DNS configured: ${NATIVE_TLDS.map((t) => `/etc/resolver/${t}`).join(", ")} -> ${addr}`);
       return true;
     } else {
       // Linux: try systemd-resolved split DNS, then resolv.conf
@@ -252,7 +261,7 @@ function configureLinuxDns(config: TnpConfig, addr: string, dnsIp: string): bool
 
   try {
     execSync(`resolvectl dns ${iface} ${config.listenAddr}`, { stdio: "pipe" });
-    execSync(`resolvectl domain ${iface} ~ox ~app`, { stdio: "pipe" });
+    execSync(`resolvectl domain ${iface} ${NATIVE_TLDS.map((t) => `~${t}`).join(" ")}`, { stdio: "pipe" });
     console.log(`[tnp] DNS configured: systemd-resolved split DNS on ${iface} for .ox .app -> ${addr}`);
     return true;
   } catch (err) {
@@ -298,14 +307,15 @@ function restoreDns(): void {
       );
       console.log("[tnp] DNS restored to default");
     } else if (process.platform === "darwin") {
-      for (const tld of ["ox", "app"]) {
+      for (const tld of NATIVE_TLDS) {
         try {
           unlinkSync(`/etc/resolver/${tld}`);
         } catch (err) {
           console.warn(`[tnp] could not remove /etc/resolver/${tld}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
-      console.log("[tnp] DNS restored: removed /etc/resolver/ox and /etc/resolver/app");
+      removeReservedResolverFiles();
+      console.log(`[tnp] DNS restored: removed ${NATIVE_TLDS.map((t) => `/etc/resolver/${t}`).join(", ")}`);
     } else {
       // Linux: remove our entry from resolv.conf if we added it
       try {
