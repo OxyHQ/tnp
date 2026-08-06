@@ -87,7 +87,7 @@ export default function Explore() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("common:searchPlaceholder")}
-          className="w-full rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
+          className="w-full rounded-md border border-border bg-surface px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
         />
       </div>
 

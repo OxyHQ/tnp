@@ -16,7 +16,7 @@ export default function DomainCard({
   return (
     <Link
       to={`/d/${name}.${tld}`}
-      className="block w-full rounded-lg border border-edge bg-surface-card p-4 text-left transition-colors hover:bg-surface-hover"
+      className="block w-full rounded-lg border border-border bg-card p-4 text-left transition-colors hover:bg-accent"
     >
       <div className="flex items-center justify-between">
         <span className="font-mono text-sm text-foreground">
@@ -27,7 +27,7 @@ export default function DomainCard({
           className={`rounded-md px-2.5 py-0.5 font-mono text-xs font-medium ${
             status === "active"
               ? "bg-primary/10 text-primary-text"
-              : "bg-surface-hover text-muted-foreground/70"
+              : "bg-accent text-muted-foreground/70"
           }`}
         >
           {status}

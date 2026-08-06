@@ -126,7 +126,7 @@ export default function DomainDetail() {
         <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">{t("domainDetail:sections.details")}</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {specs.map((spec) => (
-            <div key={spec.label} className="rounded-lg border border-edge bg-surface-card p-3">
+            <div key={spec.label} className="rounded-lg border border-border bg-card p-3">
               <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70">{spec.label}</p>
               <p className="mt-1 font-mono text-sm font-medium text-foreground">{spec.value}</p>
             </div>
@@ -138,14 +138,14 @@ export default function DomainDetail() {
       <div className="mb-10">
         <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">{t("domainDetail:sections.dnsRecords")}</h2>
         {domain.records.length === 0 ? (
-          <div className="rounded-lg border border-edge bg-surface-card p-6 text-center">
+          <div className="rounded-lg border border-border bg-card p-6 text-center">
             <p className="font-mono text-sm text-muted-foreground/70">{t("domainDetail:noDnsRecords")}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-edge bg-surface-card">
+          <div className="overflow-x-auto rounded-lg border border-border bg-card">
             <table className="w-full font-mono text-sm">
               <thead>
-                <tr className="border-b border-edge text-left text-xs text-muted-foreground/70">
+                <tr className="border-b border-border text-left text-xs text-muted-foreground/70">
                   <th className="px-4 py-3">{t("common:form.type")}</th>
                   <th className="px-4 py-3">{t("common:form.name")}</th>
                   <th className="px-4 py-3">{t("common:form.value")}</th>
@@ -154,7 +154,7 @@ export default function DomainDetail() {
               </thead>
               <tbody>
                 {domain.records.map((record) => (
-                  <tr key={record._id} className="border-t border-edge-subtle">
+                  <tr key={record._id} className="border-t border-muted">
                     <td className="px-4 py-2.5 text-xs text-muted-foreground">{record.type}</td>
                     <td className="px-4 py-2.5 text-foreground">{record.name}</td>
                     <td className="px-4 py-2.5 text-xs text-muted-foreground/70">{record.value}</td>
@@ -170,7 +170,7 @@ export default function DomainDetail() {
       {/* How to resolve */}
       <div>
         <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">{t("domainDetail:sections.howToResolve")}</h2>
-        <div className="rounded-lg border border-edge bg-surface-card p-5 space-y-3">
+        <div className="rounded-lg border border-border bg-card p-5 space-y-3">
           <p className="font-mono text-sm text-muted-foreground">
             <Trans
               i18nKey="domainDetail:howToResolveDesc"

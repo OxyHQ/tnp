@@ -118,13 +118,13 @@ export default function Register() {
             value={name}
             onChange={(e) => setName(e.target.value.toLowerCase())}
             placeholder={t("register:placeholder")}
-            className="flex-1 rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
+            className="flex-1 rounded-md border border-border bg-surface px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
             required
           />
           <select
             value={tld}
             onChange={(e) => setTld(e.target.value)}
-            className="rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-foreground"
+            className="rounded-md border border-border bg-surface px-4 py-2.5 font-mono text-sm text-foreground"
           >
             {tlds.map((t) => (
               <option key={t._id} value={t.name}>

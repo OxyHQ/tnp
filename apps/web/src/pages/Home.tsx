@@ -63,7 +63,7 @@ export default function Home() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("home:searchPlaceholder")}
-              className="flex-1 rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
+              className="flex-1 rounded-md border border-border bg-surface px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
             />
             <button
               type="submit"
@@ -116,14 +116,14 @@ export default function Home() {
       </section>
 
       {/* Quick links */}
-      <section className="border-t border-edge py-16">
+      <section className="border-t border-border py-16">
         <div className="mx-auto max-w-[1200px] px-4 lg:px-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {QUICK_LINKS.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
-                className="group rounded-lg border border-edge bg-surface-card p-5 transition-colors hover:border-edge hover:bg-surface-hover"
+                className="group rounded-lg border border-border bg-card p-5 transition-colors hover:border-border hover:bg-accent"
               >
                 <h3 className="mb-1 font-mono text-sm font-medium text-foreground group-hover:text-primary-text transition-colors">
                   {t(`home:quickLinks.${item.key}.title`)}

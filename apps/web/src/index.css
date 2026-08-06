@@ -114,13 +114,23 @@
  * whole palette is derived from it, self-consistent and WCAG-legible, rather
  * than a hand-picked list sitting beside Bloom's.
  */
+/*
+ * Colour utilities (`bg-card`, `bg-accent`, `text-muted-foreground`, …) come
+ * from Bloom's theme.css imported above — the single source of truth — and are
+ * deliberately NOT re-declared here.
+ *
+ * This app used to alias six names of its own onto Bloom tokens
+ * (`--color-surface-card`, `--color-edge`, …). Every alias is a place where a
+ * name can drift from the role it points at, and two of them did:
+ * `--color-surface-hover` pointed at `--secondary`, which is a bright
+ * foreground accent (12.39:1 against the card), so hovering a card flashed it
+ * near-cyan; and `--color-edge-subtle` pointed at `--input`, which equals
+ * `--border`, so the two edge weights had silently become one.
+ *
+ * Mention's global.css carries the same warning from the same failure, and its
+ * `@theme` block likewise holds only fonts and radii.
+ */
 @theme {
-  --color-surface-raised: var(--card);
-  --color-surface-card: var(--card);
-  --color-surface-hover: var(--secondary);
-  --color-edge: var(--border);
-  --color-edge-subtle: var(--input);
-
   --font-sans: "Geist Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
   --font-pixel: "Geist Pixel", monospace;
