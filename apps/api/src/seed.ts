@@ -2,15 +2,13 @@ import mongoose from "mongoose";
 import { config } from "./config.js";
 import TLD from "./models/TLD.js";
 
-const initialTLDs = [
-  { name: "ox", status: "active" as const, custom: true },
-  { name: "app", status: "active" as const, custom: false },
-  { name: "com", status: "active" as const, custom: false },
-];
+// Only TNP-native TLDs. `.com` and `.app` were seeded here as TNP TLDs, which
+// is what let a TNP registration change what a public name resolved to for TNP
+// users (audit S4). They are rejected by the registry now; the migration for
+// names already registered under them is docs/architecture/naming.md §6.
+export const initialTLDs = [{ name: "ox", status: "active" as const, custom: true }];
 
 export async function runSeed() {
-  // Ensure existing TLDs have the custom flag set
-  await TLD.updateMany({ name: { $in: ["com", "app"] }, custom: { $exists: false } }, { $set: { custom: false } });
   await TLD.updateMany({ custom: { $exists: false } }, { $set: { custom: true } });
 
   const count = await TLD.countDocuments();

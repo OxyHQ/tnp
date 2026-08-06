@@ -3,6 +3,7 @@ import { config } from "../config.js";
 import Domain from "../models/Domain.js";
 import TLD from "../models/TLD.js";
 import ServiceNode from "../models/ServiceNode.js";
+import { isReservedTld } from "@tnp/namespace";
 
 const router = Router();
 
@@ -33,6 +34,15 @@ router.get("/resolve", async (req, res) => {
     const tld = parts[parts.length - 1];
     const domainName = parts[parts.length - 2];
     const subdomain = parts.length > 2 ? parts.slice(0, -2).join(".") : "@";
+
+    // TNP never answers for a label the public DNS root delegates, whatever the
+    // TLD collection happens to contain (docs/architecture/naming.md, rule N1).
+    // Checked before the lookup so a `.com` row left by an earlier seed cannot
+    // produce an answer that shadows the real name.
+    if (isReservedTld(tld)) {
+      res.json({ name: fqdn, type: qtype, answers: [] });
+      return;
+    }
 
     // Verify this is a TNP TLD
     const tldDoc = await TLD.findOne({ name: tld, status: "active" });
@@ -104,10 +114,21 @@ router.get("/resolve", async (req, res) => {
   }
 });
 
+// GET /dns/tlds -- the TLD policy table clients cache for offline classification.
+//
+// Reserved TLDs are filtered out here too. This endpoint is what a resolver
+// uses to decide which names are TNP's, so publishing `.com` on it is precisely
+// how public names came to be shadowed (audit S4). Clients re-check the
+// reserved set locally as well — they do not have to trust the server to have
+// got its own policy right — but the server must not publish it either.
 router.get("/tlds", async (_req, res) => {
   try {
     const tlds = await TLD.find({ status: "active" }).select("name custom");
-    res.json(tlds.map((t) => ({ name: t.name, custom: t.custom ?? true })));
+    res.json(
+      tlds
+        .filter((t) => !isReservedTld(t.name))
+        .map((t) => ({ name: t.name, custom: t.custom ?? true })),
+    );
   } catch (err) {
     console.error("DNS TLDs error:", err);
     res.status(500).json({ error: "Failed to list TLDs" });

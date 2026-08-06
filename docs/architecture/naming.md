@@ -1,7 +1,8 @@
 # Naming and namespace policy
 
-**Status: normative policy. Partially implemented — the current default violates
-rule N1 and a migration is required. See §6.**
+**Status: normative policy. Rules N1–N5 are implemented in `@tnp/namespace` and
+enforced by both the registry and the client. Migration steps M1–M3 are done;
+M4–M7 remain. See §6.**
 
 ---
 
@@ -161,36 +162,44 @@ authenticated.
 
 ## 6. Migration away from the current collision
 
-### What is wrong today
+### What was wrong
 
 Verified in the audit (finding S4):
 
-1. `apps/api/src/seed.ts` seeds `.com` and `.app` as active TNP TLDs.
-2. `packages/client/src/service.ts` writes `/etc/resolver/com` on macOS, pointing
+1. `apps/api/src/seed.ts` seeded `.com` and `.app` as active TNP TLDs.
+2. `packages/client/src/service.ts` wrote `/etc/resolver/com` on macOS, pointing
    every `.com` lookup on that machine at the TNP resolver.
-3. The Linux installer writes a systemd-resolved drop-in with `Domains=~.`,
+3. The Linux installer wrote a systemd-resolved drop-in with `Domains=~.`,
    making TNP the routing domain for **all** DNS.
 
-Together these mean a TNP registration of a public name changes that name's
+Together these meant a TNP registration of a public name changed that name's
 meaning for TNP users. That is the thing rule N1 forbids.
 
 ### Migration, in order — no step may be skipped
 
 Deliberately staged so that nobody's working setup breaks without warning.
 
-**M1 — Stop the bleeding.** Reject new registrations under reserved TLDs at the
-API. Remove `.com` and `.app` from the seed. Existing registrations keep working
-for now. *(No user-visible breakage.)*
+**M1 — Stop the bleeding. ✅ Done.** The registry rejects registrations and
+proposals under reserved TLDs (`TLD_RESERVED`), `.com` and `.app` are out of the
+seed, and reserved TLDs are filtered out of `/tlds`, `/dns/tlds` and
+`/dns/resolve` at read time — so the fix takes effect on a database that still
+holds those rows, without waiting for a data migration. Existing registrations
+keep working. *(No user-visible breakage.)*
 
-**M2 — Narrow the capture.** Installers capture native TLDs only. macOS writes
-`/etc/resolver/<native-tld>` and nothing else, and removes any `/etc/resolver/com`
-it previously wrote. Linux switches from `Domains=~.` to per-TLD routing domains.
-Upgrades run the cleanup on existing installs. *(Public names stop being routed
+**M2 — Narrow the capture. ✅ Done.** Installers capture native TLDs only. macOS
+writes `/etc/resolver/<native-tld>` and nothing else, and removes any
+`/etc/resolver/<reserved>` a previous version wrote — but only when the file
+points at TNP's own loopback resolver, since an entry pointing elsewhere belongs
+to another tool. Linux writes per-TLD routing domains instead of `Domains=~.`,
+and the drop-in is overwritten on upgrade. *(Public names stop being routed
 through TNP. This is the fix.)*
 
-**M3 — Enforce classification.** The resolver classifies offline from the TLD
-policy table. Reserved-TLD names go straight upstream with no registry lookup.
-*(Public names now provably cannot be answered from TNP data.)*
+**M3 — Enforce classification. ✅ Done.** `classifyName` is pure and offline.
+Reserved-TLD names never reach the registry — which is both the namespace
+guarantee and a privacy property, since the API no longer learns the user's
+public browsing. The client re-checks the reserved set itself and drops reserved
+TLDs the API offers, so a stale or hostile registry cannot make it shadow a
+public name. *(Public names now provably cannot be answered from TNP data.)*
 
 **M4 — Inventory and notify.** Enumerate every existing registration under a
 reserved TLD. Notify each owner with the timeline and their options.

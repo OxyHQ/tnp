@@ -23,65 +23,94 @@ function makeConfig(): TnpConfig {
   };
 }
 
-describe("DnsProxy.isCustomTld", () => {
+describe("DnsProxy.classify", () => {
   let proxy: DnsProxy;
 
   beforeEach(() => {
     proxy = new DnsProxy(makeConfig());
   });
 
-  test("treats string-form TLDs as custom by default", () => {
+  test("a name under a native TLD belongs to TNP", () => {
     proxy.setTlds(["ox"]);
-    expect(proxy.isCustomTld("hello.ox")).toBe(true);
+    expect(proxy.classify("hello.ox")).toBe("tnp-native");
+    expect(proxy.classify("a.b.c.ox")).toBe("tnp-native");
   });
 
-  test("respects an explicit custom:false object TLD (standard TLD)", () => {
-    proxy.setTlds([{ name: "com", custom: false }]);
-    expect(proxy.isCustomTld("example.com")).toBe(false);
-  });
-
-  test("defaults object TLDs without a custom flag to custom", () => {
-    proxy.setTlds([{ name: "app" }]);
-    expect(proxy.isCustomTld("my.app")).toBe(true);
-  });
-
-  test("returns false for a TLD that was never registered", () => {
+  test("normalizes case and the trailing root dot", () => {
     proxy.setTlds(["ox"]);
-    expect(proxy.isCustomTld("example.xyz")).toBe(false);
+    expect(proxy.classify("HELLO.OX")).toBe("tnp-native");
+    expect(proxy.classify("hello.ox.")).toBe("tnp-native");
   });
 
-  test("returns false for a single-label name with no TLD", () => {
+  test("an unknown TLD is public", () => {
     proxy.setTlds(["ox"]);
-    expect(proxy.isCustomTld("localhost")).toBe(false);
+    expect(proxy.classify("example.xyz")).toBe("public-dns");
   });
 
-  test("ignores a trailing dot (FQDN root)", () => {
+  test("a single-label name is public", () => {
     proxy.setTlds(["ox"]);
-    expect(proxy.isCustomTld("hello.ox.")).toBe(true);
+    expect(proxy.classify("localhost")).toBe("public-dns");
   });
 
-  test("matches case-insensitively", () => {
+  test("classification ignores registration state", () => {
     proxy.setTlds(["ox"]);
-    expect(proxy.isCustomTld("HELLO.OX")).toBe(true);
+    expect(proxy.classify("never-registered-anywhere.ox")).toBe("tnp-native");
   });
 
-  test("matches on the final label for a multi-level subdomain", () => {
+  test("setTlds replaces the previous table rather than merging", () => {
     proxy.setTlds(["ox"]);
-    expect(proxy.isCustomTld("a.b.c.ox")).toBe(true);
+    expect(proxy.classify("hello.ox")).toBe("tnp-native");
+    proxy.setTlds(["zzt"]);
+    expect(proxy.classify("hello.ox")).toBe("public-dns");
+    expect(proxy.classify("hello.zzt")).toBe("tnp-native");
+  });
+});
+
+describe("DnsProxy namespace policy", () => {
+  let proxy: DnsProxy;
+
+  beforeEach(() => {
+    proxy = new DnsProxy(makeConfig());
   });
 
-  test("distinguishes custom from standard when both are registered", () => {
-    proxy.setTlds([{ name: "ox", custom: true }, { name: "com", custom: false }]);
-    expect(proxy.isCustomTld("site.ox")).toBe(true);
-    expect(proxy.isCustomTld("site.com")).toBe(false);
+  test("refuses reserved TLDs the API offers, in either wire form", () => {
+    // The live collision (audit S4): a database seeded before the namespace
+    // policy still holds `.com` and `.app` rows. Even if a stale or hostile API
+    // publishes them, the client must not shadow public names on its say-so.
+    proxy.setTlds([
+      "ox",
+      "com",
+      { name: "app", custom: false },
+      { name: "net", custom: true },
+    ]);
+
+    expect(proxy.classify("google.com")).toBe("public-dns");
+    expect(proxy.classify("example.app")).toBe("public-dns");
+    expect(proxy.classify("example.net")).toBe("public-dns");
+    expect(proxy.classify("example.ox")).toBe("tnp-native");
   });
 
-  test("setTlds replaces the previous set rather than merging", () => {
-    proxy.setTlds(["ox"]);
-    expect(proxy.isCustomTld("hello.ox")).toBe(true);
-    proxy.setTlds(["app"]);
-    expect(proxy.isCustomTld("hello.ox")).toBe(false);
-    expect(proxy.isCustomTld("hello.app")).toBe(true);
+  test("a custom:true flag does not make a reserved TLD TNP-native", () => {
+    // `custom` was the old gate and is not a namespace authority — the reserved
+    // set is. Marking `.com` custom must not re-enable shadowing.
+    proxy.setTlds([{ name: "com", custom: true }]);
+    expect(proxy.classify("google.com")).toBe("public-dns");
+  });
+
+  test("refuses IETF special-use names", () => {
+    proxy.setTlds(["localhost", "onion", "test", "internal", "ox"]);
+    expect(proxy.classify("foo.localhost")).toBe("public-dns");
+    expect(proxy.classify("foo.onion")).toBe("public-dns");
+    expect(proxy.classify("foo.test")).toBe("public-dns");
+    expect(proxy.classify("foo.internal")).toBe("public-dns");
+    expect(proxy.classify("foo.ox")).toBe("tnp-native");
+  });
+
+  test("an all-reserved table leaves the client resolving nothing as TNP", () => {
+    proxy.setTlds(["com", "app", "net", "org", "dev"]);
+    for (const name of ["a.com", "a.app", "a.net", "a.org", "a.dev"]) {
+      expect(proxy.classify(name)).toBe("public-dns");
+    }
   });
 });
 
