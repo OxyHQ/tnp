@@ -146,7 +146,7 @@ export default function Propose() {
               maxLength={500}
             />
           </div>
-          {error && <p className="font-mono text-sm text-red-400">{error}</p>}
+          {error && <p className="font-mono text-sm text-error-text">{error}</p>}
           {success && <p className="font-mono text-sm text-accent">{success}</p>}
           <button
             type="submit"
@@ -204,7 +204,7 @@ export default function Propose() {
                       </button>
                     )}
                     <span className={`font-mono text-xs font-medium ${
-                      score > 0 ? "text-accent" : score < 0 ? "text-red-400" : "text-muted"
+                      score > 0 ? "text-accent" : score < 0 ? "text-error-text" : "text-muted"
                     }${!canVote ? " cursor-default" : ""}`}>
                       {formattedScore}
                     </span>
@@ -213,7 +213,7 @@ export default function Propose() {
                         onClick={() => handleVote(p._id, "down")}
                         className={`cursor-pointer rounded p-1.5 transition-all duration-150 ${
                           p.userVote === "down"
-                            ? "bg-red-400/10 text-red-400"
+                            ? "bg-error-subtle text-error-text"
                             : "text-muted hover:bg-white/5 hover:text-primary"
                         }`}
                         aria-label={t("propose:downvote")}
@@ -235,8 +235,8 @@ export default function Propose() {
                   p.status === "open"
                     ? "bg-accent/10 text-accent"
                     : p.status === "approved"
-                      ? "bg-green-500/10 text-green-400"
-                      : "bg-red-500/10 text-red-400"
+                      ? "bg-success-subtle text-success-text"
+                      : "bg-error-subtle text-error-text"
                 }`}
               >
                 {t(`propose:${STATUS_KEYS[p.status]}`)}

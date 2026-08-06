@@ -135,7 +135,7 @@ export default function Register() {
         </div>
 
         {name && !checking && available !== null && (
-          <p className={`font-mono text-sm ${available ? "text-accent" : "text-red-400"}`}>
+          <p className={`font-mono text-sm ${available ? "text-accent" : "text-error-text"}`}>
             {available ? t("register:domainAvailable", { domain: `${name}.${tld}` }) : t("register:domainTaken", { domain: `${name}.${tld}` })}
           </p>
         )}
@@ -143,7 +143,7 @@ export default function Register() {
           <p className="font-mono text-sm text-muted">{t("register:checkingAvailability")}</p>
         )}
 
-        {error && <p className="font-mono text-sm text-red-400">{error}</p>}
+        {error && <p className="font-mono text-sm text-error-text">{error}</p>}
         {success && <p className="font-mono text-sm text-accent">{success}</p>}
 
         <button

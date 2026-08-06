@@ -75,7 +75,7 @@ export default function Home() {
           </form>
           {result && (
             <p
-              className={`mb-6 font-mono text-sm ${result.available ? "text-accent" : "text-red-400"}`}
+              className={`mb-6 font-mono text-sm ${result.available ? "text-accent" : "text-error-text"}`}
             >
               {result.available ? t("home:domainAvailable", { domain: result.domain }) : t("home:domainTaken", { domain: result.domain })}
               {result.available && (
