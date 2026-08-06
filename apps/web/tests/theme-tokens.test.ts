@@ -19,7 +19,7 @@ import { join } from "path";
  * Mention's global.css carries the same warning from the same failure.
  */
 
-const SRC = join(import.meta.dir, "..");
+const SRC = join(import.meta.dir, "..", "src");
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
