@@ -1,0 +1,112 @@
+# Deploy the TNP API to ECS Fargate in us-west-2.
+#
+# Replaces an SSH-and-Docker deploy to a DigitalOcean droplet that had failed on
+# every recorded run since 2026-07-14 (#29). The droplet is retired; the AWS
+# infrastructure that succeeds it already exists in oxy-infra
+# (terraform-uswest2/app-tnp.tf): ECR repositories, ECS services, task
+# definitions and ALB target groups with /health checks.
+#
+# CALLED, not triggered. ci.yml invokes this after every one of its jobs passes
+# on a push to main, so an image is never rolled out to production without the
+# test suite and the image build having gone green on that exact commit. This
+# mirrors the shape used by the other Oxy backends.
+#
+# workflow_dispatch stays as the escape hatch when CI itself is broken.
+
+name: Deploy to AWS
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+# Serialize production rollouts. Cancelling after update-service would leave an
+# unmonitored deployment running in ECS, so in-progress runs are never cancelled.
+concurrency:
+  group: deploy-tnp-api
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-west-2
+  ECR_REGISTRY: 237343248947.dkr.ecr.us-west-2.amazonaws.com
+  APP: tnp-api
+  CLUSTER: oxy-cluster
+  DOCKERFILE: Dockerfile.api
+  DEPLOY_SHA: ${{ github.sha }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::237343248947:role/oxy-github-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Tagged with the commit as well as :latest. The task definition points at
+      # :latest, but a mutable-only tag makes it impossible to say afterwards
+      # which commit is actually running.
+      - name: Build and push
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 -f "$DOCKERFILE" \
+            -t "$ECR_REGISTRY/oxy/$APP:$DEPLOY_SHA" \
+            -t "$ECR_REGISTRY/oxy/$APP:latest" .
+          docker push "$ECR_REGISTRY/oxy/$APP:$DEPLOY_SHA"
+          docker push "$ECR_REGISTRY/oxy/$APP:latest"
+
+      # The service is deliberately held at desiredCount 0 in Terraform until
+      # /oxy/tnp-api/MONGODB_URI exists (see app-tnp.tf). Rolling out to a
+      # zero-count service would report success while changing nothing, so say
+      # so plainly and stop rather than pretending a deploy happened.
+      - name: Roll out
+        run: |
+          set -euo pipefail
+          desired=$(aws ecs describe-services --cluster "$CLUSTER" --services "$APP" \
+            --query 'services[0].desiredCount' --output text)
+
+          if [ "$desired" = "0" ]; then
+            echo "::warning::$APP is scaled to 0, so the new image is pushed but not running."
+            echo "::warning::Raise desired_count in oxy-infra terraform-uswest2/app-tnp.tf once /oxy/tnp-api/MONGODB_URI exists."
+            exit 0
+          fi
+
+          aws ecs update-service --cluster "$CLUSTER" --service "$APP" \
+            --force-new-deployment --query 'service.serviceName' --output text
+
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$APP"
+          echo "Rolled out $DEPLOY_SHA"
+
+      # A stable service is not the same as a reachable one: ECS reports stable
+      # once tasks are running, before the ALB has necessarily accepted them.
+      - name: Verify through the load balancer
+        run: |
+          set -euo pipefail
+          desired=$(aws ecs describe-services --cluster "$CLUSTER" --services "$APP" \
+            --query 'services[0].desiredCount' --output text)
+          [ "$desired" = "0" ] && { echo "Scaled to 0, nothing to verify."; exit 0; }
+
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 https://api.tnp.network/health || true)
+            if [ "$code" = "200" ]; then
+              echo "api.tnp.network/health -> 200 after ${i} attempt(s)"
+              exit 0
+            fi
+            echo "attempt $i: HTTP $code"
+            sleep 10
+          done
+
+          echo "::error::api.tnp.network/health never returned 200 after the rollout"
+          exit 1

@@ -94,3 +94,14 @@ jobs:
             echo "::error::A reserved TLD is being published to clients"
             exit 1
           fi
+
+  # Deploy only after BOTH gates pass, on a push to main. Called rather than
+  # triggered so it runs inside this run, against the exact commit CI judged —
+  # there is no window in which main moves on underneath.
+  deploy:
+    needs: [verify, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/deploy-aws.yml
+    permissions:
+      id-token: write
+      contents: read

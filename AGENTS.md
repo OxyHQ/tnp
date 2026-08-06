@@ -63,9 +63,11 @@ Web app: `react-i18next`, 5 languages (en, zh, es, hi, fr). Translation files: `
 
 ## Deployment
 
-- **Web**: CF Pages (`tnp.network`) via `deploy-cloudflare.yml` — NOT on ECS
-- **API**: SSH deploy → Docker on DigitalOcean droplet (`api.tnp.network`) — NOT on ECS
-- **DB**: DigitalOcean managed MongoDB (`db-oxy` cluster), database `tnp-production`
+- **Web**: CF Pages (`tnp.network`) via `deploy.yml`, gated on CI
+- **API**: **ECS Fargate in us-west-2**, behind the shared `oxy-alb` — like the other Oxy backends. `ci.yml` calls `deploy-aws.yml` after both gates pass on `main`. The old SSH-to-DigitalOcean-droplet deploy is gone; that droplet is retired and its workflow had failed on every recorded run since 2026-07-14.
+- **Infra is owned by `~/Oxy/oxy-infra`** (`terraform-uswest2/app-tnp.tf`): ECR repos `oxy/tnp-{api,dns,relay}`, ECS services on `oxy-cluster`, ALB target groups with `/health`. Do not create TNP AWS resources from this repo.
+- **BLOCKED**: `tnp-api` is deliberately at `desired_count = 0` until the SSM parameter `/oxy/tnp-api/MONGODB_URI` exists — every other Oxy app has one, TNP does not. Until then the deploy pushes an image and warns rather than pretending a rollout happened. `TNP_PARKING_IP` is also absent from the task definition's `environment`, so parking answers would be omitted in production.
+- **DB**: MongoDB, database `tnp-production`. Which instance is a pending decision — see the blocker above.
 - **SSL**: Cloudflare proxy (flexible mode)
 - **Installer**: `curl -fsSL https://get.tnp.network | sh` (served by API via Host header routing)
 
