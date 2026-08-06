@@ -1,6 +1,5 @@
 import express from "express";
 import cors from "cors";
-import mongoose from "mongoose";
 import { config } from "./config.js";
 import { oxyAuthOptional } from "./middleware/auth.js";
 import { runSeed } from "./seed.js";
@@ -11,8 +10,10 @@ import clientRouter from "./routes/client.js";
 import dnsRouter from "./routes/dns.js";
 import nodesRouter from "./routes/nodes.js";
 import relaysRouter from "./routes/relays.js";
-import TLD from "./models/TLD.js";
-import Domain from "./models/Domain.js";
+import { and, eq } from "drizzle-orm";
+import { connectPostgres, getDb } from "./db/postgres.js";
+import { runMigrations } from "./db/migrate.js";
+import { domains, serviceNodes, tlds } from "./db/schema/index.js";
 import { escapeHtml, isValidHostname } from "./utils/hostname.js";
 
 const app = express();
@@ -77,20 +78,40 @@ app.use(async (req, res, next) => {
   const tld = parts[parts.length - 1];
   const name = parts.slice(0, -1).join(".");
 
-  const tldDoc = await TLD.findOne({ name: tld, status: "active" }).catch(() => null);
+  const db = getDb();
 
-  // Not a TNP TLD — don't serve parking page
-  if (!tldDoc) return next();
+  const [tldRow] = await db
+    .select({ custom: tlds.custom })
+    .from(tlds)
+    .where(and(eq(tlds.name, tld), eq(tlds.status, "active")))
+    .limit(1)
+    .catch(() => []);
 
-  const domain = await Domain.findOne({ name, tld, status: "active" }).catch(() => null);
+  // Not a TNP TLD — don't serve the parking page
+  if (!tldRow) return next();
+
+  const [domain] = await db
+    .select({ id: domains.id })
+    .from(domains)
+    .where(and(eq(domains.name, name), eq(domains.tld, tld), eq(domains.status, "active")))
+    .limit(1)
+    .catch(() => []);
+
   const isRegistered = !!domain;
-  const isCustomTld = tldDoc.custom;
 
-  // Standard TLD + not registered on TNP — don't serve parking page (let real DNS handle it)
-  if (!isCustomTld && !isRegistered) return next();
+  // Non-native TLD and not registered — let real DNS handle it
+  if (!tldRow.custom && !isRegistered) return next();
 
-  // If domain has a service node, let it pass (overlay handles it)
-  if (domain?.serviceNodeId) return next();
+  // A domain with a service node is served through the overlay, not here
+  if (domain) {
+    const [node] = await db
+      .select({ id: serviceNodes.id })
+      .from(serviceNodes)
+      .where(eq(serviceNodes.domainId, domain.id))
+      .limit(1)
+      .catch(() => []);
+    if (node) return next();
+  }
 
   // `isValidHostname` already excludes every character that is dangerous here,
   // so this escape is defence in depth rather than the primary control: it
@@ -145,8 +166,11 @@ app.use(async (req, res, next) => {
 });
 
 async function start() {
-  await mongoose.connect(config.mongoUri, { dbName: config.dbName });
-  console.log(`Connected to MongoDB (${config.dbName})`);
+  // Migrations run before the pool opens, so the process cannot begin serving
+  // against a schema it has not migrated.
+  await runMigrations();
+  await connectPostgres();
+  console.log("Connected to PostgreSQL");
 
   await runSeed();
 

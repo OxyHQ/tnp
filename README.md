@@ -71,7 +71,7 @@ and no part of the product may call the proxy one.
 
 ```
 apps/
-  api/            @tnp/api          Bun + Express 5 + Mongoose, Oxy auth
+  api/            @tnp/api          Bun + Express 5 + drizzle/PostgreSQL, Oxy auth
   web/            @tnp/web          Vite + React 19 + Tailwind, 5 languages
   dns-server/     @tnp/dns-server   Public TNP resolver
   relay/          @tnp/relay        Relay server
@@ -85,15 +85,18 @@ The target structure and the phased route to it are in
 
 ## Getting started
 
-Requires [Bun](https://bun.sh) and MongoDB.
+Requires [Bun](https://bun.sh) and PostgreSQL 17.
 
 ```bash
 git clone https://github.com/OxyHQ/tnp.git
 cd tnp
 bun install
 
-cp apps/api/.env.example apps/api/.env   # set MONGODB_URI
-bun run seed                             # seed initial TLDs
+docker run -d --name tnp-postgres -p 5434:5432 \
+  -e POSTGRES_USER=tnp -e POSTGRES_PASSWORD=tnp -e POSTGRES_DB=tnp postgres:17
+
+cp apps/api/.env.example apps/api/.env   # set DATABASE_URL
+cd apps/api && bun run db:migrate && bun run seed && cd ../..
 bun run dev                              # web on :8170, API on :4170
 ```
 
@@ -116,7 +119,7 @@ cd packages/protocol && bun test       # protocol tests
 
 | Variable | Description | Default |
 |---|---|---|
-| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
+| `DATABASE_URL` | PostgreSQL connection string | **required, no default** |
 | `PORT` | API port | `4170` |
 | `NODE_ENV` | Environment name, used in the database name | `development` |
 | `OXY_API_URL` | Oxy API base URL | `https://api.oxy.so` |

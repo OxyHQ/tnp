@@ -1,6 +1,8 @@
 import { Router } from "express";
-import Relay from "../models/Relay.js";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { requireOxyAuth, getRequiredOxyUserId } from "@oxyhq/core/server";
+import { getDb } from "../db/postgres.js";
+import { relays } from "../db/schema/index.js";
 
 const router = Router();
 
@@ -8,20 +10,26 @@ const router = Router();
 router.get("/", async (req, res) => {
   try {
     const operatorFilter = req.query.operator;
+    const operator =
+      operatorFilter === "oxy" || operatorFilter === "community" ? operatorFilter : null;
 
-    const query: Record<string, unknown> = {
-      status: { $ne: "offline" },
-    };
+    const rows = await getDb()
+      .select({
+        endpoint: relays.endpoint,
+        publicKey: relays.publicKey,
+        operator: relays.operator,
+        location: relays.location,
+        status: relays.status,
+      })
+      .from(relays)
+      .where(
+        operator
+          ? and(ne(relays.status, "offline"), eq(relays.operator, operator))
+          : ne(relays.status, "offline"),
+      )
+      .orderBy(asc(relays.status), asc(relays.endpoint));
 
-    if (operatorFilter === "oxy" || operatorFilter === "community") {
-      query.operator = operatorFilter;
-    }
-
-    const relays = await Relay.find(query)
-      .select("endpoint publicKey operator location status")
-      .sort({ status: 1, endpoint: 1 });
-
-    res.json(relays);
+    res.json(rows);
   } catch (err) {
     console.error("List relays error:", err);
     res.status(500).json({ error: "Failed to list relays" });
@@ -56,19 +64,42 @@ router.post("/register", requireOxyAuth, async (req, res) => {
       return;
     }
 
-    const relay = await Relay.findOneAndUpdate(
-      { endpoint },
-      {
+    const operatorUserId = getRequiredOxyUserId(req);
+
+    // Re-registering an endpoint is only allowed by its existing operator: the
+    // upsert's WHERE is what stops one account from taking over another's relay
+    // by re-registering the same endpoint.
+    const [relay] = await getDb()
+      .insert(relays)
+      .values({
         endpoint,
         publicKey,
         operator,
-        operatorUserId: getRequiredOxyUserId(req),
-        capacity,
-        location: location || "",
+        operatorUserId,
+        maxConnections: capacity.maxConnections,
+        bandwidth: capacity.bandwidth,
+        location: typeof location === "string" ? location : "",
         lastSeen: new Date(),
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
+      })
+      .onConflictDoUpdate({
+        target: relays.endpoint,
+        set: {
+          publicKey,
+          operator,
+          maxConnections: capacity.maxConnections,
+          bandwidth: capacity.bandwidth,
+          location: typeof location === "string" ? location : "",
+          lastSeen: sql`now()`,
+          updatedAt: sql`now()`,
+        },
+        setWhere: eq(relays.operatorUserId, operatorUserId),
+      })
+      .returning();
+
+    if (!relay) {
+      res.status(403).json({ error: "This endpoint is registered to another operator" });
+      return;
+    }
 
     res.status(201).json(relay);
   } catch (err) {
@@ -87,20 +118,21 @@ router.post("/heartbeat", requireOxyAuth, async (req, res) => {
       return;
     }
 
-    const relay = await Relay.findOne({ endpoint });
-    if (!relay) {
+    const updated = await getDb()
+      .update(relays)
+      .set({ lastSeen: sql`now()`, status: "active", updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(relays.endpoint, endpoint),
+          eq(relays.operatorUserId, getRequiredOxyUserId(req)),
+        ),
+      )
+      .returning({ id: relays.id });
+
+    if (updated.length === 0) {
       res.status(404).json({ error: "Relay not found" });
       return;
     }
-
-    if (relay.operatorUserId !== getRequiredOxyUserId(req)) {
-      res.status(403).json({ error: "You do not operate this relay" });
-      return;
-    }
-
-    relay.lastSeen = new Date();
-    relay.status = "active";
-    await relay.save();
 
     res.json({ status: "ok" });
   } catch (err) {

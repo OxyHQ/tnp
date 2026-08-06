@@ -61,13 +61,24 @@ jobs:
       - name: Build the API image
         run: docker build -f Dockerfile.api -t tnp-api:ci .
 
-      - name: Start it against a throwaway MongoDB and check it answers
+      - name: Start it against a throwaway PostgreSQL and check it answers
         run: |
           set -euo pipefail
           docker network create tnp-ci
-          docker run -d --name mongo --network tnp-ci mongo:8
+          docker run -d --name pg --network tnp-ci \
+            -e POSTGRES_USER=tnp -e POSTGRES_PASSWORD=tnp -e POSTGRES_DB=tnp postgres:17
+
+          for i in $(seq 1 30); do
+            docker exec pg pg_isready -U tnp >/dev/null 2>&1 && break
+            [ "$i" -eq 30 ] && { echo "::error::Postgres never became ready"; exit 1; }
+            sleep 1
+          done
+
+          # The image runs its own migrations at startup, so this also proves the
+          # migration files in drizzle/ actually apply to an empty database —
+          # a schema that only exists in TypeScript would pass every unit test.
           docker run -d --name api --network tnp-ci -p 8080:8080 \
-            -e MONGODB_URI=mongodb://mongo:27017 \
+            -e DATABASE_URL=postgres://tnp:tnp@pg:5432/tnp \
             -e TNP_PARKING_IP=203.0.113.10 \
             tnp-api:ci
 
@@ -92,6 +103,13 @@ jobs:
           echo "policy table: $tlds"
           if printf '%s' "$tlds" | grep -qE '"(com|app|net|org|dev)"'; then
             echo "::error::A reserved TLD is being published to clients"
+            exit 1
+          fi
+          # And the seed ran, so an empty table cannot pass the check above by
+          # containing nothing at all.
+          if ! printf '%s' "$tlds" | grep -q '"ox"'; then
+            echo "::error::The policy table is missing .ox — the seed did not run"
+            docker logs api
             exit 1
           fi
 

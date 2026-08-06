@@ -1,10 +1,13 @@
 import { Router } from "express";
-import Domain from "../models/Domain.js";
-import TLD from "../models/TLD.js";
-import ServiceNode from "../models/ServiceNode.js";
+import { and, eq, sql } from "drizzle-orm";
 import { requireOxyAuth, getRequiredOxyUserId } from "@oxyhq/core/server";
+import { isReservedTld } from "@tnp/namespace";
+import { getDb } from "../db/postgres.js";
+import { domains, serviceNodes, tlds } from "../db/schema/index.js";
 
 const router = Router();
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // POST /nodes/register -- register a service node for a domain (auth required)
 router.post("/register", requireOxyAuth, async (req, res) => {
@@ -12,7 +15,7 @@ router.post("/register", requireOxyAuth, async (req, res) => {
     const userId = getRequiredOxyUserId(req);
     const { domainId, publicKey } = req.body;
 
-    if (!domainId || typeof domainId !== "string") {
+    if (!domainId || typeof domainId !== "string" || !UUID_RE.test(domainId)) {
       res.status(400).json({ error: "domainId is required" });
       return;
     }
@@ -21,32 +24,32 @@ router.post("/register", requireOxyAuth, async (req, res) => {
       return;
     }
 
-    const domain = await Domain.findById(domainId);
+    const db = getDb();
+
+    const [domain] = await db
+      .select({ id: domains.id, oxyUserId: domains.oxyUserId })
+      .from(domains)
+      .where(eq(domains.id, domainId))
+      .limit(1);
+
     if (!domain) {
       res.status(404).json({ error: "Domain not found" });
       return;
     }
-
     if (domain.oxyUserId !== userId) {
       res.status(403).json({ error: "You do not own this domain" });
       return;
     }
 
-    const node = await ServiceNode.findOneAndUpdate(
-      { domainId: domain._id },
-      {
-        domainId: domain._id,
-        oxyUserId: userId,
-        publicKey,
-        lastSeen: new Date(),
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-
-    await Domain.findByIdAndUpdate(domain._id, {
-      serviceNodeId: node._id,
-      serviceNodePubKey: publicKey,
-    });
+    // One node per domain, enforced by a unique index rather than by convention.
+    const [node] = await db
+      .insert(serviceNodes)
+      .values({ domainId: domain.id, oxyUserId: userId, publicKey })
+      .onConflictDoUpdate({
+        target: serviceNodes.domainId,
+        set: { publicKey, oxyUserId: userId, lastSeen: sql`now()`, updatedAt: sql`now()` },
+      })
+      .returning();
 
     res.status(201).json(node);
   } catch (err) {
@@ -55,7 +58,7 @@ router.post("/register", requireOxyAuth, async (req, res) => {
   }
 });
 
-// GET /nodes/:domain -- look up service node by domain (e.g., example.ox)
+// GET /nodes/:domain -- look up a service node by domain (e.g. example.ox)
 router.get("/:domain", async (req, res) => {
   try {
     const parts = req.params.domain.split(".");
@@ -64,38 +67,45 @@ router.get("/:domain", async (req, res) => {
       return;
     }
 
-    const [name, tld] = parts;
+    const [name, tld] = parts.map((p) => p.toLowerCase());
 
-    const tldDoc = await TLD.findOne({
-      name: tld.toLowerCase(),
-      status: "active",
-    });
-    if (!tldDoc) {
+    // TNP serves no reserved TLD, so it publishes no service node under one
+    // either — otherwise this endpoint would be a way around the namespace rule.
+    if (isReservedTld(tld)) {
       res.status(404).json({ error: "TLD not found" });
       return;
     }
 
-    const domain = await Domain.findOne({
-      name: name.toLowerCase(),
-      tld: tld.toLowerCase(),
-      status: "active",
-    });
-    if (!domain) {
-      res.status(404).json({ error: "Domain not found" });
+    const db = getDb();
+
+    const [tldRow] = await db
+      .select({ id: tlds.id })
+      .from(tlds)
+      .where(and(eq(tlds.name, tld), eq(tlds.status, "active")))
+      .limit(1);
+
+    if (!tldRow) {
+      res.status(404).json({ error: "TLD not found" });
       return;
     }
 
-    const node = await ServiceNode.findOne({ domainId: domain._id });
+    const [node] = await db
+      .select({
+        publicKey: serviceNodes.publicKey,
+        connectedRelay: serviceNodes.connectedRelay,
+        status: serviceNodes.status,
+      })
+      .from(serviceNodes)
+      .innerJoin(domains, eq(serviceNodes.domainId, domains.id))
+      .where(and(eq(domains.name, name), eq(domains.tld, tld), eq(domains.status, "active")))
+      .limit(1);
+
     if (!node) {
       res.status(404).json({ error: "No service node registered for this domain" });
       return;
     }
 
-    res.json({
-      publicKey: node.publicKey,
-      connectedRelay: node.connectedRelay,
-      status: node.status,
-    });
+    res.json(node);
   } catch (err) {
     console.error("Lookup service node error:", err);
     res.status(500).json({ error: "Failed to look up service node" });
@@ -107,7 +117,7 @@ router.post("/heartbeat", requireOxyAuth, async (req, res) => {
   try {
     const { domainId, connectedRelay } = req.body;
 
-    if (!domainId || typeof domainId !== "string") {
+    if (!domainId || typeof domainId !== "string" || !UUID_RE.test(domainId)) {
       res.status(400).json({ error: "domainId is required" });
       return;
     }
@@ -116,21 +126,31 @@ router.post("/heartbeat", requireOxyAuth, async (req, res) => {
       return;
     }
 
-    const node = await ServiceNode.findOne({ domainId });
-    if (!node) {
+    // The ownership predicate is in the UPDATE, so a node belonging to another
+    // account cannot be touched even by guessing its domain id.
+    const updated = await getDb()
+      .update(serviceNodes)
+      .set({
+        lastSeen: sql`now()`,
+        connectedRelay,
+        status: "online",
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(serviceNodes.domainId, domainId),
+          eq(serviceNodes.oxyUserId, getRequiredOxyUserId(req)),
+        ),
+      )
+      .returning({ id: serviceNodes.id });
+
+    if (updated.length === 0) {
+      // Deliberately does not distinguish "no such node" from "not yours":
+      // telling an unauthorized caller which domains have nodes is a disclosure
+      // the previous 404/403 split made for free.
       res.status(404).json({ error: "Service node not found" });
       return;
     }
-
-    if (node.oxyUserId !== getRequiredOxyUserId(req)) {
-      res.status(403).json({ error: "You do not own this service node" });
-      return;
-    }
-
-    node.lastSeen = new Date();
-    node.connectedRelay = connectedRelay;
-    node.status = "online";
-    await node.save();
 
     res.json({ status: "ok" });
   } catch (err) {
