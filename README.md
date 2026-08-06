@@ -1,9 +1,13 @@
 # TNP — The Network Protocol
 
-TNP is a network layer that runs on top of the existing internet. It provides a
-namespace of its own, resolves names in that namespace, and carries traffic to
-services published inside it — without those services needing a public IP address
-or an open inbound port.
+TNP is an alternative internet that runs on top of the existing one: its own
+namespace, its own edge, and an optional privacy layer. Services publish through
+it without a public IP address or an open inbound port, and their origin address
+is never exposed to clients.
+
+Three products sharing one network — a namespace (ICANN's role), an edge
+(Cloudflare's role), and a secure connection (a VPN's role). See
+[what TNP is, as a product](docs/architecture/product.md).
 
 Domains are tied to your Oxy account. Register at [tnp.network](https://tnp.network),
 manage records, publish services, and propose new TLDs.
@@ -44,6 +48,7 @@ Ten layers, nine operating modes, a versioned wire protocol.
 
 | | |
 |---|---|
+| [Product](docs/architecture/product.md) | What TNP is trying to be, and in what order |
 | [Overview](docs/architecture/overview.md) | The layers and how they fit |
 | [Glossary](docs/architecture/glossary.md) | Precise meanings |
 | [Operating modes](docs/architecture/operating-modes.md) | What you can turn on, and what it costs |

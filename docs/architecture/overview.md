@@ -8,10 +8,16 @@ that closes it. It never describes an unimplemented thing as working.
 
 ## What TNP is
 
-TNP — The Network Protocol — is a network layer that runs on top of the existing
-internet. It gives its users a namespace of their own, resolves names in that
-namespace, and carries traffic to services published inside it without those
-services needing a public IP address or an open inbound port.
+TNP — The Network Protocol — is an alternative internet that runs on top of the
+existing one: its own namespace, its own edge, and an optional privacy layer.
+Three products sharing one network — a namespace (ICANN's role), an edge
+(Cloudflare's role), and a secure connection (a VPN's role).
+
+The product direction and the priority order it implies are in
+[`product.md`](./product.md). **Read that first** — it is what decides which of
+the layers below get built when, and it carries the rule the rest of this
+document has to respect: the default path has to feel like normal internet, and
+privacy that costs latency is a tier the user chooses.
 
 TNP is **not** only an alternative DNS. Name resolution is one of ten layers.
 
@@ -110,6 +116,7 @@ shape and the phased route to it — no big-bang restructure — are in
 
 ## Where to go next
 
+- What TNP is trying to be, and in what order → [`product.md`](./product.md)
 - What the words mean → [`glossary.md`](./glossary.md)
 - What a user can turn on, and what each mode costs them → [`operating-modes.md`](./operating-modes.md)
 - Why a public name never changes meaning → [`naming.md`](./naming.md)

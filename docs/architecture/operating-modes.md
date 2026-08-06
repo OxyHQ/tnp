@@ -5,6 +5,11 @@ permission requirements, its own diagnostics and its own threat model. They
 **compose** — a device can be in resolver + proxy + service mode at once — so
 this is not a single enum, and any UI that presents it as one is wrong.
 
+Cutting across all of them is the **privacy tier** the user selects — standard
+(one hop, fast, the default) or private (multi-hop, slower, opt-in). The tier
+decides how traffic is carried; the mode decides what traffic is carried. See
+[`product.md`](./product.md) § Privacy tiers.
+
 `Status` in each section is the honest state of the code, not the plan.
 
 ---
@@ -112,6 +117,11 @@ Detail: [`relays.md`](./relays.md).
 ---
 
 ## 6. Private mode
+
+The opt-in privacy **tier**, not a separate way of using TNP: it changes how
+access, proxy and tunnel modes carry traffic, and costs latency to do it. The
+standard tier stays the default precisely so that choosing this one is a
+decision the user makes rather than a tax everyone pays.
 
 **Does (specified):** builds multi-hop circuits so no single relay sees both the
 client and the destination.
