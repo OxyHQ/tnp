@@ -1,6 +1,22 @@
 # TNP (The Network Protocol)
 
-Alternative internet namespace system for custom TLDs. Agent: `tnp`.
+Universal network layer over the public internet: its own namespace, resolution,
+NAT-traversing service publication, an overlay transport, and (planned) onion
+routing, exit nodes and an OS-level tunnel. **Not "DNS-only"** — that phrasing is
+retired. Agent: `tnp`.
+
+**Read `docs/architecture/` before changing anything.** Start with
+`overview.md`, then the layer doc for what you are touching.
+`audit-2026-08-06.md` is the verified state of the code; where docs and code
+disagree, the audit says which is which.
+
+Three rules that override convenience:
+- **Never shadow a public DNS name.** A `public-dns` name resolves identically
+  with and without TNP. `naming.md` is normative.
+- **A proxy is not a VPN.** No CLI, UI or doc string may call the local proxy a
+  VPN.
+- **No anonymity claims.** Multi-hop is not implemented; even when it is, the
+  wording rules in `privacy-model.md` §6 apply.
 
 ## Commands
 
@@ -75,5 +91,8 @@ Key modules in `packages/client/src/`:
 ## Gotchas
 
 - **DNS/parking IP**: `TNP_PARKING_IP` and `TNP_PUBLIC_DNS` MUST be set to the AWS NLB EIP at deploy time. Never hardcode IP values.
-- **`packages/client` typecheck gate**: `bun run tsc --noEmit` must pass before merge — enforced by CI.
+- **Typecheck/test gates are NOT in CI yet.** Only `packages/client`, `packages/protocol` and `apps/web` have a typecheck script at all; `apps/api`, `apps/relay` and `apps/dns-server` have none, and no workflow runs tests or typecheck on any of them. Run them by hand until Phase 1 lands the CI job — and expect `apps/dns-server` to fail, it builds a `TnpConfig` missing 13 required fields (audit B1).
+- **`apps/dns-server` imports `packages/client` by relative path** without declaring the dependency. That is why B1 was never caught. Do not add more cross-workspace relative imports; extract a package instead.
+- **The relay implementation exists twice** — `apps/relay/src/` and `packages/client/src/relay-node.ts` — with the same bugs in both. A fix to one is not a fix.
+- **Client/API request bodies are hand-matched, and currently disagree.** `registerRelay` and `sendRelayHeartbeat` send shapes the API rejects (audit B2). Until `@tnp/shared-types` exists, check both sides when touching either.
 - **Key deps**: `tweetnacl` (X25519/XSalsa20 in client), `dns2` (DNS encoding in client), `react-i18next` + `i18next` + `i18next-http-backend` + `i18next-browser-languagedetector` (web i18n).
