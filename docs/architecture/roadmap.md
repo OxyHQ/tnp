@@ -4,6 +4,12 @@ Twelve phases. **Every phase leaves the repository runnable and tested.** No
 phase begins before the previous one's exit criteria are met — a half-finished
 transport under a half-finished proxy is how a system becomes unfixable.
 
+**Ordering is set by [`product.md`](./product.md), not by this list's numbering.**
+The fast path serves both the edge product and the secure connection, so it
+comes first; exit nodes (7) now precede onion routing (6), because the VPN needs
+exits and multi-hop only becomes mandatory once an exit exists to see every
+destination.
+
 Phase 0 is complete: [`audit-2026-08-06.md`](./audit-2026-08-06.md).
 
 ---

@@ -14,6 +14,25 @@
 @source "../../../node_modules/@oxyhq/services/lib/**/*.{js,jsx}";
 @source "../../../node_modules/@oxyhq/bloom/lib/**/*.{js,jsx}";
 
+/*
+ * Bloom's canonical token map. This is the piece that was missing, and its
+ * absence is why every @oxyhq/bloom and @oxyhq/services surface — the
+ * OxyProvider sign-in dialog, the account switcher, every Bloom component —
+ * rendered with UNDEFINED colours: they style themselves with Bloom's token
+ * names (`bg-bg`, `text-text`, `border-border-input`, `bg-fill-brand`, …) and
+ * not one of those names was defined anywhere in the built stylesheet.
+ *
+ * It maps each Tailwind `--color-*` utility onto a Bloom base token as
+ * `var(--x)`. NEVER wrap these in `hsl(...)`: the base token already resolves
+ * to a full colour, so double-wrapping yields an invalid value and the utility
+ * silently renders transparent.
+ *
+ * The base tokens themselves (`--background`, `--foreground`, `--card`, …) are
+ * written onto `document.documentElement` at runtime by `BloomThemeProvider`
+ * (see main.tsx), which is why they do not appear in this file.
+ */
+@import "@oxyhq/bloom/design-tokens/theme.css";
+
 @font-face {
   font-family: "Geist Sans";
   src: url("/fonts/Geist-Light.woff2") format("woff2");
@@ -78,24 +97,29 @@
   font-display: swap;
 }
 
+/*
+ * TNP-only tokens: names Bloom does not define, kept because TNP's surfaces are
+ * more layered than Bloom's base set.
+ *
+ * They are DERIVED from Bloom base tokens rather than hardcoded, so they follow
+ * the active theme instead of drifting from it. The previous block hardcoded
+ * seventeen `--color-*` values, ELEVEN of which collided with names Bloom owns
+ * (`--color-background`, `--color-foreground`, `--color-primary`, `--color-accent`,
+ * `--color-border`, `--color-input`, …). Redefining Bloom's own token names in
+ * an app stylesheet is the thing Bloom's docs call out as unsupported: the app
+ * ends up with a palette that is partly its own and partly Bloom's, depending
+ * on which names happen to collide.
+ *
+ * TNP's identity now comes from the seed passed to BloomThemeProvider, so the
+ * whole palette is derived from it, self-consistent and WCAG-legible, rather
+ * than a hand-picked list sitting beside Bloom's.
+ */
 @theme {
-  --color-surface: #000;
-  --color-surface-raised: #0a0a0a;
-  --color-surface-card: #111;
-  --color-surface-hover: #181818;
-  --color-edge: #222;
-  --color-edge-subtle: #1a1a1a;
-  --color-primary: #ededef;
-  --color-secondary: #8a8a97;
-  --color-muted: #56565f;
-  --color-accent: #22c55e;
-  --color-background: #000;
-  --color-foreground: #ededef;
-  --color-primary-foreground: #000;
-  --color-muted-foreground: #56565f;
-  --color-accent-foreground: #000;
-  --color-border: #222;
-  --color-input: #222;
+  --color-surface-raised: var(--card);
+  --color-surface-card: var(--card);
+  --color-surface-hover: var(--secondary);
+  --color-edge: var(--border);
+  --color-edge-subtle: var(--input);
 
   --font-sans: "Geist Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
@@ -108,5 +132,7 @@ body {
 }
 
 ::selection {
-  background-color: rgba(34, 197, 94, 0.3);
+  /* Follows the theme's accent instead of a literal that has to be kept in
+     sync with it by hand. */
+  background-color: color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
