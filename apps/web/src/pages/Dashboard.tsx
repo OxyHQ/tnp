@@ -143,7 +143,7 @@ export default function Dashboard() {
                               <td className="py-2">
                                 <button
                                   onClick={() => deleteRecord(domain._id, record._id)}
-                                  className="cursor-pointer text-xs text-red-400 transition-colors hover:text-red-300"
+                                  className="cursor-pointer text-xs text-destructive transition-colors hover:text-destructive/80"
                                 >
                                   [{t("common:delete")}]
                                 </button>
@@ -163,7 +163,7 @@ export default function Dashboard() {
                   <div className="flex justify-end">
                     <button
                       onClick={() => releaseDomain(domain._id)}
-                      className="cursor-pointer font-mono text-xs text-red-400 transition-colors hover:text-red-300"
+                      className="cursor-pointer font-mono text-xs text-destructive transition-colors hover:text-destructive/80"
                     >
                       [{t("common:releaseDomain")}]
                     </button>

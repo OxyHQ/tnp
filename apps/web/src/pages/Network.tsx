@@ -137,8 +137,8 @@ export default function Network() {
                       <span
                         className={`inline-block h-2 w-2 rounded-full ${
                           relay.status === "active"
-                            ? "bg-green-400"
-                            : "bg-gray-500"
+                            ? "bg-success-text"
+                            : "bg-muted-foreground"
                         }`}
                         title={relay.status}
                       />

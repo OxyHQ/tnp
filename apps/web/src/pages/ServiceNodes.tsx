@@ -138,10 +138,10 @@ export default function ServiceNodes() {
                   <span
                     className={`inline-block h-2 w-2 rounded-full ${
                       loading
-                        ? "bg-yellow-400"
+                        ? "bg-info-text"
                         : node?.status === "online"
-                          ? "bg-green-400"
-                          : "bg-gray-500"
+                          ? "bg-success-text"
+                          : "bg-muted-foreground"
                     }`}
                     title={
                       loading

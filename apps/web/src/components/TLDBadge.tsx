@@ -6,7 +6,7 @@ interface TLDBadgeProps {
 export default function TLDBadge({ name, status = "active" }: TLDBadgeProps) {
   const statusColors = {
     active: "border-accent/30 text-accent",
-    proposed: "border-amber-400/30 text-amber-400",
+    proposed: "border-warning-subtle text-warning-text",
     pending: "border-muted/30 text-muted",
   };
 

@@ -108,8 +108,8 @@ export default function DomainDetail() {
               domain.status === "active"
                 ? "bg-accent/10 text-accent"
                 : domain.status === "pending"
-                  ? "bg-amber-400/10 text-amber-400"
-                  : "bg-red-400/10 text-red-400"
+                  ? "bg-warning-subtle text-warning-text"
+                  : "bg-error-subtle text-error-text"
             }`}
           >
             {domain.status}
