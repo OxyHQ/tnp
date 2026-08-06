@@ -25,7 +25,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
-      <header className="sticky top-0 z-50 border-b border-edge bg-background/80 backdrop-blur-md">
+      <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="mx-auto w-full max-w-[1200px] px-4 lg:px-6">
           <nav aria-label="Main navigation" className="flex items-center justify-between py-3 lg:py-4">
             <div className="flex items-center gap-6">
@@ -56,7 +56,7 @@ export default function Layout() {
               <select
                 value={i18n.language}
                 onChange={(e) => i18n.changeLanguage(e.target.value)}
-                className="rounded-md border border-edge bg-surface-raised px-2 py-1.5 font-mono text-xs text-muted-foreground"
+                className="rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-xs text-muted-foreground"
                 aria-label="Select language"
               >
                 {LANGUAGES.map((lang) => (
@@ -105,7 +105,7 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      <footer role="contentinfo" className="border-t border-edge">
+      <footer role="contentinfo" className="border-t border-border">
         <div className="mx-auto w-full max-w-[1200px] px-4 py-12 lg:px-6">
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
             <div>

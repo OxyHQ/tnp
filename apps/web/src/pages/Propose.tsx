@@ -125,7 +125,7 @@ export default function Propose() {
       {isAuthenticated ? (
         <form onSubmit={handleSubmit} className="mb-12 space-y-4">
           <div className="flex gap-2">
-            <div className="flex items-center rounded-md border border-edge bg-surface-raised">
+            <div className="flex items-center rounded-md border border-border bg-surface">
               <span className="pl-4 font-mono text-muted-foreground/70">.</span>
               <input
                 type="text"
@@ -141,7 +141,7 @@ export default function Propose() {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder={t("propose:reasonPlaceholder")}
-              className="flex-1 rounded-md border border-edge bg-surface-raised px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
+              className="flex-1 rounded-md border border-border bg-surface px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
               required
               maxLength={500}
             />
@@ -157,7 +157,7 @@ export default function Propose() {
           </button>
         </form>
       ) : (
-        <div className="mb-12 rounded-lg border border-edge bg-surface-card p-6 text-center">
+        <div className="mb-12 rounded-lg border border-border bg-card p-6 text-center">
           <p className="mb-4 font-mono text-sm text-muted-foreground/70">{t("propose:signInPrompt")}</p>
           <button
             onClick={() => signIn()}
@@ -176,7 +176,7 @@ export default function Propose() {
           {proposals.map((p) => (
             <div
               key={p._id}
-              className="flex items-center gap-4 rounded-lg border border-edge bg-surface-card p-4"
+              className="flex items-center gap-4 rounded-lg border border-border bg-card p-4"
             >
               {(() => {
                 const canVote = p.status === "open" && isAuthenticated && user?.id !== p.proposedBy?.oxyUserId;
@@ -194,7 +194,7 @@ export default function Propose() {
                         className={`cursor-pointer rounded p-1.5 transition-all duration-150 ${
                           p.userVote === "up"
                             ? "bg-primary/10 text-primary-text"
-                            : "text-muted-foreground/70 hover:bg-white/5 hover:text-foreground"
+                            : "text-muted-foreground/70 hover:bg-accent hover:text-foreground"
                         }`}
                         aria-label={t("propose:upvote")}
                       >
@@ -214,7 +214,7 @@ export default function Propose() {
                         className={`cursor-pointer rounded p-1.5 transition-all duration-150 ${
                           p.userVote === "down"
                             ? "bg-error-subtle text-error-text"
-                            : "text-muted-foreground/70 hover:bg-white/5 hover:text-foreground"
+                            : "text-muted-foreground/70 hover:bg-accent hover:text-foreground"
                         }`}
                         aria-label={t("propose:downvote")}
                       >

@@ -72,7 +72,7 @@ export default function Network() {
       ) : (
         <>
           <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border border-edge bg-surface-card p-4">
+            <div className="rounded-lg border border-border bg-card p-4">
               <p className="font-mono text-xs uppercase tracking-wider text-muted-foreground/70">
                 {t("activeRelays")}
               </p>
@@ -80,7 +80,7 @@ export default function Network() {
                 {activeRelays.length}
               </p>
             </div>
-            <div className="rounded-lg border border-edge bg-surface-card p-4">
+            <div className="rounded-lg border border-border bg-card p-4">
               <p className="font-mono text-xs uppercase tracking-wider text-muted-foreground/70">
                 {t("oxyOperated")}
               </p>
@@ -88,7 +88,7 @@ export default function Network() {
                 {oxyCount}
               </p>
             </div>
-            <div className="rounded-lg border border-edge bg-surface-card p-4">
+            <div className="rounded-lg border border-border bg-card p-4">
               <p className="font-mono text-xs uppercase tracking-wider text-muted-foreground/70">
                 {t("community")}
               </p>
@@ -106,7 +106,7 @@ export default function Network() {
                 className={`cursor-pointer rounded-md px-3 py-1.5 font-mono text-sm transition-colors ${
                   filter === f
                     ? "border border-primary/30 bg-primary/10 text-primary-text"
-                    : "border border-edge text-muted-foreground/70 hover:text-muted-foreground"
+                    : "border border-border text-muted-foreground/70 hover:text-muted-foreground"
                 }`}
               >
                 {t(FILTER_KEYS[f])}
@@ -123,7 +123,7 @@ export default function Network() {
               {filteredRelays.map((relay) => (
                 <div
                   key={relay.endpoint}
-                  className="rounded-lg border border-edge bg-surface-card p-4"
+                  className="rounded-lg border border-border bg-card p-4"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -142,7 +142,7 @@ export default function Network() {
                         className={`rounded-md px-2.5 py-0.5 font-mono text-xs font-medium ${
                           relay.operator === "oxy"
                             ? "bg-primary/10 text-primary-text"
-                            : "bg-surface-hover text-muted-foreground"
+                            : "bg-accent text-muted-foreground"
                         }`}
                       >
                         {relay.operator}

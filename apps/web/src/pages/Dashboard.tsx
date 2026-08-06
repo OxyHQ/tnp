@@ -77,7 +77,7 @@ export default function Dashboard() {
         </Link>
         <Link
           to="/service-nodes"
-          className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-edge text-muted-foreground/70 hover:text-muted-foreground"
+          className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-border text-muted-foreground/70 hover:text-muted-foreground"
         >
           {t("dashboard:tabs.serviceNodes")}
         </Link>
@@ -94,7 +94,7 @@ export default function Dashboard() {
       ) : (
         <div className="space-y-3">
           {domains.map((domain) => (
-            <div key={domain._id} className="rounded-lg border border-edge bg-surface-card">
+            <div key={domain._id} className="rounded-lg border border-border bg-card">
               <button
                 onClick={() => setExpanded(expanded === domain._id ? null : domain._id)}
                 className="flex w-full cursor-pointer items-center justify-between p-4 text-left"
@@ -108,7 +108,7 @@ export default function Dashboard() {
                     className={`rounded-md px-2.5 py-0.5 font-mono text-xs font-medium ${
                       domain.status === "active"
                         ? "bg-primary/10 text-primary-text"
-                        : "bg-surface-hover text-muted-foreground/70"
+                        : "bg-accent text-muted-foreground/70"
                     }`}
                   >
                     {domain.status}
@@ -120,7 +120,7 @@ export default function Dashboard() {
               </button>
 
               {expanded === domain._id && (
-                <div className="border-t border-edge p-4 space-y-6">
+                <div className="border-t border-border p-4 space-y-6">
                   {domain.records.length > 0 && (
                     <div className="overflow-x-auto">
                       <table className="w-full font-mono text-sm">
@@ -135,7 +135,7 @@ export default function Dashboard() {
                         </thead>
                         <tbody>
                           {domain.records.map((record) => (
-                            <tr key={record._id} className="border-t border-edge-subtle">
+                            <tr key={record._id} className="border-t border-muted">
                               <td className="py-2 pr-4 text-xs text-muted-foreground">{record.type}</td>
                               <td className="py-2 pr-4 text-foreground">{record.name}</td>
                               <td className="py-2 pr-4 text-xs text-muted-foreground/70">{record.value}</td>

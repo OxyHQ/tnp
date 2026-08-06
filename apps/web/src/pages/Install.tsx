@@ -91,7 +91,7 @@ export default function Install() {
             className={`cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors ${
               method === key
                 ? "border border-primary/30 bg-primary/10 text-primary-text"
-                : "border border-edge text-muted-foreground/70 hover:text-muted-foreground"
+                : "border border-border text-muted-foreground/70 hover:text-muted-foreground"
             }`}
           >
             {t(`install:methods.${key}`)}
@@ -113,7 +113,7 @@ export default function Install() {
                 className={`cursor-pointer rounded-md px-3 py-1.5 font-mono text-sm transition-colors ${
                   dnsPlatform === p.id
                     ? "border border-primary/30 bg-primary/10 text-primary-text"
-                    : "border border-edge text-muted-foreground/70 hover:text-muted-foreground"
+                    : "border border-border text-muted-foreground/70 hover:text-muted-foreground"
                 }`}
               >
                 {p.label}
@@ -121,7 +121,7 @@ export default function Install() {
             ))}
           </div>
 
-          <div className="rounded-lg border border-edge bg-surface-card p-5 space-y-4">
+          <div className="rounded-lg border border-border bg-card p-5 space-y-4">
             {dnsPlatform === "android" && (
               <>
                 <h3 className="font-mono text-sm font-medium text-foreground">{t("install:dns.android.title")}</h3>
@@ -134,7 +134,7 @@ export default function Install() {
                         values={{ dnsHost: DNS_HOST, dnsIp: DNS_IP }}
                         components={{
                           accent: <span className="text-muted-foreground" />,
-                          code: <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text" />,
+                          code: <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />,
                         }}
                       />
                     </li>
@@ -145,7 +145,7 @@ export default function Install() {
                     i18nKey="install:dns.android.note"
                     t={t}
                     values={{ dnsIp: DNS_IP }}
-                    components={{ code: <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text" /> }}
+                    components={{ code: <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" /> }}
                   />
                 </p>
               </>
@@ -162,7 +162,7 @@ export default function Install() {
                         values={{ dnsIp: DNS_IP }}
                         components={{
                           accent: <span className="text-muted-foreground" />,
-                          code: <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text" />,
+                          code: <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />,
                         }}
                       />
                     </li>
@@ -185,7 +185,7 @@ export default function Install() {
                         values={{ dnsIp: DNS_IP }}
                         components={{
                           accent: <span className="text-muted-foreground" />,
-                          code: <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text" />,
+                          code: <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />,
                         }}
                       />
                     </li>
@@ -205,7 +205,7 @@ export default function Install() {
                         values={{ dnsIp: DNS_IP }}
                         components={{
                           accent: <span className="text-muted-foreground" />,
-                          code: <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text" />,
+                          code: <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />,
                         }}
                       />
                     </li>
@@ -220,19 +220,19 @@ export default function Install() {
                   <div>
                     <p className="mb-1 font-medium text-muted-foreground">systemd-resolved (Ubuntu, Fedora, Debian):</p>
                     <p className="mb-2 text-xs text-muted-foreground/70">
-                      If <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text">resolvectl</code> is not found, install it first:
+                      If <code className="rounded bg-background px-1.5 py-0.5 text-primary-text">resolvectl</code> is not found, install it first:
                     </p>
-                    <code className="block rounded bg-surface px-3 py-2 text-xs text-primary-text mb-2">
+                    <code className="block rounded bg-background px-3 py-2 text-xs text-primary-text mb-2">
                       sudo apt install systemd-resolved   # Debian/Ubuntu
                     </code>
                     <p className="mb-1 text-xs text-muted-foreground/70">Then configure DNS:</p>
-                    <code className="block rounded bg-surface px-3 py-2 text-xs text-primary-text">
+                    <code className="block rounded bg-background px-3 py-2 text-xs text-primary-text">
                       sudo resolvectl dns eth0 {DNS_IP} && sudo resolvectl dnsovertls eth0 no
                     </code>
                   </div>
                   <div>
                     <p className="mb-1 font-medium text-muted-foreground">resolv.conf (any distro):</p>
-                    <code className="block rounded bg-surface px-3 py-2 text-xs text-primary-text">
+                    <code className="block rounded bg-background px-3 py-2 text-xs text-primary-text">
                       echo "nameserver {DNS_IP}" | sudo tee /etc/resolv.conf  # port 53 only
                     </code>
                   </div>
@@ -243,7 +243,7 @@ export default function Install() {
                         i18nKey="install:dns.linux.networkManagerDesc"
                         t={t}
                         values={{ dnsIp: DNS_IP }}
-                        components={{ code: <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text" /> }}
+                        components={{ code: <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" /> }}
                       />
                     </p>
                   </div>
@@ -265,9 +265,9 @@ export default function Install() {
                         values={{ dnsIp: DNS_IP }}
                         components={{
                           accent: <span className="text-muted-foreground" />,
-                          code: <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text" />,
-                          code1: <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text" />,
-                          code2: <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text" />,
+                          code: <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />,
+                          code1: <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />,
+                          code2: <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />,
                         }}
                       />
                     </li>
@@ -291,7 +291,7 @@ export default function Install() {
           )}
 
           <div className="mb-8 space-y-3">
-            <div className="rounded-lg border border-edge bg-surface-card px-4 py-3">
+            <div className="rounded-lg border border-border bg-card px-4 py-3">
               <p className="mb-2 font-mono text-xs font-medium text-muted-foreground">macOS / Linux</p>
               <div className="flex items-center justify-between">
                 <code className="font-mono text-sm text-primary-text">{INSTALL_CMD_UNIX}</code>
@@ -304,7 +304,7 @@ export default function Install() {
               </div>
             </div>
 
-            <div className="rounded-lg border border-edge bg-surface-card px-4 py-3">
+            <div className="rounded-lg border border-border bg-card px-4 py-3">
               <p className="mb-2 font-mono text-xs font-medium text-muted-foreground">Windows (PowerShell)</p>
               <div className="flex items-center justify-between">
                 <code className="font-mono text-sm text-primary-text">{INSTALL_CMD_WINDOWS}</code>
@@ -326,7 +326,7 @@ export default function Install() {
                 className={`cursor-pointer rounded-md px-3 py-1.5 font-mono text-sm transition-colors ${
                   clientPlatform === p.id
                     ? "border border-primary/30 bg-primary/10 text-primary-text"
-                    : "border border-edge text-muted-foreground/70 hover:text-muted-foreground"
+                    : "border border-border text-muted-foreground/70 hover:text-muted-foreground"
                 }`}
               >
                 {p.label}
@@ -334,7 +334,7 @@ export default function Install() {
             ))}
           </div>
 
-          <div className="rounded-lg border border-edge bg-surface-card p-5 space-y-4">
+          <div className="rounded-lg border border-border bg-card p-5 space-y-4">
             {clientPlatform === "macos" && (
               <>
                 <h3 className="font-mono text-sm font-medium text-foreground">{t("install:client.macos.title")}</h3>
@@ -389,20 +389,20 @@ export default function Install() {
             {t("install:serve.intro")}
           </p>
 
-          <div className="rounded-lg border border-edge bg-surface-card p-5 space-y-4">
+          <div className="rounded-lg border border-border bg-card p-5 space-y-4">
             <h3 className="font-mono text-sm font-medium text-foreground">{t("install:serve.heading")}</h3>
 
             <div className="space-y-3">
               <div>
                 <p className="mb-1 font-mono text-xs font-medium text-muted-foreground">{t("install:serve.step1Title")}</p>
-                <code className="block rounded bg-surface px-3 py-2 text-xs text-primary-text">
+                <code className="block rounded bg-background px-3 py-2 text-xs text-primary-text">
                   curl -fsSL https://get.tnp.network | sh
                 </code>
               </div>
 
               <div>
                 <p className="mb-1 font-mono text-xs font-medium text-muted-foreground">{t("install:serve.step2Title")}</p>
-                <code className="block rounded bg-surface px-3 py-2 text-xs text-primary-text">
+                <code className="block rounded bg-background px-3 py-2 text-xs text-primary-text">
                   tnp auth login
                 </code>
                 <p className="mt-1 font-mono text-xs text-muted-foreground/70">
@@ -412,7 +412,7 @@ export default function Install() {
 
               <div>
                 <p className="mb-1 font-mono text-xs font-medium text-muted-foreground">{t("install:serve.step3Title")}</p>
-                <code className="block rounded bg-surface px-3 py-2 text-xs text-primary-text">
+                <code className="block rounded bg-background px-3 py-2 text-xs text-primary-text">
                   tnp serve --domain example.ox --target localhost:80 --token &lt;your-token&gt;
                 </code>
                 <p className="mt-1 font-mono text-xs text-muted-foreground/70">
@@ -420,15 +420,15 @@ export default function Install() {
                     i18nKey="install:serve.step3Desc"
                     t={t}
                     components={{
-                      code1: <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text" />,
-                      code2: <code className="rounded bg-surface px-1.5 py-0.5 text-primary-text" />,
+                      code1: <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />,
+                      code2: <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />,
                     }}
                   />
                 </p>
               </div>
             </div>
 
-            <div className="border-t border-edge pt-4">
+            <div className="border-t border-border pt-4">
               <p className="font-mono text-xs font-medium text-muted-foreground">{t("install:serve.howItWorks")}</p>
               <ul className="mt-2 list-disc pl-5 space-y-1.5 font-mono text-xs text-muted-foreground/70">
                 {(t("install:serve.howItWorksList", { returnObjects: true }) as string[]).map((item, i) => (
@@ -446,7 +446,7 @@ export default function Install() {
             {t("install:relay.intro")}
           </p>
 
-          <div className="rounded-lg border border-edge bg-surface-card p-5 space-y-4">
+          <div className="rounded-lg border border-border bg-card p-5 space-y-4">
             <h3 className="font-mono text-sm font-medium text-foreground">{t("install:relay.whatRelaysDo")}</h3>
             <ul className="list-disc pl-5 space-y-1.5 font-mono text-xs text-muted-foreground/70">
               {(t("install:relay.whatRelaysDoList", { returnObjects: true }) as string[]).map((item, i) => (
@@ -455,7 +455,7 @@ export default function Install() {
             </ul>
           </div>
 
-          <div className="mt-4 rounded-lg border border-edge bg-surface-card p-5 space-y-4">
+          <div className="mt-4 rounded-lg border border-border bg-card p-5 space-y-4">
             <h3 className="font-mono text-sm font-medium text-foreground">{t("install:relay.communityRelay")}</h3>
             <p className="font-mono text-xs text-muted-foreground/70">
               {t("install:relay.communityRelayDesc")}
@@ -464,13 +464,13 @@ export default function Install() {
             <div className="space-y-3">
               <div>
                 <p className="mb-1 font-mono text-xs font-medium text-muted-foreground">{t("install:relay.step1Title")}</p>
-                <code className="block rounded bg-surface px-3 py-2 text-xs text-primary-text">
+                <code className="block rounded bg-background px-3 py-2 text-xs text-primary-text">
                   git clone https://github.com/OxyHQ/tnp && cd tnp/apps/relay
                 </code>
               </div>
               <div>
                 <p className="mb-1 font-mono text-xs font-medium text-muted-foreground">{t("install:relay.step2Title")}</p>
-                <code className="block rounded bg-surface px-3 py-2 text-xs text-primary-text">
+                <code className="block rounded bg-background px-3 py-2 text-xs text-primary-text">
                   cp .env.example .env && bun run start
                 </code>
               </div>

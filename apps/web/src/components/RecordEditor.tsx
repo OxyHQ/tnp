@@ -41,7 +41,7 @@ export default function RecordEditor({
         <select
           value={type}
           onChange={(e) => setType(e.target.value)}
-          className="block rounded-md border border-edge bg-surface-raised px-3 py-2 font-mono text-sm text-foreground"
+          className="block rounded-md border border-border bg-surface px-3 py-2 font-mono text-sm text-foreground"
         >
           {RECORD_TYPES.map((rt) => (
             <option key={rt} value={rt}>{rt}</option>
@@ -54,7 +54,7 @@ export default function RecordEditor({
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="block rounded-md border border-edge bg-surface-raised px-3 py-2 font-mono text-sm text-foreground"
+          className="block rounded-md border border-border bg-surface px-3 py-2 font-mono text-sm text-foreground"
           placeholder={t("placeholder.recordName")}
           required
         />
@@ -65,7 +65,7 @@ export default function RecordEditor({
           type="text"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="block w-full rounded-md border border-edge bg-surface-raised px-3 py-2 font-mono text-sm text-foreground"
+          className="block w-full rounded-md border border-border bg-surface px-3 py-2 font-mono text-sm text-foreground"
           placeholder={t("placeholder.recordValue")}
           required
         />
@@ -76,7 +76,7 @@ export default function RecordEditor({
           type="number"
           value={ttl}
           onChange={(e) => setTtl(Number(e.target.value))}
-          className="block w-24 rounded-md border border-edge bg-surface-raised px-3 py-2 font-mono text-sm text-foreground"
+          className="block w-24 rounded-md border border-border bg-surface px-3 py-2 font-mono text-sm text-foreground"
           min={60}
         />
       </div>
