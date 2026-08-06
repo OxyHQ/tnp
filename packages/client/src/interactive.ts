@@ -12,7 +12,7 @@ import {
   type TextRenderable,
 } from "@opentui/core";
 import type { KeyEvent } from "@opentui/core";
-import { loadConfig, saveConfig, type TnpConfig } from "./config";
+import { loadConfig, saveConfig, parsePrivacyLevel, type TnpConfig } from "./config";
 import { serviceStatus } from "./service";
 
 const VERSION = "0.2.0";
@@ -133,9 +133,8 @@ const SETTING_FIELDS: SettingField[] = [
     key: "privacyLevel",
     label: "Privacy level",
     validate: (v) => {
-      if (v !== "access" && v !== "private")
-        return 'Must be "access" or "private"';
-      return null;
+      const result = parsePrivacyLevel(v);
+      return result.ok ? null : result.error;
     },
   },
   {
@@ -243,8 +242,6 @@ function buildStatusBar() {
 
   const serviceLabel = running ? "● running" : "● stopped";
   const serviceColor = running ? GREEN : RED;
-  const privacyColor =
-    config.privacyLevel === "private" ? YELLOW : GREEN;
 
   return Box(
     { width: "100%", flexDirection: "row", gap: 2, paddingLeft: 2, paddingTop: 1 },
@@ -252,7 +249,7 @@ function buildStatusBar() {
     Text({ content: "│", fg: DIM }),
     Text({
       content: `Privacy: ${config.privacyLevel}`,
-      fg: privacyColor,
+      fg: GREEN,
     }),
     Text({ content: "│", fg: DIM }),
     Text({ content: `Relay: ${config.relayPreference}`, fg: CYAN }),
@@ -679,7 +676,7 @@ async function actionHelp(): Promise<void> {
 
     addLine("");
     addLine("Overlay commands:", WHITE);
-    addLine("  tnp connect [--privacy access|private]", CYAN);
+    addLine("  tnp connect [--privacy access]", CYAN);
     addLine(
       "    Starts both the DNS proxy and a SOCKS5 proxy. TNP domains with active",
     );

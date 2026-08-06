@@ -10,7 +10,12 @@
     "rootDir": "src",
     "declaration": false,
     "resolveJsonModule": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "types": [
+      "bun-types"
+    ]
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

@@ -1,9 +1,9 @@
 # Onion routing
 
 **Status: specification only. Nothing here is implemented.** There is no
-multi-hop code in the repository. `tnp connect --privacy private` today parses
-the flag and builds an ordinary single-hop circuit (audit B5). Phase 1 makes that
-flag fail loudly; Phase 6 implements this document.
+multi-hop code in the repository. `tnp connect --privacy private` used to parse
+the flag and build an ordinary single-hop circuit (audit B5); since Phase 1 it
+fails loudly instead. Phase 6 implements this document.
 
 ---
 

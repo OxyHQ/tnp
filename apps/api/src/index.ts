@@ -13,6 +13,7 @@ import nodesRouter from "./routes/nodes.js";
 import relaysRouter from "./routes/relays.js";
 import TLD from "./models/TLD.js";
 import Domain from "./models/Domain.js";
+import { escapeHtml, isValidHostname } from "./utils/hostname.js";
 
 const app = express();
 
@@ -65,6 +66,13 @@ app.use(async (req, res, next) => {
   }
   if (!host.includes(".")) return next();
 
+  // `req.hostname` is the raw Host header. Express does not validate it, so it
+  // can carry anything the sender put there — verified against Express 5.2.1:
+  // `Host: a.ox<script>alert(1)</script>` arrives intact. Reject anything that
+  // is not a plausible DNS name before it reaches a database query or the
+  // response body.
+  if (!isValidHostname(host)) return next();
+
   const parts = host.split(".");
   const tld = parts[parts.length - 1];
   const name = parts.slice(0, -1).join(".");
@@ -84,15 +92,24 @@ app.use(async (req, res, next) => {
   // If domain has a service node, let it pass (overlay handles it)
   if (domain?.serviceNodeId) return next();
 
+  // `isValidHostname` already excludes every character that is dangerous here,
+  // so this escape is defence in depth rather than the primary control: it
+  // keeps the page safe if that validator is ever loosened.
+  const safeHost = escapeHtml(host);
+
   const title = isRegistered
-    ? `${host} — Registered on TNP`
-    : `${host} — Available on TNP`;
+    ? `${safeHost} — Registered on TNP`
+    : `${safeHost} — Available on TNP`;
   const subtitle = isRegistered
     ? "This domain is registered on The Network Protocol."
     : "This domain is available. Register it on The Network Protocol.";
   const ctaText = isRegistered ? "View domain details" : "Register this domain";
+  // Encoded for URL semantics, then escaped for the HTML attribute it lands in.
+  // `encodeURIComponent` alone leaves `'` intact, which is harmless inside a
+  // double-quoted attribute and a breakout the moment someone changes the
+  // quoting — so both steps run rather than relying on the quote style.
   const ctaHref = isRegistered
-    ? `https://tnp.network/d/${host}`
+    ? `https://tnp.network/d/${escapeHtml(encodeURIComponent(host))}`
     : "https://tnp.network/register";
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -116,7 +133,7 @@ app.use(async (req, res, next) => {
   </style>
 </head>
 <body>
-  <h1>${host}</h1>
+  <h1>${safeHost}</h1>
   <p>${subtitle}</p>
   <div class="links">
     <a href="${ctaHref}">[${ctaText}]</a>

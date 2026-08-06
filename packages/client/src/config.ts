@@ -33,9 +33,57 @@ export interface DnsProxyConfig {
   cacheTtlSeconds: number;
 }
 
+/**
+ * Privacy levels the client can actually provide.
+ *
+ * `"private"` — multi-hop onion routing — is specified in
+ * `docs/architecture/onion-routing.md` and is NOT implemented: there is no
+ * multi-hop code in the repository. It was previously accepted, stored,
+ * reported back to the user as `privacy: private`, and then ignored, which gave
+ * anyone who asked for private routing ordinary single-hop routing plus a
+ * status line telling them otherwise.
+ *
+ * It stays out of this union until Phase 6 (#22) implements it. The type is the
+ * statement of what exists; `parsePrivacyLevel` rejects the rest by name so the
+ * failure is explicit rather than silent.
+ */
+export type PrivacyLevel = "access";
+
+/** Levels that are specified but not implemented, with the issue that lands each. */
+const PLANNED_PRIVACY_LEVELS: Record<string, string> = {
+  private: "multi-hop onion routing is not implemented yet (see #22)",
+};
+
+export type PrivacyLevelResult =
+  | { ok: true; level: PrivacyLevel }
+  | { ok: false; error: string };
+
+/**
+ * Resolve a user-supplied privacy level.
+ *
+ * Separated from both the CLI flag parser and the config loader so a level that
+ * TNP cannot actually provide is rejected identically wherever it is named —
+ * command line, interactive settings editor, or a stored config file.
+ */
+export function parsePrivacyLevel(value: string): PrivacyLevelResult {
+  if (value === "access") return { ok: true, level: "access" };
+
+  // `Object.hasOwn`, not a plain index: a bare lookup resolves inherited keys,
+  // so "constructor" and "toString" would each report as a planned level.
+  if (Object.hasOwn(PLANNED_PRIVACY_LEVELS, value)) {
+    const planned = PLANNED_PRIVACY_LEVELS[value];
+    return { ok: false, error: `privacy level "${value}" is unavailable: ${planned}` };
+  }
+
+  return {
+    ok: false,
+    error: `unknown privacy level "${value}". The only available level is "access".`,
+  };
+}
+
 export interface TnpConfig extends DnsProxyConfig {
   upstreamDns: string;
-  privacyLevel: "access" | "private";
+  privacyLevel: PrivacyLevel;
   socksPort: number;
   relayPreference: "oxy" | "community" | "any";
   identityKeyPath: string;
@@ -102,6 +150,31 @@ const DEFAULT_CONFIG: TnpConfig = {
   publicDnsIp: TNP_PUBLIC_DNS,
 };
 
+/**
+ * Merge a stored config over the defaults.
+ *
+ * Split out from `loadConfig` so the merge — including the privacy-level
+ * normalization below — is testable without touching the filesystem.
+ *
+ * A stored `privacyLevel` is re-validated rather than trusted: a config written
+ * by an earlier build can name a level that never worked. Falling back silently
+ * would put the caller back in the situation this normalization exists to end,
+ * so the downgrade is announced.
+ */
+export function applyStoredConfig(saved: Partial<TnpConfig>): TnpConfig {
+  const merged = { ...DEFAULT_CONFIG, ...saved };
+
+  const privacy = parsePrivacyLevel(String(merged.privacyLevel));
+  if (!privacy.ok) {
+    console.warn(
+      `[tnp] stored ${privacy.error} Falling back to "${DEFAULT_CONFIG.privacyLevel}".`,
+    );
+    merged.privacyLevel = DEFAULT_CONFIG.privacyLevel;
+  }
+
+  return merged;
+}
+
 export function loadConfig(): TnpConfig {
   const path = configPath();
   if (!existsSync(path)) {
@@ -118,7 +191,7 @@ export function loadConfig(): TnpConfig {
     );
     return { ...DEFAULT_CONFIG };
   }
-  return { ...DEFAULT_CONFIG, ...saved };
+  return applyStoredConfig(saved);
 }
 
 export function saveConfig(cfg: TnpConfig): void {

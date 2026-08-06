@@ -28,7 +28,7 @@ This table is the honest state of the code. Full evidence:
 | Reach a TNP service over SOCKS5 | ⚠️ Prototype — TNP destinations only, no IPv6, ignores the requested port |
 | Run a relay (`tnp relay`) | ❌ Broken — registration fails against the current API |
 | HTTP CONNECT proxy | ❌ Not implemented |
-| Onion routing / private mode | ❌ Not implemented — the `--privacy private` flag currently does nothing |
+| Onion routing / private mode | ❌ Not implemented — `--privacy private` is rejected rather than silently downgraded |
 | Exit nodes / public internet routing | ❌ Not implemented |
 | Full or split tunnel VPN | ❌ Not implemented |
 | Mobile apps | ❌ Not implemented |

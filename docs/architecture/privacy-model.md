@@ -20,8 +20,8 @@ Concretely, right now:
   nothing (audit S3).
 - Your public DNS queries currently go to a hardcoded third-party DoH endpoint
   regardless of your configured upstream (audit B4).
-- Multi-hop routing does not exist. `--privacy private` currently changes nothing
-  (audit B5).
+- Multi-hop routing does not exist. `--privacy private` is rejected rather than
+  silently downgraded to single-hop, which is what it used to do (audit B5).
 
 **TNP does not provide anonymity today.** It provides confidentiality against the
 relay and against a passive network observer, conditional on the API behaving.
