@@ -15,5 +15,5 @@
   "docsIgnore": [
     "superpowers"
   ],
-  "description": "Alternative DNS / namespace system — Vite web + Bun API + DNS server"
+  "description": "Universal network layer — namespace, resolution, encrypted overlay, Vite web + Bun API + DNS server + relay"
 }

@@ -12,11 +12,19 @@ TNP is an alternative internet namespace controlled by Oxy. Anyone can register 
 
 ## What it is
 
-TNP is **DNS-only**. It does not route traffic, does not act as a VPN, and does not touch anything except name resolution. Install the TNP client once, point a device at the public TNP resolver, or run the local proxy — and every TNP domain resolves natively on your device. Browsers, CLI tools, APIs, everything.
+TNP is a network layer over the public internet: its own namespace, resolution for that namespace, and an overlay that carries traffic to services published inside it. It is **not** DNS-only — the client ships a local resolver, a SOCKS5 proxy, an overlay transport and a service-node mode.
+
+Public DNS keeps working. A public name resolves identically with TNP installed and without it — see the [namespace policy](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/naming.md).
 
 Domains are tied to your Oxy account. Register at [tnp.network](https://tnp.network), manage your DNS records from the web dashboard, and propose new TLDs to the community.
 
-On top of pure DNS, TNP also ships an optional **end-to-end encrypted overlay** built around the same domains: register a service node, run `tnp serve` on a port, and clients connect through community-operated relays without exposing your IP. Overlay traffic is multiplexed over WebSockets and encrypted with NaCl (X25519 + XSalsa20-Poly1305).
+Alongside resolution, TNP ships an **encrypted overlay** built around the same domains: register a service node, run `tnp serve` on a port, and clients connect through relays without your IP being exposed to them. Overlay traffic is multiplexed over WebSockets and encrypted with NaCl (X25519 + XSalsa20-Poly1305).
+
+<Callout type="warning">
+**Current limits, stated plainly.** The overlay is a prototype. Payloads are encrypted against the relay, but the service node's public key is served by the API with no signature chain, so the API is presently able to substitute it — the tunnel is not end-to-end authenticated yet. Onion routing, exit nodes and VPN mode are **not implemented**; `tnp connect --privacy private` currently changes nothing. TNP does not provide anonymity. See the [Phase 0 audit](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/audit-2026-08-06.md) and the [privacy model](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/privacy-model.md).
+</Callout>
+
+A local proxy is **not** a VPN, and TNP does not describe it as one.
 
 ## Architecture
 
