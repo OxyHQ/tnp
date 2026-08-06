@@ -42,6 +42,10 @@ apps/
 packages/
   client/         @tnp/client       Interactive CLI, DNS proxy, SOCKS5 proxy, tunnel manager,
                                     service node, embedded relay (compiles to standalone binary)
+  namespace/      @tnp/namespace    TLD policy, reserved set, name classification
+  protocol/       @tnp/protocol     Binary frame codec
+  shared-types/   @tnp/shared-types Request/response contracts for the relay and service-node
+                                    endpoints, and the parsers the API validates with
 ```
 
 ## How It Works
@@ -78,7 +82,8 @@ tnp                  # Interactive menu (arrow keys, settings, status, become a 
 tnp run              # DNS resolver daemon (foreground)
 tnp connect          # Overlay client (DNS + SOCKS5 proxy)
 tnp serve            # Host a service on a TNP domain
-tnp relay            # Run as a community relay node
+tnp relay            # Run as a community relay node (--endpoint is the public
+                     #   URL clients dial, not the --host/--port bind address)
 tnp install / uninstall / status / test <domain>
 ```
 
@@ -96,5 +101,6 @@ Key modules in `packages/client/src/`:
 - **Gates**: `bun run typecheck` and `bun run test` at the repo root fan out to every workspace with `bun run --filter '*'` and exit non-zero if any fails. `ci.yml` runs both on every PR, and both deploy workflows `needs:` them, so a red `main` cannot ship. Run them locally before pushing.
 - **`apps/dns-server` imports `packages/client` by relative path** without declaring the dependency. That is why audit B1 (a `TnpConfig` built with 5 of 18 required fields) went unnoticed for so long. The resolver now takes a narrow `DnsProxyConfig` instead, but the relative import stands until Phase 2 extracts `@tnp/resolver` — do not add more cross-workspace relative imports; extract a package instead.
 - **The relay implementation exists twice** — `apps/relay/src/` and `packages/client/src/relay-node.ts` — with the same bugs in both. A fix to one is not a fix.
-- **Client/API request bodies are hand-matched, and currently disagree.** `registerRelay` and `sendRelayHeartbeat` send shapes the API rejects (audit B2). Until `@tnp/shared-types` exists, check both sides when touching either.
+- **A request body is a contract, and a contract lives in `@tnp/shared-types`.** Never write a request shape twice. An API route validates with the package's parser and destructures the parsed value; the client builds a value of the same declared type. Both hold for the relay and service-node endpoints; move any other endpoint the same way when you touch it, rather than hand-matching a new literal against a route you read once — that is exactly how `registerRelay` came to send `{port, location}` to an endpoint requiring `{endpoint, publicKey, operator, capacity}` for the whole life of the feature (audit B2). The gate is two-sided and both halves are needed: `packages/client/src/api.contract.test.ts` captures the bytes the real client sends and feeds them to the real parser, `apps/api/src/routes/*.contract.test.ts` drives the real router over HTTP with no database (a rejected body is a 400 from the contract, an accepted one reaches the handler and 500s at `getDb()`).
+- **A new workspace package must be added to every Dockerfile that installs the graph containing it.** Bun resolves the whole workspace before installing anything, so one missing `COPY <pkg>/package.json` fails the install with `@tnp/<name>@workspace:* failed to resolve` no matter how unrelated that package is to the image. Only `Dockerfile.api` is built in CI, so `Dockerfile.dns` silently broke this way once already.
 - **Key deps**: `tweetnacl` (X25519/XSalsa20 in client), `dns2` (DNS encoding in client), `react-i18next` + `i18next` + `i18next-http-backend` + `i18next-browser-languagedetector` (web i18n).

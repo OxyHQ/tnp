@@ -1,15 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
+import type { RelayDirectoryEntry, RelayOperator } from "@tnp/shared-types";
 import { apiFetch } from "../lib/api";
-
-interface Relay {
-  endpoint: string;
-  publicKey: string;
-  operator: "oxy" | "community";
-  location: string;
-  status: "active" | "inactive";
-}
 
 const FILTER_KEYS = {
   all: "filterAll",
@@ -19,13 +12,13 @@ const FILTER_KEYS = {
 
 export default function Network() {
   const { t } = useTranslation("network");
-  const [relays, setRelays] = useState<Relay[]>([]);
+  const [relays, setRelays] = useState<RelayDirectoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "oxy" | "community">("all");
+  const [filter, setFilter] = useState<"all" | RelayOperator>("all");
 
   const fetchRelays = useCallback(() => {
     setLoading(true);
-    apiFetch<Relay[]>("/relays")
+    apiFetch<RelayDirectoryEntry[]>("/relays")
       .then((data) => {
         setRelays(data);
         setLoading(false);

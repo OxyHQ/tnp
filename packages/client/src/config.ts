@@ -97,8 +97,17 @@ export interface TnpConfig extends DnsProxyConfig {
   relayPreference: "oxy" | "community" | "any";
   identityKeyPath: string;
   relayPort: number;
+  /**
+   * Public `ws://`/`wss://` URL this machine's relay is reachable at, published
+   * in the relay directory. Empty until the operator sets it; `tnp relay`
+   * refuses to register without it rather than publishing a guess derived from
+   * a bind address.
+   */
+  relayEndpoint: string;
   relayLocation: string;
   relayMaxConnections: number;
+  /** Advertised bandwidth ceiling in Mbit/s. 0 means the operator states none. */
+  relayBandwidth: number;
   relayAuthToken: string;
   autoConnect: boolean;
   killSwitch: boolean;
@@ -151,8 +160,10 @@ const DEFAULT_CONFIG: TnpConfig = {
   relayPreference: "oxy",
   identityKeyPath: join(dataDir(), "identity.key"),
   relayPort: 8080,
+  relayEndpoint: "",
   relayLocation: "",
   relayMaxConnections: 100,
+  relayBandwidth: 0,
   relayAuthToken: "",
   autoConnect: false,
   killSwitch: false,

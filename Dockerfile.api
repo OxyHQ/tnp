@@ -21,6 +21,7 @@ COPY apps/web/package.json apps/web/
 COPY packages/client/package.json packages/client/
 COPY packages/namespace/package.json packages/namespace/
 COPY packages/protocol/package.json packages/protocol/
+COPY packages/shared-types/package.json packages/shared-types/
 
 RUN bun install --frozen-lockfile
 
@@ -29,6 +30,7 @@ RUN bun install --frozen-lockfile
 # only add a way for the two to diverge.
 COPY apps/api apps/api
 COPY packages/namespace packages/namespace
+COPY packages/shared-types packages/shared-types
 
 ENV NODE_ENV=production
 ENV PORT=8080

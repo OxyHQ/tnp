@@ -23,6 +23,7 @@
     "@opentui/core": "^0.4.3",
     "@tnp/namespace": "workspace:*",
     "@tnp/protocol": "workspace:*",
+    "@tnp/shared-types": "workspace:*",
     "dns-packet": "^5.6.1",
     "dns2": "^3.0.0",
     "tweetnacl": "^1.0.3"

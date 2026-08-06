@@ -1,6 +1,13 @@
 import { Router } from "express";
 import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { requireOxyAuth, getRequiredOxyUserId } from "@oxyhq/core/server";
+import {
+  parseRegisterRelayRequest,
+  parseRelayHeartbeatRequest,
+  type RelayDirectoryEntry,
+  type RelayHeartbeatResponse,
+  type RelayRegistration,
+} from "@tnp/shared-types";
 import { getDb } from "../db/postgres.js";
 import { relays } from "../db/schema/index.js";
 
@@ -29,7 +36,12 @@ router.get("/", async (req, res) => {
       )
       .orderBy(asc(relays.status), asc(relays.endpoint));
 
-    res.json(rows);
+    // Annotated rather than merely returned: the directory listing is a
+    // contract the CLI and the web dashboard both read, so a column added to
+    // or dropped from the projection above has to be a decision about the
+    // contract instead of a silent change to one consumer's assumptions.
+    const directory: RelayDirectoryEntry[] = rows;
+    res.json(directory);
   } catch (err) {
     console.error("List relays error:", err);
     res.status(500).json({ error: "Failed to list relays" });
@@ -39,31 +51,18 @@ router.get("/", async (req, res) => {
 // POST /relays/register -- register a relay node (auth required)
 router.post("/register", requireOxyAuth, async (req, res) => {
   try {
-    const { endpoint, publicKey, operator, capacity, location } = req.body;
-
-    if (!endpoint || typeof endpoint !== "string") {
-      res.status(400).json({ error: "endpoint is required" });
-      return;
-    }
-    if (!publicKey || typeof publicKey !== "string") {
-      res.status(400).json({ error: "publicKey is required" });
-      return;
-    }
-    if (operator !== "oxy" && operator !== "community") {
-      res.status(400).json({ error: "operator must be 'oxy' or 'community'" });
-      return;
-    }
-    if (
-      !capacity ||
-      typeof capacity.maxConnections !== "number" ||
-      typeof capacity.bandwidth !== "number"
-    ) {
-      res.status(400).json({
-        error: "capacity with maxConnections and bandwidth is required",
-      });
+    // The one definition of what this endpoint accepts lives in
+    // @tnp/shared-types, and the relay builds its request from that same
+    // declaration. Hand-written field checks here are exactly what let this
+    // route and the client disagree for the whole life of the feature — see
+    // audit finding B2.
+    const parsed = parseRegisterRelayRequest(req.body);
+    if (!parsed.ok) {
+      res.status(400).json({ error: parsed.error });
       return;
     }
 
+    const { endpoint, publicKey, operator, capacity, location } = parsed.value;
     const operatorUserId = getRequiredOxyUserId(req);
 
     // Re-registering an endpoint is only allowed by its existing operator: the
@@ -78,7 +77,7 @@ router.post("/register", requireOxyAuth, async (req, res) => {
         operatorUserId,
         maxConnections: capacity.maxConnections,
         bandwidth: capacity.bandwidth,
-        location: typeof location === "string" ? location : "",
+        location,
         lastSeen: new Date(),
       })
       .onConflictDoUpdate({
@@ -88,7 +87,7 @@ router.post("/register", requireOxyAuth, async (req, res) => {
           operator,
           maxConnections: capacity.maxConnections,
           bandwidth: capacity.bandwidth,
-          location: typeof location === "string" ? location : "",
+          location,
           lastSeen: sql`now()`,
           updatedAt: sql`now()`,
         },
@@ -101,7 +100,17 @@ router.post("/register", requireOxyAuth, async (req, res) => {
       return;
     }
 
-    res.status(201).json(relay);
+    // Projected, not returned whole: the row also carries `operatorUserId` and
+    // internal ids, which are not part of the contract.
+    const registration: RelayRegistration = {
+      endpoint: relay.endpoint,
+      publicKey: relay.publicKey,
+      operator: relay.operator,
+      capacity: { maxConnections: relay.maxConnections, bandwidth: relay.bandwidth },
+      location: relay.location,
+      status: relay.status,
+    };
+    res.status(201).json(registration);
   } catch (err) {
     console.error("Register relay error:", err);
     res.status(500).json({ error: "Failed to register relay" });
@@ -111,10 +120,9 @@ router.post("/register", requireOxyAuth, async (req, res) => {
 // POST /relays/heartbeat -- update relay status (auth required)
 router.post("/heartbeat", requireOxyAuth, async (req, res) => {
   try {
-    const { endpoint } = req.body;
-
-    if (!endpoint || typeof endpoint !== "string") {
-      res.status(400).json({ error: "endpoint is required" });
+    const parsed = parseRelayHeartbeatRequest(req.body);
+    if (!parsed.ok) {
+      res.status(400).json({ error: parsed.error });
       return;
     }
 
@@ -123,7 +131,7 @@ router.post("/heartbeat", requireOxyAuth, async (req, res) => {
       .set({ lastSeen: sql`now()`, status: "active", updatedAt: sql`now()` })
       .where(
         and(
-          eq(relays.endpoint, endpoint),
+          eq(relays.endpoint, parsed.value.endpoint),
           eq(relays.operatorUserId, getRequiredOxyUserId(req)),
         ),
       )
@@ -134,7 +142,8 @@ router.post("/heartbeat", requireOxyAuth, async (req, res) => {
       return;
     }
 
-    res.json({ status: "ok" });
+    const response: RelayHeartbeatResponse = { status: "ok" };
+    res.json(response);
   } catch (err) {
     console.error("Relay heartbeat error:", err);
     res.status(500).json({ error: "Failed to update heartbeat" });

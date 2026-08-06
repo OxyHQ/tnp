@@ -65,6 +65,14 @@ Overlay commands:
     Registers this machine as a service node for the given domain.
     Incoming connections are forwarded to the local target (default localhost:80).
 
+  tnp relay --endpoint <wss://url> --token <token> [--port N] [--host addr]
+            [--location label] [--max-connections N] [--bandwidth mbps]
+    Runs a community relay and publishes it in the relay directory.
+    --endpoint is the public URL other people's clients dial. It is not the
+    bind address: --host/--port say where to listen, --endpoint says how the
+    rest of the network reaches you through whatever name, port or TLS
+    termination sits in front.
+
 Config: /etc/tnp/config.json (or /usr/local/etc/tnp/config.json on macOS)
 Docs:   https://tnp.network/install
 `);
@@ -580,17 +588,28 @@ async function cmdRelay() {
   const location = getFlag("--location") ?? config.relayLocation;
   const authToken = getFlag("--token") ?? config.relayAuthToken;
   const maxConn = Number(getFlag("--max-connections") ?? config.relayMaxConnections);
+  const bandwidth = Number(getFlag("--bandwidth") ?? config.relayBandwidth);
+  const endpoint = getFlag("--endpoint") ?? config.relayEndpoint;
 
   if (!authToken) {
     console.error("[tnp] --token is required (Oxy auth token)");
-    console.error("Example: tnp relay --token <auth-token>");
+    console.error("Example: tnp relay --endpoint wss://relay.example.com --token <auth-token>");
+    process.exit(1);
+  }
+
+  if (!endpoint) {
+    console.error("[tnp] --endpoint is required: the public URL clients dial");
+    console.error("Example: tnp relay --endpoint wss://relay.example.com --token <auth-token>");
+    console.error("It is not the bind address -- use --host/--port for that.");
     process.exit(1);
   }
 
   console.log(`[tnp] v${VERSION} relay node starting...`);
   console.log(`[tnp] listen: ${host}:${port}`);
+  console.log(`[tnp] endpoint: ${endpoint}`);
   console.log(`[tnp] location: ${location || "(not set)"}`);
   console.log(`[tnp] max connections: ${maxConn}`);
+  console.log(`[tnp] bandwidth: ${bandwidth > 0 ? `${bandwidth} Mbit/s` : "(not stated)"}`);
 
   const { RelayNode } = await import("./relay-node");
   const { TnpApiClient } = await import("./api");
@@ -600,10 +619,13 @@ async function cmdRelay() {
   const relay = new RelayNode({
     port,
     host,
+    endpoint,
     maxConnections: maxConn,
+    bandwidth,
     authToken,
     location,
     apiBaseUrl: config.apiBaseUrl,
+    identityKeyPath: config.identityKeyPath,
   });
 
   await relay.start(apiClient);
