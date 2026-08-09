@@ -49,7 +49,7 @@ These endpoints are public — anyone can ask the API to resolve a domain. They 
 
 `overlay` is only present when the domain has an active service node and the service node has heartbeated within the recent timeout window. The overlay-enabled client uses it to route through the encrypted tunnel.
 
-If the name isn't on a TNP TLD, the response is `{ answers: [] }` so the caller can fall through to upstream DNS. If a name is on a **custom** TNP TLD but not registered, the response includes a synthetic A record to the parking IP (`TNP_PARKING_IP`, default `174.138.10.81`) so the browser shows the "available — register on TNP" page.
+If the name isn't on a TNP TLD, the response is `{ answers: [] }` so the caller can fall through to upstream DNS. If a name is on a **custom** TNP TLD but not registered, the response includes a synthetic A record to the parking IP (`TNP_PARKING_IP`, which has no default — when it is unset the synthetic record is omitted rather than pointed somewhere stale) so the browser shows the "available — register on TNP" page.
 
 ## TLDs (`/tlds`)
 
@@ -87,7 +87,7 @@ All record routes require auth and ownership of the parent domain.
 | PUT | `/domains/:id/records/:rid` | Update fields on a record. |
 | DELETE | `/domains/:id/records/:rid` | Delete a record. |
 
-Records use Mongoose subdocuments, so `:rid` is the auto-generated `_id` returned by the create call.
+Records are rows in their own `dns_records` table, so `:rid` is the record's UUID as returned by the create call — not the parent domain's id.
 
 `name` validation: 1–63 lowercase alphanumeric/hyphen, may not start or end with a hyphen. Apex is stored as `name: '@'` on records.
 
@@ -125,7 +125,7 @@ In production the API also responds to `https://get.tnp.network` — when the `H
 
 ## Parking middleware
 
-For requests whose `Host` is a TNP domain (e.g., `nate.ox`), the API serves an inline HTML "registered on / available on TNP" page **at the original URL** — no redirect. The page is rendered server-side based on whether the name exists in MongoDB and whether the TLD is a custom TNP TLD. Hosts that match `localhost`, `*.tnp.network`, `*.oxy.so`, or `*.pages.dev` are passed through to the regular router.
+For requests whose `Host` is a TNP domain (e.g., `nate.ox`), the API serves an inline HTML "registered on / available on TNP" page **at the original URL** — no redirect. The page is rendered server-side based on whether the name exists in the database and whether the TLD is a custom TNP TLD. Hosts that match `localhost`, `*.tnp.network`, `*.oxy.so`, or `*.pages.dev` are passed through to the regular router.
 
 This is why directly visiting `nate.ox` in a browser (after pointing DNS at the TNP resolver) shows the parking page at `nate.ox` instead of redirecting away.
 
@@ -158,8 +158,8 @@ function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void 
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3000` | API listen port. |
-| `MONGODB_URI` | `mongodb://localhost:27017` | MongoDB connection string. Database name is `tnp-<NODE_ENV>` (e.g., `tnp-production`). |
-| `NODE_ENV` | `development` | Used to derive the database name. |
+| `PORT` | `4170` | API listen port. ECS injects `8080` explicitly. |
+| `DATABASE_URL` | *none* | PostgreSQL connection string, database name included. No default on purpose: a wrong database is worse than a missing one, so the API refuses to start without it. |
+| `NODE_ENV` | `development` | Runtime environment. It does **not** select the database — that is `DATABASE_URL`'s job. |
 | `OXY_API_URL` | `https://api.oxy.so` | Oxy API base URL (token verification). |
-| `TNP_PARKING_IP` | `174.138.10.81` | A-record value returned for unregistered names on custom TLDs and as a fallback for record-less registered domains. |
+| `TNP_PARKING_IP` | *none* | A-record value returned for unregistered names on custom TLDs and as a fallback for record-less registered domains. There is deliberately **no** fallback: a stale literal would route every TNP query at a dead or attacker-controlled host, so when this is unset parking answers are omitted instead. In production it is the Elastic IP fronting the `tnp-dns` NLB. |
