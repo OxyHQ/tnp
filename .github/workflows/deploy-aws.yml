@@ -39,7 +39,16 @@ env:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # ARM, because the ECS task definition is ARM64 and an image must match the
+    # runtime platform it is scheduled onto. Building amd64 here produced an
+    # image the service could never run — see the Build step below. Native ARM
+    # rather than buildx emulation: it is faster and it cannot silently produce
+    # the wrong architecture.
+    #
+    # This job runs no service containers, which is the one thing GitHub-hosted
+    # ARM runners do not support. The test gates live in ci.yml, which calls
+    # this workflow and stays on x86 for exactly that reason.
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -58,14 +67,39 @@ jobs:
       # Tagged with the commit as well as :latest. The task definition points at
       # :latest, but a mutable-only tag makes it impossible to say afterwards
       # which commit is actually running.
+      #
+      # linux/arm64 MUST match `runtime_platform.cpu_architecture` in
+      # oxy-infra's modules/app-service, which is ARM64 for every Oxy backend.
+      # This built amd64 until 2026-08-10 and nothing caught it, because the
+      # service has never had a running task to fail: the mismatch is invisible
+      # while desiredCount is 0 and total the moment it is raised.
       - name: Build and push
         run: |
           set -euo pipefail
-          docker build --platform linux/amd64 -f "$DOCKERFILE" \
+          docker build --platform linux/arm64 -f "$DOCKERFILE" \
             -t "$ECR_REGISTRY/oxy/$APP:$DEPLOY_SHA" \
             -t "$ECR_REGISTRY/oxy/$APP:latest" .
           docker push "$ECR_REGISTRY/oxy/$APP:$DEPLOY_SHA"
           docker push "$ECR_REGISTRY/oxy/$APP:latest"
+
+      # The push above is the only thing that can put a wrong-architecture image
+      # in front of ECS, so assert the architecture of what actually landed
+      # rather than trusting the --platform flag. A build that silently fell
+      # back to the runner's native arch would otherwise reach production and
+      # fail as a task that will not start.
+      - name: Assert the pushed image is arm64
+        run: |
+          set -euo pipefail
+          arch=$(aws ecr batch-get-image --repository-name "oxy/$APP" \
+            --image-ids imageTag="$DEPLOY_SHA" \
+            --query 'images[0].imageManifest' --output text \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["config"]["digest"])' \
+            | xargs -I{} aws ecr get-download-url-for-layer --repository-name "oxy/$APP" \
+                --layer-digest {} --query 'downloadUrl' --output text \
+            | xargs curl -s \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["architecture"])')
+          echo "pushed image architecture: $arch"
+          [ "$arch" = "arm64" ] || { echo "::error::expected arm64, got $arch"; exit 1; }
 
       # The service is deliberately held at desiredCount 0 in Terraform until
       # /oxy/tnp-api/MONGODB_URI exists (see app-tnp.tf). Rolling out to a
