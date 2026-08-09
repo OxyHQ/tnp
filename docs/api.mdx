@@ -49,7 +49,7 @@ These endpoints are public — anyone can ask the API to resolve a domain. They 
 
 `overlay` is only present when the domain has an active service node and the service node has heartbeated within the recent timeout window. The overlay-enabled client uses it to route through the encrypted tunnel.
 
-If the name isn't on a TNP TLD, the response is `{ answers: [] }` so the caller can fall through to upstream DNS. If a name is on a **custom** TNP TLD but not registered, the response includes a synthetic A record to the parking IP (`TNP_PARKING_IP`, default `174.138.10.81`) so the browser shows the "available — register on TNP" page.
+If the name isn't on a TNP TLD, the response is `{ answers: [] }` so the caller can fall through to upstream DNS. If a name is on a **custom** TNP TLD but not registered, the response includes a synthetic A record to the parking IP (`TNP_PARKING_IP`, which has no default — when it is unset the synthetic record is omitted rather than pointed somewhere stale) so the browser shows the "available — register on TNP" page.
 
 ## TLDs (`/tlds`)
 

@@ -110,7 +110,7 @@ TXT   _verify  oxy-domain-verify=abc123   300
 MX    @     mail.example.com  3600
 ```
 
-Records are stored as a subdocument on the `Domain` model. Supported types: `A`, `AAAA`, `CNAME`, `TXT`, `MX`, `NS`. TTLs default to `3600` seconds.
+Records are rows in their own `dns_records` table, keyed by `(domain_id, name, type)` — the shape the resolver queries on every lookup. Supported types: `A`, `AAAA`, `CNAME`, `TXT`, `MX`, `NS`. TTLs default to `3600` seconds.
 
 ### 3. Resolve
 
