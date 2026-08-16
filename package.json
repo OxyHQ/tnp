@@ -13,6 +13,7 @@
     "dev:web": "cd apps/web && bun run dev",
     "seed": "cd apps/api && bun run seed",
     "typecheck": "bun run --filter '*' typecheck",
+    "validate:agents-md": "bun ./scripts/check-agents-md-size.mjs && bun ./scripts/test-check-agents-md-size.mjs",
     "test": "bun run --filter '*' test",
     "release": "release-it"
   },

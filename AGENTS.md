@@ -1,5 +1,12 @@
 # TNP (The Network Protocol)
 
+> **Budget: under 12 KB**, enforced by `scripts/check-agents-md-size.mjs`
+> (`bun run validate:agents-md`). It is prepended to EVERY agent session, so its
+> bytes are paid on every task forever, and it grows by accretion — one
+> reasonable paragraph at a time, invisible per-commit. An addition that pushes
+> it over is paid for in the SAME edit: compress something, or move it to
+> `docs/` and leave a pointer.
+
 Universal network layer over the public internet: its own namespace, resolution,
 NAT-traversing service publication, an overlay transport, and (planned) onion
 routing, exit nodes and an OS-level tunnel. **Not "DNS-only"** — that phrasing is
