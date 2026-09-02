@@ -32,6 +32,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Test the fail-closed ECS parking gate
+        run: python3 .github/scripts/test-assert-tnp-services-parked.py
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest

@@ -47,6 +47,11 @@ jobs:
             exit 1
           fi
 
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -59,29 +64,9 @@ jobs:
       - name: Assert API, DNS, and Relay are all at zero
         run: |
           set -euo pipefail
-          state=$(aws ecs describe-services --cluster "$CLUSTER" \
-            --services tnp-api tnp-dns tnp-relay --output json)
-          SERVICE_STATE="$state" python3 - <<'PY'
-          import json
-          import os
-
-          expected = {"tnp-api", "tnp-dns", "tnp-relay"}
-          payload = json.loads(os.environ["SERVICE_STATE"])
-          services = {item["serviceName"]: item for item in payload.get("services", [])}
-          failures = payload.get("failures", [])
-          if failures or set(services) != expected:
-              print("::error::could not resolve the exact three TNP ECS services")
-              raise SystemExit(1)
-          active = {
-              name: service.get("desiredCount")
-              for name, service in services.items()
-              if service.get("desiredCount") != 0
-          }
-          if active:
-              print(f"::error::TNP image publication requires desiredCount 0: {active}")
-              raise SystemExit(1)
-          print("tnp-api, tnp-dns, and tnp-relay are all parked at desiredCount 0")
-          PY
+          aws ecs describe-services --cluster "$CLUSTER" \
+            --services tnp-api tnp-dns tnp-relay --output json \
+            | python3 .github/scripts/assert-tnp-services-parked.py
 
   publish:
     name: Publish ${{ matrix.app }} linux/arm64
