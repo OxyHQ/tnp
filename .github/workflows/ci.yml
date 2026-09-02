@@ -30,7 +30,7 @@ jobs:
     name: Typecheck and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -62,7 +62,7 @@ jobs:
     name: AWS images build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build the API image
         run: docker build -f Dockerfile.api -t tnp-api:ci .
