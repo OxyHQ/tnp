@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed unless the exact TNP ECS services have no desired or live work."""
+"""Fail closed unless the exact API and DNS services have no live work."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import sys
 from typing import Any
 
 
-EXPECTED_SERVICES = {"tnp-api", "tnp-dns", "tnp-relay"}
+EXPECTED_SERVICES = {"tnp-api", "tnp-dns"}
 COUNT_FIELDS = ("desiredCount", "runningCount", "pendingCount")
 
 
@@ -18,7 +18,7 @@ def validate(payload: Any) -> str | None:
 
     failures = payload.get("failures")
     if not isinstance(failures, list) or failures:
-        return "ECS did not resolve the exact three TNP services without failures"
+        return "ECS did not resolve the exact TNP API and DNS services without failures"
 
     raw_services = payload.get("services")
     if not isinstance(raw_services, list):
@@ -71,7 +71,7 @@ def main() -> int:
         return 1
 
     print(
-        "tnp-api, tnp-dns, and tnp-relay all have "
+        "tnp-api and tnp-dns both have "
         "desiredCount=0, runningCount=0, and pendingCount=0"
     )
     return 0

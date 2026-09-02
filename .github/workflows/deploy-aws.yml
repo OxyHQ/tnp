@@ -1,9 +1,10 @@
 # Publish the dormant TNP API and DNS images to ECR in us-west-2.
 #
-# This workflow deliberately does NOT deploy. The three ECS services remain at
-# desiredCount 0 until their separate infrastructure and security promotion
-# gates pass. Publishing a reviewed image and activating traffic are different
-# operations and must never be coupled implicitly.
+# This workflow deliberately does NOT deploy. The API and DNS ECS services
+# remain at desiredCount 0 until their separate infrastructure and security
+# promotion gates pass. TNP Relay is an independent live service and is outside
+# this publisher's scope. Publishing a reviewed image and activating traffic
+# are different operations and must never be coupled implicitly.
 #
 # Called by ci.yml only after typecheck, tests, and both Docker builds pass for
 # the exact main commit. workflow_dispatch is an operational retry path, not a
@@ -31,7 +32,7 @@ env:
 
 jobs:
   preflight:
-    name: Prove every TNP service is parked
+    name: Prove TNP API and DNS are parked
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -58,14 +59,14 @@ jobs:
           role-to-assume: arn:aws:iam::237343248947:role/oxy-github-deploy
           aws-region: ${{ env.AWS_REGION }}
 
-      # This is a read-only guard. It never scales a service. Requiring all
-      # three names also makes a missing/renamed service fail closed instead of
-      # treating an empty AWS response as proof that nothing is running.
-      - name: Assert API, DNS, and Relay are all at zero
+      # This is a read-only guard. It never scales a service. Both names are
+      # required so a missing/renamed service fails closed instead of treating
+      # an empty AWS response as proof that nothing is running.
+      - name: Assert API and DNS are both at zero
         run: |
           set -euo pipefail
           aws ecs describe-services --cluster "$CLUSTER" \
-            --services tnp-api tnp-dns tnp-relay --output json \
+            --services tnp-api tnp-dns --output json \
             | python3 .github/scripts/assert-tnp-services-parked.py
 
   publish:
@@ -101,9 +102,9 @@ jobs:
       # tag would make a later scale-up select an artefact no reviewed infra
       # change named. The promotion PR must pin the digest printed below.
       #
-      # ECR is currently tag-mutable, so the workflow enforces immutability by
-      # refusing to push over a SHA that already exists. The concurrency group
-      # prevents two runs racing through this check for the same commit.
+      # The API and DNS ECR repositories reject tag overwrites. This explicit
+      # lookup produces a clearer failure and the concurrency group prevents
+      # two runs racing through it for the same commit.
       - name: Build and publish immutable SHA image
         id: image
         env:
