@@ -1,19 +1,15 @@
-# Deploy the TNP API to ECS Fargate in us-west-2.
+# Publish the dormant TNP API and DNS images to ECR in us-west-2.
 #
-# Replaces an SSH-and-Docker deploy to a DigitalOcean droplet that had failed on
-# every recorded run since 2026-07-14 (#29). The droplet is retired; the AWS
-# infrastructure that succeeds it already exists in oxy-infra
-# (terraform-uswest2/app-tnp.tf): ECR repositories, ECS services, task
-# definitions and ALB target groups with /health checks.
+# This workflow deliberately does NOT deploy. The three ECS services remain at
+# desiredCount 0 until their separate infrastructure and security promotion
+# gates pass. Publishing a reviewed image and activating traffic are different
+# operations and must never be coupled implicitly.
 #
-# CALLED, not triggered. ci.yml invokes this after every one of its jobs passes
-# on a push to main, so an image is never rolled out to production without the
-# test suite and the image build having gone green on that exact commit. This
-# mirrors the shape used by the other Oxy backends.
-#
-# workflow_dispatch stays as the escape hatch when CI itself is broken.
+# Called by ci.yml only after typecheck, tests, and both Docker builds pass for
+# the exact main commit. workflow_dispatch is an operational retry path, not a
+# way to publish an unreviewed branch: the preflight refuses anything but main.
 
-name: Deploy to AWS
+name: Publish AWS images
 
 on:
   workflow_call:
@@ -23,40 +19,76 @@ permissions:
   id-token: write
   contents: read
 
-# Serialize production rollouts. Cancelling after update-service would leave an
-# unmonitored deployment running in ECS, so in-progress runs are never cancelled.
 concurrency:
-  group: deploy-tnp-api
+  group: publish-tnp-aws-images
   cancel-in-progress: false
 
 env:
   AWS_REGION: us-west-2
   ECR_REGISTRY: 237343248947.dkr.ecr.us-west-2.amazonaws.com
-  APP: tnp-api
   CLUSTER: oxy-cluster
-  DOCKERFILE: Dockerfile.api
-  DEPLOY_SHA: ${{ github.sha }}
+  SOURCE_SHA: ${{ github.sha }}
 
 jobs:
-  deploy:
-    # ARM, because the ECS task definition is ARM64 and an image must match the
-    # runtime platform it is scheduled onto. Building amd64 here produced an
-    # image the service could never run — see the Build step below. Native ARM
-    # rather than buildx emulation: it is faster and it cannot silently produce
-    # the wrong architecture.
-    #
-    # This job runs no service containers, which is the one thing GitHub-hosted
-    # ARM runners do not support. The test gates live in ci.yml, which calls
-    # this workflow and stays on x86 for exactly that reason.
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
+  preflight:
+    name: Prove every TNP service is parked
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - name: Validate the immutable main source
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != 'refs/heads/main' ]; then
+            echo '::error::AWS images may only be published from refs/heads/main.'
+            exit 1
+          fi
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo '::error::SOURCE_SHA is not a full lowercase Git commit SHA.'
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
         with:
-          ref: ${{ env.DEPLOY_SHA }}
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::237343248947:role/oxy-github-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      # This is a read-only guard. It never scales a service. Requiring all
+      # three names also makes a missing/renamed service fail closed instead of
+      # treating an empty AWS response as proof that nothing is running.
+      - name: Assert API, DNS, and Relay are all at zero
+        run: |
+          set -euo pipefail
+          aws ecs describe-services --cluster "$CLUSTER" \
+            --services tnp-api tnp-dns tnp-relay --output json \
+            | python3 .github/scripts/assert-tnp-services-parked.py
+
+  publish:
+    name: Publish ${{ matrix.app }} linux/arm64
+    needs: preflight
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: tnp-api
+            dockerfile: Dockerfile.api
+          - app: tnp-dns
+            dockerfile: Dockerfile.dns
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::237343248947:role/oxy-github-deploy
           aws-region: ${{ env.AWS_REGION }}
@@ -64,86 +96,110 @@ jobs:
       - name: Log in to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Tagged with the commit as well as :latest. The task definition points at
-      # :latest, but a mutable-only tag makes it impossible to say afterwards
-      # which commit is actually running.
+      # A full commit SHA is the only tag. There is intentionally no :latest:
+      # existing ECS definitions still reference it, and moving that mutable
+      # tag would make a later scale-up select an artefact no reviewed infra
+      # change named. The promotion PR must pin the digest printed below.
       #
-      # linux/arm64 MUST match `runtime_platform.cpu_architecture` in
-      # oxy-infra's modules/app-service, which is ARM64 for every Oxy backend.
-      # This built amd64 until 2026-08-10 and nothing caught it, because the
-      # service has never had a running task to fail: the mismatch is invisible
-      # while desiredCount is 0 and total the moment it is raised.
-      - name: Build and push
+      # ECR is currently tag-mutable, so the workflow enforces immutability by
+      # refusing to push over a SHA that already exists. The concurrency group
+      # prevents two runs racing through this check for the same commit.
+      - name: Build and publish immutable SHA image
+        id: image
+        env:
+          APP: ${{ matrix.app }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
         run: |
           set -euo pipefail
-          docker build --platform linux/arm64 -f "$DOCKERFILE" \
-            -t "$ECR_REGISTRY/oxy/$APP:$DEPLOY_SHA" \
-            -t "$ECR_REGISTRY/oxy/$APP:latest" .
-          docker push "$ECR_REGISTRY/oxy/$APP:$DEPLOY_SHA"
-          docker push "$ECR_REGISTRY/oxy/$APP:latest"
+          repository="oxy/$APP"
+          image="$ECR_REGISTRY/$repository:$SOURCE_SHA"
+          lookup=$(aws ecr batch-get-image --repository-name "$repository" \
+            --image-ids imageTag="$SOURCE_SHA" --output json)
+          existing_digest=$(LOOKUP="$lookup" python3 - <<'PY'
+          import json
+          import os
 
-      # The push above is the only thing that can put a wrong-architecture image
-      # in front of ECS, so assert the architecture of what actually landed
-      # rather than trusting the --platform flag. A build that silently fell
-      # back to the runner's native arch would otherwise reach production and
-      # fail as a task that will not start.
-      - name: Assert the pushed image is arm64
-        run: |
-          set -euo pipefail
-          arch=$(aws ecr batch-get-image --repository-name "oxy/$APP" \
-            --image-ids imageTag="$DEPLOY_SHA" \
-            --query 'images[0].imageManifest' --output text \
-            | python3 -c 'import json,sys; print(json.load(sys.stdin)["config"]["digest"])' \
-            | xargs -I{} aws ecr get-download-url-for-layer --repository-name "oxy/$APP" \
-                --layer-digest {} --query 'downloadUrl' --output text \
-            | xargs curl -s \
-            | python3 -c 'import json,sys; print(json.load(sys.stdin)["architecture"])')
-          echo "pushed image architecture: $arch"
-          [ "$arch" = "arm64" ] || { echo "::error::expected arm64, got $arch"; exit 1; }
+          payload = json.loads(os.environ["LOOKUP"])
+          images = payload.get("images", [])
+          failures = payload.get("failures", [])
+          if images and not failures:
+              print(images[0]["imageId"]["imageDigest"])
+          elif not images and len(failures) == 1 and failures[0].get("failureCode") == "ImageNotFound":
+              print("missing")
+          else:
+              print("::error::ECR lookup did not prove an existing image or ImageNotFound")
+              raise SystemExit(1)
+          PY
+          )
 
-      # The service is deliberately held at desiredCount 0 in Terraform (see
-      # app-tnp.tf). Rolling out to a zero-count service would report success
-      # while changing nothing, so say so plainly and stop rather than
-      # pretending a deploy happened.
-      #
-      # It is no longer the database that holds it there: /oxy/tnp-api/DATABASE_URL
-      # exists and is verified. Raising the count is the owner's call.
-      - name: Roll out
-        run: |
-          set -euo pipefail
-          desired=$(aws ecs describe-services --cluster "$CLUSTER" --services "$APP" \
-            --query 'services[0].desiredCount' --output text)
-
-          if [ "$desired" = "0" ]; then
-            echo "::warning::$APP is scaled to 0, so the new image is pushed but not running."
-            echo "::warning::Raising desired_count in oxy-infra terraform-uswest2/app-tnp.tf is the owner's call."
-            exit 0
+          if [[ "$existing_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "The immutable SHA tag already exists; refusing to overwrite it."
+            digest="$existing_digest"
+          elif [ "$existing_digest" = "missing" ]; then
+            docker build --platform linux/arm64 -f "$DOCKERFILE" \
+              --label "org.opencontainers.image.revision=$SOURCE_SHA" \
+              --label 'org.opencontainers.image.source=https://github.com/OxyHQ/tnp' \
+              -t "$image" .
+            architecture=$(docker image inspect "$image" --format '{{.Architecture}}')
+            if [ "$architecture" != "arm64" ]; then
+              echo "::error::local image architecture is $architecture, expected arm64"
+              exit 1
+            fi
+            docker push "$image"
+            digest=$(aws ecr batch-get-image --repository-name "$repository" \
+              --image-ids imageTag="$SOURCE_SHA" \
+              --query 'images[0].imageId.imageDigest' --output text)
+          else
+            echo '::error::ECR returned an invalid existing image digest.'
+            exit 1
           fi
 
-          aws ecs update-service --cluster "$CLUSTER" --service "$APP" \
-            --force-new-deployment --query 'service.serviceName' --output text
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo '::error::ECR did not return an exact sha256 image digest.'
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
-          aws ecs wait services-stable --cluster "$CLUSTER" --services "$APP"
-          echo "Rolled out $DEPLOY_SHA"
-
-      # A stable service is not the same as a reachable one: ECS reports stable
-      # once tasks are running, before the ALB has necessarily accepted them.
-      - name: Verify through the load balancer
+      # Verify the registry artefact, not only the local build flag. This also
+      # covers the idempotent retry path where the SHA tag already existed.
+      - name: Verify the published registry artefact
+        env:
+          APP: ${{ matrix.app }}
+          DIGEST: ${{ steps.image.outputs.digest }}
         run: |
           set -euo pipefail
-          desired=$(aws ecs describe-services --cluster "$CLUSTER" --services "$APP" \
-            --query 'services[0].desiredCount' --output text)
-          [ "$desired" = "0" ] && { echo "Scaled to 0, nothing to verify."; exit 0; }
+          repository="oxy/$APP"
+          manifest=$(aws ecr batch-get-image --repository-name "$repository" \
+            --image-ids imageDigest="$DIGEST" \
+            --query 'images[0].imageManifest' --output text)
+          config_digest=$(MANIFEST="$manifest" python3 - <<'PY'
+          import json
+          import os
 
-          for i in $(seq 1 20); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 https://api.tnp.network/health || true)
-            if [ "$code" = "200" ]; then
-              echo "api.tnp.network/health -> 200 after ${i} attempt(s)"
-              exit 0
-            fi
-            echo "attempt $i: HTTP $code"
-            sleep 10
-          done
+          print(json.loads(os.environ["MANIFEST"])["config"]["digest"])
+          PY
+          )
+          config_url=$(aws ecr get-download-url-for-layer --repository-name "$repository" \
+            --layer-digest "$config_digest" --query downloadUrl --output text)
+          read -r architecture revision < <(curl -fsS "$config_url" | python3 -c '
+          import json
+          import sys
 
-          echo "::error::api.tnp.network/health never returned 200 after the rollout"
-          exit 1
+          image = json.load(sys.stdin)
+          labels = image.get("config", {}).get("Labels") or {}
+          print(image.get("architecture", "missing"), labels.get("org.opencontainers.image.revision", "missing"))
+          ')
+          if [ "$architecture" != "arm64" ]; then
+            echo "::error::published image architecture is $architecture, expected arm64"
+            exit 1
+          fi
+          if [ "$revision" != "$SOURCE_SHA" ]; then
+            echo '::error::published image is not labelled for the exact source commit'
+            exit 1
+          fi
+          printf -- '- `%s` -> `%s@%s` (`linux/arm64`)\n' \
+            "$SOURCE_SHA" "$ECR_REGISTRY/$repository" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+
+      # No ECS update-service, task-definition registration, desired-count
+      # mutation, SSM write, or traffic probe belongs in an artefact publisher.
+      # Activation is a later reviewed oxy-infra change using the digest above.

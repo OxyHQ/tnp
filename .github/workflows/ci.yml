@@ -30,7 +30,10 @@ jobs:
     name: Typecheck and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+
+      - name: Test the fail-closed ECS parking gate
+        run: python3 .github/scripts/test-assert-tnp-services-parked.py
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -54,19 +57,21 @@ jobs:
       - name: Test
         run: bun run test
 
-  # The API image broke when apps/api gained a workspace dependency and the
-  # Dockerfile was not updated to copy it. Nothing caught it: the deploy
-  # workflow had been failing for an unrelated reason for weeks, so a genuine
-  # build break was invisible. Building the image is the only check that sees
-  # this class of error.
+  # Both AWS images consume the monorepo workspace graph. A missing manifest or
+  # source COPY is invisible to TypeScript and unit tests, so both Dockerfiles
+  # are built before either can be published. Relay is deliberately absent: its
+  # security blockers are recorded in docs/architecture/relays.md.
   docker:
-    name: API image builds
+    name: AWS images build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build the API image
         run: docker build -f Dockerfile.api -t tnp-api:ci .
+
+      - name: Build the DNS image
+        run: docker build -f Dockerfile.dns -t tnp-dns:ci .
 
       - name: Start it against a throwaway PostgreSQL and check it answers
         run: |
@@ -120,10 +125,9 @@ jobs:
             exit 1
           fi
 
-  # Deploy only after BOTH gates pass, on a push to main. Called rather than
-  # triggered so it runs inside this run, against the exact commit CI judged —
-  # there is no window in which main moves on underneath.
-  deploy:
+  # Publish only after BOTH gates pass, on a push to main. The reusable workflow
+  # only writes immutable API/DNS images; it cannot roll out or scale ECS.
+  publish_aws_images:
     needs: [verify, docker]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/deploy-aws.yml

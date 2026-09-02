@@ -6,12 +6,12 @@ order: 1
 
 # DNS Server
 
-The same `DnsProxy` class powers two deployments:
+The same `DnsProxy` class powers two runtimes:
 
-- **`apps/dns-server`** — the public resolver at `174.138.10.81` / `dns.tnp.network`. Listens on `0.0.0.0:5353` (UDP + TCP). Stateless: one process per Docker container, scaled horizontally.
-- **`packages/client` — `tnp run` / `tnp connect`** — the local proxy on `127.0.0.1:5354`. Same code, different listen address; optionally enables the encrypted overlay (`tnp connect`).
+- **`apps/dns-server`** — the public-resolver image. It listens on UDP and TCP and is stateless, but the AWS service and public traffic path remain parked at zero until a separate infrastructure promotion.
+- **`packages/client` — `tnp run` / `tnp connect`** — the local proxy on `127.0.0.1:5354`. It uses the same resolution logic and may enable the encrypted overlay when connected.
 
-The class lives in `packages/client/src/proxy.ts` so both runtimes share the exact same resolution logic. `apps/dns-server/src/index.ts` is a 30-line wrapper that constructs `DnsProxy`, kicks off a periodic TLD sync, and starts the sockets.
+The class lives in `packages/client/src/proxy.ts`. `apps/dns-server/src/index.ts` is the small wrapper that constructs it, starts the TLD-policy sync, and binds the sockets.
 
 ## Listening
 
@@ -20,117 +20,75 @@ const proxy = new DnsProxy({
   listenAddr: "0.0.0.0",
   listenPort: 5353,
   apiBaseUrl: "https://api.tnp.network",
-  upstreamDns: "1.1.1.1",
-  cacheTtlSeconds: 300,
+  upstreamDns: "1.1.1.1,8.8.8.8",
+  cacheMaxEntries: 10_000,
 });
 
-await proxy.syncTlds();         // pulls active TLDs once on boot
-proxy.startTldSync(5 * 60_000); // re-pull every 5 minutes
-await proxy.start();            // binds UDP + TCP sockets
+proxy.startTldSync(5 * 60_000);
+await proxy.syncTlds();
+await proxy.start();
 ```
 
-UDP handles standard DNS-over-UDP. TCP handles DNS-over-TCP (2-byte length prefix per RFC 1035) and is also what `stunnel` terminates DoT against, so the public resolver speaks DNS-over-TLS without any extra code in the resolver itself.
-
-TCP has a 10-second idle timeout and refuses messages larger than 65 535 + 2 bytes (the RFC max), to keep a malicious client from exhausting memory by streaming a never-ending message.
+UDP handles DNS-over-UDP. TCP uses the two-byte message-length prefix from RFC 1035. A TCP client has a 10-second idle timeout, and the server refuses a buffer larger than the DNS message maximum plus that prefix. DNS-over-TLS is not implemented or advertised by this runtime.
 
 ## Resolution decision tree
 
-For each incoming question:
-
-```
+```text
 question: name + type
 │
-├── is it a TNP TLD (e.g., ends in .ox, .app)?
-│   │
-│   ├── NO  ───────────────────────▶ forward upstream (DoH to 8.8.8.8)
-│   │
-│   └── YES
-│       │
-│       ├── custom TLD (.ox)?
-│       │   │
-│       │   ├── YES ── hit API ──▶ return answers (or parking-IP A record
-│       │   │                       if unregistered)
-│       │   │
-│       │   └── NO (.com / .app)
-│       │       │
-│       │       └── cache hit?
-│       │           ├── YES ── return cached answers
-│       │           └── NO  ── forward upstream first; only hit the API
-│       │                       when a positive cache entry exists.
-│       │
-│       └── If overlay is enabled AND the API returned `overlay.available`:
-│           → cache `{ serviceNodePubKey, relay }` in `overlayCache`
-│           → return synthetic A record 127.0.0.1
-│           → the local SOCKS5 proxy picks the connection up
+├── public or special-use TLD ─────────▶ configured upstream resolver
+│
+└── TNP-native TLD (currently .ox)
+    │
+    ├── query registry API ────────────▶ authoritative answer or NXDOMAIN
+    │
+    ├── configured parking result ─────▶ parking A record
+    │
+    └── overlay enabled and available ─▶ cache relay metadata and answer 127.0.0.1
 ```
 
-This split matters: TNP also covers `.com` and `.app` for a small allowlist of Oxy use cases, but the overwhelming majority of `.com` queries from a real device aren't on TNP. Forwarding those upstream by default keeps p99 latency in line with a plain resolver and keeps the API from being hammered for queries it can't answer.
+Public and special-use TLDs always use public DNS, even if a stale or compromised API offers them. TNP is authoritative only for a native label present in its policy table; see [`architecture/naming.md`](./architecture/naming.md). A TNP-native name never falls through to public DNS.
 
 ## Upstream forwarding
 
-`forwardUpstreamRaw` does **not** open a UDP socket to upstream — Bun's `dgram` has a one-socket-per-process limitation that conflicts with running the listener and forwarder side by side. Instead, it hits Google's DoH JSON API (`https://8.8.8.8/resolve?name=&type=`) over `fetch`, then re-serialises the JSON answer back into the DNS wire format (`A`, `AAAA`, `CNAME` types fully encoded; others written as raw strings).
-
-The serialisation is hand-rolled with `Packet.Writer` from the `dns2` package because we need byte-for-byte control over the response — `dns2`'s high-level `Packet.write` doesn't always round-trip every record type correctly across mixed query types.
+The proxy forwards the original DNS wire message to the configured upstreams in failover order. A classic address uses UDP first and retries over TCP when the response is truncated; an HTTPS URL uses RFC 8484 DNS-over-HTTPS. The wire response is preserved, including response codes and record sections. If every upstream fails, the proxy returns `SERVFAIL`.
 
 ## Caching
 
-A simple `Map<cacheKey, { answers, expiresAt }>` keyed by `name:type`, TTL-bounded by `cacheTtlSeconds`. The cache is intentionally per-process and never persisted:
+A bounded in-memory LRU cache is keyed by normalized `name:type`. Positive answers expire at the shortest record TTL, within safe floors and ceilings; NXDOMAIN answers use bounded negative caching. Restarts begin with an empty cache.
 
-- On the public resolver, restarts are cheap (containers come up in `<1s` and `syncTlds()` only fetches a small JSON array).
-- On the client, cache survives only between hot reloads — a fresh `tnp run` always re-asks the API.
-
-Caching the **overlay info** (`{ serviceNodePubKey, relay }`) is separate, in `overlayCache`, and queried synchronously by the SOCKS5 proxy on every outbound connection.
+Overlay metadata (`{ serviceNodePubKey, relay }`) is kept separately in `overlayCache` and read synchronously by the local SOCKS5 proxy.
 
 ## TLD sync
 
-Every 5 minutes the proxy calls `GET /dns/tlds` and rebuilds an internal `Map<tld, custom>`:
+Every five minutes the proxy calls `GET /dns/tlds` and replaces its internal policy table. The current seed contains only the native `.ox` TLD:
 
 ```ts
 {
-  "ox":   true,   // custom TNP TLD, parking-page fallback for unregistered names
-  "com":  false,  // standard internet TLD, fall through to upstream
-  "app":  false,
+  "ox": true,
 }
 ```
 
-`startTldSync` runs the recurring timer. Callers (including `apps/dns-server`) trigger the initial sync explicitly via `proxy.syncTlds()` before `proxy.start()` so the first incoming query already has the right TLD set loaded.
+The proxy independently drops every public-root or special-use TLD from this response, so stale rows such as `.com` or `.app` cannot shadow public DNS. Callers perform an initial sync before accepting queries. If the API is unavailable, the empty table fails closed: names use public DNS until a later sync succeeds.
 
-If the API is unreachable on boot, the proxy logs the failure and keeps an empty TLD set — every query falls through to upstream until the next sync succeeds. There's no panic, no exit.
+## Public resolver image
 
-## Public resolver deployment
+The public resolver image is built from `Dockerfile.dns`. `.github/workflows/ci.yml` builds it on every change. After all gates pass on `main`, the AWS publisher builds it natively for `linux/arm64`, publishes only the full Git SHA tag, verifies the registry artefact, and records its digest.
 
-The public resolver runs in a Docker container built from `Dockerfile.dns` at the repo root:
-
-```dockerfile
-FROM oven/bun:latest
-WORKDIR /app
-COPY package.json bun.lock ./
-COPY packages/client/package.json packages/client/
-COPY apps/dns-server/package.json apps/dns-server/
-RUN bun install --no-save
-COPY packages/client packages/client
-COPY apps/dns-server apps/dns-server
-ENV NODE_ENV=production
-EXPOSE 5353/udp 5353/tcp
-CMD ["bun", "apps/dns-server/src/index.ts"]
-```
-
-In production the host iptables NAT 53/udp + 53/tcp → 5353 so the public resolver can run unprivileged and still be reachable on the well-known DNS port. DNS-over-TLS is terminated by `stunnel` in front of the TCP socket.
+The publisher does not move `latest`, register a task definition, scale a service, or open traffic. `tnp-dns` is intentionally parked at `desired_count = 0`. A later reviewed `oxy-infra` promotion must pin an approved digest and independently validate the NLB listeners, security groups, resolver behavior, and parking path before changing that count.
 
 ## Environment variables
 
-The DNS server reads everything from env:
-
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TNP_LISTEN_ADDR` | `0.0.0.0` | Bind address for UDP + TCP listeners. |
-| `TNP_LISTEN_PORT` | `5353` | Bind port (containerised; host NATs 53 → 5353). |
-| `TNP_API_URL` | `https://api.tnp.network` | Where to fetch TLD list + per-domain resolution. |
-| `TNP_UPSTREAM_DNS` | `1.1.1.1` | Reserved; current implementation forwards to Google DoH because of Bun's dgram constraint. |
-| `TNP_CACHE_TTL` | `300` | Seconds to cache positive answers per `(name, type)`. |
+| `TNP_LISTEN_ADDR` | `0.0.0.0` | Bind address for UDP and TCP listeners. |
+| `TNP_LISTEN_PORT` | `5353` | Bind port. The ECS task definition supplies the production container port; no host NAT is assumed here. |
+| `TNP_API_URL` | `https://api.tnp.network` | Registry used for the TLD policy and native-name answers. |
+| `TNP_UPSTREAM_DNS` | `1.1.1.1,8.8.8.8` | Comma-separated classic DNS addresses or RFC 8484 HTTPS URLs, in failover order. |
+| `TNP_CACHE_MAX_ENTRIES` | `10000` | Maximum DNS answers retained in the in-memory LRU cache. |
 
 ## Parking page hand-off
 
-When DNS resolves an unregistered name on a custom TLD, it returns the parking IP (`174.138.10.81` — the same host as the resolver, just on port 80). Hits to that IP go to the API container, which inspects the `Host` header in middleware (`apps/api/src/index.ts`) and serves an inline HTML "registered on / available on TNP" page. No redirect, no URL change — visiting `nate.ox` in a browser shows the parking page at `nate.ox`.
+For a native name that should park, the API may return the address supplied through `TNP_PARKING_IP`. Production must inject the exact infrastructure-owned endpoint; the application has no hardcoded fallback. The API inspects the `Host` header and serves its inline registered-or-available page without redirecting the browser.
 
-For registered domains that don't have a service node and don't have a custom A record set, the resolver returns the same parking IP, and the API decides what page to render based on whether the domain exists in the database. This is the single fall-back path; once the owner adds an `A` record or registers a service node, the parking page disappears automatically on the next cache cycle.
+The AWS DNS and parking traffic paths remain inactive while their services are parked. Activation requires a separate infrastructure review and live end-to-end validation.

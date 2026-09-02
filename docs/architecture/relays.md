@@ -105,9 +105,30 @@ From the [audit](./audit-2026-08-06.md):
 | **No limits** | No frame cap, no quotas, no backpressure, unbounded tables (S6). |
 | **Duplicated implementation** | `apps/relay` and `packages/client/src/relay-node.ts` implement the same routing twice, with the same bugs twice. |
 | **Unsigned directory** | Clients cannot verify a relay is legitimate. |
-| **No tests** | Nothing exercises the relay. |
+| **No transport tests** | Contract and frame-codec tests exist, but nothing exercises the standalone WebSocket relay's authentication, ownership, isolation, takeover, bounds, or backpressure. |
 
 Phase 3 fixes authentication, circuit scoping and limits, and collapses the two
 implementations into one `@tnp/relay-core` that both the standalone server and
 the embedded relay consume. Phase 5 adds the signed directory, health, peering
 and selection.
+
+## 8. Deployment security gate
+
+`tnp-relay` is intentionally not an AWS-publishable artefact and its ECS service
+must remain at `desired_count = 0`. The API and DNS image workflow has no relay
+matrix entry, task-definition registration, rollout, or scaling operation.
+
+Do not add the relay to that workflow or activate traffic until all of these are
+closed with tests and a separate security review:
+
+1. `/service` and `/tunnel` authenticate the caller and the relay.
+2. Operator identity and domain ownership are verified rather than asserted.
+3. Circuit identifiers are connection-scoped and cannot affect another client.
+4. Frame, circuit, stream, connection, memory, rate, and buffer bounds enforce
+   backpressure.
+5. Standalone and embedded implementations share one tested relay core.
+6. Clients verify a signed directory before selecting a relay.
+
+Keeping the service at zero is necessary but not sufficient: publishing an
+apparently deployable relay image would create an unsafe shortcut around this
+gate, so the publisher excludes it entirely.
