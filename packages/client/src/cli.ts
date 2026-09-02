@@ -270,7 +270,7 @@ function configureLinuxDns(config: TnpConfig, addr: string, dnsIp: string): bool
   try {
     execSync(`resolvectl dns ${iface} ${config.listenAddr}`, { stdio: "pipe" });
     execSync(`resolvectl domain ${iface} ${NATIVE_TLDS.map((t) => `~${t}`).join(" ")}`, { stdio: "pipe" });
-    console.log(`[tnp] DNS configured: systemd-resolved split DNS on ${iface} for .ox .app -> ${addr}`);
+    console.log(`[tnp] DNS configured: systemd-resolved split DNS on ${iface} for ${NATIVE_TLDS.map((t) => `.${t}`).join(" ")} -> ${addr}`);
     return true;
   } catch (err) {
     console.warn(`[tnp] systemd-resolved not available, trying resolv.conf: ${err instanceof Error ? err.message : String(err)}`);
@@ -657,7 +657,7 @@ function cmdInstall() {
   try {
     installService(binaryPath, config);
     console.log("[tnp] service installed and started");
-    console.log("[tnp] TNP domains (.ox, .app, .com) will now resolve on this device");
+    console.log(`[tnp] TNP-native domains (${NATIVE_TLDS.map((t) => `.${t}`).join(", ")}) will now resolve on this device`);
   } catch (err) {
     console.error(`[tnp] install failed: ${err}`);
     console.error("[tnp] you may need to run this command with sudo");

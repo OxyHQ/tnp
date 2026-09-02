@@ -6,7 +6,7 @@ order: 0
 
 # TNP (The Network Protocol)
 
-TNP is an alternative internet namespace controlled by Oxy. Anyone can register domains on TLDs that only exist inside the TNP network — `.ox`, `.app`, `.com`, and community-proposed TLDs — and resolve them from any device.
+TNP is an alternative internet namespace controlled by Oxy. Users register domains on native TLDs that exist only inside TNP (`.ox` today). Public-root and special-use TLDs are never claimable by TNP.
 
 <Badge variant="success">Service</Badge> <Badge>DNS</Badge> <Badge>Overlay</Badge>
 
@@ -21,7 +21,7 @@ Domains are tied to your Oxy account. Register at [tnp.network](https://tnp.netw
 Alongside resolution, TNP ships an **encrypted overlay** built around the same domains: register a service node, run `tnp serve` on a port, and clients connect through relays without your IP being exposed to them. Overlay traffic is multiplexed over WebSockets and encrypted with NaCl (X25519 + XSalsa20-Poly1305).
 
 <Callout type="warning">
-**Current limits, stated plainly.** The overlay is a prototype. Payloads are encrypted against the relay, but the service node's public key is served by the API with no signature chain, so the API is presently able to substitute it — the tunnel is not end-to-end authenticated yet. Onion routing, exit nodes and VPN mode are **not implemented**; `tnp connect --privacy private` currently changes nothing. TNP does not provide anonymity. See the [Phase 0 audit](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/audit-2026-08-06.md) and the [privacy model](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/privacy-model.md).
+**Current limits, stated plainly.** The overlay is a prototype. Payloads are encrypted against the relay, but the service node's public key is served by the API with no signature chain, so the API is presently able to substitute it — the tunnel is not end-to-end authenticated yet. Onion routing, exit nodes and VPN mode are **not implemented**; `tnp connect --privacy private` is rejected as unavailable. TNP does not provide anonymity. See the [Phase 0 audit](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/audit-2026-08-06.md) and the [privacy model](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/privacy-model.md).
 </Callout>
 
 A local proxy is **not** a VPN, and TNP does not describe it as one.
@@ -79,13 +79,7 @@ Windows (PowerShell, run as Administrator):
 irm https://get.tnp.network/ps | iex
 ```
 
-The installer detects platform/arch, downloads the right `tnp` binary from the latest GitHub release, installs it to `/usr/local/bin/tnp` (or `%ProgramFiles%\tnp\tnp.exe`), and prompts you to either:
-
-1. **Install the TNP service** (recommended) — runs a local DNS proxy on `127.0.0.1:5354` and configures system DNS to use it. Only TNP domains are affected; standard DNS continues to work via fallback to `1.1.1.1`.
-2. **Switch system DNS to the public TNP resolver** (`174.138.10.81`, `dns.tnp.network`) — every DNS query goes through TNP.
-3. **Skip** — manual setup later.
-
-No client needed if you just want resolution: point any device's DNS at `174.138.10.81` and TNP domains resolve from the public resolver.
+The installer detects the platform and architecture and installs the matching `tnp` binary. `tnp install` runs the local resolver as a service and configures split DNS for TNP-native labels where the operating system supports it. Public DNS continues through the configured upstreams. The AWS public resolver remains parked and must not be documented as reachable until its separate infrastructure promotion passes.
 
 ## Quick start
 
@@ -96,7 +90,7 @@ No client needed if you just want resolution: point any device's DNS at `174.138
 open https://tnp.network/register
 ```
 
-Sign in with Oxy, pick a name, pick a TLD (`.ox` is the default community TLD), submit. Custom TNP TLDs are first-come, first-served and free; standard mirrors (`.com`, `.app`) are restricted to admin accounts.
+Sign in with Oxy, pick a name and a native TLD (`.ox` is the current default), then submit. The registry refuses any TLD already delegated by the public DNS root or reserved for special use.
 
 ### 2. Add DNS records
 
@@ -118,9 +112,6 @@ Records are rows in their own `dns_records` table, keyed by `(domain_id, name, t
 # Using the installed client
 tnp test your.ox
 
-# Or via dig against the public resolver
-dig @174.138.10.81 your.ox A
-
 # Or just open it in a browser if the client/system DNS is configured
 open http://your.ox
 ```
@@ -132,8 +123,8 @@ open http://your.ox
 tnp serve --domain your.ox --target localhost:8080 --token <oxy-token>
 
 # Anyone running `tnp connect` resolves your.ox to 127.0.0.1, the SOCKS5
-# proxy picks up the connection, and traffic flows encrypted end-to-end
-# through the relay to your service node. Your origin IP is never exposed.
+# proxy picks up the connection and forwards encrypted payloads through a relay.
+# Read the prototype security limits below before exposing a service.
 ```
 
 ## Core concepts
@@ -144,10 +135,7 @@ A TNP name is `<label>.<tld>` where `<label>` is `[a-z0-9](-[a-z0-9])*`, 1–63 
 
 ### TLDs
 
-The `TLD` model has two flavours:
-
-- `custom: true` — community TNP TLDs (`.ox` is the canonical one). Resolve **inside** the TNP network only. Unregistered names on custom TLDs return a synthetic A record pointing to the parking IP, which renders an "available — register on TNP" page (served by the API for direct host header hits, or as a redirect via the public DNS resolver).
-- `custom: false` — standard internet TLDs (`.com`, `.app`) that TNP mirrors for select Oxy use cases. Unregistered names fall through to upstream DNS (`8.8.8.8` DoH) so the public internet continues to work. Registration on these is restricted to admin Oxy accounts.
+Active TNP-native TLDs such as `.ox` resolve only inside TNP. Public-root and special-use labels are rejected at registration and independently filtered by both the API and resolver. For an unregistered native name, the API may return the configured parking A record; there is no hardcoded parking address.
 
 New TLDs come from the community: `POST /tlds/propose` creates a proposal, `POST /tlds/proposals/:id/vote` upvotes / downvotes, and an Oxy admin promotes the winners to `status: 'active'`.
 
@@ -156,20 +144,19 @@ New TLDs come from the community: `POST /tlds/propose` creates a proposal, `POST
 `GET /dns/resolve?name=foo.ox&type=A` is the single source of truth. The flow on the API side:
 
 1. Split `name` into `subdomain`, `domainName`, `tld`.
-2. Look up the TLD. If not a TNP TLD → return `{ answers: [] }` and the client forwards to upstream.
+2. Refuse public-root and special-use TLDs, then look up the native TLD. If it is not native, return no registry answers; the client already classifies it as public DNS and forwards upstream directly.
 3. Look up the domain. If not registered:
-   - **Custom TLD** → return parking IP A record.
-   - **Standard TLD** → return empty answers; client forwards to upstream.
+   - Return the configured parking A record when parking is enabled; otherwise return no answers.
 4. Filter the domain's stored records by `type` and matching subdomain (`@` or full FQDN).
 5. If the domain has an active service node, attach `overlay: { serviceNodePubKey, relay, available: true }` to the response — the overlay-enabled client uses this to route through the encrypted tunnel.
 
 ### Caching
 
-Both the public DNS server and the local client cache responses for `cacheTtlSeconds` (default 300s). Standard-TLD queries that miss the cache go straight to upstream DoH — there's no extra round trip to the TNP API for `.com` lookups that aren't on TNP.
+The public DNS server and local client share a bounded in-memory LRU cache. Positive answers follow their record TTLs within safe bounds, and NXDOMAIN answers use bounded negative caching. Public names bypass the TNP API and keep their original DNS wire format through classic DNS or RFC 8484 upstreams.
 
 ### Authentication
 
-The API uses **Oxy authentication** (device-first, zero-cookie). Every protected endpoint requires `Authorization: Bearer <oxy-token>`; the API verifies tokens against `https://api.oxy.so` via `@oxyhq/core`'s `oxy.auth()` middleware. Users are created lazily — first authenticated request creates the local `User` document keyed by `oxyUserId`.
+The API uses **Oxy authentication** (device-first, zero-cookie). Every protected endpoint requires `Authorization: Bearer <oxy-token>`; the API verifies tokens against `https://api.oxy.so` via `@oxyhq/core`'s `oxy.auth()` middleware. Users are created lazily — the first authenticated request creates the local PostgreSQL user row keyed by `oxyUserId`.
 
 ## Where to go next
 

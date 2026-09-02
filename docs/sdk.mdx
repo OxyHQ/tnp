@@ -65,7 +65,7 @@ tnp help                   Show usage
 
 | Flag | Description |
 |------|-------------|
-| `--privacy access\|private` | `access` = direct relay selection (fast); `private` = randomised path. Default `access`. |
+| `--privacy access` | Single-relay access mode. `private` is rejected until multi-hop onion routing exists. |
 | `--autoconnect` | Persist the choice and start TNP on system boot. |
 | `--no-autoconnect` | Disable autoconnect. |
 | `--killswitch` | Block all DNS via iptables if the local proxy crashes (Linux only). |
@@ -98,14 +98,16 @@ interface TnpConfig {
   listenPort: number;           // default 5354
   apiBaseUrl: string;           // default "https://api.tnp.network"
   upstreamDns: string;          // default "1.1.1.1"
-  cacheTtlSeconds: number;      // default 300
-  privacyLevel: "access" | "private";
+  cacheMaxEntries: number;      // default 10000; answers use record TTLs
+  privacyLevel: "access";      // private is explicitly unavailable
   socksPort: number;            // default 1080
   relayPreference: "oxy" | "community" | "any";
   identityKeyPath: string;      // <dataDir>/identity.key
   relayPort: number;            // default 8080 (for `tnp relay`)
+  relayEndpoint: string;        // public ws:// or wss:// URL; no guessed default
   relayLocation: string;
   relayMaxConnections: number;  // default 100
+  relayBandwidth: number;       // advertised Mbit/s; 0 means unstated
   relayAuthToken: string;
   autoConnect: boolean;
   killSwitch: boolean;

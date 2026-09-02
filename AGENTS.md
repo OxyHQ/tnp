@@ -58,10 +58,10 @@ packages/
 ## How It Works
 
 1. User registers at TNP web via device-first Oxy sign-in (`OxyProvider` from `@oxyhq/services`)
-2. User registers domains on custom TLDs (.ox, .app, etc.)
+2. User registers domains on TNP-native TLDs (`.ox` today); public-root and special-use TLDs are always refused
 3. User manages DNS records via web dashboard
 4. Client CLI daemon resolves TNP domains locally (intercepts DNS queries)
-5. Unhosted domains show a branded parking page via DNS fallback → redirect → `/park/:domain`
+5. A native name without a target may receive the configured parking A record; the API serves the branded page from its original Host header
 6. Service nodes expose local services through the overlay network (encrypted tunnels via relays)
 
 ## i18n
@@ -75,10 +75,11 @@ Web app: `react-i18next`, 5 languages (en, zh, es, hi, fr). Translation files: `
 ## Deployment
 
 - **Web**: CF Pages (`tnp.network`) via `deploy.yml`, gated on CI
-- **API**: **ECS Fargate in us-west-2**, behind the shared `oxy-alb` — like the other Oxy backends. `ci.yml` calls `deploy-aws.yml` after both gates pass on `main`. The old SSH-to-DigitalOcean-droplet deploy is gone; that droplet is retired and its workflow had failed on every recorded run since 2026-07-14.
+- **API and DNS images**: **ECS Fargate in us-west-2** is the planned runtime. After both gates pass on `main`, `ci.yml` calls the artefact-only `deploy-aws.yml`, which publishes `linux/arm64` API and DNS images under the full Git SHA and records their digests. It does not move `latest`, register task definitions, roll out ECS, scale services, or activate traffic. The old SSH-to-DigitalOcean deploy is gone.
 - **Infra is owned by `~/Oxy/oxy-infra`** (`terraform-uswest2/app-tnp.tf`): ECR repos `oxy/tnp-{api,dns,relay}`, ECS services on `oxy-cluster`, ALB target groups with `/health`. Do not create TNP AWS resources from this repo.
-- **NOT RUNNING**: `tnp-api` sits at `desired_count = 0` and has never run. The database half is done — `/oxy/tnp-api/DATABASE_URL` exists and is verified (the `tnp` role owns database `tnp` on the shared `oxy-postgres`; `/oxy/tnp-api/MONGODB_URI` never existed at all), and `TNP_PARKING_IP` is now on the task definition as a reference to the `tnp-dns` NLB's Elastic IP. **One blocker is left, and it is the image:** the published `oxy/tnp-api:latest` is `amd64` while the ECS task definition is `ARM64`, so a task started today cannot run it — `deploy-aws.yml` builds `--platform linux/amd64` on `ubuntu-latest`, where every other Oxy backend builds `--platform linux/arm64` on `ubuntu-24.04-arm`. Until the count is raised the deploy pushes an image and warns rather than pretending a rollout happened. Raising it is the owner's call.
-- **DB**: **PostgreSQL** via drizzle-orm + postgres.js, like Mention and oxy-api. Migrations in `apps/api/drizzle/`, applied by the app at startup (`src/db/migrate.ts`) so it cannot serve against a schema it has not migrated. `bun run db:generate` writes a migration; never hand-edit one. Mongoose is gone.
+- **PARKED**: all three TNP ECS services are intended to remain at `desired_count = 0`. The publisher verifies that live state before it writes either image and fails closed if any service is non-zero, missing, or renamed; it never changes the count itself. Activation requires a separate reviewed infra change that pins an approved digest and proves the database, secrets, health checks, and traffic path.
+- **DB**: **PostgreSQL** via drizzle-orm + postgres.js, like Mention and oxy-api. Migrations in `apps/api/drizzle/`, applied by the app at startup (`src/db/migrate.ts`) so it cannot serve against a schema it has not migrated. `bun run db:generate` writes a migration; never hand-edit one.
+- **Relay is not publishable or deployable**: it is deliberately absent from the AWS image matrix and remains parked until the authentication, ownership, isolation, bounds, signed-directory, duplication, and test blockers in `docs/architecture/relays.md` are closed.
 - **SSL**: Cloudflare proxy (flexible mode)
 - **Installer**: `curl -fsSL https://get.tnp.network | sh` (served by API via Host header routing)
 

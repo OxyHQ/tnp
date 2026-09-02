@@ -1,6 +1,6 @@
 # TNP Client
 
-The TNP client is a lightweight DNS resolver daemon that runs on your machine. It resolves TNP domains (like `nate.ox`, `studio.app`) by querying the TNP API, while forwarding all other DNS queries to 1.1.1.1 (or your configured upstream).
+The TNP client is a lightweight DNS resolver daemon that runs on your machine. It resolves TNP-native domains such as `nate.ox` through the TNP API while forwarding public and special-use names to the configured upstream resolvers.
 
 Built with TypeScript and compiled to a standalone binary via Bun.
 
@@ -22,8 +22,8 @@ irm https://get.tnp.network | iex
 
 1. The daemon runs as a background service (launchd on macOS, systemd on Linux, Scheduled Task on Windows)
 2. It listens for DNS queries on `127.0.0.1:5354`
-3. For TNP TLDs (.ox, .app, .com, etc.), it resolves records via the TNP API and caches them locally
-4. For everything else, it forwards to 1.1.1.1 untouched
+3. For TNP-native TLDs (currently `.ox`), it resolves records via the TNP API and caches them locally
+4. For everything else, it forwards the original DNS wire query to the configured upstreams
 5. Your system DNS is configured to route TNP TLD queries to the local resolver
 
 ## CLI
@@ -73,8 +73,8 @@ Config file location:
 {
   "listenAddr": "127.0.0.1",
   "listenPort": 5354,
-  "apiBaseUrl": "https://tnp.network/api",
+  "apiBaseUrl": "https://api.tnp.network",
   "upstreamDns": "1.1.1.1",
-  "cacheTtlSeconds": 300
+  "cacheMaxEntries": 10000
 }
 ```
