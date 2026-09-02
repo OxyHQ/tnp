@@ -12,7 +12,8 @@ import unittest
 
 
 SCRIPT = Path(__file__).with_name("assert-tnp-services-parked.py")
-SERVICES = ("tnp-api", "tnp-dns", "tnp-relay")
+WORKFLOW = SCRIPT.parent.parent / "workflows" / "deploy-aws.yml"
+SERVICES = ("tnp-api", "tnp-dns")
 COUNT_FIELDS = ("desiredCount", "runningCount", "pendingCount")
 
 
@@ -42,6 +43,11 @@ def run_gate(payload: object) -> subprocess.CompletedProcess[str]:
 
 
 class ParkingGateTest(unittest.TestCase):
+    def test_workflow_queries_only_the_two_images_it_publishes(self) -> None:
+        workflow = WORKFLOW.read_text()
+        self.assertIn("--services tnp-api tnp-dns --output json", workflow)
+        self.assertNotIn("--services tnp-api tnp-dns tnp-relay", workflow)
+
     def test_exact_zero_state_passes(self) -> None:
         result = run_gate(parked_payload())
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -84,7 +90,7 @@ class ParkingGateTest(unittest.TestCase):
 
     def test_aws_lookup_failure_fails_closed(self) -> None:
         payload = parked_payload()
-        payload["failures"] = [{"arn": "tnp-relay", "reason": "MISSING"}]
+        payload["failures"] = [{"arn": "tnp-dns", "reason": "MISSING"}]
         self.assertNotEqual(run_gate(payload).returncode, 0)
 
 
