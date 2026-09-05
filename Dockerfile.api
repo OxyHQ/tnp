@@ -19,6 +19,7 @@ COPY apps/dns-server/package.json apps/dns-server/
 COPY apps/relay/package.json apps/relay/
 COPY apps/web/package.json apps/web/
 COPY packages/client/package.json packages/client/
+COPY packages/crypto/package.json packages/crypto/
 COPY packages/namespace/package.json packages/namespace/
 COPY packages/protocol/package.json packages/protocol/
 COPY packages/shared-types/package.json packages/shared-types/
