@@ -127,6 +127,17 @@
         "@opentui/core-win32-x64": "^0.4.3",
       },
     },
+    "packages/crypto": {
+      "name": "@tnp/crypto",
+      "version": "0.1.0",
+      "dependencies": {
+        "tweetnacl": "^1.0.3",
+      },
+      "devDependencies": {
+        "bun-types": "^1.3.14",
+        "typescript": "~7.0.2",
+      },
+    },
     "packages/namespace": {
       "name": "@tnp/namespace",
       "version": "0.1.0",
@@ -706,6 +717,8 @@
     "@tnp/api": ["@tnp/api@workspace:apps/api"],
 
     "@tnp/client": ["@tnp/client@workspace:packages/client"],
+
+    "@tnp/crypto": ["@tnp/crypto@workspace:packages/crypto"],
 
     "@tnp/dns-server": ["@tnp/dns-server@workspace:apps/dns-server"],
 
