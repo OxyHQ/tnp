@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@oxyhq/core": "^23.3.2",
+    "@oxyhq/core": "^23.3.4",
     "@tnp/namespace": "workspace:*",
     "@tnp/shared-types": "workspace:*",
     "cors": "^2.8.6",
