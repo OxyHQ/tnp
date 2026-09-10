@@ -1,9 +1,9 @@
-import type { LinkedHttpClient } from "@oxyhq/core";
+import type { LinkedHttpClient } from "@oxy.so/core";
 
 type TnpApiClient = LinkedHttpClient["client"];
 
 // The TNP backend client, registered by AuthBridge from the linked client that
-// @oxyhq/core mints off the OxyServices session. It targets TNP's own API
+// @oxy.so/core mints off the OxyServices session. It targets TNP's own API
 // (VITE_API_URL) while keeping its bearer token in lockstep with the Oxy
 // session and delegating 401 refresh back to that session. No manual
 // Authorization plumbing — the SDK owns the token.

@@ -9,7 +9,7 @@ order: 3
 Base URL (production): `https://api.tnp.network`
 Base URL (dev): `http://localhost:4170`
 
-The API is plain JSON over HTTPS, served by Bun + Express 5. Mutating endpoints require an Oxy access token in `Authorization: Bearer <token>`; the token is verified against `https://api.oxy.so` by `@oxyhq/core`'s `oxy.auth()` middleware. The local `User` document is created lazily on the first authenticated request, keyed by `oxyUserId`.
+The API is plain JSON over HTTPS, served by Bun + Express 5. Mutating endpoints require an Oxy access token in `Authorization: Bearer <token>`; the token is verified against `https://api.oxy.so` by `@oxy.so/core`'s `oxy.auth()` middleware. The local `User` document is created lazily on the first authenticated request, keyed by `oxyUserId`.
 
 CORS is enabled for `https://tnp.network`, `https://www.tnp.network`, the Cloudflare Pages preview origin, and `http://localhost:8170`.
 
@@ -134,7 +134,7 @@ This is why directly visiting `nate.ox` in a browser (after pointing DNS at the 
 The middleware is built once and reused across routes:
 
 ```ts
-import { OxyServices } from "@oxyhq/core";
+import { OxyServices } from "@oxy.so/core";
 const oxy = new OxyServices({ baseURL: process.env.OXY_API_URL });
 export const oxyAuth = oxy.auth();
 export const oxyAuthOptional = oxy.auth({ optional: true });

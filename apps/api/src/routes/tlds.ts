@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { Request } from "express";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { requireOxyAuth, getOxyUserId, getRequiredOxyUserId } from "@oxyhq/core/server";
+import { requireOxyAuth, getOxyUserId, getRequiredOxyUserId } from "@oxy.so/core/server";
 import { isReservedTld, validateNativeTld } from "@tnp/namespace";
 import { getDb } from "../db/postgres.js";
 import { tldProposals, tlds, users, votes } from "../db/schema/index.js";

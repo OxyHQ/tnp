@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { and, asc, eq, ne, sql } from "drizzle-orm";
-import { requireOxyAuth, getRequiredOxyUserId } from "@oxyhq/core/server";
+import { requireOxyAuth, getRequiredOxyUserId } from "@oxy.so/core/server";
 import {
   parseRegisterRelayRequest,
   parseRelayHeartbeatRequest,

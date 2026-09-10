@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { and, eq, sql } from "drizzle-orm";
-import { requireOxyAuth, getRequiredOxyUserId } from "@oxyhq/core/server";
+import { requireOxyAuth, getRequiredOxyUserId } from "@oxy.so/core/server";
 import { isReservedTld } from "@tnp/namespace";
 import {
   parseRegisterServiceNodeRequest,

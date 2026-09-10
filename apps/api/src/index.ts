@@ -50,7 +50,7 @@ app.get("/health", (_req, res) => {
 
 // Routes with mixed auth -- oxyAuthOptional resolves req.userId/req.user if a
 // token is present; individual write handlers enforce auth with requireOxyAuth
-// from @oxyhq/core/server. GET requests work without a token.
+// from @oxy.so/core/server. GET requests work without a token.
 app.use("/tlds", oxyAuthOptional, tldsRouter);
 app.use("/domains", oxyAuthOptional, domainsRouter);
 app.use("/nodes", oxyAuthOptional, nodesRouter);

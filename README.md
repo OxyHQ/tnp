@@ -145,8 +145,8 @@ tnp install / uninstall / status / test <domain>
 ## API
 
 Base URL `https://api.tnp.network`. Auth is an Oxy bearer token validated through
-`@oxyhq/core`; the web app mounts a single device-first `OxyProvider` from
-`@oxyhq/services`.
+`@oxy.so/core`; the web app mounts a single device-first `OxyProvider` from
+`@oxy.so/services`.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|

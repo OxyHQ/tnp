@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import express from "express";
 import type { Server } from "node:http";
-import { getRequiredOxyUserId, requireOxyAuth } from "@oxyhq/core/server";
+import { getRequiredOxyUserId, requireOxyAuth } from "@oxy.so/core/server";
 import { oxyAuthOptional } from "./auth.js";
 
 /**
- * Regression lock for the @oxyhq/core server auth bypass (fixed in core 20.x).
+ * Regression lock for the @oxy.so/core server auth bypass (fixed in core 20.x).
  *
  * On the vulnerable core 12.x line, `oxy.auth()` decoded the bearer with
  * `jwtDecode()` (no signature check) and, for a token that carried NO

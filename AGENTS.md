@@ -42,7 +42,7 @@ Still uses `apps/` layout (not yet migrated to the `packages/` standard):
 
 ```
 apps/
-  api/            @tnp/api          Bun + Express 5.2 / drizzle-orm + PostgreSQL / @oxyhq/core
+  api/            @tnp/api          Bun + Express 5.2 / drizzle-orm + PostgreSQL / @oxy.so/core
   web/            @tnp/web          Vite 8 / React 19 / TailwindCSS 4.2 / React Router 7 / react-i18next
   dns-server/     @tnp/dns-server   DNS daemon (dns2 library)
   relay/          @tnp/relay        WebSocket relay server for overlay network
@@ -57,7 +57,7 @@ packages/
 
 ## How It Works
 
-1. User registers at TNP web via device-first Oxy sign-in (`OxyProvider` from `@oxyhq/services`)
+1. User registers at TNP web via device-first Oxy sign-in (`OxyProvider` from `@oxy.so/services`)
 2. User registers domains on TNP-native TLDs (`.ox` today); public-root and special-use TLDs are always refused
 3. User manages DNS records via web dashboard
 4. Client CLI daemon resolves TNP domains locally (intercepts DNS queries)

@@ -44,9 +44,9 @@ reusable, it belongs in a shared Oxy package.
 ## 3. Oxy foundations
 
 Per the ecosystem rules, not re-litigated here: Expo SDK 57 workspace
-dependencies; a single `OxyProvider` from `@oxyhq/services` with a registered
-`clientId` for device-first session handling; `@oxyhq/core` and shared contracts;
-Oxy visual components and `@oxyhq/app-preset`; SecureStore/keychain for
+dependencies; a single `OxyProvider` from `@oxy.so/services` with a registered
+`clientId` for device-first session handling; `@oxy.so/core` and shared contracts;
+Oxy visual components and `@oxy.so/app-preset`; SecureStore/keychain for
 non-extension secrets; EAS profiles for development, preview and production.
 
 No app-local session code, no app-local auth callback routes.

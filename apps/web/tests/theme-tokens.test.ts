@@ -52,7 +52,7 @@ describe("Bloom is the single source of colour", () => {
   });
 
   test("Bloom's token map is imported", () => {
-    expect(CSS).toContain("@oxyhq/bloom/design-tokens/theme.css");
+    expect(CSS).toContain("@oxy.so/bloom/design-tokens/theme.css");
   });
 
   test("no base token is wrapped in hsl()", () => {

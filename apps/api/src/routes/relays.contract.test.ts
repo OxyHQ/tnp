@@ -20,7 +20,7 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import express from "express";
 import type { Server } from "node:http";
-import type { OxyAuthRequest } from "@oxyhq/core/server";
+import type { OxyAuthRequest } from "@oxy.so/core/server";
 import type { RegisterRelayRequest, RelayHeartbeatRequest } from "@tnp/shared-types";
 import relaysRouter from "./relays.js";
 

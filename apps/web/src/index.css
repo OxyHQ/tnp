@@ -5,18 +5,18 @@
 /*
  * On web, react-native-css (NativeWind 5 preview) emits real CSS utility classes
  * for the className layout props (`flex-1`, `flex-row`, `gap-*`, `items-center`,
- * arbitrary `[Npx]`, …) used across @oxyhq/services + @oxyhq/bloom screens (the
+ * arbitrary `[Npx]`, …) used across @oxy.so/services + @oxy.so/bloom screens (the
  * OxyProvider account dialog, sign-in surfaces, Bloom components). Tailwind v4
  * does NOT scan node_modules by default, so without these @source globs those
  * utilities are never generated and the SDK's layout classes are inert on web
  * (RN-Web's base View reset shows through). Paths are relative to this file.
  */
-@source "../../../node_modules/@oxyhq/services/lib/**/*.{js,jsx}";
-@source "../../../node_modules/@oxyhq/bloom/lib/**/*.{js,jsx}";
+@source "../../../node_modules/@oxy.so/services/lib/**/*.{js,jsx}";
+@source "../../../node_modules/@oxy.so/bloom/lib/**/*.{js,jsx}";
 
 /*
  * Bloom's canonical token map. This is the piece that was missing, and its
- * absence is why every @oxyhq/bloom and @oxyhq/services surface — the
+ * absence is why every @oxy.so/bloom and @oxy.so/services surface — the
  * OxyProvider sign-in dialog, the account switcher, every Bloom component —
  * rendered with UNDEFINED colours: they style themselves with Bloom's token
  * names (`bg-bg`, `text-text`, `border-border-input`, `bg-fill-brand`, …) and
@@ -31,7 +31,7 @@
  * written onto `document.documentElement` at runtime by `BloomThemeProvider`
  * (see main.tsx), which is why they do not appear in this file.
  */
-@import "@oxyhq/bloom/design-tokens/theme.css";
+@import "@oxy.so/bloom/design-tokens/theme.css";
 
 @font-face {
   font-family: "Geist Sans";
