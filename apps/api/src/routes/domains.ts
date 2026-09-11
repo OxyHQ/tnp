@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { Request } from "express";
-import { and, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { requireOxyAuth, getRequiredOxyUserId } from "@oxy.so/core/server";
 import { validateNativeTld } from "@tnp/namespace";
 import { getDb } from "../db/postgres.js";
@@ -13,6 +13,43 @@ const DOMAIN_NAME_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 /** Record types the registry stores. */
 const RECORD_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "NS"] as const;
 type RecordType = (typeof RECORD_TYPES)[number];
+
+export function serializeDnsRecord(record: typeof dnsRecords.$inferSelect) {
+  return {
+    _id: record.id,
+    type: record.type,
+    name: record.name,
+    value: record.value,
+    ttl: record.ttl,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
+}
+
+export function serializeDomain(domain: typeof domains.$inferSelect) {
+  return {
+    _id: domain.id,
+    name: domain.name,
+    tld: domain.tld,
+    oxyUserId: domain.oxyUserId,
+    status: domain.status,
+    createdAt: domain.createdAt,
+    updatedAt: domain.updatedAt,
+    expiresAt: domain.expiresAt,
+  };
+}
+
+export function serializeDomainWithRecords(
+  domain: typeof domains.$inferSelect,
+  records: (typeof dnsRecords.$inferSelect)[],
+) {
+  return {
+    ...serializeDomain(domain),
+    records: records
+      .filter((record) => record.domainId === domain.id)
+      .map(serializeDnsRecord),
+  };
+}
 
 function isRecordType(value: unknown): value is RecordType {
   return typeof value === "string" && (RECORD_TYPES as readonly string[]).includes(value);
@@ -82,7 +119,7 @@ router.get("/", async (req, res) => {
         .where(eq(domains.status, "active")),
     ]);
 
-    res.json({ domains: rows, total, page, pages: Math.ceil(total / limit) });
+    res.json({ domains: rows.map(serializeDomain), total, page, pages: Math.ceil(total / limit) });
   } catch (err) {
     console.error("List domains error:", err);
     res.status(500).json({ error: "Failed to list domains" });
@@ -108,7 +145,7 @@ router.get("/search", async (req, res) => {
       .where(and(eq(domains.status, "active"), ilike(domains.name, pattern)))
       .limit(50);
 
-    res.json(rows);
+    res.json(rows.map(serializeDomain));
   } catch (err) {
     console.error("Search domains error:", err);
     res.status(500).json({ error: "Failed to search domains" });
@@ -162,18 +199,8 @@ router.get("/lookup/:domain", async (req, res) => {
     }
     const [name, tld] = parts.map((p) => p.toLowerCase());
 
-    // ownerId is the internal user key and is deliberately not selected — this
-    // endpoint is public.
     const [domain] = await getDb()
-      .select({
-        _id: domains.id,
-        name: domains.name,
-        tld: domains.tld,
-        oxyUserId: domains.oxyUserId,
-        status: domains.status,
-        createdAt: domains.createdAt,
-        expiresAt: domains.expiresAt,
-      })
+      .select()
       .from(domains)
       .where(and(eq(domains.name, name), eq(domains.tld, tld), eq(domains.status, "active")))
       .limit(1);
@@ -183,7 +210,13 @@ router.get("/lookup/:domain", async (req, res) => {
       return;
     }
 
-    res.json(domain);
+    const records = await getDb()
+      .select()
+      .from(dnsRecords)
+      .where(eq(dnsRecords.domainId, domain.id))
+      .orderBy(dnsRecords.createdAt);
+
+    res.json(serializeDomainWithRecords(domain, records));
   } catch (err) {
     console.error("Lookup domain error:", err);
     res.status(500).json({ error: "Failed to look up domain" });
@@ -264,7 +297,7 @@ router.post("/register", requireOxyAuth, async (req, res) => {
       return;
     }
 
-    res.status(201).json(inserted[0]);
+    res.status(201).json({ ...serializeDomain(inserted[0]), records: [] });
   } catch (err) {
     console.error("Register domain error:", err);
     res.status(500).json({ error: "Failed to register domain" });
@@ -274,12 +307,24 @@ router.post("/register", requireOxyAuth, async (req, res) => {
 // GET /domains/mine (auth required)
 router.get("/mine", requireOxyAuth, async (req, res) => {
   try {
-    const rows = await getDb()
+    const db = getDb();
+    const rows = await db
       .select()
       .from(domains)
       .where(eq(domains.oxyUserId, getRequiredOxyUserId(req)))
       .orderBy(desc(domains.createdAt));
-    res.json(rows);
+    const records =
+      rows.length === 0
+        ? []
+        : await db
+            .select()
+            .from(dnsRecords)
+            .where(inArray(dnsRecords.domainId, rows.map((domain) => domain.id)))
+            .orderBy(dnsRecords.createdAt);
+
+    res.json(
+      rows.map((domain) => serializeDomainWithRecords(domain, records)),
+    );
   } catch (err) {
     console.error("My domains error:", err);
     res.status(500).json({ error: "Failed to get your domains" });
@@ -323,7 +368,7 @@ router.get("/:id/records", requireOxyAuth, async (req: Request<{ id: string }>, 
       .where(eq(dnsRecords.domainId, owned.domainId))
       .orderBy(dnsRecords.createdAt);
 
-    res.json(rows);
+    res.json(rows.map(serializeDnsRecord));
   } catch (err) {
     console.error("Get records error:", err);
     res.status(500).json({ error: "Failed to get records" });
@@ -363,7 +408,7 @@ router.post("/:id/records", requireOxyAuth, async (req: Request<{ id: string }>,
       })
       .returning();
 
-    res.status(201).json(record);
+    res.status(201).json(serializeDnsRecord(record));
   } catch (err) {
     console.error("Add record error:", err);
     res.status(500).json({ error: "Failed to add record" });
@@ -413,7 +458,7 @@ router.put(
         return;
       }
 
-      res.json(record);
+      res.json(serializeDnsRecord(record));
     } catch (err) {
       console.error("Update record error:", err);
       res.status(500).json({ error: "Failed to update record" });
