@@ -1,10 +1,10 @@
-# Publish the dormant TNP API and DNS images to ECR in us-west-2.
+# Publish TNP API and DNS images to ECR in us-west-2.
 #
 # This workflow deliberately does NOT deploy. The API and DNS ECS services
-# remain at desiredCount 0 until their separate infrastructure and security
-# promotion gates pass. TNP Relay is an independent live service and is outside
-# this publisher's scope. Publishing a reviewed image and activating traffic
-# are different operations and must never be coupled implicitly.
+# are activated by a separate reviewed infrastructure change that pins the
+# digest printed here. TNP Relay is outside this publisher's scope. Publishing
+# a reviewed image and activating traffic are different operations and must
+# never be coupled implicitly.
 #
 # Called by ci.yml only after typecheck, tests, and both Docker builds pass for
 # the exact main commit. workflow_dispatch is an operational retry path, not a
@@ -27,14 +27,21 @@ concurrency:
 env:
   AWS_REGION: us-west-2
   ECR_REGISTRY: 237343248947.dkr.ecr.us-west-2.amazonaws.com
-  CLUSTER: oxy-cluster
   SOURCE_SHA: ${{ github.sha }}
 
 jobs:
-  preflight:
-    name: Prove TNP API and DNS are parked
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  publish:
+    name: Publish ${{ matrix.app }} linux/arm64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: tnp-api
+            dockerfile: Dockerfile.api
+          - app: tnp-dns
+            dockerfile: Dockerfile.dns
     steps:
       - name: Validate the immutable main source
         run: |
@@ -48,41 +55,6 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ env.SOURCE_SHA }}
-          persist-credentials: false
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: arn:aws:iam::237343248947:role/oxy-github-deploy
-          aws-region: ${{ env.AWS_REGION }}
-
-      # This is a read-only guard. It never scales a service. Both names are
-      # required so a missing/renamed service fails closed instead of treating
-      # an empty AWS response as proof that nothing is running.
-      - name: Assert API and DNS are both at zero
-        run: |
-          set -euo pipefail
-          aws ecs describe-services --cluster "$CLUSTER" \
-            --services tnp-api tnp-dns --output json \
-            | python3 .github/scripts/assert-tnp-services-parked.py
-
-  publish:
-    name: Publish ${{ matrix.app }} linux/arm64
-    needs: preflight
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - app: tnp-api
-            dockerfile: Dockerfile.api
-          - app: tnp-dns
-            dockerfile: Dockerfile.dns
-    steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ env.SOURCE_SHA }}
