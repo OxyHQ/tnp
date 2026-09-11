@@ -37,7 +37,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: package.json
 
       # --cpu / --os fetch the platform-gated optional dependencies
       # (@opentui/core native binaries) that packages/client imports.

@@ -1,7 +1,7 @@
 # Pinned for the same reason as Dockerfile.api: the lockfile is consumed here
 # and in CI, and a version mismatch reads as a dependency problem when it is a
 # tooling one.
-FROM oven/bun:1.3.14
+FROM oven/bun:1.4.2
 WORKDIR /app
 
 # The hoisted linker, or bun nests dependencies under each workspace and the

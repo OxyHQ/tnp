@@ -20,7 +20,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: package.json
 
       - name: Install dependencies
         # --cpu=* --os=* fetches every platform-gated optional dependency
