@@ -1,5 +1,4 @@
-import { metadataFromHeaders } from '@oxy.so/telemetry/server';
-import { startEcosystemActivity, recordTransport, stopEcosystemActivity } from './ecosystemActivity.js';
+import { startEcosystemActivity, recordTransport, stopEcosystemActivity, requestEdgeRegion } from './ecosystemActivity.js';
 import type { ServerWebSocket } from "bun";
 import { ConnectionManager, type ClientData, type ServiceNodeData } from "./connections.js";
 import { decodeFrame, encodeFrame, FrameType } from "@tnp/protocol";
@@ -50,8 +49,7 @@ const server = Bun.serve<WsData>({
 
   fetch(req, server) {
     const url = new URL(req.url);
-    const pop = metadataFromHeaders({ 'cf-ray': req.headers.get('cf-ray') ?? undefined }).edgePop;
-    const edgeRegion = pop ? `edge:${pop}` : undefined;
+    const edgeRegion = requestEdgeRegion(req.headers);
     if (url.pathname !== '/health') recordTransport('inbound', edgeRegion);
     const respond = (response: Response) => {
       if (url.pathname !== '/health') recordTransport('outbound', edgeRegion);

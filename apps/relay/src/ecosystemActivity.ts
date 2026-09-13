@@ -1,3 +1,4 @@
+import { metadataFromHeaders } from '@oxy.so/telemetry/server';
 import { createEcosystemTraffic } from '@oxy.so/core/server';
 
 let activity: ReturnType<typeof createEcosystemTraffic> | undefined;
@@ -32,4 +33,9 @@ export async function stopEcosystemActivity(): Promise<void> {
   const current = activity;
   activity = undefined;
   await current?.stop();
+}
+
+export function requestEdgeRegion(headers: Headers): string | undefined {
+  const pop = metadataFromHeaders({ 'cf-ray': headers.get('cf-ray') ?? undefined }).edgePop;
+  return pop ? `edge-${pop}` : undefined;
 }
