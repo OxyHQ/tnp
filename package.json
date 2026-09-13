@@ -35,5 +35,11 @@
   "devDependencies": {
     "concurrently": "^10.0.3",
     "release-it": "^20.2.1"
+  },
+  "overrides": {
+    "@oxy.so/telemetry": "1.1.0"
+  },
+  "resolutions": {
+    "@oxy.so/telemetry": "1.1.0"
   }
 }

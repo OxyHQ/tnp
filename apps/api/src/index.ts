@@ -1,3 +1,4 @@
+import { getEcosystemActivity, startEcosystemActivity, stopEcosystemActivity } from './ecosystemActivity.js';
 import express from "express";
 import cors from "cors";
 import { config } from "./config.js";
@@ -11,12 +12,17 @@ import dnsRouter from "./routes/dns.js";
 import nodesRouter from "./routes/nodes.js";
 import relaysRouter from "./routes/relays.js";
 import { and, eq } from "drizzle-orm";
-import { connectPostgres, getDb } from "./db/postgres.js";
+import { closePostgres, connectPostgres, getDb } from "./db/postgres.js";
 import { runMigrations } from "./db/migrate.js";
 import { domains, serviceNodes, tlds } from "./db/schema/index.js";
 import { escapeHtml, isValidHostname } from "./utils/hostname.js";
 
 const app = express();
+app.use((req, res, next) => {
+  const activity = getEcosystemActivity();
+  if (activity) activity.observeHttp(req, res, next);
+  else next();
+});
 
 app.use(
   cors({
@@ -166,6 +172,8 @@ app.use(async (req, res, next) => {
 });
 
 async function start() {
+  let ready = false;
+  startEcosystemActivity(() => ready);
   // Migrations run before the pool opens, so the process cannot begin serving
   // against a schema it has not migrated.
   await runMigrations();
@@ -174,9 +182,24 @@ async function start() {
 
   await runSeed();
 
-  app.listen(config.port, () => {
+  const server = app.listen(config.port, () => {
+    ready = true;
     console.log(`TNP API running on http://localhost:${config.port}`);
   });
+  let stopping = false;
+  const stop = () => {
+    if (stopping) return;
+    stopping = true;
+    ready = false;
+    server.close(() => {
+      void stopEcosystemActivity().finally(() => closePostgres()).catch(() => {
+        console.error('Failed to close activity publisher or database');
+        process.exitCode = 1;
+      });
+    });
+  };
+  process.once("SIGTERM", stop);
+  process.once("SIGINT", stop);
 }
 
 start().catch((err) => {

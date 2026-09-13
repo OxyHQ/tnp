@@ -105,8 +105,10 @@ change. No compatibility shims, no re-export barrels, no deprecated aliases.
 
 ## 6. Not breaking the deployment
 
-Currently deployed: the web app on Cloudflare Pages, the API on a DigitalOcean
-droplet via SSH + Docker, and released client binaries for five targets.
+The web app deploys to Cloudflare Pages. API and DNS images are published to
+ECR, while all three ECS services remain parked until an explicit infrastructure
+activation. The relay is excluded from image publication pending its security
+blockers. Client binaries target five platforms.
 
 - API route contracts change only additively until the client that consumes them
   ships. Relay registration (audit B2) was the exception that needed no

@@ -1,3 +1,4 @@
+import { startEcosystemActivity, recordTransport, stopEcosystemActivity } from './ecosystemActivity.js';
 import { DnsProxy } from "../../../packages/client/src/proxy";
 import type { DnsProxyConfig } from "../../../packages/client/src/config";
 
@@ -9,20 +10,22 @@ const config: DnsProxyConfig = {
   upstreamDns: process.env.TNP_UPSTREAM_DNS || "1.1.1.1,8.8.8.8",
 };
 
-const proxy = new DnsProxy(config);
+const proxy = new DnsProxy(config, recordTransport);
 
 console.log("[tnp-dns] starting public DNS server...");
 console.log(`[tnp-dns] listen: ${config.listenAddr}:${config.listenPort}`);
 console.log(`[tnp-dns] API: ${config.apiBaseUrl}`);
 console.log(`[tnp-dns] upstream: ${config.upstreamDns}`);
 
+startEcosystemActivity(() => proxy.listening);
 proxy.startTldSync(5 * 60 * 1000);
 await proxy.syncTlds();
 await proxy.start();
 
-const shutdown = () => {
+const shutdown = async () => {
   console.log("\n[tnp-dns] shutting down...");
   proxy.stop();
+  await stopEcosystemActivity();
   process.exit(0);
 };
 

@@ -1,10 +1,12 @@
 import type { ServerWebSocket } from "bun";
 
 export interface ServiceNodeData {
+  edgeRegion?: string;
   domain: string;
 }
 
 export interface ClientData {
+  edgeRegion?: string;
   type: "client";
 }
 

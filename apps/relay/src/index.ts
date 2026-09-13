@@ -1,3 +1,5 @@
+import { metadataFromHeaders } from '@oxy.so/telemetry/server';
+import { startEcosystemActivity, recordTransport, stopEcosystemActivity } from './ecosystemActivity.js';
 import type { ServerWebSocket } from "bun";
 import { ConnectionManager, type ClientData, type ServiceNodeData } from "./connections.js";
 import { decodeFrame, encodeFrame, FrameType } from "@tnp/protocol";
@@ -9,6 +11,8 @@ const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
 const manager = new ConnectionManager();
+let ready = false;
+startEcosystemActivity(() => ready);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -24,7 +28,14 @@ function toUint8Array(data: string | Buffer | ArrayBuffer | Uint8Array): Uint8Ar
 
 function sendError(ws: ServerWebSocket<ClientData>, circuitId: number, message: string): void {
   const payload = textEncoder.encode(message);
-  ws.sendBinary(encodeFrame(circuitId, FrameType.ERROR, payload));
+  sendFrame(ws, encodeFrame(circuitId, FrameType.ERROR, payload));
+}
+
+/** Count accepted sends without looking inside encrypted frames. */
+function sendFrame<T extends ClientData | ServiceNodeData>(ws: ServerWebSocket<T>, frame: Uint8Array): number {
+  const result = ws.sendBinary(frame);
+  if (result !== 0) recordTransport('outbound', ws.data.edgeRegion);
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -39,29 +50,37 @@ const server = Bun.serve<WsData>({
 
   fetch(req, server) {
     const url = new URL(req.url);
+    const pop = metadataFromHeaders({ 'cf-ray': req.headers.get('cf-ray') ?? undefined }).edgePop;
+    const edgeRegion = pop ? `edge:${pop}` : undefined;
+    if (url.pathname !== '/health') recordTransport('inbound', edgeRegion);
+    const respond = (response: Response) => {
+      if (url.pathname !== '/health') recordTransport('outbound', edgeRegion);
+      response.headers.set('X-Oxy-Region', process.env.AWS_REGION ?? 'unknown');
+      return response;
+    };
 
     // --- WebSocket upgrade paths ---
 
     if (url.pathname === "/service") {
       const domain = url.searchParams.get("domain")?.trim().toLowerCase();
       if (!domain) {
-        return new Response("Missing ?domain query parameter", { status: 400 });
+        return respond(new Response("Missing ?domain query parameter", { status: 400 }));
       }
       const upgraded = server.upgrade(req, {
-        data: { domain } satisfies ServiceNodeData,
+        data: { domain, edgeRegion } satisfies ServiceNodeData,
       });
       if (!upgraded) {
-        return new Response("WebSocket upgrade failed", { status: 500 });
+        return respond(new Response("WebSocket upgrade failed", { status: 500 }));
       }
       return undefined;
     }
 
     if (url.pathname === "/tunnel") {
       const upgraded = server.upgrade(req, {
-        data: { type: "client" } satisfies ClientData,
+        data: { type: "client", edgeRegion } satisfies ClientData,
       });
       if (!upgraded) {
-        return new Response("WebSocket upgrade failed", { status: 500 });
+        return respond(new Response("WebSocket upgrade failed", { status: 500 }));
       }
       return undefined;
     }
@@ -69,17 +88,17 @@ const server = Bun.serve<WsData>({
     // --- HTTP endpoints ---
 
     if (url.pathname === "/health") {
-      return Response.json({ ok: true, service: "tnp-relay" });
+      return respond(Response.json({ ok: true, service: "tnp-relay" }));
     }
 
     if (url.pathname === "/stats") {
-      return Response.json({
+      return respond(Response.json({
         serviceNodes: manager.serviceNodeCount,
         activeCircuits: manager.circuitCount,
-      });
+      }));
     }
 
-    return new Response("Not Found", { status: 404 });
+    return respond(new Response("Not Found", { status: 404 }));
   },
 
   websocket: {
@@ -97,6 +116,7 @@ const server = Bun.serve<WsData>({
     },
 
     message(ws: ServerWebSocket<WsData>, raw: string | Buffer) {
+      recordTransport('inbound', ws.data.edgeRegion);
       const bytes = toUint8Array(raw);
 
       let frame;
@@ -160,14 +180,14 @@ function handleClientMessage(
       }
 
       // Confirm to the client
-      clientWs.sendBinary(
+      sendFrame(clientWs,
         encodeFrame(frame.circuitId, FrameType.OPENED, new Uint8Array(0)),
       );
 
       // Notify the service node that a new circuit was opened
       const serviceWs = manager.getServiceNode(domain);
       if (serviceWs) {
-        serviceWs.sendBinary(
+        sendFrame(serviceWs,
           encodeFrame(frame.circuitId, FrameType.OPEN, frame.payload),
         );
       }
@@ -181,7 +201,7 @@ function handleClientMessage(
         return;
       }
       // Forward encrypted payload to the service node with the same circuitId
-      circuit.serviceWs.sendBinary(
+      sendFrame(circuit.serviceWs,
         encodeFrame(frame.circuitId, FrameType.DATA, frame.payload),
       );
       break;
@@ -191,7 +211,7 @@ function handleClientMessage(
       const circuit = manager.getCircuit(frame.circuitId);
       if (circuit) {
         // Notify the service node
-        circuit.serviceWs.sendBinary(
+        sendFrame(circuit.serviceWs,
           encodeFrame(frame.circuitId, FrameType.CLOSE, new Uint8Array(0)),
         );
       }
@@ -218,7 +238,7 @@ function handleServiceNodeMessage(
   switch (frame.type) {
     case FrameType.DATA: {
       // Forward encrypted payload back to the client
-      circuit.clientWs.sendBinary(
+      sendFrame(circuit.clientWs,
         encodeFrame(frame.circuitId, FrameType.DATA, frame.payload),
       );
       break;
@@ -226,7 +246,7 @@ function handleServiceNodeMessage(
 
     case FrameType.CLOSE: {
       // Service node wants to close the circuit
-      circuit.clientWs.sendBinary(
+      sendFrame(circuit.clientWs,
         encodeFrame(frame.circuitId, FrameType.CLOSE, new Uint8Array(0)),
       );
       manager.closeCircuit(frame.circuitId);
@@ -235,7 +255,7 @@ function handleServiceNodeMessage(
 
     case FrameType.ERROR: {
       // Forward error to client
-      circuit.clientWs.sendBinary(
+      sendFrame(circuit.clientWs,
         encodeFrame(frame.circuitId, FrameType.ERROR, frame.payload),
       );
       break;
@@ -246,6 +266,15 @@ function handleServiceNodeMessage(
     }
   }
 }
+
+ready = true;
+const shutdown = async () => {
+  ready = false;
+  await server.stop(true);
+  await stopEcosystemActivity();
+};
+process.once('SIGTERM', () => { void shutdown(); });
+process.once('SIGINT', () => { void shutdown(); });
 
 console.log(`[relay] TNP Relay Server listening on ${RELAY_HOST}:${RELAY_PORT}`);
 
