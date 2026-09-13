@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "dns2": "^3.0.0",
-    "@oxy.so/core": "1.1.0"
+    "@oxy.so/core": "^1.1.2"
   },
   "devDependencies": {
     "@types/dns2": "^2.0.10",

@@ -4,9 +4,10 @@ The API, public DNS daemon, and hosted relay each have a collector and a live
 infrastructure heartbeat. Enable a process with `OXY_ECOSYSTEM_ACTIVITY_ENABLED=true`,
 `AWS_REGION`, `OXY_SERVICE_API_KEY`, and `OXY_SERVICE_API_SECRET`. Missing required
 configuration fails at startup; disabled collection emits a warning. These
-settings do not activate infrastructure: the three ECS services remain parked,
-and the relay retains the separate publication and deployment blockers documented
-in `architecture/relays.md`.
+settings do not activate infrastructure. The September 13 live ECS audit found
+one running API task and one running DNS task; the relay alone remains parked
+with desired count zero and retains the separate publication and deployment
+blockers documented in `architecture/relays.md`.
 
 The shared SDK observes API HTTP requests/responses and outgoing fetch/Node HTTP
 calls, including the DNS daemon's control-plane calls. The DNS proxy exposes an
