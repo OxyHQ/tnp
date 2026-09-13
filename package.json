@@ -16,7 +16,8 @@
     "typecheck": "bun run --filter '*' typecheck",
     "validate:agents-md": "bun ./scripts/check-agents-md-size.mjs && bun ./scripts/test-check-agents-md-size.mjs",
     "test": "bun run --filter '*' test",
-    "release": "release-it"
+    "release": "release-it",
+    "test:edge": "bun test scripts/edge-activity.test.ts"
   },
   "release-it": {
     "git": {
@@ -35,5 +36,11 @@
   "devDependencies": {
     "concurrently": "^10.0.3",
     "release-it": "^20.2.1"
+  },
+  "overrides": {
+    "@oxy.so/telemetry": "^1.1.1"
+  },
+  "resolutions": {
+    "@oxy.so/telemetry": "^1.1.1"
   }
 }

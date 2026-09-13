@@ -69,11 +69,21 @@ export class DnsProxy {
   /** Handle for the periodic TLD sync interval, so it can be cleared on stop. */
   private tldSyncInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor(config: DnsProxyConfig) {
+  constructor(config: DnsProxyConfig, private readonly onTraffic?: (direction: 'inbound' | 'outbound') => void) {
     this.config = config;
     this.apiClient = new TnpApiClient(config.apiBaseUrl);
     this.cache = new DnsCache<DnsAnswer>({ maxEntries: config.cacheMaxEntries });
     this.upstreams = parseUpstreams(config.upstreamDns);
+  }
+
+  /** Observability must never change DNS answers or expose query contents. */
+  private observeTraffic(direction: 'inbound' | 'outbound'): void {
+    try { this.onTraffic?.(direction); } catch { /* Best-effort counters. */ }
+  }
+
+  get listening(): boolean {
+    try { return Boolean(this.tcpServer?.listening && this.udpServer?.address()); }
+    catch { return false; }
   }
 
   /** Enable overlay routing (DNS returns 127.0.0.1 for overlay domains). */
@@ -244,11 +254,15 @@ export class DnsProxy {
 
     for (const upstream of this.upstreams) {
       try {
+        if (upstream.transport === 'classic') this.observeTraffic('outbound');
         let response = await queryUpstream(upstream, queryBuf);
+        if (upstream.transport === 'classic') this.observeTraffic('inbound');
 
         // Bit 9 of the flags word is TC.
         if (response.byteLength >= 4 && (response.readUInt16BE(2) & 0x0200) !== 0) {
+          this.observeTraffic('outbound');
           response = await queryUpstreamTcp(upstream, queryBuf);
+          this.observeTraffic('inbound');
         }
 
         return response;
@@ -351,13 +365,17 @@ export class DnsProxy {
     this.udpServer = dgram.createSocket({ type: "udp4", reuseAddr: true });
 
     this.udpServer.on("message", (msg: Buffer, rinfo: dgram.RemoteInfo) => {
+      this.observeTraffic('inbound');
       // Defer to the next tick so a synchronous handler cannot block Bun's
       // event loop while the upstream fetch is in flight.
       setTimeout(() => {
         this.handleQuery(Buffer.from(msg), true)
           .then((response) => {
             if (response.byteLength === 0) return;
-            this.udpServer?.send(response, 0, response.length, rinfo.port, rinfo.address);
+            if (this.udpServer) {
+              this.udpServer.send(response, 0, response.length, rinfo.port, rinfo.address);
+              this.observeTraffic('outbound');
+            }
           })
           .catch((err) => {
             console.error(`[tnp] udp error: ${err instanceof Error ? err.stack : err}`);
@@ -395,12 +413,14 @@ export class DnsProxy {
           const queryBuf = Buffer.from(buffer.subarray(2, 2 + msgLen));
           buffer = buffer.subarray(2 + msgLen);
 
+          this.observeTraffic('inbound');
           this.handleQuery(queryBuf, false)
             .then((response) => {
               if (response.byteLength > 0) {
                 const lenBuf = Buffer.alloc(2);
                 lenBuf.writeUInt16BE(response.length, 0);
                 socket.write(Buffer.concat([lenBuf, response]));
+                this.observeTraffic('outbound');
               }
               processNext();
             })
