@@ -462,7 +462,7 @@ $ErrorActionPreference = "Stop"
 
 $ApiUrl      = "https://api.tnp.network"
 $Repo        = "OxyHQ/tnp"
-$InstallDir  = "$env:ProgramFiles\\tnp"
+$InstallDir  = "$env:LOCALAPPDATA\\Programs\\tnp"
 $BinaryName  = "tnp.exe"
 $DnsIp       = "${dnsIp}"
 $DnsHost     = "${DNS_HOST}"
@@ -481,26 +481,56 @@ function Exit-Fatal {
 }
 
 # ── Admin check ──────────────────────────────────────────────────────────────
+#
+# The base install (download + place the binary + user-PATH update) never
+# needs Administrator: it lives entirely under %LOCALAPPDATA%, which the
+# current user always owns. Only two optional steps genuinely need it --
+# registering the SYSTEM-level scheduled task ("tnp install") and changing
+# the machine's DNS servers -- so elevation is requested lazily, only for
+# those, via Invoke-Elevated below. That also means a UAC denial (no local
+# admin rights, an org policy that auto-denies elevation for standard users,
+# or a non-interactive/remote session with no secure desktop -- all of which
+# surface as an immediate "Access is denied" from Start-Process) no longer
+# aborts the whole installer.
 
-function Assert-Admin {
+function Test-IsAdmin {
     $current = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
-    if (-not $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        Write-Warn "This installer needs Administrator privileges."
-        Write-Info "Restarting as Administrator..."
+    return $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
 
-        # Build the full command to re-run this script elevated
-        $scriptContent = $MyInvocation.ScriptName
-        if ($scriptContent) {
-            Start-Process powershell.exe \`
-                -ArgumentList "-ExecutionPolicy Bypass -File \`"$scriptContent\`"" \`
-                -Verb RunAs
-        } else {
-            # When piped from irm, re-download and run elevated
-            Start-Process powershell.exe \`
-                -ArgumentList "-ExecutionPolicy Bypass -Command \`"irm https://get.tnp.network/ps | iex\`"" \`
-                -Verb RunAs
+# Run $Command elevated. Runs in-process if already Administrator; otherwise
+# relaunches via UAC (-EncodedCommand sidesteps nested-quoting issues) and
+# waits for it to finish. Returns $true/$false instead of throwing, and on
+# failure prints the manual command so the user isn't left with a raw
+# InvalidOperationException.
+function Invoke-Elevated {
+    param([string]$Command, [string]$Description)
+
+    if (Test-IsAdmin) {
+        Invoke-Expression $Command
+        return $true
+    }
+
+    Write-Info "$Description requires Administrator privileges. Requesting elevation..."
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Command))
+    try {
+        $proc = Start-Process powershell.exe \`
+            -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", $encoded) \`
+            -Verb RunAs -Wait -PassThru
+        if ($proc.ExitCode -ne 0) {
+            Write-Warn "Elevated command exited with code $($proc.ExitCode)."
+            return $false
         }
-        exit 0
+        return $true
+    }
+    catch {
+        Write-Err "Could not get Administrator elevation: $_"
+        Write-Warn "UAC denied the request outright. This usually means your account has no"
+        Write-Warn "local admin rights, your organization's policy auto-denies elevation for"
+        Write-Warn "standard users, or this session has no interactive desktop (SSH/remote)."
+        Write-Warn "Open PowerShell 'as Administrator' yourself and run:"
+        Write-Host "    $Command" -ForegroundColor White
+        return $false
     }
 }
 
@@ -635,15 +665,12 @@ function Install-Binary {
     Copy-Item -Path $TmpFile -Destination $target -Force
     Remove-Item $TmpFile -Force -ErrorAction SilentlyContinue
 
-    # Add to PATH if not already there
-    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-    if ($machinePath -notlike "*$InstallDir*") {
-        Write-Info "Adding $InstallDir to system PATH..."
-        [Environment]::SetEnvironmentVariable(
-            "Path",
-            "$machinePath;$InstallDir",
-            "Machine"
-        )
+    # Add to PATH if not already there (User scope -- no admin required)
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($userPath -notlike "*$InstallDir*") {
+        Write-Info "Adding $InstallDir to your PATH..."
+        $newUserPath = if ([string]::IsNullOrEmpty($userPath)) { $InstallDir } else { "$userPath;$InstallDir" }
+        [Environment]::SetEnvironmentVariable("Path", $newUserPath, "User")
         # Also update current session PATH
         $env:Path = "$env:Path;$InstallDir"
     }
@@ -662,16 +689,12 @@ function Set-SystemDns {
 
     Write-Info "Configuring system DNS to $DnsIp..."
 
-    try {
-        $adapters = Get-NetAdapter | Where-Object { $_.Status -eq "Up" }
-        foreach ($adapter in $adapters) {
-            Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses @($DnsIp, "1.1.1.1")
-        }
+    $dnsCommand = "Get-NetAdapter | Where-Object { \`$_.Status -eq 'Up' } | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex \`$_.ifIndex -ServerAddresses @('$DnsIp', '1.1.1.1') }"
+
+    if (Invoke-Elevated -Command $dnsCommand -Description "Changing system DNS") {
         Write-Ok "DNS set to $DnsIp on all active network adapters."
         Write-Warn "Cloudflare (1.1.1.1) added as fallback."
-    }
-    catch {
-        Write-Err "Failed to configure DNS: $_"
+    } else {
         Write-Warn "You can set DNS manually in Network Settings to $DnsIp"
     }
 }
@@ -701,15 +724,11 @@ function Invoke-DnsSetup {
 
     switch ($choice) {
         "1" {
-            Write-Info "Installing TNP as a system service..."
             $tnpPath = Join-Path $InstallDir $BinaryName
-            try {
-                & $tnpPath install
+            if (Invoke-Elevated -Command "& '$tnpPath' install" -Description "Installing the TNP service") {
                 Write-Ok "TNP service installed and running."
-            }
-            catch {
-                Write-Err "Service installation failed: $_"
-                Write-Warn "You can retry manually: tnp install"
+            } else {
+                Write-Warn "You can retry later from an elevated PowerShell: tnp install"
             }
         }
         "2" {
@@ -787,7 +806,6 @@ function Show-Success {
 
 function Main {
     Show-Banner
-    Assert-Admin
 
     $platform = Get-Platform
     Write-Info "Detected platform: $platform"
