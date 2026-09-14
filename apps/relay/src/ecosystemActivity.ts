@@ -4,12 +4,8 @@ import { createEcosystemTraffic } from '@oxy.so/core/server';
 let activity: ReturnType<typeof createEcosystemTraffic> | undefined;
 
 export function startEcosystemActivity(ready: () => boolean): void {
-  const enabled = process.env.OXY_ECOSYSTEM_ACTIVITY_ENABLED;
-  if (enabled !== undefined && enabled !== 'true' && enabled !== 'false') {
-    throw new Error('OXY_ECOSYSTEM_ACTIVITY_ENABLED must be true or false');
-  }
-  if (enabled !== 'true') {
-    console.warn('Ecosystem activity is disabled for tnp-relay');
+  if (!process.env.OXY_SERVICE_API_KEY?.trim() || !process.env.OXY_SERVICE_API_SECRET?.trim()) {
+    console.warn('Ecosystem activity is disabled for tnp-relay (missing OXY_SERVICE_API_KEY/OXY_SERVICE_API_SECRET)');
     return;
   }
   if (activity) return;
