@@ -171,8 +171,9 @@ baseline these points moved from.
   guarantee the standard tier depends on is not yet real (audit S3).
 - There is one relay implementation, duplicated, with no limits and no circuit
   isolation.
-- Services is designed, not available: no sale is possible until a payment
-  mechanism is approved ([`services.md`](./services.md) §8–9).
+- Services has its foundation (contracts, outbox, reconciliation, DNS apply)
+  and is off by default; no sale is possible until a payment mechanism is
+  approved ([`services.md`](./services.md) §8–9).
 
 The namespace works and DNS is now correct. The edge is a prototype with a
 critical authentication gap. The secure connection does not exist.
