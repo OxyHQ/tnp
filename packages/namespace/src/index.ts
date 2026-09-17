@@ -1,5 +1,6 @@
 export {
   classifyName,
+  isPublicRootTld,
   isReservedTld,
   normalizeName,
   tldOf,
