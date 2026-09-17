@@ -37,7 +37,7 @@ This table is the honest state of the code. Full evidence:
 | Exit nodes / public internet routing | ❌ Not implemented |
 | Full or split tunnel VPN | ❌ Not implemented |
 | Mobile apps | ❌ Not implemented |
-| Services: public domains, DNS, hosting | 🧭 Foundation only, optional and off by default — nothing can be bought until a payment mechanism is approved ([services](docs/architecture/services.md)) |
+| Services: public domains, DNS, hosting | 🧭 Foundation only, optional and off by default — nothing can be bought until the Peable payment integration lands ([services](docs/architecture/services.md)) |
 
 **TNP does not provide anonymity.** It currently provides single-hop encrypted
 transport plus name resolution, and the API is presently able to substitute a

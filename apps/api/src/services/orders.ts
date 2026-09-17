@@ -53,12 +53,12 @@ export interface PaymentAuthorizer {
 
 export class PaymentsNotConfiguredError extends Error {
   constructor() {
-    super("no payment mechanism is approved and configured");
+    super("payments are not integrated yet (Peable, services.md §8)");
     this.name = "PaymentsNotConfiguredError";
   }
 }
 
-/** The only production authorizer until services.md §8 is decided. */
+/** The only production authorizer until the Peable integration (services.md §8) replaces it. */
 export const unconfiguredPayments: PaymentAuthorizer = {
   async authorize() {
     throw new PaymentsNotConfiguredError();

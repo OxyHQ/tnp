@@ -45,7 +45,7 @@
     "heading": "Purchasing",
     "blocked": {
       "sales_disabled": "Domain sales are not enabled. You can search and see prices, but nothing can be bought here yet.",
-      "payments_not_configured": "No payment method has been approved yet. You can search and see prices, but nothing can be bought here yet."
+      "payments_not_configured": "Payments are not connected yet. You can search and see prices, but nothing can be bought here yet."
     }
   },
   "search": {
