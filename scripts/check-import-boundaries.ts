@@ -71,7 +71,9 @@ export function checkImportBoundaries(root: string): BoundaryResult {
 
   const services = "apps/api/src/services/";
   const testing = "apps/api/src/services/providers/testing/";
-  const transpiler = new Bun.Transpiler({ loader: "tsx" });
+  // The loader follows the extension: parsed as TSX, `<T>(x: T) => x` in a
+  // plain `.ts` file is a JSX element and the scan fails.
+  const transpilers = { ts: new Bun.Transpiler({ loader: "ts" }), tsx: new Bun.Transpiler({ loader: "tsx" }), js: new Bun.Transpiler({ loader: "js" }) };
   const violations: string[] = [];
   let sawAllowedEntry = false;
 
@@ -81,6 +83,7 @@ export function checkImportBoundaries(root: string): BoundaryResult {
     let imports: { path: string }[];
     try {
       // A shebang line is valid for Bun to execute but not for the scanner.
+      const transpiler = file.endsWith(".tsx") ? transpilers.tsx : /\.(mjs|js)$/.test(file) ? transpilers.js : transpilers.ts;
       imports = transpiler.scanImports(readFileSync(file, "utf8").replace(/^#!.*/, ""));
     } catch (err) {
       violations.push(`${from}: could not be parsed (${String(err)})`);

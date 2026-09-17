@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
-import { Toaster } from "sonner";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Home from "./pages/Home";
@@ -23,7 +22,6 @@ export default function App() {
     <HelmetProvider>
     <AuthBridge />
     {/* One toaster for the app; pages report failed actions through `toast`. */}
-    <Toaster theme="dark" position="bottom-right" closeButton />
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>

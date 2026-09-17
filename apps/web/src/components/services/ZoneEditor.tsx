@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { toast } from "@oxy.so/bloom/toast";
 import {
   MAX_ZONE_CHANGES,
   type OperationDto,
