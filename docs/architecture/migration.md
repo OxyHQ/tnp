@@ -61,10 +61,14 @@ platforms/
   linux/ macos/ windows/ android/ ios/     thin OS integration only
 ```
 
-Note this repository still uses `apps/` while the Oxy standard is `packages/`
-for single-app repos. TNP is not a single app — it is a network with several
-deployable programs — so `apps/` for deployables plus `packages/` for libraries
-is the right shape here and is a deliberate exception, not drift.
+**Decision:** `apps/` for deployables plus `packages/` for libraries. The Oxy
+standard (`packages/frontend` + `packages/backend`) is for single-app repos;
+TNP is a network with several deployable programs, so this is a deliberate
+exception, not drift, and there is no pending move to `packages/`.
+
+The optional services layer (#62) lives inside `apps/api/src/services/` with a
+worker entrypoint in `apps/api/src/workers/`, and is not extracted into a
+package until it has a second consumer. See [`services.md`](./services.md) §2.
 
 ## 4. Extraction order
 
@@ -105,10 +109,16 @@ change. No compatibility shims, no re-export barrels, no deprecated aliases.
 
 ## 6. Not breaking the deployment
 
-The web app deploys to Cloudflare Pages. API and DNS images are published to
-ECR, while all three ECS services remain parked until an explicit infrastructure
-activation. The relay is excluded from image publication pending its security
-blockers. Client binaries target five platforms.
+The web app deploys to Cloudflare Pages on a green `main`. API and DNS images
+are published to ECR after CI passes and the API and DNS services are active;
+publishing an image never rolls it out — promotion of a reviewed digest is a
+separate, manual step in `oxy-infra`. The relay is excluded from image
+publication and stays parked pending its security blockers. Client binaries
+target five platforms.
+
+Because the web deploys on merge and the API does not, **a web change must work
+against the API that is currently running** until the matching API digest is
+promoted.
 
 - API route contracts change only additively until the client that consumes them
   ships. Relay registration (audit B2) was the exception that needed no
@@ -122,8 +132,8 @@ blockers. Client binaries target five platforms.
 - Installers must clean up state a previous version wrote — most importantly
   `/etc/resolver/com` and `Domains=~.` — so an upgrade fixes the namespace
   violation rather than leaving it behind.
-- `.github/workflows/deploy.yml` currently deploys the web app on every push to
-  `main` with no gate. Phase 1 puts a green CI run in front of it.
+- ~~`.github/workflows/deploy.yml` deploys the web app with no gate.~~ Done:
+  it is gated on CI.
 
 ## 7. What gets deleted
 

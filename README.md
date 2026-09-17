@@ -31,12 +31,13 @@ This table is the honest state of the code. Full evidence:
 | Forward public DNS to an upstream | ✅ Wire-format end to end, correct response codes, EDNS(0), TCP fallback, configurable upstreams |
 | Publish a service from behind NAT (`tnp serve`) | ⚠️ Prototype — the relay does not authenticate service nodes |
 | Reach a TNP service over SOCKS5 | ⚠️ Prototype — TNP destinations only, no IPv6, ignores the requested port |
-| Run a relay (`tnp relay`) | ❌ Broken — registration fails against the current API |
+| Run a relay (`tnp relay`) | ⚠️ Registration works; the relay stays parked until its authentication and isolation blockers close |
 | HTTP CONNECT proxy | ❌ Not implemented |
 | Onion routing / private mode | ❌ Not implemented — `--privacy private` is rejected rather than silently downgraded |
 | Exit nodes / public internet routing | ❌ Not implemented |
 | Full or split tunnel VPN | ❌ Not implemented |
 | Mobile apps | ❌ Not implemented |
+| Services: public domains, DNS, hosting | 🧭 Designed, optional and off by default — nothing can be bought yet ([services](docs/architecture/services.md)) |
 
 **TNP does not provide anonymity.** It currently provides single-hop encrypted
 transport plus name resolution, and the API is presently able to substitute a
@@ -49,6 +50,7 @@ Ten layers, nine operating modes, a versioned wire protocol.
 | | |
 |---|---|
 | [Product](docs/architecture/product.md) | What TNP is trying to be, and in what order |
+| [Services](docs/architecture/services.md) | The optional public-domain, DNS and hosting layer |
 | [Overview](docs/architecture/overview.md) | The layers and how they fit |
 | [Glossary](docs/architecture/glossary.md) | Precise meanings |
 | [Operating modes](docs/architecture/operating-modes.md) | What you can turn on, and what it costs |
@@ -77,7 +79,10 @@ apps/
   relay/          @tnp/relay        Relay server
 packages/
   client/         @tnp/client       CLI, resolver, SOCKS5, tunnel, service node, embedded relay
+  crypto/         @tnp/crypto       Key hierarchy and grant chains
+  namespace/      @tnp/namespace    TLD policy, reserved set, name classification
   protocol/       @tnp/protocol     Binary frame codec
+  shared-types/   @tnp/shared-types Request/response contracts
 ```
 
 The target structure and the phased route to it are in
@@ -138,7 +143,7 @@ tnp                       # interactive menu
 tnp run                   # resolver daemon
 tnp connect               # resolver + SOCKS5 proxy
 tnp serve <domain> --target <url>
-tnp relay                 # currently broken, see the audit
+tnp relay                 # registers; relay network stays parked, see relays.md
 tnp install / uninstall / status / test <domain>
 ```
 
@@ -169,12 +174,14 @@ Base URL `https://api.tnp.network`. Auth is an Oxy bearer token validated throug
 | `POST` | `/relays/register` · `/relays/heartbeat` | ✔ | Relays |
 | `GET` | `/client/latest` | — | Client version and downloads |
 
-## Out of scope
+## Services
 
-Not implemented, and no adapters, mocks or interfaces for them: OpenProvider,
-ICANN reseller integration, traditional domain sale, transfer or renewal, the
-reseller system, FairCoin payments, checkout and billing, ICANN registrar
-accreditation.
+TNP Network does not depend on any commercial provider. Public domains, their
+DNS and later hosting are an optional services layer, off by default, with
+Namecheap as the first registrar adapter behind provider-neutral contracts.
+Native names and public domains are separate resources: buying a `.com` never
+makes it a TNP name and never changes how it resolves. State and launch gates:
+[services.md](docs/architecture/services.md).
 
 ## Contributing
 

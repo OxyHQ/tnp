@@ -17,13 +17,17 @@ retired. Agent: `tnp`.
 `audit-2026-08-06.md` is the verified state of the code; where docs and code
 disagree, the audit says which is which.
 
-Three rules that override convenience:
+Rules that override convenience:
 - **Never shadow a public DNS name.** A `public-dns` name resolves identically
   with and without TNP. `naming.md` is normative.
 - **A proxy is not a VPN.** No CLI, UI or doc string may call the local proxy a
   VPN.
 - **No anonymity claims.** Multi-hop is not implemented; even when it is, the
   wording rules in `privacy-model.md` §6 apply.
+- **Services never become a network dependency.** Public domains/DNS/hosting
+  (#62) live in `apps/api/src/services/`, are off by default, and nothing in the
+  network path imports them. A `.com` is never a native name. `services.md` is
+  normative.
 
 ## Commands
 

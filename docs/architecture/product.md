@@ -21,6 +21,16 @@ The three are not alternatives. A domain registered in the namespace is served
 through the edge, and a device on the secure connection reaches it over the same
 network.
 
+### Services — an optional second area
+
+Next to the network, TNP offers **Services**: public DNS domains, their zones
+and, later, hosting, bought and managed through trusted providers (Namecheap is
+the first registrar adapter). It is a separate, optional product area with its
+own boundary — the network never depends on it, a `.com` bought here is never a
+TNP-native name, and every commercial feature is off by default. The home page
+and onboarding present TNP Network, not a domain store. Design, state and launch
+gates: [`services.md`](./services.md).
+
 ## The rule that shapes everything below
 
 **The default has to feel like normal internet.** Not "fast for an overlay" —
@@ -149,19 +159,20 @@ VPN product needs exits and the standard tier is honest about what an exit sees.
 ## Distance between this and today
 
 Stated plainly, because the gap is large and the roadmap should not read as if
-it were small:
+it were small. Verified on 2026-09-17; `audit-2026-08-06.md` is the historical
+baseline these points moved from.
 
-- The production API is **down**, and its deploy workflow has never succeeded
-  (#29).
-- `tnp relay` **cannot register** — the client and API disagree on the request
-  body (audit B2). There is no relay network, and no community relay has ever
-  run.
-- The relay accepts an unauthenticated socket claiming any domain, and evicts
-  the incumbent (audit S2).
-- The API can substitute a service node's key, so the end-to-end guarantee the
-  standard tier depends on is not yet real (audit S3).
-- There is one relay implementation, duplicated, with no limits, no
-  authentication and no circuit isolation.
+- The production API answers `/health`, and API/DNS images are published only
+  after CI passes (#29 is historical).
+- `tnp relay` registration works (audit B2 is fixed), but the relay stays
+  **parked**: it still accepts an unauthenticated socket claiming any domain
+  (audit S2), and the blockers in [`relays.md`](./relays.md) are open.
+- The API can still substitute a service node's key, so the end-to-end
+  guarantee the standard tier depends on is not yet real (audit S3).
+- There is one relay implementation, duplicated, with no limits and no circuit
+  isolation.
+- Services is designed, not available: no sale is possible until a payment
+  mechanism is approved ([`services.md`](./services.md) §8–9).
 
 The namespace works and DNS is now correct. The edge is a prototype with a
 critical authentication gap. The secure connection does not exist.

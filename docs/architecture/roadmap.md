@@ -212,15 +212,22 @@ fuzzed continuously; the privacy model states measured results.
 | #11 — Cross-platform client lifecycle | 1, 9, 10 |
 | #13 — Threat model and security testing | 1 (initial), 11 (complete) |
 | #15 — Expo mobile app | 9 |
-| #12 — OpenProvider | **Out of scope — close** |
-| #14 — FairCoin payments | **Out of scope — close** |
+| #62 — Services layer (public domains, DNS, hosting) | Parallel track, [`services.md`](./services.md) §9 |
+| #12 — OpenProvider | "OpenProvider first" superseded by #62 (Namecheap first, multi-provider by contract); its portability requirements are kept |
+| #14 — FairCoin payments | Not revived; the payment decision is open ([`services.md`](./services.md) §8) |
 
-## Out of scope
+## Services track (#62)
 
-Not implemented, and no interfaces, adapters or mocks for them: OpenProvider,
-ICANN reseller integration, traditional domain sale/transfer/renewal, the
-reseller system, FairCoin payments, checkout and billing, ICANN registrar
-accreditation. A grep confirms the codebase is currently clean of all of these.
+A parallel line of work beside the network phases, governed by
+[`services.md`](./services.md). It never blocks a network phase and no network
+phase depends on it. Its gates, in order: foundation (contracts, schema,
+outbox, worker, import boundaries) → Namecheap sandbox → domain pilot (needs an
+approved payment mechanism) → first hosting product (needs an approved
+provider) → second real provider → edge integration (needs Phase 3 and 5).
+
+Still out of scope: ICANN registrar accreditation, a TNP wallet or billing
+system of its own, and any provider or product family that has not passed its
+admission record.
 
 ## Success criteria
 
