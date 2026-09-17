@@ -1,0 +1,246 @@
+{
+  "meta": {
+    "title": "Services",
+    "description": "Optional services next to TNP Network: public DNS domains and their DNS zones, through trusted providers."
+  },
+  "heading": "Services",
+  "subtitle": "An optional area next to TNP Network for public DNS domains and their zones, through trusted providers. TNP Network — native names, resolution and service publication — works the same with or without it.",
+  "signInPrompt": "Sign in to search public domains and manage the ones you own.",
+  "signIn": "sign in with oxy",
+  "status": {
+    "checking": "Checking whether services are available..."
+  },
+  "common": {
+    "retry": "retry",
+    "cancel": "cancel"
+  },
+  "errors": {
+    "network": "Could not reach the TNP API. Check your connection and try again."
+  },
+  "notAvailable": {
+    "heading": "Services are not available yet",
+    "body": "Public domain search, quotes and DNS management have not been enabled on this TNP deployment. Nothing here can be searched or bought yet.",
+    "unreachable": "The services status could not be checked right now.",
+    "networkUnaffected": "TNP Network is unaffected:",
+    "registerNative": "register a native name",
+    "recheck": "check again"
+  },
+  "namespace": {
+    "publicDns": "Public DNS",
+    "tnpNetwork": "TNP Network",
+    "tnpExplain": "Native names such as .ox live in TNP's own namespace and resolve through TNP.",
+    "tnpAction": "register a native name",
+    "publicExplain": "Public domains such as .com are registered through a provider and resolve through the public DNS, exactly as they would without TNP.",
+    "notNative": "Buying a public domain such as a .com does not make it a TNP name."
+  },
+  "provider": {
+    "sandbox": "sandbox",
+    "sandboxHint": "Registered in the provider's test environment: not a real registration.",
+    "environment": {
+      "sandbox": "sandbox",
+      "production": "production"
+    }
+  },
+  "purchase": {
+    "heading": "Purchasing",
+    "blocked": {
+      "sales_disabled": "Domain sales are not enabled. You can search and see prices, but nothing can be bought here yet.",
+      "payments_not_configured": "No payment method has been approved yet. You can search and see prices, but nothing can be bought here yet."
+    }
+  },
+  "search": {
+    "heading": "Search public domains",
+    "label": "Domain names",
+    "placeholder": "example.com, example.org",
+    "hint": "Up to {{max}} names, separated by commas or spaces.",
+    "dropped_one": "{{count}} name was left out: at most {{max}} per search.",
+    "dropped_other": "{{count}} names were left out: at most {{max}} per search.",
+    "notReservation": "Availability is a moment's answer, not a reservation. A name shown as available can be registered by someone else before you.",
+    "searching": "Searching...",
+    "noResults": "No results.",
+    "resultCount_one": "{{count}} result",
+    "resultCount_other": "{{count}} results",
+    "premium": "premium",
+    "failed": "The search failed. Try again."
+  },
+  "availability": {
+    "available": "available",
+    "unavailable": "taken",
+    "unknown": "could not check",
+    "unsupported": "not offered",
+    "invalid": "invalid name",
+    "explain": {
+      "available": "The provider reports this name as available right now.",
+      "unavailable": "This name is already registered.",
+      "unknown": "The provider did not give a clear answer. This does not mean the name is available.",
+      "unsupported": "This name cannot be searched or registered through TNP's providers.",
+      "invalid": "This is not a valid public domain name."
+    }
+  },
+  "quote": {
+    "get": "Get a quote",
+    "pending": "Getting quote...",
+    "refresh": "new quote",
+    "failed": "Could not get a quote. Try again.",
+    "unformattable": "{{amount}} (minor units of {{currency}})",
+    "price_one": "Price ({{count}} year)",
+    "price_other": "Price ({{count}} years)",
+    "fees": "Included provider fees",
+    "renewal": "Renewal",
+    "perYear": "{{price}} per year",
+    "renewalUnknown": "Not quoted by the provider",
+    "expires": "Quote valid until",
+    "premiumNote": "Premium names are priced by the registry and can renew at a higher price."
+  },
+  "inventory": {
+    "heading": "Your public domains",
+    "loading": "Loading your public domains...",
+    "failed": "Your public domains could not be loaded.",
+    "empty": "You have no public domains.",
+    "manage": "manage",
+    "manageName": "Manage {{name}}",
+    "pagination": "Public domain pages",
+    "prev": "prev",
+    "next": "next",
+    "pageOf": "{{page}} / {{pages}}"
+  },
+  "domain": {
+    "heading": "Public domain",
+    "back": "services",
+    "loading": "Loading domain...",
+    "failed": "This domain could not be loaded.",
+    "notFound": "Domain not found. It may not exist or may belong to another account.",
+    "ascii": "ASCII",
+    "expires": "Expires",
+    "expiresUnknown": "Unknown",
+    "provider": "Provider",
+    "locked": "Transfer lock",
+    "unknownValue": "Unknown",
+    "yes": "On",
+    "no": "Off",
+    "renewal": "Renewal",
+    "renewalOwner": {
+      "none": "Not set to renew",
+      "tnp": "Renewed through TNP",
+      "provider": "Renewed at the provider"
+    },
+    "lastSynced": "Last checked with provider",
+    "neverSynced": "Not checked yet",
+    "lifecycleLabel": "State"
+  },
+  "lifecycle": {
+    "pending": "pending",
+    "active": "active",
+    "expired": "expired",
+    "redemption": "redemption",
+    "transferring_in": "transferring in",
+    "transferred_out": "transferred out",
+    "locked_by_registry": "locked by registry",
+    "failed": "failed",
+    "unknown": "being checked",
+    "explain": {
+      "pending": "The registration is being processed.",
+      "active": "Registered and active.",
+      "expired": "The registration has expired.",
+      "redemption": "Expired and in the registry's redemption period; it may still be recoverable.",
+      "transferring_in": "A transfer to this provider is in progress.",
+      "transferred_out": "The domain was transferred to another provider.",
+      "locked_by_registry": "The registry has locked this domain.",
+      "failed": "The registration did not complete.",
+      "unknown": "The state is being confirmed with the provider."
+    }
+  },
+  "operation": {
+    "queued": "queued",
+    "running": "running",
+    "succeeded": "done",
+    "failed": "failed",
+    "unknown": "being checked",
+    "manual_review": "needs review",
+    "explain": {
+      "queued": "Waiting to start.",
+      "running": "In progress with the provider.",
+      "succeeded": "Completed and confirmed.",
+      "failed": "Did not complete. See the message below, if any.",
+      "unknown": "The provider did not confirm the outcome. It is being checked automatically; this is not a failure.",
+      "manual_review": "The outcome needs a person to review it. This is not a failure; no action is needed from you yet."
+    },
+    "kind": {
+      "domain_register": "Registration",
+      "domain_renew": "Renewal",
+      "domain_sync": "Check with provider",
+      "dns_apply": "DNS change"
+    }
+  },
+  "operations": {
+    "heading": "Operation log",
+    "loading": "Loading operations...",
+    "failed": "The operation log could not be loaded.",
+    "empty": "No operations yet.",
+    "refresh": "refresh"
+  },
+  "zone": {
+    "heading": "DNS zone",
+    "none": "No DNS zone is recorded for this domain.",
+    "authority": {
+      "provider": "Hosted at the provider",
+      "external": "Managed outside TNP"
+    },
+    "state": {
+      "unmanaged": "unmanaged",
+      "in_sync": "in sync",
+      "pending": "publishing",
+      "conflict": "changed elsewhere",
+      "unknown": "being checked"
+    },
+    "lastVerified": "verified {{time}}",
+    "conflictState": "The zone was changed outside TNP since it was last read. Preview again to see the current records before editing.",
+    "external": "This zone is managed outside TNP. Edit its records where it is hosted; TNP does not publish changes to it.",
+    "editingDisabled": "DNS editing is not enabled yet.",
+    "invalidDraft": "Check the record rows: {{detail}}",
+    "previewFailed": "The preview could not be generated. Try again.",
+    "applied": "DNS change queued.",
+    "conflict": "The zone changed since your preview. Preview again before applying.",
+    "applyNetwork": "The request did not get an answer. Retrying is safe: the same change will not be applied twice.",
+    "applyFailed": "The change could not be applied. Try again.",
+    "action": {
+      "add": "add",
+      "update": "update",
+      "delete": "delete"
+    },
+    "rowLegend": "Change {{n}}",
+    "field": {
+      "action": "Action",
+      "host": "Host",
+      "type": "Type",
+      "value": "Value",
+      "ttl": "TTL",
+      "priority": "Priority"
+    },
+    "removeRow": "remove",
+    "removeRowLabel": "Remove change {{n}}",
+    "matchHeading": "Existing record",
+    "newRecordHeading": "New record",
+    "addRow": "add change",
+    "preview": "Preview changes",
+    "previewing": "Previewing...",
+    "previewHeading": "Preview",
+    "added_one": "{{count}} record added",
+    "added_other": "{{count}} records added",
+    "removed_one": "{{count}} record removed",
+    "removed_other": "{{count}} records removed",
+    "noDifference": "These changes would not alter the zone.",
+    "raceNotice": "The provider has no way to lock the zone: an edit made in the provider's own panel at the same time can still conflict with this change.",
+    "reviewApply": "Review and apply",
+    "currentRecords_one": "Current zone ({{count}} record)",
+    "currentRecords_other": "Current zone ({{count}} records)",
+    "operationHeading": "Latest DNS change",
+    "pollingStopped": "Still being checked. This page stopped asking; refresh the operation log later.",
+    "confirmTitle": "Apply DNS changes?",
+    "confirmSummary": "Records added: {{added}} · Records removed: {{removed}}",
+    "confirmConsequence": "The whole zone is rewritten at the provider with these records. Removed records stop resolving once the change is published.",
+    "apply": "Apply changes",
+    "applying": "Applying...",
+    "retryApply": "Retry"
+  }
+}

@@ -1,0 +1,252 @@
+{
+  "meta": {
+    "title": "Services",
+    "description": "Services optionnels à côté de TNP Network : domaines DNS publics et leurs zones DNS, via des fournisseurs de confiance."
+  },
+  "heading": "Services",
+  "subtitle": "Un espace optionnel à côté de TNP Network pour les domaines DNS publics et leurs zones, via des fournisseurs de confiance. TNP Network — noms natifs, résolution et publication de services — fonctionne de la même façon avec ou sans lui.",
+  "signInPrompt": "Connectez-vous pour rechercher des domaines publics et gérer ceux que vous possédez.",
+  "signIn": "se connecter avec oxy",
+  "status": {
+    "checking": "Vérification de la disponibilité des services..."
+  },
+  "common": {
+    "retry": "réessayer",
+    "cancel": "annuler"
+  },
+  "errors": {
+    "network": "Impossible de joindre l'API TNP. Vérifiez votre connexion et réessayez."
+  },
+  "notAvailable": {
+    "heading": "Les services ne sont pas encore disponibles",
+    "body": "La recherche de domaines publics, les devis et la gestion DNS ne sont pas activés sur ce déploiement de TNP. Rien ne peut encore être recherché ni acheté ici.",
+    "unreachable": "L'état des services n'a pas pu être vérifié pour le moment.",
+    "networkUnaffected": "TNP Network n'est pas concerné :",
+    "registerNative": "enregistrer un nom natif",
+    "recheck": "vérifier à nouveau"
+  },
+  "namespace": {
+    "publicDns": "DNS public",
+    "tnpNetwork": "TNP Network",
+    "tnpExplain": "Les noms natifs comme .ox appartiennent à l'espace de noms propre à TNP et sont résolus par TNP.",
+    "tnpAction": "enregistrer un nom natif",
+    "publicExplain": "Les domaines publics comme .com sont enregistrés via un fournisseur et résolus par le DNS public, exactement comme sans TNP.",
+    "notNative": "Acheter un domaine public comme un .com n'en fait pas un nom TNP."
+  },
+  "provider": {
+    "sandbox": "sandbox",
+    "sandboxHint": "Enregistré dans l'environnement de test du fournisseur : ce n'est pas un véritable enregistrement.",
+    "environment": {
+      "sandbox": "sandbox",
+      "production": "production"
+    }
+  },
+  "purchase": {
+    "heading": "Achats",
+    "blocked": {
+      "sales_disabled": "La vente de domaines n'est pas activée. Vous pouvez rechercher et voir les prix, mais rien ne peut encore être acheté ici.",
+      "payments_not_configured": "Aucun moyen de paiement n'a encore été approuvé. Vous pouvez rechercher et voir les prix, mais rien ne peut encore être acheté ici."
+    }
+  },
+  "search": {
+    "heading": "Rechercher des domaines publics",
+    "label": "Noms de domaine",
+    "placeholder": "exemple.com, exemple.org",
+    "hint": "Jusqu'à {{max}} noms, séparés par des virgules ou des espaces.",
+    "dropped_one": "{{count}} nom a été ignoré : {{max}} au maximum par recherche.",
+    "dropped_many": "{{count}} noms ont été ignorés : {{max}} au maximum par recherche.",
+    "dropped_other": "{{count}} noms ont été ignorés : {{max}} au maximum par recherche.",
+    "notReservation": "La disponibilité est une réponse instantanée, pas une réservation. Quelqu'un d'autre peut enregistrer un nom disponible avant vous.",
+    "searching": "Recherche...",
+    "noResults": "Aucun résultat.",
+    "resultCount_one": "{{count}} résultat",
+    "resultCount_many": "{{count}} résultats",
+    "resultCount_other": "{{count}} résultats",
+    "premium": "premium",
+    "failed": "La recherche a échoué. Réessayez."
+  },
+  "availability": {
+    "available": "disponible",
+    "unavailable": "déjà pris",
+    "unknown": "vérification impossible",
+    "unsupported": "non proposé",
+    "invalid": "nom invalide",
+    "explain": {
+      "available": "Le fournisseur indique que ce nom est disponible en ce moment.",
+      "unavailable": "Ce nom est déjà enregistré.",
+      "unknown": "Le fournisseur n'a pas donné de réponse claire. Cela ne signifie pas que le nom est disponible.",
+      "unsupported": "Ce nom ne peut pas être recherché ni enregistré via les fournisseurs de TNP.",
+      "invalid": "Ce n'est pas un nom de domaine public valide."
+    }
+  },
+  "quote": {
+    "get": "Obtenir un devis",
+    "pending": "Obtention du devis...",
+    "refresh": "nouveau devis",
+    "failed": "Impossible d'obtenir un devis. Réessayez.",
+    "unformattable": "{{amount}} (unités mineures de {{currency}})",
+    "price_one": "Prix ({{count}} an)",
+    "price_many": "Prix ({{count}} ans)",
+    "price_other": "Prix ({{count}} ans)",
+    "fees": "Frais du fournisseur inclus",
+    "renewal": "Renouvellement",
+    "perYear": "{{price}} par an",
+    "renewalUnknown": "Non indiqué par le fournisseur",
+    "expires": "Devis valable jusqu'au",
+    "premiumNote": "Les noms premium sont tarifés par le registre et peuvent se renouveler à un prix plus élevé."
+  },
+  "inventory": {
+    "heading": "Vos domaines publics",
+    "loading": "Chargement de vos domaines publics...",
+    "failed": "Vos domaines publics n'ont pas pu être chargés.",
+    "empty": "Vous n'avez aucun domaine public.",
+    "manage": "gérer",
+    "manageName": "Gérer {{name}}",
+    "pagination": "Pages de domaines publics",
+    "prev": "préc.",
+    "next": "suiv.",
+    "pageOf": "{{page}} / {{pages}}"
+  },
+  "domain": {
+    "heading": "Domaine public",
+    "back": "services",
+    "loading": "Chargement du domaine...",
+    "failed": "Ce domaine n'a pas pu être chargé.",
+    "notFound": "Domaine introuvable. Il n'existe peut-être pas ou appartient à un autre compte.",
+    "ascii": "ASCII",
+    "expires": "Expire le",
+    "expiresUnknown": "Inconnu",
+    "provider": "Fournisseur",
+    "locked": "Verrou de transfert",
+    "unknownValue": "Inconnu",
+    "yes": "Activé",
+    "no": "Désactivé",
+    "renewal": "Renouvellement",
+    "renewalOwner": {
+      "none": "Renouvellement non configuré",
+      "tnp": "Renouvelé via TNP",
+      "provider": "Renouvelé chez le fournisseur"
+    },
+    "lastSynced": "Dernière vérification auprès du fournisseur",
+    "neverSynced": "Pas encore vérifié",
+    "lifecycleLabel": "État"
+  },
+  "lifecycle": {
+    "pending": "en attente",
+    "active": "actif",
+    "expired": "expiré",
+    "redemption": "rédemption",
+    "transferring_in": "transfert entrant",
+    "transferred_out": "transféré ailleurs",
+    "locked_by_registry": "verrouillé par le registre",
+    "failed": "échec",
+    "unknown": "en vérification",
+    "explain": {
+      "pending": "L'enregistrement est en cours de traitement.",
+      "active": "Enregistré et actif.",
+      "expired": "L'enregistrement a expiré.",
+      "redemption": "Expiré et en période de rédemption du registre ; il est peut-être encore récupérable.",
+      "transferring_in": "Un transfert vers ce fournisseur est en cours.",
+      "transferred_out": "Le domaine a été transféré vers un autre fournisseur.",
+      "locked_by_registry": "Le registre a verrouillé ce domaine.",
+      "failed": "L'enregistrement n'a pas abouti.",
+      "unknown": "L'état est en cours de confirmation auprès du fournisseur."
+    }
+  },
+  "operation": {
+    "queued": "en file",
+    "running": "en cours",
+    "succeeded": "terminée",
+    "failed": "échec",
+    "unknown": "en vérification",
+    "manual_review": "à examiner",
+    "explain": {
+      "queued": "En attente de démarrage.",
+      "running": "En cours auprès du fournisseur.",
+      "succeeded": "Terminée et confirmée.",
+      "failed": "N'a pas abouti. Consultez le message ci-dessous, s'il y en a un.",
+      "unknown": "Le fournisseur n'a pas confirmé le résultat. Il est vérifié automatiquement ; ce n'est pas un échec.",
+      "manual_review": "Le résultat doit être examiné par une personne. Ce n'est pas un échec ; vous n'avez rien à faire pour l'instant."
+    },
+    "kind": {
+      "domain_register": "Enregistrement",
+      "domain_renew": "Renouvellement",
+      "domain_sync": "Vérification auprès du fournisseur",
+      "dns_apply": "Modification DNS"
+    }
+  },
+  "operations": {
+    "heading": "Journal des opérations",
+    "loading": "Chargement des opérations...",
+    "failed": "Le journal des opérations n'a pas pu être chargé.",
+    "empty": "Aucune opération pour l'instant.",
+    "refresh": "actualiser"
+  },
+  "zone": {
+    "heading": "Zone DNS",
+    "none": "Aucune zone DNS n'est enregistrée pour ce domaine.",
+    "authority": {
+      "provider": "Hébergée chez le fournisseur",
+      "external": "Gérée en dehors de TNP"
+    },
+    "state": {
+      "unmanaged": "non gérée",
+      "in_sync": "synchronisée",
+      "pending": "publication",
+      "conflict": "modifiée ailleurs",
+      "unknown": "en vérification"
+    },
+    "lastVerified": "vérifiée {{time}}",
+    "conflictState": "La zone a été modifiée en dehors de TNP depuis sa dernière lecture. Générez un nouvel aperçu pour voir les enregistrements actuels avant de modifier.",
+    "external": "Cette zone est gérée en dehors de TNP. Modifiez ses enregistrements là où elle est hébergée ; TNP n'y publie aucune modification.",
+    "editingDisabled": "La modification DNS n'est pas encore activée.",
+    "invalidDraft": "Vérifiez les lignes d'enregistrement : {{detail}}",
+    "previewFailed": "L'aperçu n'a pas pu être généré. Réessayez.",
+    "applied": "Modification DNS mise en file.",
+    "conflict": "La zone a changé depuis votre aperçu. Générez un nouvel aperçu avant d'appliquer.",
+    "applyNetwork": "La requête n'a pas obtenu de réponse. Vous pouvez réessayer sans risque : la même modification ne sera pas appliquée deux fois.",
+    "applyFailed": "La modification n'a pas pu être appliquée. Réessayez.",
+    "action": {
+      "add": "ajouter",
+      "update": "modifier",
+      "delete": "supprimer"
+    },
+    "rowLegend": "Modification {{n}}",
+    "field": {
+      "action": "Action",
+      "host": "Hôte",
+      "type": "Type",
+      "value": "Valeur",
+      "ttl": "TTL",
+      "priority": "Priorité"
+    },
+    "removeRow": "retirer",
+    "removeRowLabel": "Retirer la modification {{n}}",
+    "matchHeading": "Enregistrement existant",
+    "newRecordHeading": "Nouvel enregistrement",
+    "addRow": "ajouter une modification",
+    "preview": "Aperçu des modifications",
+    "previewing": "Génération de l'aperçu...",
+    "previewHeading": "Aperçu",
+    "added_one": "{{count}} enregistrement ajouté",
+    "added_many": "{{count}} enregistrements ajoutés",
+    "added_other": "{{count}} enregistrements ajoutés",
+    "removed_one": "{{count}} enregistrement supprimé",
+    "removed_many": "{{count}} enregistrements supprimés",
+    "removed_other": "{{count}} enregistrements supprimés",
+    "noDifference": "Ces modifications ne changeraient pas la zone.",
+    "raceNotice": "Le fournisseur ne permet pas de verrouiller la zone : une modification faite au même moment dans le panneau du fournisseur peut encore entrer en conflit avec celle-ci.",
+    "reviewApply": "Vérifier et appliquer",
+    "currentRecords_one": "Zone actuelle ({{count}} enregistrement)",
+    "currentRecords_many": "Zone actuelle ({{count}} enregistrements)",
+    "currentRecords_other": "Zone actuelle ({{count}} enregistrements)",
+    "operationHeading": "Dernière modification DNS",
+    "pollingStopped": "Toujours en vérification. Cette page a cessé d'interroger ; actualisez le journal des opérations plus tard.",
+    "confirmTitle": "Appliquer les modifications DNS ?",
+    "confirmSummary": "Enregistrements ajoutés : {{added}} · Enregistrements supprimés : {{removed}}",
+    "confirmConsequence": "Toute la zone est réécrite chez le fournisseur avec ces enregistrements. Les enregistrements supprimés cessent d'être résolus dès la publication de la modification.",
+    "apply": "Appliquer les modifications",
+    "applying": "Application...",
+    "retryApply": "Réessayer"
+  }
+}

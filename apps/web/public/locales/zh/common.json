@@ -5,7 +5,8 @@
     "network": "网络",
     "propose": "提议",
     "install": "安装",
-    "dashboard": "控制台"
+    "dashboard": "控制台",
+    "services": "服务"
   },
   "auth": {
     "signIn": "登录",

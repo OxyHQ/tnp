@@ -1,0 +1,252 @@
+{
+  "meta": {
+    "title": "Servicios",
+    "description": "Servicios opcionales junto a TNP Network: dominios de DNS público y sus zonas DNS, a través de proveedores de confianza."
+  },
+  "heading": "Servicios",
+  "subtitle": "Un área opcional junto a TNP Network para dominios de DNS público y sus zonas, a través de proveedores de confianza. TNP Network — nombres nativos, resolución y publicación de servicios — funciona igual con o sin ella.",
+  "signInPrompt": "Inicia sesión para buscar dominios públicos y gestionar los tuyos.",
+  "signIn": "iniciar sesión con oxy",
+  "status": {
+    "checking": "Comprobando si los servicios están disponibles..."
+  },
+  "common": {
+    "retry": "reintentar",
+    "cancel": "cancelar"
+  },
+  "errors": {
+    "network": "No se pudo contactar con la API de TNP. Comprueba tu conexión e inténtalo de nuevo."
+  },
+  "notAvailable": {
+    "heading": "Los servicios aún no están disponibles",
+    "body": "La búsqueda de dominios públicos, los presupuestos y la gestión de DNS no están activados en este despliegue de TNP. Todavía no se puede buscar ni comprar nada aquí.",
+    "unreachable": "No se ha podido comprobar el estado de los servicios en este momento.",
+    "networkUnaffected": "TNP Network no se ve afectada:",
+    "registerNative": "registra un nombre nativo",
+    "recheck": "comprobar de nuevo"
+  },
+  "namespace": {
+    "publicDns": "DNS público",
+    "tnpNetwork": "TNP Network",
+    "tnpExplain": "Los nombres nativos como .ox viven en el espacio de nombres propio de TNP y se resuelven a través de TNP.",
+    "tnpAction": "registrar un nombre nativo",
+    "publicExplain": "Los dominios públicos como .com se registran a través de un proveedor y se resuelven mediante el DNS público, exactamente igual que sin TNP.",
+    "notNative": "Comprar un dominio público como un .com no lo convierte en un nombre de TNP."
+  },
+  "provider": {
+    "sandbox": "sandbox",
+    "sandboxHint": "Registrado en el entorno de pruebas del proveedor: no es un registro real.",
+    "environment": {
+      "sandbox": "sandbox",
+      "production": "producción"
+    }
+  },
+  "purchase": {
+    "heading": "Compras",
+    "blocked": {
+      "sales_disabled": "La venta de dominios no está activada. Puedes buscar y ver precios, pero aún no se puede comprar nada aquí.",
+      "payments_not_configured": "Todavía no se ha aprobado ningún método de pago. Puedes buscar y ver precios, pero aún no se puede comprar nada aquí."
+    }
+  },
+  "search": {
+    "heading": "Buscar dominios públicos",
+    "label": "Nombres de dominio",
+    "placeholder": "ejemplo.com, ejemplo.org",
+    "hint": "Hasta {{max}} nombres, separados por comas o espacios.",
+    "dropped_one": "Se ha omitido {{count}} nombre: como máximo {{max}} por búsqueda.",
+    "dropped_many": "Se han omitido {{count}} nombres: como máximo {{max}} por búsqueda.",
+    "dropped_other": "Se han omitido {{count}} nombres: como máximo {{max}} por búsqueda.",
+    "notReservation": "La disponibilidad es una respuesta del momento, no una reserva. Otra persona puede registrar un nombre disponible antes que tú.",
+    "searching": "Buscando...",
+    "noResults": "Sin resultados.",
+    "resultCount_one": "{{count}} resultado",
+    "resultCount_many": "{{count}} resultados",
+    "resultCount_other": "{{count}} resultados",
+    "premium": "premium",
+    "failed": "La búsqueda ha fallado. Inténtalo de nuevo."
+  },
+  "availability": {
+    "available": "disponible",
+    "unavailable": "ocupado",
+    "unknown": "no se pudo comprobar",
+    "unsupported": "no ofrecido",
+    "invalid": "nombre no válido",
+    "explain": {
+      "available": "El proveedor indica que este nombre está disponible ahora mismo.",
+      "unavailable": "Este nombre ya está registrado.",
+      "unknown": "El proveedor no dio una respuesta clara. Esto no significa que el nombre esté disponible.",
+      "unsupported": "Este nombre no se puede buscar ni registrar a través de los proveedores de TNP.",
+      "invalid": "No es un nombre de dominio público válido."
+    }
+  },
+  "quote": {
+    "get": "Pedir presupuesto",
+    "pending": "Obteniendo presupuesto...",
+    "refresh": "nuevo presupuesto",
+    "failed": "No se pudo obtener un presupuesto. Inténtalo de nuevo.",
+    "unformattable": "{{amount}} (unidades menores de {{currency}})",
+    "price_one": "Precio ({{count}} año)",
+    "price_many": "Precio ({{count}} años)",
+    "price_other": "Precio ({{count}} años)",
+    "fees": "Comisiones del proveedor incluidas",
+    "renewal": "Renovación",
+    "perYear": "{{price}} al año",
+    "renewalUnknown": "El proveedor no la ha presupuestado",
+    "expires": "Presupuesto válido hasta",
+    "premiumNote": "Los nombres premium los tarifica el registro y pueden renovarse a un precio mayor."
+  },
+  "inventory": {
+    "heading": "Tus dominios públicos",
+    "loading": "Cargando tus dominios públicos...",
+    "failed": "No se pudieron cargar tus dominios públicos.",
+    "empty": "No tienes dominios públicos.",
+    "manage": "gestionar",
+    "manageName": "Gestionar {{name}}",
+    "pagination": "Páginas de dominios públicos",
+    "prev": "anterior",
+    "next": "siguiente",
+    "pageOf": "{{page}} / {{pages}}"
+  },
+  "domain": {
+    "heading": "Dominio público",
+    "back": "servicios",
+    "loading": "Cargando dominio...",
+    "failed": "No se pudo cargar este dominio.",
+    "notFound": "Dominio no encontrado. Puede que no exista o que pertenezca a otra cuenta.",
+    "ascii": "ASCII",
+    "expires": "Caduca",
+    "expiresUnknown": "Desconocido",
+    "provider": "Proveedor",
+    "locked": "Bloqueo de transferencia",
+    "unknownValue": "Desconocido",
+    "yes": "Activado",
+    "no": "Desactivado",
+    "renewal": "Renovación",
+    "renewalOwner": {
+      "none": "Sin renovación configurada",
+      "tnp": "Se renueva a través de TNP",
+      "provider": "Se renueva en el proveedor"
+    },
+    "lastSynced": "Última comprobación con el proveedor",
+    "neverSynced": "Aún sin comprobar",
+    "lifecycleLabel": "Estado"
+  },
+  "lifecycle": {
+    "pending": "pendiente",
+    "active": "activo",
+    "expired": "caducado",
+    "redemption": "redención",
+    "transferring_in": "transfiriéndose",
+    "transferred_out": "transferido fuera",
+    "locked_by_registry": "bloqueado por el registro",
+    "failed": "fallido",
+    "unknown": "en comprobación",
+    "explain": {
+      "pending": "El registro se está procesando.",
+      "active": "Registrado y activo.",
+      "expired": "El registro ha caducado.",
+      "redemption": "Caducado y en el periodo de redención del registro; puede que aún sea recuperable.",
+      "transferring_in": "Hay una transferencia a este proveedor en curso.",
+      "transferred_out": "El dominio se transfirió a otro proveedor.",
+      "locked_by_registry": "El registro ha bloqueado este dominio.",
+      "failed": "El registro no se completó.",
+      "unknown": "Se está confirmando el estado con el proveedor."
+    }
+  },
+  "operation": {
+    "queued": "en cola",
+    "running": "en curso",
+    "succeeded": "hecho",
+    "failed": "fallida",
+    "unknown": "en comprobación",
+    "manual_review": "requiere revisión",
+    "explain": {
+      "queued": "Esperando para empezar.",
+      "running": "En curso con el proveedor.",
+      "succeeded": "Completada y confirmada.",
+      "failed": "No se completó. Consulta el mensaje de abajo, si lo hay.",
+      "unknown": "El proveedor no confirmó el resultado. Se está comprobando automáticamente; no es un fallo.",
+      "manual_review": "El resultado necesita que una persona lo revise. No es un fallo; por ahora no tienes que hacer nada."
+    },
+    "kind": {
+      "domain_register": "Registro",
+      "domain_renew": "Renovación",
+      "domain_sync": "Comprobación con el proveedor",
+      "dns_apply": "Cambio de DNS"
+    }
+  },
+  "operations": {
+    "heading": "Registro de operaciones",
+    "loading": "Cargando operaciones...",
+    "failed": "No se pudo cargar el registro de operaciones.",
+    "empty": "Todavía no hay operaciones.",
+    "refresh": "actualizar"
+  },
+  "zone": {
+    "heading": "Zona DNS",
+    "none": "No hay ninguna zona DNS registrada para este dominio.",
+    "authority": {
+      "provider": "Alojada en el proveedor",
+      "external": "Gestionada fuera de TNP"
+    },
+    "state": {
+      "unmanaged": "sin gestionar",
+      "in_sync": "sincronizada",
+      "pending": "publicando",
+      "conflict": "cambiada en otro sitio",
+      "unknown": "en comprobación"
+    },
+    "lastVerified": "verificada {{time}}",
+    "conflictState": "La zona se modificó fuera de TNP desde la última lectura. Genera una nueva vista previa para ver los registros actuales antes de editar.",
+    "external": "Esta zona se gestiona fuera de TNP. Edita sus registros donde esté alojada; TNP no publica cambios en ella.",
+    "editingDisabled": "La edición de DNS aún no está activada.",
+    "invalidDraft": "Revisa las filas de registros: {{detail}}",
+    "previewFailed": "No se pudo generar la vista previa. Inténtalo de nuevo.",
+    "applied": "Cambio de DNS en cola.",
+    "conflict": "La zona cambió desde tu vista previa. Genera una nueva antes de aplicar.",
+    "applyNetwork": "La solicitud no obtuvo respuesta. Reintentar es seguro: el mismo cambio no se aplicará dos veces.",
+    "applyFailed": "No se pudo aplicar el cambio. Inténtalo de nuevo.",
+    "action": {
+      "add": "añadir",
+      "update": "modificar",
+      "delete": "eliminar"
+    },
+    "rowLegend": "Cambio {{n}}",
+    "field": {
+      "action": "Acción",
+      "host": "Host",
+      "type": "Tipo",
+      "value": "Valor",
+      "ttl": "TTL",
+      "priority": "Prioridad"
+    },
+    "removeRow": "quitar",
+    "removeRowLabel": "Quitar el cambio {{n}}",
+    "matchHeading": "Registro existente",
+    "newRecordHeading": "Registro nuevo",
+    "addRow": "añadir cambio",
+    "preview": "Vista previa de los cambios",
+    "previewing": "Generando vista previa...",
+    "previewHeading": "Vista previa",
+    "added_one": "{{count}} registro añadido",
+    "added_many": "{{count}} registros añadidos",
+    "added_other": "{{count}} registros añadidos",
+    "removed_one": "{{count}} registro eliminado",
+    "removed_many": "{{count}} registros eliminados",
+    "removed_other": "{{count}} registros eliminados",
+    "noDifference": "Estos cambios no alterarían la zona.",
+    "raceNotice": "El proveedor no permite bloquear la zona: una edición hecha al mismo tiempo en el panel del proveedor todavía puede entrar en conflicto con este cambio.",
+    "reviewApply": "Revisar y aplicar",
+    "currentRecords_one": "Zona actual ({{count}} registro)",
+    "currentRecords_many": "Zona actual ({{count}} registros)",
+    "currentRecords_other": "Zona actual ({{count}} registros)",
+    "operationHeading": "Último cambio de DNS",
+    "pollingStopped": "Sigue en comprobación. Esta página ha dejado de consultar; actualiza el registro de operaciones más tarde.",
+    "confirmTitle": "¿Aplicar los cambios de DNS?",
+    "confirmSummary": "Registros añadidos: {{added}} · Registros eliminados: {{removed}}",
+    "confirmConsequence": "Toda la zona se reescribe en el proveedor con estos registros. Los registros eliminados dejan de resolverse cuando se publique el cambio.",
+    "apply": "Aplicar cambios",
+    "applying": "Aplicando...",
+    "retryApply": "Reintentar"
+  }
+}
