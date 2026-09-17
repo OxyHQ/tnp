@@ -8,8 +8,6 @@
   "searchPlaceholder": "yourname.ox",
   "checking": "检查中...",
   "check": "检查",
-  "domainAvailable": "{{domain}} 可注册",
-  "domainTaken": "{{domain}} 已被注册",
   "registerNow": "立即注册",
   "signInWithOxy": "使用 Oxy 登录",
   "learnMore": "了解更多",

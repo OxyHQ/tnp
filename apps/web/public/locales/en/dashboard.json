@@ -8,5 +8,47 @@
   },
   "heading": "Your Domains",
   "emptyState": "You have not registered any domains yet.",
-  "addRecord": "Add Record"
+  "addRecord": "Add Record",
+  "loading": "Loading your domains...",
+  "loadError": "Your domains could not be loaded.",
+  "emptyStateRegister": "Register one",
+  "pagination": "Domain pages",
+  "recordsLoading": "Loading records...",
+  "recordsError": "Records could not be loaded.",
+  "noRecords": "No DNS records yet.",
+  "recordsCaption": "DNS records for {{domain}}",
+  "actions": "Actions",
+  "deleteRecordLabel": "Delete {{type}} record {{name}}",
+  "deleting": "deleting...",
+  "recordAdded": "Record added",
+  "recordAddFailed": "The record could not be added.",
+  "recordDeleteFailed": "The record could not be deleted.",
+  "renewed": "{{domain}} renewed for another year",
+  "renewFailed": "The domain could not be renewed.",
+  "released": "{{domain}} released",
+  "releaseFailed": "The domain could not be released.",
+  "expiry": {
+    "state": {
+      "active": "active",
+      "renewable": "renew soon",
+      "grace": "expired, grace period",
+      "expired": "expired, held"
+    },
+    "expiresOn": "Expires {{date}}",
+    "never": "Does not expire",
+    "renew": "[renew for 1 year]",
+    "renewing": "renewing..."
+  },
+  "release": {
+    "title": "Release {{domain}}?",
+    "consequences": "Releasing this domain:",
+    "recordsDeleted": "deletes all of its DNS records;",
+    "nodeDeleted": "removes its service node, so the service stops being reachable through TNP;",
+    "nameReleased": "makes the name available for anyone to register.",
+    "irreversible": "This cannot be undone.",
+    "typeToConfirm": "Type {{domain}} to confirm",
+    "cancel": "Cancel",
+    "confirm": "Release domain",
+    "releasing": "Releasing..."
+  }
 }

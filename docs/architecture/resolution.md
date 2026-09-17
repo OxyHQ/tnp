@@ -136,3 +136,53 @@ B1). Phase 2 extracts a real `@tnp/resolver` package that both consume.
 
 Anyone using the public resolver is trusting Oxy with their query stream. That
 trade-off must be stated wherever the resolver's address is published.
+
+## 9. Registry answers (`/dns/resolve`)
+
+**Status: implemented** in `apps/api/src/registry/resolve.ts` (issue #62, A6).
+Every resolver asks the registry the same question — name and query type —
+and the answer is a pure function of what the registry holds, a clock and two
+settings. `loadNameFacts` reads the facts; `decideResolution` applies the rules
+below and is unit-tested one rule at a time, with real-PostgreSQL tests for the
+loader (`apps/api/test-db/resolve.test.ts`).
+
+The response is `DnsResolveResponse` in `@tnp/shared-types`. It only grows:
+`rcode` is an addition, and a resolver that predates it reads empty `answers`
+as it always did.
+
+| Name | Answer | `rcode` |
+|---|---|---|
+| Single label, reserved TLD (even with a stale active row), or a TLD TNP does not operate | nothing | `NXDOMAIN` |
+| Native TLD, second-level name **not registered** | parking A record for `A`/`ANY` when `TNP_PARKING_IP` is set, nothing for other types | `NOERROR` (parking synthesizes the name) or `NXDOMAIN` when parking is unset |
+| Registered, records of the queried type at the label | those records | `NOERROR` |
+| Registered, no records of that type but a **CNAME** at the label | the CNAME, for every type — never parking | `NOERROR` |
+| Registered, records of other types at the label, or an online service node | nothing (NODATA) | `NOERROR` |
+| Registered, **nothing at all** at the label and no online node | parking A record for `A`/`ANY` when parking is set; otherwise nothing | `NOERROR` for the registered name itself or an empty non-terminal, `NXDOMAIN` for any other label |
+
+A service node counts only when its `status` is `online` **and** its last
+heartbeat is at most 90 seconds old. Clients heartbeat every 30 seconds and
+nothing ever writes `offline`, so the stored status alone would call a node that
+died a month ago online. The `overlay` block is attached only for such a node,
+and `GET /nodes/:domain` reports the same effective status.
+
+**Parking synthesis for unregistered native names is deliberate.** A browser
+that looks up a free `.ox` name lands on the API's "available — register on TNP"
+page instead of an error. It is an answer TNP makes up, for native names only,
+and it is the reason an unregistered native name is `NOERROR` rather than
+`NXDOMAIN` whenever `TNP_PARKING_IP` is set. It never applies to a public-DNS
+name (naming.md rule N1): those are `NXDOMAIN` here and never reach the registry
+from a conforming client at all.
+
+**Expiry.** With `TNP_NATIVE_EXPIRY_ENFORCED=true`, a registered name whose
+expiry state is `expired` (naming.md §4) is answered exactly like an unregistered
+one — parking only, no records, no overlay — and the parking page says "expired,
+held", never "available". Enforcement is off by default.
+
+The parking page (`apps/api/src/index.ts`) uses the same facts and the same node
+and expiry rules through `decideParkingPage`, so every name that resolves to the
+parking address gets a page rather than a 404.
+
+Known gap: the client resolver (`packages/client/src/proxy.ts`) does not yet read
+`rcode`, so it still turns NODATA into NXDOMAIN on the wire. Fixing that belongs
+with the resolver extraction (audit A9), which also has to give the cache a
+distinct NODATA entry.

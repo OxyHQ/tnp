@@ -8,5 +8,47 @@
   },
   "heading": "Vos domaines",
   "emptyState": "Vous n'avez pas encore enregistré de domaine.",
-  "addRecord": "Ajouter un enregistrement"
+  "addRecord": "Ajouter un enregistrement",
+  "loading": "Chargement de vos domaines...",
+  "loadError": "Impossible de charger vos domaines.",
+  "emptyStateRegister": "Enregistrez-en un",
+  "pagination": "Pages de domaines",
+  "recordsLoading": "Chargement des enregistrements...",
+  "recordsError": "Impossible de charger les enregistrements.",
+  "noRecords": "Aucun enregistrement DNS pour l'instant.",
+  "recordsCaption": "Enregistrements DNS de {{domain}}",
+  "actions": "Actions",
+  "deleteRecordLabel": "Supprimer l'enregistrement {{type}} {{name}}",
+  "deleting": "suppression...",
+  "recordAdded": "Enregistrement ajouté",
+  "recordAddFailed": "Impossible d'ajouter l'enregistrement.",
+  "recordDeleteFailed": "Impossible de supprimer l'enregistrement.",
+  "renewed": "{{domain}} renouvelé pour un an de plus",
+  "renewFailed": "Impossible de renouveler le domaine.",
+  "released": "{{domain}} libéré",
+  "releaseFailed": "Impossible de libérer le domaine.",
+  "expiry": {
+    "state": {
+      "active": "actif",
+      "renewable": "à renouveler",
+      "grace": "expiré, période de grâce",
+      "expired": "expiré, conservé"
+    },
+    "expiresOn": "Expire le {{date}}",
+    "never": "N'expire pas",
+    "renew": "[renouveler pour 1 an]",
+    "renewing": "renouvellement..."
+  },
+  "release": {
+    "title": "Libérer {{domain}} ?",
+    "consequences": "Libérer ce domaine :",
+    "recordsDeleted": "supprime tous ses enregistrements DNS ;",
+    "nodeDeleted": "supprime son nœud de service, qui cesse d'être joignable via TNP ;",
+    "nameReleased": "rend le nom disponible à l'enregistrement pour tout le monde.",
+    "irreversible": "Cette action est irréversible.",
+    "typeToConfirm": "Saisissez {{domain}} pour confirmer",
+    "cancel": "Annuler",
+    "confirm": "Libérer le domaine",
+    "releasing": "Libération..."
+  }
 }

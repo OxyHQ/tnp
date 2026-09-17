@@ -8,5 +8,47 @@
   },
   "heading": "आपके डोमेन",
   "emptyState": "आपने अभी तक कोई डोमेन पंजीकृत नहीं किया है।",
-  "addRecord": "रिकॉर्ड जोड़ें"
+  "addRecord": "रिकॉर्ड जोड़ें",
+  "loading": "आपके डोमेन लोड हो रहे हैं...",
+  "loadError": "आपके डोमेन लोड नहीं हो सके।",
+  "emptyStateRegister": "एक पंजीकृत करें",
+  "pagination": "डोमेन पेज",
+  "recordsLoading": "रिकॉर्ड लोड हो रहे हैं...",
+  "recordsError": "रिकॉर्ड लोड नहीं हो सके।",
+  "noRecords": "अभी तक कोई DNS रिकॉर्ड नहीं।",
+  "recordsCaption": "{{domain}} के DNS रिकॉर्ड",
+  "actions": "क्रियाएँ",
+  "deleteRecordLabel": "{{type}} रिकॉर्ड {{name}} हटाएँ",
+  "deleting": "हटाया जा रहा है...",
+  "recordAdded": "रिकॉर्ड जोड़ा गया",
+  "recordAddFailed": "रिकॉर्ड जोड़ा नहीं जा सका।",
+  "recordDeleteFailed": "रिकॉर्ड हटाया नहीं जा सका।",
+  "renewed": "{{domain}} एक और वर्ष के लिए नवीनीकृत",
+  "renewFailed": "डोमेन नवीनीकृत नहीं किया जा सका।",
+  "released": "{{domain}} रिलीज किया गया",
+  "releaseFailed": "डोमेन रिलीज नहीं किया जा सका।",
+  "expiry": {
+    "state": {
+      "active": "सक्रिय",
+      "renewable": "जल्द नवीनीकरण करें",
+      "grace": "समाप्त, अनुग्रह अवधि",
+      "expired": "समाप्त, रोका गया"
+    },
+    "expiresOn": "{{date}} को समाप्त होगा",
+    "never": "समाप्त नहीं होता",
+    "renew": "[1 वर्ष के लिए नवीनीकरण करें]",
+    "renewing": "नवीनीकरण हो रहा है..."
+  },
+  "release": {
+    "title": "{{domain}} रिलीज करें?",
+    "consequences": "इस डोमेन को रिलीज करने से:",
+    "recordsDeleted": "इसके सभी DNS रिकॉर्ड हट जाएँगे;",
+    "nodeDeleted": "इसका सर्विस नोड हट जाएगा, इसलिए सेवा TNP के माध्यम से उपलब्ध नहीं रहेगी;",
+    "nameReleased": "नाम किसी के भी पंजीकरण के लिए उपलब्ध हो जाएगा।",
+    "irreversible": "इसे पूर्ववत नहीं किया जा सकता।",
+    "typeToConfirm": "पुष्टि के लिए {{domain}} टाइप करें",
+    "cancel": "रद्द करें",
+    "confirm": "डोमेन रिलीज करें",
+    "releasing": "रिलीज हो रहा है..."
+  }
 }

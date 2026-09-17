@@ -8,8 +8,6 @@
   "searchPlaceholder": "tunombre.ox",
   "checking": "Verificando...",
   "check": "Verificar",
-  "domainAvailable": "{{domain}} está disponible",
-  "domainTaken": "{{domain}} está ocupado",
   "registerNow": "Regístralo ahora",
   "signInWithOxy": "iniciar sesión con oxy",
   "learnMore": "más información",

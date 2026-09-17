@@ -1,4 +1,7 @@
 import type {
+  DnsResolveAnswer,
+  DnsResolveOverlay,
+  DnsResolveResponse,
   RegisterRelayRequest,
   RegisterServiceNodeRequest,
   RelayDirectoryEntry,
@@ -8,25 +11,12 @@ import type {
   ServiceNodeLookup,
 } from "@tnp/shared-types";
 
-export interface DnsAnswer {
-  name: string;
-  type: string;
-  value: string;
-  ttl: number;
-}
-
-export interface OverlayInfo {
-  serviceNodePubKey: string;
-  relay: string;
-  available: boolean;
-}
-
-export interface ResolveResponse {
-  name: string;
-  type: string;
-  answers: DnsAnswer[];
-  overlay?: OverlayInfo;
-}
+// The `/dns/resolve` response is declared once, in @tnp/shared-types, next to
+// the other registry contracts. `rcode` is optional there because an older API
+// image omits it; this client still treats empty `answers` as NXDOMAIN.
+export type DnsAnswer = DnsResolveAnswer;
+export type OverlayInfo = DnsResolveOverlay;
+export type ResolveResponse = DnsResolveResponse;
 
 /** How long a write is given before the client gives up on it. */
 const WRITE_TIMEOUT_MS = 5000;

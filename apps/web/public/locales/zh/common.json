@@ -36,7 +36,9 @@
     "type": "类型",
     "name": "名称",
     "value": "值",
-    "ttl": "TTL"
+    "ttl": "TTL",
+    "priority": "优先级",
+    "mailHost": "邮件服务器"
   },
   "addRecord": "添加记录",
   "copy": "复制",
@@ -48,13 +50,20 @@
   "noDomainsFound": "未找到域名",
   "searchPlaceholder": "搜索域名...",
   "pagination": "{{page}} / {{totalPages}}",
-  "confirmReleaseDomain": "确定要释放此域名吗？",
   "recordCount_one": "{{count}} 条记录",
   "recordCount_other": "{{count}} 条记录",
   "releaseDomain": "释放域名",
   "placeholder": {
     "recordName": "@",
-    "recordValue": "192.168.1.1"
+    "recordValue": "192.168.1.1",
+    "recordValueByType": {
+      "A": "192.0.2.1",
+      "AAAA": "2001:db8::1",
+      "CNAME": "host.example.ox",
+      "NS": "ns1.example.ox",
+      "MX": "mail.example.ox",
+      "TXT": "v=spf1 -all"
+    }
   },
   "status": {
     "active": "活跃",
@@ -68,5 +77,33 @@
     "registrationFailed": "注册失败",
     "loadFailed": "加载失败",
     "genericError": "发生错误"
+  },
+  "retry": "重试",
+  "saving": "保存中...",
+  "recordErrors": {
+    "body_invalid": "无法读取该记录。请刷新页面后重试。",
+    "type_invalid": "请选择记录类型：A、AAAA、CNAME、TXT、MX 或 NS。",
+    "name_required": "请输入名称，或用 @ 表示域名本身。",
+    "name_invalid": "名称只能包含字母、数字和连字符，各部分以点分隔（例如 www 或 _dmarc）。",
+    "name_wildcard": "不支持通配符记录（*）。",
+    "value_required": "请输入值。",
+    "ipv4_invalid": "A 记录需要 IPv4 地址，例如 192.0.2.1。",
+    "ipv6_invalid": "AAAA 记录需要 IPv6 地址，例如 2001:db8::1。",
+    "hostname_invalid": "请输入主机名，例如 host.example.ox，而不是 IP 地址或 URL。",
+    "txt_too_long": "TXT 值最多 2048 个字符。",
+    "txt_invalid_chars": "TXT 值不能包含换行、制表符或其他控制字符。",
+    "priority_invalid": "MX 记录需要 0 到 65535 之间的优先级。",
+    "ttl_invalid": "TTL 必须是 {{min}} 到 {{max}} 之间的整数秒。",
+    "cname_conflict": "CNAME 不能与其他任何记录共用同一名称。",
+    "duplicate": "已存在完全相同的记录。",
+    "record_limit": "该域名已达到 100 条记录的上限。"
+  },
+  "availability": {
+    "available": "{{domain}} 可注册",
+    "taken": "{{domain}} 已被注册",
+    "reserved": "{{domain}} 属于公共 DNS 顶级域。TNP 只注册其自有顶级域（例如 .ox）下的名称。",
+    "tldNotAvailable": "{{domain}} 的顶级域在 TNP 上不可用。",
+    "invalid": "{{domain}} 不是有效名称。请使用字母、数字和连字符，例如 yourname.ox。",
+    "subdomain": "{{domain}} 是子域名，不能单独注册。{{parent}} 的所有者可以将其创建为 DNS 记录。"
   }
 }

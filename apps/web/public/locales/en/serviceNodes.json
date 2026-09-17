@@ -24,5 +24,8 @@
     "step3Title": "3. Get your auth token",
     "step3Desc": "Run <code>tnp auth login</code> to authenticate with your Oxy account. The token is stored locally and used for subsequent commands.",
     "footer": "The service node registers with a relay server and accepts incoming connections over encrypted tunnels. Replace <code1>example.ox</code1> with your actual domain and <code2>localhost:80</code2> with the local address of your service."
-  }
+  },
+  "loadError": "Your domains could not be loaded.",
+  "checkFailed": "check failed",
+  "pagination": "Domain pages"
 }

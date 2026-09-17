@@ -123,9 +123,42 @@ public name may be answered from TNP data by any code path.
 | Ownership | A domain is owned by exactly one Oxy identity. Ownership is proven with the owner's own credential, never a service credential. |
 | Delegation | An owner may authorize other Oxy identities to publish under a domain. The grant is explicit, revocable, and recorded. |
 | Records | Records are authoritative TNP data and are signed (§5) once Phase 2 lands. |
-| Expiry | A domain has an expiry. Expired names stop resolving and enter a hold period before re-registration. |
+| Expiry | A native registration lasts one year and is renewed free by its owner. States, windows and enforcement are below. A name is never released by lapsing: an expired name is held for its owner. |
 | Reservations | Names may be reserved (trademark, abuse, infrastructure) and are unregistrable while reserved. |
 | Recovery | A name recovered from an abusive registrant is placed in hold, not immediately re-issued, so the previous key material cannot be silently re-bound to the same name. |
+
+### Native expiry and renewal
+
+**Status: policy implemented and shown to owners; enforcement implemented but
+off.** The policy is `nativeExpiryState` in `@tnp/namespace`
+(`packages/namespace/src/expiry.ts`), a pure function of the stored `expiresAt`
+and a clock. It applies to native registrations only; public domains in the
+services layer take their dates from the registrar (`services.md` §4).
+
+| State | When | Resolves | Owner may renew |
+|---|---|---|---|
+| `active` | more than 90 days before `expiresAt`, or `expiresAt` is null | yes | no |
+| `renewable` | from 90 days before `expiresAt` until it | yes | yes |
+| `grace` | from `expiresAt` until 30 days after, inclusive | yes | yes |
+| `expired` | more than 30 days after `expiresAt` | yes, unless enforcement is on | yes |
+
+- **No expiry.** `expiresAt = null` is a registration that does not expire.
+  Rows written before expiry existed are never made to expire by this policy.
+- **Renewal** (`POST /domains/:id/renew`) is free, owner-only and native-only
+  (a legacy row under a reserved TLD is migrated per §6, not renewed). It sets
+  `expiresAt` to one calendar year (UTC) after the later of the current expiry
+  and now, so renewing early loses nothing and renewing a lapsed name does not
+  back-date it. The write is a compare-and-set on the expiry that was read: two
+  concurrent renewals extend the name once, and the second reports a conflict.
+- **Held, not released.** An expired name keeps its row, so it stays
+  unregistrable by anyone else, and `/domains/check` reports it `registered`.
+  Nothing in this policy deletes a registration or its records.
+- **Enforcement** is `TNP_NATIVE_EXPIRY_ENFORCED`, off unless exactly `true`.
+  When on, an `expired` name is answered by `/dns/resolve` like an unregistered
+  one (parking only; no records, no overlay) and its parking page says "expired,
+  held" — never "available". It stays off until owners of existing
+  registrations have been told, through an approved communication, that their
+  names expire (#62): switching it on retroactively without that is forbidden.
 
 ### Abuse prevention
 

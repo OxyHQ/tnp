@@ -9,7 +9,6 @@ interface Domain {
   name: string;
   tld: string;
   status: string;
-  oxyUserId: string;
 }
 
 interface DomainsResponse {
@@ -81,7 +80,7 @@ export default function Domains() {
           <p className="font-mono text-sm text-muted-foreground/70">{t("common:noDomainsFound")}</p>
         ) : (
           domains.map((d) => (
-            <DomainCard key={d._id} name={d.name} tld={d.tld} status={d.status} oxyUserId={d.oxyUserId} />
+            <DomainCard key={d._id} name={d.name} tld={d.tld} status={d.status} />
           ))
         )}
       </div>
