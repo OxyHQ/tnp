@@ -8,5 +8,47 @@
   },
   "heading": "你的域名",
   "emptyState": "你还没有注册任何域名。",
-  "addRecord": "添加记录"
+  "addRecord": "添加记录",
+  "loading": "正在加载你的域名...",
+  "loadError": "无法加载你的域名。",
+  "emptyStateRegister": "立即注册",
+  "pagination": "域名分页",
+  "recordsLoading": "正在加载记录...",
+  "recordsError": "无法加载记录。",
+  "noRecords": "暂无 DNS 记录。",
+  "recordsCaption": "{{domain}} 的 DNS 记录",
+  "actions": "操作",
+  "deleteRecordLabel": "删除 {{type}} 记录 {{name}}",
+  "deleting": "删除中...",
+  "recordAdded": "记录已添加",
+  "recordAddFailed": "无法添加记录。",
+  "recordDeleteFailed": "无法删除记录。",
+  "renewed": "{{domain}} 已续期一年",
+  "renewFailed": "无法续期该域名。",
+  "released": "{{domain}} 已释放",
+  "releaseFailed": "无法释放该域名。",
+  "expiry": {
+    "state": {
+      "active": "有效",
+      "renewable": "即将到期",
+      "grace": "已过期，宽限期内",
+      "expired": "已过期，保留中"
+    },
+    "expiresOn": "{{date}} 到期",
+    "never": "永不过期",
+    "renew": "[续期 1 年]",
+    "renewing": "续期中..."
+  },
+  "release": {
+    "title": "释放 {{domain}}？",
+    "consequences": "释放此域名将会：",
+    "recordsDeleted": "删除其所有 DNS 记录；",
+    "nodeDeleted": "移除其服务节点，服务将无法再通过 TNP 访问；",
+    "nameReleased": "使该名称可被任何人注册。",
+    "irreversible": "此操作无法撤销。",
+    "typeToConfirm": "输入 {{domain}} 以确认",
+    "cancel": "取消",
+    "confirm": "释放域名",
+    "releasing": "释放中..."
+  }
 }

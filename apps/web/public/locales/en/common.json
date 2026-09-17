@@ -36,7 +36,9 @@
     "type": "Type",
     "name": "Name",
     "value": "Value",
-    "ttl": "TTL"
+    "ttl": "TTL",
+    "priority": "Priority",
+    "mailHost": "Mail server"
   },
   "addRecord": "Add Record",
   "copy": "Copy",
@@ -48,13 +50,20 @@
   "noDomainsFound": "No domains found",
   "searchPlaceholder": "Search domains...",
   "pagination": "{{page}} / {{totalPages}}",
-  "confirmReleaseDomain": "Are you sure you want to release this domain?",
   "recordCount_one": "{{count}} record",
   "recordCount_other": "{{count}} records",
   "releaseDomain": "release domain",
   "placeholder": {
     "recordName": "@",
-    "recordValue": "192.168.1.1"
+    "recordValue": "192.168.1.1",
+    "recordValueByType": {
+      "A": "192.0.2.1",
+      "AAAA": "2001:db8::1",
+      "CNAME": "host.example.ox",
+      "NS": "ns1.example.ox",
+      "MX": "mail.example.ox",
+      "TXT": "v=spf1 -all"
+    }
   },
   "status": {
     "active": "active",
@@ -68,5 +77,33 @@
     "registrationFailed": "Registration failed",
     "loadFailed": "Failed to load",
     "genericError": "An error occurred"
+  },
+  "retry": "retry",
+  "saving": "Saving...",
+  "recordErrors": {
+    "body_invalid": "The record could not be read. Reload the page and try again.",
+    "type_invalid": "Choose a record type: A, AAAA, CNAME, TXT, MX or NS.",
+    "name_required": "Enter a name, or @ for the domain itself.",
+    "name_invalid": "The name may use only letters, digits and hyphens, with labels separated by dots (e.g. www or _dmarc).",
+    "name_wildcard": "Wildcard records (*) are not supported.",
+    "value_required": "Enter a value.",
+    "ipv4_invalid": "An A record needs an IPv4 address like 192.0.2.1.",
+    "ipv6_invalid": "An AAAA record needs an IPv6 address like 2001:db8::1.",
+    "hostname_invalid": "Enter a hostname like host.example.ox, not an IP address or URL.",
+    "txt_too_long": "A TXT value may be at most 2048 characters.",
+    "txt_invalid_chars": "A TXT value may not contain line breaks, tabs or other control characters.",
+    "priority_invalid": "An MX record needs a priority between 0 and 65535.",
+    "ttl_invalid": "TTL must be a whole number of seconds between {{min}} and {{max}}.",
+    "cname_conflict": "A CNAME cannot share its name with any other record.",
+    "duplicate": "An identical record already exists.",
+    "record_limit": "This domain has reached its limit of 100 records."
+  },
+  "availability": {
+    "available": "{{domain}} is available",
+    "taken": "{{domain}} is already registered",
+    "reserved": "{{domain}} is under a public DNS TLD. TNP only registers names under its own TLDs, such as .ox.",
+    "tldNotAvailable": "The TLD of {{domain}} is not available on TNP.",
+    "invalid": "{{domain}} is not a valid name. Use letters, digits and hyphens, like yourname.ox.",
+    "subdomain": "{{domain}} is a subdomain and cannot be registered on its own. The owner of {{parent}} can create it as a DNS record."
   }
 }

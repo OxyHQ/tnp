@@ -8,8 +8,6 @@
   "title": "注册域名",
   "signInPrompt": "使用你的 Oxy 账户登录以注册 TNP 域名。",
   "placeholder": "yourname",
-  "domainAvailable": "{{domain}} 可注册",
-  "domainTaken": "{{domain}} 已被注册",
   "checkingAvailability": "检查可用性...",
   "registerButton": "注册 {{domain}}",
   "registering": "注册中...",

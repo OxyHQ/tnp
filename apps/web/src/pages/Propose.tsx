@@ -2,18 +2,19 @@ import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../lib/auth";
+import type { TldProposalEntry } from "@tnp/shared-types";
 import { apiFetch } from "../lib/api";
 
-interface Proposal {
-  _id: string;
-  tld: string;
-  reason: string;
-  score: number;
-  userVote: "up" | "down" | null;
-  status: "open" | "approved" | "rejected";
-  proposedBy: { _id: string; oxyUserId: string };
-  createdAt: string;
-}
+/**
+ * `TldProposalEntry`, plus the legacy `proposedBy` an API image older than
+ * this build still sends in place of `proposedByMe`. Read only to hide the
+ * vote buttons on the caller's own proposals, never displayed.
+ * TODO: drop `proposedBy` once the API digest with `proposedByMe` is promoted.
+ */
+type Proposal = Omit<TldProposalEntry, "proposedByMe"> & {
+  proposedByMe?: boolean;
+  proposedBy?: { oxyUserId?: string };
+};
 
 const STATUS_KEYS = {
   open: "statusOpen",
@@ -179,7 +180,8 @@ export default function Propose() {
               className="flex items-center gap-4 rounded-lg border border-border bg-card p-4"
             >
               {(() => {
-                const canVote = p.status === "open" && isAuthenticated && user?.id !== p.proposedBy?.oxyUserId;
+                const mine = p.proposedByMe ?? (user?.id !== undefined && user.id === p.proposedBy?.oxyUserId);
+                const canVote = p.status === "open" && isAuthenticated && !mine;
                 const score = p.score ?? 0;
                 const abs = Math.abs(score);
                 const compact = abs >= 1_000_000 ? `${(abs / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`

@@ -18,11 +18,10 @@ interface DomainData {
   _id: string;
   name: string;
   tld: string;
-  oxyUserId: string;
   status: string;
   records: DnsRecord[];
   createdAt: string;
-  expiresAt: string;
+  expiresAt: string | null;
   updatedAt: string;
 }
 

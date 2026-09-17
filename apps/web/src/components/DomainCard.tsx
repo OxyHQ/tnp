@@ -4,14 +4,12 @@ interface DomainCardProps {
   name: string;
   tld: string;
   status: string;
-  oxyUserId?: string;
 }
 
 export default function DomainCard({
   name,
   tld,
   status,
-  oxyUserId,
 }: DomainCardProps) {
   return (
     <Link
@@ -33,9 +31,6 @@ export default function DomainCard({
           {status}
         </span>
       </div>
-      {oxyUserId && (
-        <p className="mt-1 font-mono text-xs text-muted-foreground/70">{oxyUserId}</p>
-      )}
     </Link>
   );
 }
