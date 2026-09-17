@@ -72,6 +72,37 @@ export function getDb(): Database {
   return db;
 }
 
+/**
+ * Whether `sql` answers `select 1` within `timeoutMs`.
+ *
+ * Never throws. A query that outlives the timeout is left to finish or fail on
+ * its own; the caller has its answer either way, and a readiness probe that
+ * hangs as long as the database does is no probe.
+ */
+export async function pingDatabase(sql: postgres.Sql | null, timeoutMs: number): Promise<boolean> {
+  if (!sql) return false;
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), timeoutMs);
+  });
+  const answered = sql`select 1 as ok`.then(
+    (rows) => rows.length === 1,
+    () => false,
+  );
+
+  try {
+    return await Promise.race([answered, timedOut]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** `pingDatabase` against the process pool; false before `connectPostgres()` resolved. */
+export function pingPostgres(timeoutMs: number): Promise<boolean> {
+  return pingDatabase(client, timeoutMs);
+}
+
 export async function closePostgres(): Promise<void> {
   if (client) {
     await client.end({ timeout: CLOSE_TIMEOUT_SECONDS });
