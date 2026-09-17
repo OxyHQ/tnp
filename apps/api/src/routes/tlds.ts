@@ -1,8 +1,10 @@
 import { Router } from "express";
 import type { Request } from "express";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { requireOxyAuth, getOxyUserId, getRequiredOxyUserId } from "@oxy.so/core/server";
 import { isReservedTld, validateNativeTld } from "@tnp/namespace";
+import type { PublicTld, TldProposalEntry } from "@tnp/shared-types";
+import { listTldProposals } from "../registry/tlds.js";
 import { getDb } from "../db/postgres.js";
 import { tldProposals, tlds, users, votes } from "../db/schema/index.js";
 
@@ -26,13 +28,24 @@ async function findOrCreateUser(oxyUserId: string): Promise<string> {
 // rows, and publishing those is what made clients shadow public names.
 router.get("/", async (_req, res) => {
   try {
+    // Projected rather than `select()`: the row also carries `proposedById`, a
+    // user key a public list has no reason to publish.
     const rows = await getDb()
-      .select()
+      .select({
+        _id: tlds.id,
+        name: tlds.name,
+        status: tlds.status,
+        custom: tlds.custom,
+        createdAt: tlds.createdAt,
+      })
       .from(tlds)
       .where(eq(tlds.status, "active"))
       .orderBy(asc(tlds.name));
 
-    res.json(rows.filter((t) => !isReservedTld(t.name)));
+    const body: PublicTld[] = rows
+      .filter((t) => !isReservedTld(t.name))
+      .map((t) => ({ ...t, createdAt: t.createdAt.toISOString() }));
+    res.json(body);
   } catch (err) {
     console.error("List TLDs error:", err);
     res.status(500).json({ error: "Failed to list TLDs" });
@@ -98,60 +111,8 @@ router.post("/propose", requireOxyAuth, async (req, res) => {
 // GET /tlds/proposals -- proposals with scores, newest-highest first
 router.get("/proposals", async (req, res) => {
   try {
-    const db = getDb();
-
-    const callerId = getOxyUserId(req);
-    let userId: string | null = null;
-    if (callerId) {
-      const [row] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.oxyUserId, callerId))
-        .limit(1);
-      userId = row?.id ?? null;
-    }
-
-    // Correlated subqueries are fully qualified. An unqualified column inside a
-    // correlated subquery resolves against the SUBQUERY's own table, so the
-    // predicate silently compares two of its columns and matches nothing — with
-    // no error at all. That shipped in a sibling Oxy port and read as zero
-    // counts everywhere.
-    const score = sql<number>`(
-      select coalesce(
-        count(*) filter (where ${votes.direction} = 'up')
-        - count(*) filter (where ${votes.direction} = 'down'), 0)
-      from ${votes}
-      where ${votes.proposalId} = ${tldProposals.id}
-    )::int`;
-
-    const userVote = userId
-      ? sql<string | null>`(
-          select ${votes.direction} from ${votes}
-          where ${votes.proposalId} = ${tldProposals.id}
-            and ${votes.userId} = ${userId}
-          limit 1
-        )`
-      : sql<string | null>`null::text`;
-
-    const rows = await db
-      .select({
-        _id: tldProposals.id,
-        tld: tldProposals.tld,
-        reason: tldProposals.reason,
-        status: tldProposals.status,
-        createdAt: tldProposals.createdAt,
-        score,
-        userVote,
-        proposedBy: {
-          _id: users.id,
-          oxyUserId: users.oxyUserId,
-        },
-      })
-      .from(tldProposals)
-      .leftJoin(users, eq(tldProposals.proposedById, users.id))
-      .orderBy(desc(score), desc(tldProposals.createdAt));
-
-    res.json(rows);
+    const body: TldProposalEntry[] = await listTldProposals(getDb(), getOxyUserId(req) ?? null);
+    res.json(body);
   } catch (err) {
     console.error("List proposals error:", err);
     res.status(500).json({ error: "Failed to list proposals" });
