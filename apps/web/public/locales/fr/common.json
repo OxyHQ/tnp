@@ -5,7 +5,8 @@
     "network": "réseau",
     "propose": "proposer",
     "install": "installer",
-    "dashboard": "tableau de bord"
+    "dashboard": "tableau de bord",
+    "services": "services"
   },
   "auth": {
     "signIn": "se connecter",

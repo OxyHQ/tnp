@@ -70,7 +70,7 @@ packages/
 
 ## i18n
 
-Web app: `react-i18next`, 5 languages (en, zh, es, hi, fr). Translation files: `apps/web/public/locales/{lng}/{ns}.json`. Namespaces: common, home, explore, register, domains, domainDetail, dashboard, serviceNodes, network, propose, install, park. Language detection: localStorage (`tnp-lang`) → browser → HTML tag.
+Web app: `react-i18next`, 5 languages (en, zh, es, hi, fr). Translation files: `apps/web/public/locales/{lng}/{ns}.json`. Namespaces: common, home, explore, register, domains, domainDetail, dashboard, serviceNodes, network, propose, install, park, services. Language detection: localStorage (`tnp-lang`) → browser → HTML tag.
 
 ## Models
 

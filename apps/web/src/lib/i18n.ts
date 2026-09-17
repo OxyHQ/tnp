@@ -18,6 +18,7 @@ const NAMESPACES = [
   "propose",
   "install",
   "park",
+  "services",
 ] as const;
 
 i18n

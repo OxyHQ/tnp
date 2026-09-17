@@ -5,7 +5,8 @@
     "network": "network",
     "propose": "propose",
     "install": "install",
-    "dashboard": "dashboard"
+    "dashboard": "dashboard",
+    "services": "services"
   },
   "auth": {
     "signIn": "sign in",

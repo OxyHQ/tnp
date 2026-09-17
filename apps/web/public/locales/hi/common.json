@@ -5,7 +5,8 @@
     "network": "नेटवर्क",
     "propose": "प्रस्ताव",
     "install": "इंस्टॉल",
-    "dashboard": "डैशबोर्ड"
+    "dashboard": "डैशबोर्ड",
+    "services": "सेवाएँ"
   },
   "auth": {
     "signIn": "साइन इन",
