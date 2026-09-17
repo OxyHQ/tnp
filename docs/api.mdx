@@ -19,7 +19,8 @@ All responses follow `{ error: 'human readable message' }` on failure with the a
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/health` | none | Liveness probe. Returns `{ ok: true, service: 'tnp-api' }`. |
+| GET | `/health` | none | Liveness probe. Answers from the process alone: `{ ok: true, service: 'tnp-api' }`. |
+| GET | `/health/ready` | none | Readiness probe. Runs `select 1` against PostgreSQL with a 2 s bound: `200 { ok: true }` or `503 { ok: false }`. Consults no external provider. |
 
 ## DNS resolution (`/dns`)
 
@@ -43,21 +44,24 @@ These endpoints are public — anyone can ask the API to resolve a domain. They 
     "serviceNodePubKey": "<base64>",
     "relay": "wss://relay1.tnp.network",
     "available": true
-  }
+  },
+  "rcode": "NOERROR"
 }
 ```
 
-`overlay` is only present when the domain has an active service node and the service node has heartbeated within the recent timeout window. The overlay-enabled client uses it to route through the encrypted tunnel.
+The contract is `DnsResolveResponse` in `@tnp/shared-types`, and it only grows. `rcode` (`NOERROR` or `NXDOMAIN`) was added so a resolver can tell NODATA — the name exists, no records of that type — from a missing name; resolvers that predate it keep reading empty `answers` as they always did.
 
-If the name isn't on a TNP TLD, the response is `{ answers: [] }` so the caller can fall through to upstream DNS. If a name is on a **custom** TNP TLD but not registered, the response includes a synthetic A record to the parking IP (`TNP_PARKING_IP`, which has no default — when it is unset the synthetic record is omitted rather than pointed somewhere stale) so the browser shows the "available — register on TNP" page.
+`overlay` is only present when the domain's service node is `online` **and** its last heartbeat is at most 90 seconds old (three missed 30-second heartbeats). The overlay-enabled client uses it to route through the encrypted tunnel.
+
+The full answer rules — CNAME at a name, NODATA, NXDOMAIN, parking synthesis for unregistered native names and for registered labels with nothing at them, expiry enforcement — are specified in [`docs/architecture/resolution.md` §9](./architecture/resolution.md).
 
 ## TLDs (`/tlds`)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/tlds` | optional | List active TLDs. Non-admin callers only see `custom: true` TLDs; admin Oxy accounts see all. |
+| GET | `/tlds` | optional | List active native TLDs as `{ _id, name, status, custom, createdAt }`. Reserved TLDs are never listed. |
 | POST | `/tlds/propose` | required | Propose a new TLD. Body: `{ tld, reason }`. |
-| GET | `/tlds/proposals` | optional | List proposals sorted by score (upvotes − downvotes). If authenticated, includes `userVote: "up" \| "down" \| null` for each proposal. |
+| GET | `/tlds/proposals` | optional | List proposals sorted by score (upvotes − downvotes). Each entry carries `userVote: "up" \| "down" \| null` and `proposedByMe: boolean` for the caller. No proposer identity is published. |
 | POST | `/tlds/proposals/:id/vote` | required | Upvote / downvote a proposal. Body: `{ direction: "up" \| "down" }`. Cannot vote on your own. |
 | DELETE | `/tlds/proposals/:id/vote` | required | Remove your vote. |
 
@@ -67,14 +71,18 @@ If the name isn't on a TNP TLD, the response is `{ answers: [] }` so the caller 
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/domains?page=&limit=` | optional | Public directory. Default `page=1`, `limit=50`, max `limit=100`. Returns `{ domains, total, page, pages }`. |
+| GET | `/domains?page=&limit=` | optional | Public directory. Default `page=1`, `limit=50`, max `limit=100`. Returns `{ domains, total, page, pages }` of `PublicDomain`. |
 | GET | `/domains/search?q=` | optional | Substring search by name. Max 50 results. |
-| GET | `/domains/check/:name/:tld` | optional | Availability check. Returns `{ domain, available }`. |
+| GET | `/domains/check/:name/:tld` | optional | Native availability under the full native policy. Returns `{ domain, available, reason?, detail?, namespace: "tnp-native" }`, `reason` ∈ `registered \| reserved \| tld_not_available \| invalid`. A subdomain such as `a.b.ox` is `invalid`. Never answers for public-DNS names. |
 | GET | `/domains/check/:domain` | optional | Same, but `:domain` is `name.tld`. |
-| GET | `/domains/lookup/:domain` | optional | Public detail view. 404 if not registered. Omits `ownerId`. |
-| POST | `/domains/register` | required | Register a domain. Body: `{ name, tld }`. Standard (non-custom) TLDs are admin-only. |
-| GET | `/domains/mine` | required | Current user's domains, newest first. |
-| DELETE | `/domains/:id` | required | Release a domain (must be owner). |
+| GET | `/domains/lookup/:domain` | optional | Public detail view with records. 404 if not registered. |
+| POST | `/domains/register` | required | Register a domain. Body: `{ name, tld }`. Reserved TLDs are refused with `TLD_RESERVED`. |
+| GET | `/domains/owned?page=&limit=` | required | The caller's domains, newest first, default `limit=20`. Returns `{ domains, total, page, pages }`; each domain has `expiryState` and `recordCount`, no records. |
+| GET | `/domains/mine` | required | **Deprecated** — use `/domains/owned`. The caller's domains with every record embedded, unpaginated. |
+| POST | `/domains/:id/renew` | required | Renew a native registration by one year from the later of its expiry and now. Free, owner only, allowed when `expiryState` is `renewable`, `grace` or `expired`; otherwise `409` with a `code` (`not_renewable`, `no_expiry`, `not_native`, `conflict`). |
+| DELETE | `/domains/:id` | required | Release a native domain (must be owner). Irreversible: deletes the registration, its records and its service node, and the name becomes registrable by anyone. Never used by the services layer. |
+
+Public responses (`PublicDomain`) carry no owner identifier. Owner responses (`OwnedDomain`) add `expiryState` — `active`, `renewable` (within 90 days of expiry), `grace` (up to 30 days after, still resolves) or `expired` — defined in `@tnp/namespace` and specified in [`naming.md` §4](./architecture/naming.md).
 
 ### DNS records (per-domain)
 
@@ -83,13 +91,21 @@ All record routes require auth and ownership of the parent domain.
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/domains/:id/records` | List all records for a domain. |
-| POST | `/domains/:id/records` | Add a record. Body: `{ type, name, value, ttl? }`. `type` ∈ `A \| AAAA \| CNAME \| TXT \| MX \| NS`. Default `ttl: 3600`. |
-| PUT | `/domains/:id/records/:rid` | Update fields on a record. |
+| POST | `/domains/:id/records` | Add a record. Body: `{ type, name, value, ttl?, priority? }`. `type` ∈ `A \| AAAA \| CNAME \| TXT \| MX \| NS`. |
+| PUT | `/domains/:id/records/:rid` | Update fields on a record. The record that results from the merge is validated as a whole. |
 | DELETE | `/domains/:id/records/:rid` | Delete a record. |
 
 Records are rows in their own `dns_records` table, so `:rid` is the record's UUID as returned by the create call — not the parent domain's id.
 
-`name` validation: 1–63 lowercase alphanumeric/hyphen, may not start or end with a hyphen. Apex is stored as `name: '@'` on records.
+Validation is `parseCreateDnsRecordRequest` / `parseUpdateDnsRecordRequest` in `@tnp/shared-types`, the same code the web editor runs. A refusal is `400 { error, code, field }`.
+
+- `name`: `@` or labels relative to the domain (letters, digits, interior hyphens, one optional leading `_`), lowercased. A name ending in the domain itself is made relative. Wildcards are refused: the resolver matches names exactly.
+- `A`: a strict dotted quad. `AAAA`: an IPv6 address. `CNAME`, `NS`: a hostname (≤ 253, labels ≤ 63, trailing dot dropped, lowercased, not an IP).
+- `MX`: a priority 0–65535, either as `priority` with a bare host in `value` or as `value: "<priority> <host>"`. Stored as `"<priority> <host>"`.
+- `TXT`: at most 2048 characters, no control characters.
+- `ttl`: an integer 60–86400; `3600` only when absent.
+
+Cross-record rules answer `409 { error, code }`: a CNAME cannot share its name with any other record (`cname_conflict`), exact duplicates are refused (`duplicate`), and a domain holds at most 100 records (`record_limit`). Mutations for one domain run one at a time behind `SELECT … FOR UPDATE` on the domain row, so two concurrent writers cannot both pass these checks.
 
 ## Service nodes (`/nodes`)
 
@@ -162,4 +178,5 @@ function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void 
 | `DATABASE_URL` | *none* | PostgreSQL connection string, database name included. No default on purpose: a wrong database is worse than a missing one, so the API refuses to start without it. |
 | `NODE_ENV` | `development` | Runtime environment. It does **not** select the database — that is `DATABASE_URL`'s job. |
 | `OXY_API_URL` | `https://api.oxy.so` | Oxy API base URL (token verification). |
+| `TNP_NATIVE_EXPIRY_ENFORCED` | `false` | Only exactly `true` enables it. When on, a native name past its 30-day grace period is withheld: `/dns/resolve` answers it like an unregistered name (parking only, no records, no overlay) and the parking page says "expired, held". It is never released for re-registration. Off by default because enforcing expiry retroactively needs an approved owner communication first (#62). |
 | `TNP_PARKING_IP` | *none* | A-record value returned for unregistered names on custom TLDs and as a fallback for record-less registered domains. There is deliberately **no** fallback: a stale literal would route every TNP query at a dead or attacker-controlled host, so when this is unset parking answers are omitted instead. In production it is the Elastic IP fronting the `tnp-dns` NLB. |
