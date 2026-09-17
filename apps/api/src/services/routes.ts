@@ -178,7 +178,7 @@ function idempotencyKey(req: Request): string | null {
 
 /**
  * The router `index.ts` mounts: production adapters, built lazily, and the
- * refusing payment authorizer until a payment mechanism is approved.
+ * refusing payment authorizer until the Peable integration (services.md §8) lands.
  */
 export function createProductionServicesRouter(config: ServicesConfig, getDb: () => Database): Router {
   let registry: ProviderRegistry | null = null;
@@ -201,7 +201,7 @@ export function createServicesRouter(options: ServicesRouterOptions): Router {
     const status: ServicesStatus = {
       catalog: config.catalog,
       dnsWrite: config.dnsWrite,
-      // No payment mechanism is approved (services.md §8), so nothing is
+      // Payments are not integrated yet (services.md §8), so nothing is
       // purchasable regardless of the sales flag.
       purchasable: false,
       purchaseBlockedReason: config.sales ? "payments_not_configured" : "sales_disabled",

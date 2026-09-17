@@ -221,8 +221,8 @@ fuzzed continuously; the privacy model states measured results.
 A parallel line of work beside the network phases, governed by
 [`services.md`](./services.md). It never blocks a network phase and no network
 phase depends on it. Its gates, in order: foundation (contracts, schema,
-outbox, worker, import boundaries) → Namecheap sandbox → domain pilot (needs an
-approved payment mechanism) → first hosting product (needs an approved
+outbox, worker, import boundaries) → Namecheap sandbox → domain pilot (needs the
+Peable payment integration) → first hosting product (needs an approved
 provider) → second real provider → edge integration (needs Phase 3 and 5).
 
 Still out of scope: ICANN registrar accreditation, a TNP wallet or billing

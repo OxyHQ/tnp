@@ -18,8 +18,8 @@ export interface ServicesStatus {
   catalog: boolean;
   dnsWrite: boolean;
   /**
-   * Whether an order can be placed right now. False until a payment mechanism
-   * is approved and integrated, whatever the flags say.
+   * Whether an order can be placed right now. False until the Peable payment integration
+   * lands, whatever the flags say.
    */
   purchasable: boolean;
   /** Why `purchasable` is false, when it is. */

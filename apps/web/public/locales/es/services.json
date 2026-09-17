@@ -45,7 +45,7 @@
     "heading": "Compras",
     "blocked": {
       "sales_disabled": "La venta de dominios no está activada. Puedes buscar y ver precios, pero aún no se puede comprar nada aquí.",
-      "payments_not_configured": "Todavía no se ha aprobado ningún método de pago. Puedes buscar y ver precios, pero aún no se puede comprar nada aquí."
+      "payments_not_configured": "Los pagos todavía no están conectados. Puedes buscar y ver precios, pero aún no se puede comprar nada aquí."
     }
   },
   "search": {

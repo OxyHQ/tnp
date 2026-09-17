@@ -4,7 +4,7 @@
  * Independent switches (services.md §9): turning on the catalog does not open
  * sales, and turning everything off leaves TNP Network exactly as it is.
  * There is no renewals flag yet: renewals TNP executes are paid, and arrive
- * with the payment mechanism rather than as a switch that does nothing. A
+ * with the Peable payment integration rather than as a switch that does nothing. A
  * flag is on only for the literal values `1` or `true`, so a typo or an empty
  * variable fails closed.
  */
@@ -14,7 +14,7 @@ import type { ProviderEnvironment } from "./providers/contracts.js";
 export interface ServicesConfig {
   /** Public-domain search and quotes. */
   readonly catalog: boolean;
-  /** Placing orders. Also needs an approved payment mechanism, which does not exist yet. */
+  /** Placing orders. Also needs the Peable payment integration, which does not exist yet. */
   readonly sales: boolean;
   /** Editing zones hosted by an integrated provider. */
   readonly dnsWrite: boolean;

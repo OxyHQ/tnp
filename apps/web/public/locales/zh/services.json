@@ -45,7 +45,7 @@
     "heading": "购买",
     "blocked": {
       "sales_disabled": "域名销售尚未启用。你可以搜索并查看价格，但目前还不能在这里购买。",
-      "payments_not_configured": "尚未批准任何支付方式。你可以搜索并查看价格，但目前还不能在这里购买。"
+      "payments_not_configured": "支付尚未接入。你可以搜索并查看价格，但目前还不能在这里购买。"
     }
   },
   "search": {

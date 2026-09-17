@@ -279,22 +279,67 @@ Adapter rules:
 
 Out of the first release: hosting, SSL, email or any other Namecheap product.
 
-## 8. Payments — Blocked
+## 8. Payments — Peable (decided 2026-09-17, not integrated)
 
-Oxy owns billing across the ecosystem (`~/Oxy/docs/project-map.md`). TNP keeps
-orders and fulfilment state; it does not become a bank, a wallet or a second
-billing system. **The payment method and the service that executes it are not
-decided.** Stripe, FairCoin, a currency and an Oxy checkout are all unassumed.
-#14's FairCoin-only requirement is not revived by inertia.
+**Payments go through Peable** (`~/Oxy/Peable`, `@peable.to/sdk`), Oxy's own
+gateway. TNP keeps orders and fulfilment state; Peable holds the payment
+lifecycle. TNP does not become a bank, a wallet or a second billing system, and
+never holds a payer's keys: Peable is non-custodial and settles on-chain to a
+watch-only xpub, or through its card rail.
 
-Until a mechanism is approved and integrated, the order route refuses with
-`payments_not_configured`: there is a `PaymentAuthorizer` seam with exactly
-one production implementation, which refuses. Payment confirmation never comes
-from a client-supplied boolean. Sandbox fulfilment is exercised by an operator
+This supersedes "payment method undecided". It does **not** revive #14's
+FairCoin-*only* requirement: which of Peable's rails (`faircoin`, `card` in
+USD/EUR) are offered is a pricing decision below, not an architectural one.
+
+### What integrating Peable changes in the order flow
+
+Peable confirms payment **asynchronously** (a signed webhook when the intent is
+`settled`), so the synchronous `PaymentAuthorizer` seam becomes a two-step flow:
+
+```text
+quote -> order (awaiting_payment) + Peable checkout session, one idempotency key
+      -> payer pays on Peable's hosted checkout (or the embedded button)
+      -> webhook payment_intent.settled, signature verified on the RAW body
+      -> in ONE transaction: order paid, lines + pending domains + operations
+      -> worker fulfils as today
+```
+
+- The order and its Peable session share an idempotency key, so a retried
+  checkout never creates a second intent (`paymentIntents.create` requires one).
+- **Fulfilment starts only from the verified webhook**, never from the
+  `successUrl` redirect and never from a client flag. `confirming` is not paid.
+- `failed`, `expired`, `rejected` close the order without creating resources.
+- Webhooks are deduplicated by event id and applied with a compare-and-swap on
+  the order state, since Peable redelivers.
+- A quote must not expire before the payment can settle: an intent's
+  `expiresAt` bounds the quote's, and a price change past the quote's tolerance
+  needs new consent (§5), not a silent adjustment.
+- A line that fails after payment (registration refused, `manual_review`
+  resolved as not registered) is refunded through Peable's refund flow once it
+  is exposed in the SDK, per the published refund policy. Nothing is refunded
+  automatically while an operation is `unknown`.
+
+### Still open before sales
+
+1. **Rail and currency.** Namecheap charges TNP's wholesale balance in USD. A
+   `card` intent in USD has no exchange-rate exposure; a `faircoin` intent needs
+   a USD→FAIR rate source, a rate lock no longer than the intent's expiry, and a
+   decision on who carries the rate risk between settlement and the wholesale
+   top-up.
+2. Retail pricing policy (today a quote is cost plus fees, no margin), taxes and
+   invoices.
+3. Renewal consent and how a renewal is charged (Peable has no subscriptions
+   yet: each renewal is a new intent the owner pays, or TNP-owned renewals wait
+   for that capability).
+4. Refund and cancellation policy, and support responsibilities.
+5. Peable-side setup: an Oxy service credential for TNP with `payments:read` +
+   `payments:write` (test environment first), TNP registered as a Peable
+   merchant with a watch-only xpub (testnet first), a webhook endpoint secret,
+   and Peable's own mainnet gates for the chosen rail.
+
+Until this is integrated the order route keeps refusing with
+`payments_not_configured`. Sandbox fulfilment is still exercised by the operator
 script that only accepts sandbox accounts and never charges anyone.
-
-Before sales: currency and pricing, taxes, invoices, renewal consent, failed
-charges, refunds, cancellation and support responsibilities are defined.
 
 ## 9. Launch gates
 
@@ -302,7 +347,7 @@ charges, refunds, cancellation and support responsibilities are defined.
 |---|---|---|
 | Foundation | Contracts, registry, schema, outbox, worker, import gate, commerce-off start, two adapters in tests, real-PostgreSQL tests | **Implemented** (#62 Phase 2) |
 | Namecheap sandbox | Adapter against sandbox with real credentials, capability matrix dated, uncertain-timeout drill | Adapter **implemented against documentation and fixtures** (#62 Phase 3), capability matrix undated; **sandbox run Blocked** on credentials and an egress IP in `oxy-infra` |
-| Domain pilot | Approved payment mechanism, terms, support, runbooks, alerts, balance monitoring, limited authorized pilot | **Blocked** (§8) |
+| Domain pilot | Peable integration (§8) on testnet, rail/pricing decisions, terms, support, runbooks, alerts, balance monitoring, limited authorized pilot | **Blocked** — Peable chosen, not integrated (§8) |
 | First hosting | Approved provider and product, API/permission validation, isolation, backup restore demonstrated | **Blocked** — no provider approved |
 | Second provider | A real, evaluated second provider on the same contracts, export/migration rehearsed | **Blocked** — no provider approved |
 | Edge integration | Public gateway, TLS trust design, transport gates of #19 | **Blocked** on #19/#21 |
@@ -311,7 +356,7 @@ Feature flags are independent — `TNP_SERVICES_CATALOG`, `TNP_SERVICES_SALES`,
 `TNP_SERVICES_DNS_WRITE`, and `TNP_SERVICES_WORKER` for the outbox worker — and
 all default to off. No flag disables TNP Network, and turning a product flag off
 never stops the worker syncing and reconciling what already exists. Renewals get
-a switch with the payment mechanism, not before: a flag with no behaviour behind
+a switch with the Peable integration, not before: a flag with no behaviour behind
 it would be a claim the code does not support.
 
 ### Operating the foundation
@@ -325,8 +370,8 @@ it would be a claim the code does not support.
 | Gates | `bun run validate:boundaries`; `bun run test:db` (outbox, reconciliation, quota, DNS apply, routes against PostgreSQL); CI starts the API image with no services configuration and requires `/services/status` to report off and the worker to stay disabled. |
 
 Retail pricing is also undecided: a quote's price is the provider's cost plus
-its itemized fees, with no margin, until a pricing policy is approved with the
-payment mechanism.
+its itemized fees, with no margin, until a pricing policy is approved together
+with the Peable integration.
 
 ## 10. Hosting — Designed
 
@@ -396,6 +441,6 @@ plan. Approval is per product family and account, and reviewed periodically.
 |---|---|
 | #6, `overview.md` | Network architecture unchanged. The "not a registrar" line now refers to the network; the services layer is optional and separate. |
 | #12 | "OpenProvider first" is superseded by "Namecheap first, multi-provider by contract". Its decoupling and portability requirements are kept. A further provider is added only after evaluation. |
-| #14 | FairCoin-only is not revived. The payment decision is open (§8). |
+| #14 | Payments go through Peable (§8). FairCoin is one of its rails; FairCoin-*only* is not revived. |
 | #19 | Mandatory gate for any product using the relay/edge. It does not block a domains adapter. |
 | `audit-2026-08-06.md` §7 | The "out of scope" list is historical; this ADR replaces it for the services layer. |

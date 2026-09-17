@@ -172,8 +172,8 @@ baseline these points moved from.
 - There is one relay implementation, duplicated, with no limits and no circuit
   isolation.
 - Services has its foundation (contracts, outbox, reconciliation, DNS apply)
-  and is off by default; no sale is possible until a payment mechanism is
-  approved ([`services.md`](./services.md) §8–9).
+  and is off by default; no sale is possible until the Peable payment integration
+  lands ([`services.md`](./services.md) §8–9).
 
 The namespace works and DNS is now correct. The edge is a prototype with a
 critical authentication gap. The secure connection does not exist.
