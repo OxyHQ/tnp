@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApiResponse xmlns="http://api.namecheap.com/xml.response" Status="OK">
+  <Errors />
+  <Warnings />
+  <RequestedCommand>namecheap.domains.getList</RequestedCommand>
+  <CommandResponse Type="namecheap.domains.getList">
+    <DomainGetListResult>
+      <Domain ID="127" Name="alpha-fixture.com" User="fixtureuser" Created="02/15/2016" Expires="02/15/2032" IsExpired="false" IsLocked="false" AutoRenew="false" WhoisGuard="ENABLED" IsPremium="true" IsOurDNS="true"/>
+      <Domain ID="381" Name="beta-fixture.net" User="fixtureuser" Created="04/28/2016" Expires="04/28/2023" IsExpired="true" IsLocked="true" AutoRenew="true" WhoisGuard="NOTPRESENT" IsPremium="false" IsOurDNS="false"/>
+    </DomainGetListResult>
+    <Paging>
+      <TotalItems>12</TotalItems>
+      <CurrentPage>2</CurrentPage>
+      <PageSize>10</PageSize>
+    </Paging>
+  </CommandResponse>
+  <Server>FIXTURE-01</Server>
+  <GMTTimeDifference>+5:30</GMTTimeDifference>
+  <ExecutionTime>0.047</ExecutionTime>
+</ApiResponse>

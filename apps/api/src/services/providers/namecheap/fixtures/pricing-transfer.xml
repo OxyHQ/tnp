@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApiResponse xmlns="http://api.namecheap.com/xml.response" Status="OK">
+  <Errors />
+  <Warnings />
+  <RequestedCommand>namecheap.users.getPricing</RequestedCommand>
+  <CommandResponse Type="namecheap.users.getPricing">
+    <UserGetPricingResult>
+      <ProductType Name="DOMAIN">
+        <ProductCategory Name="TRANSFER">
+          <Product Name="com">
+            <Price Duration="1" DurationType="YEAR" Price="8.95" RegularPrice="10.28" YourPrice="9.58" CouponPrice="" Currency="USD" />
+            <Price Duration="2" DurationType="YEAR" Price="8.95" RegularPrice="10.28" YourPrice="8.95" CouponPrice="" Currency="USD" AdditionalCost="0.20" YourAdditonalCost="0.18" />
+            <Price Duration="1" DurationType="MONTH" Price="1.00" RegularPrice="1.00" YourPrice="1.00" CouponPrice="" Currency="USD" />
+          </Product>
+          <Product Name="net">
+            <Price Duration="1" DurationType="YEAR" Price="11.00" RegularPrice="11.00" YourPrice="11.00" CouponPrice="" Currency="USD" />
+          </Product>
+        </ProductCategory>
+      </ProductType>
+    </UserGetPricingResult>
+  </CommandResponse>
+  <Server>FIXTURE-01</Server>
+  <GMTTimeDifference>+5:30</GMTTimeDifference>
+  <ExecutionTime>0.047</ExecutionTime>
+</ApiResponse>

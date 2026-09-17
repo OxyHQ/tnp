@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApiResponse Status="OK">
+  <Errors />
+  <Warnings />
+  <RequestedCommand>namecheap.domains.getinfo</RequestedCommand>
+  <CommandResponse Type="namecheap.domains.getinfo">
+    <DomainGetInfoResult Status="Ok" ID="736542" DomainName="held-fixture.com" OwnerName="fixtureuser" IsOwner="false" IsPremium="false">
+      <DomainDetails>
+        <CreatedDate>09/05/2016</CreatedDate>
+        <ExpiredDate>12/31/2027</ExpiredDate>
+      </DomainDetails>
+      <LockDetails />
+      <Whoisguard Enabled="True">
+        <ID>3655801</ID>
+        <ExpiredDate>01/26/2028</ExpiredDate>
+      </Whoisguard>
+      <DnsDetails ProviderType="FREE" IsUsingOurDNS="true" HostCount="3" EmailType="FWD">
+        <Nameserver>dns1.registrar-servers.com</Nameserver>
+        <Nameserver>dns2.registrar-servers.com</Nameserver>
+      </DnsDetails>
+      <Modificationrights All="true" />
+    </DomainGetInfoResult>
+  </CommandResponse>
+  <Server>FIXTURE-01</Server>
+  <GMTTimeDifference>+5:30</GMTTimeDifference>
+  <ExecutionTime>0.047</ExecutionTime>
+</ApiResponse>

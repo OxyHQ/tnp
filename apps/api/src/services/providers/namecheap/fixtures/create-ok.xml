@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApiResponse xmlns="http://api.namecheap.com/xml.response" Status="OK">
+  <Errors />
+  <Warnings />
+  <RequestedCommand>namecheap.domains.create</RequestedCommand>
+  <CommandResponse Type="namecheap.domains.create">
+    <DomainCreateResult Domain="free-fixture.com" Registered="true" ChargedAmount="9.5800" DomainID="103877" OrderID="22158" TransactionID="51284" WhoisguardEnable="false" NonRealTimeDomain="false"/>
+  </CommandResponse>
+  <Server>FIXTURE-01</Server>
+  <GMTTimeDifference>+5:30</GMTTimeDifference>
+  <ExecutionTime>0.047</ExecutionTime>
+</ApiResponse>
