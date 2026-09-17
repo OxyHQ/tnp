@@ -174,7 +174,6 @@ CREATE TABLE "public_domains" (
 	"last_synced_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "public_domains_account_name_key" UNIQUE("provider_account_id","ascii_name"),
 	CONSTRAINT "public_domains_ascii_canonical" CHECK ("public_domains"."ascii_name" = lower("public_domains"."ascii_name") and "public_domains"."ascii_name" not like '%.'),
 	CONSTRAINT "public_domains_renewal_consent" CHECK ("public_domains"."renewal_owner" <> 'tnp' or "public_domains"."renewal_consent_at" is not null)
 );
@@ -224,6 +223,7 @@ CREATE INDEX "operations_resource_idx" ON "operations" USING btree ("resource_ty
 CREATE INDEX "order_lines_order_idx" ON "order_lines" USING btree ("order_id");--> statement-breakpoint
 CREATE INDEX "orders_owner_idx" ON "orders" USING btree ("owner_id","created_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "provider_rate_windows_key" ON "provider_rate_windows" USING btree ("provider_account_id","window","window_start");--> statement-breakpoint
+CREATE UNIQUE INDEX "public_domains_account_name_live_key" ON "public_domains" USING btree ("provider_account_id","ascii_name") WHERE "public_domains"."lifecycle" not in ('failed', 'transferred_out');--> statement-breakpoint
 CREATE INDEX "public_domains_owner_idx" ON "public_domains" USING btree ("owner_id","created_at");--> statement-breakpoint
 CREATE INDEX "public_domains_expiry_idx" ON "public_domains" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "quotes_owner_idx" ON "quotes" USING btree ("owner_id","created_at");

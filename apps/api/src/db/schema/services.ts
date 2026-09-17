@@ -179,7 +179,11 @@ export const publicDomains = pgTable(
     updatedAt: updatedAt(),
   },
   (table) => [
-    unique("public_domains_account_name_key").on(table.providerAccountId, table.asciiName),
+    // One live row per name per account. A registration that failed, or a
+    // domain that left the account, must not block the name being ordered again.
+    uniqueIndex("public_domains_account_name_live_key")
+      .on(table.providerAccountId, table.asciiName)
+      .where(sql`${table.lifecycle} not in ('failed', 'transferred_out')`),
     index("public_domains_owner_idx").on(table.ownerId, table.createdAt),
     index("public_domains_expiry_idx").on(table.expiresAt),
     check(

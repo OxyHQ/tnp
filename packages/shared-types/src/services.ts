@@ -17,7 +17,6 @@ export interface MoneyDto {
 export interface ServicesStatus {
   catalog: boolean;
   dnsWrite: boolean;
-  renewals: boolean;
   /**
    * Whether an order can be placed right now. False until a payment mechanism
    * is approved and integrated, whatever the flags say.

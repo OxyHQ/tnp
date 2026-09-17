@@ -7,7 +7,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import type { Database } from "../src/db/postgres.js";
-import { operations, orderLines, orders, providerAccounts, publicDomains, quotes } from "../src/db/schema/index.js";
+import { auditEvents, operations, orderLines, orders, providerAccounts, publicDomains, quotes } from "../src/db/schema/index.js";
 import { Catalog, readOnlyCall } from "../src/services/catalog.js";
 import { OPERATION_KINDS } from "../src/services/operations/handlers.js";
 import { IdempotencyConflictError } from "../src/services/operations/intent.js";
@@ -67,6 +67,7 @@ async function orderDomain(name: string) {
     idempotencyKey: `order-${crypto.randomUUID()}`,
     contacts: CONTACTS,
     privacy: true,
+    actor: { kind: "system" as const },
   });
   const [line] = await db.select().from(orderLines).where(eq(orderLines.orderId, placed.order.id));
   if (!line.operationId || !line.publicDomainId) throw new Error("order line was not wired to an operation");
@@ -123,7 +124,7 @@ describe("orders", () => {
     const catalog = new Catalog(db, memoryRegistry(state));
     const quote = await catalog.quoteRegistration(account, ownerId, "unpaid.com", 1, readOnlyCall("test"));
     await expect(
-      placeOrder(db, unconfiguredPayments, { ownerId, quoteIds: [quote.id], idempotencyKey: "unpaid-order-1", contacts: CONTACTS, privacy: false }),
+      placeOrder(db, unconfiguredPayments, { ownerId, quoteIds: [quote.id], idempotencyKey: "unpaid-order-1", contacts: CONTACTS, privacy: false, actor: { kind: "system" as const } }),
     ).rejects.toBeInstanceOf(PaymentsNotConfiguredError);
     expect(await db.select().from(orders).where(eq(orders.ownerId, ownerId))).toHaveLength(0);
     expect(await db.select().from(publicDomains).where(eq(publicDomains.ownerId, ownerId))).toHaveLength(0);
@@ -136,14 +137,14 @@ describe("orders", () => {
     const catalog = new Catalog(db, memoryRegistry(state));
     const quote = await catalog.quoteRegistration(production, ownerId, "prod.com", 1, readOnlyCall("test"));
     await expect(
-      placeOrder(db, sandboxNoCharge, { ownerId, quoteIds: [quote.id], idempotencyKey: "prod-order-01", contacts: CONTACTS, privacy: false }),
+      placeOrder(db, sandboxNoCharge, { ownerId, quoteIds: [quote.id], idempotencyKey: "prod-order-01", contacts: CONTACTS, privacy: false, actor: { kind: "system" as const } }),
     ).rejects.toBeInstanceOf(PaymentsNotConfiguredError);
   });
 
   test("an order, its line, the pending domain and its operation are written together; a retry returns the same order", async () => {
     const catalog = new Catalog(db, memoryRegistry(state));
     const quote = await catalog.quoteRegistration(account, ownerId, "atomic.com", 1, readOnlyCall("test"));
-    const request = { ownerId, quoteIds: [quote.id], idempotencyKey: "atomic-order-1", contacts: CONTACTS, privacy: false };
+    const request = { ownerId, quoteIds: [quote.id], idempotencyKey: "atomic-order-1", contacts: CONTACTS, privacy: false, actor: { kind: "system" as const } };
 
     const first = await placeOrder(db, sandboxNoCharge, request);
     const retry = await placeOrder(db, sandboxNoCharge, request);
@@ -164,9 +165,9 @@ describe("orders", () => {
   test("a consumed quote cannot be sold again under a different key", async () => {
     const catalog = new Catalog(db, memoryRegistry(state));
     const quote = await catalog.quoteRegistration(account, ownerId, "once.com", 1, readOnlyCall("test"));
-    await placeOrder(db, sandboxNoCharge, { ownerId, quoteIds: [quote.id], idempotencyKey: "once-order-01", contacts: CONTACTS, privacy: false });
+    await placeOrder(db, sandboxNoCharge, { ownerId, quoteIds: [quote.id], idempotencyKey: "once-order-01", contacts: CONTACTS, privacy: false, actor: { kind: "system" as const } });
     await expect(
-      placeOrder(db, sandboxNoCharge, { ownerId, quoteIds: [quote.id], idempotencyKey: "once-order-02", contacts: CONTACTS, privacy: false }),
+      placeOrder(db, sandboxNoCharge, { ownerId, quoteIds: [quote.id], idempotencyKey: "once-order-02", contacts: CONTACTS, privacy: false, actor: { kind: "system" as const } }),
     ).rejects.toBeInstanceOf(QuoteUnusableError);
   });
 });
@@ -190,6 +191,15 @@ describe("registration fulfilment", () => {
     const [done] = await db.select().from(orders).where(eq(orders.id, order.id));
     expect(done.state).toBe("completed");
     expect(await registerCalls("happy.com")).toBe(1);
+
+    // The trail names what happened, and carries no contact data.
+    const trail = await db.select().from(auditEvents).where(inArray(auditEvents.resourceId, [order.id, domainId]));
+    expect(trail.map((e) => [e.action, e.outcome]).sort()).toEqual([
+      ["operation.domain.register", "succeeded"],
+      ["operation.domain.sync", "succeeded"],
+      ["order.place", "accepted"],
+    ]);
+    expect(JSON.stringify(trail)).not.toContain(CONTACTS.registrant.email);
   });
 
   test("applied then timed out: unknown, then reconciled to succeeded without a second registration", async () => {
@@ -269,6 +279,17 @@ describe("registration fulfilment", () => {
     expect((await loadOperation(db, operationId)).status).toBe("manual_review");
     const [domain] = await db.select().from(publicDomains).where(eq(publicDomains.id, domainId));
     expect(domain.lifecycle).toBe("unknown");
+  });
+
+  test("a failed registration does not block ordering the same name again", async () => {
+    const first = await orderDomain("retry-name.com");
+    state.failNext("register", { mode: "refuse", code: "validation" });
+    await engineFor(db, state).runOnce();
+    const [failed] = await db.select().from(publicDomains).where(eq(publicDomains.id, first.domainId));
+    expect(failed.lifecycle).toBe("failed");
+
+    const second = await orderDomain("retry-name.com");
+    expect(second.domainId).not.toBe(first.domainId);
   });
 
   test("an operation written for sandbox never acts through a production account", async () => {

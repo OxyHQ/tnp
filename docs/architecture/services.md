@@ -301,14 +301,17 @@ charges, refunds, cancellation and support responsibilities are defined.
 | Edge integration | Public gateway, TLS trust design, transport gates of #19 | **Blocked** on #19/#21 |
 
 Feature flags are independent — `TNP_SERVICES_CATALOG`, `TNP_SERVICES_SALES`,
-`TNP_SERVICES_DNS_WRITE`, `TNP_SERVICES_RENEWALS` — and all default to off. No
-flag disables TNP Network.
+`TNP_SERVICES_DNS_WRITE`, and `TNP_SERVICES_WORKER` for the outbox worker — and
+all default to off. No flag disables TNP Network, and turning a product flag off
+never stops the worker syncing and reconciling what already exists. Renewals get
+a switch with the payment mechanism, not before: a flag with no behaviour behind
+it would be a claim the code does not support.
 
 ### Operating the foundation
 
 | What | How |
 |---|---|
-| Worker | `bun run worker:services` in `apps/api` (image command `bun apps/api/src/workers/commerce.ts`). Exits immediately, logging `worker.disabled`, when no flag is on. |
+| Worker | `bun run worker:services` in `apps/api` (image command `bun apps/api/src/workers/commerce.ts`). Runs only with `TNP_SERVICES_WORKER=1`; otherwise exits, logging `worker.disabled`. |
 | Provider account | `bun src/services/scripts/provider-account.ts --adapter … --environment sandbox --label … --secret-ref env:NAME --config '{…}'`. Production needs `--confirm-production`. |
 | Sandbox order | `bun src/services/scripts/sandbox-order.ts --account <id> --owner <oxy user id> --name … --contact contact.json` — the no-charge authorizer refuses anything but sandbox. |
 | Routes | `GET /services/status`; with flags: `GET /services/domains/availability`, `POST /services/quotes`, `POST /services/orders` (503 `payments_not_configured`), `GET /services/domains[/:id[/operations]]`, `POST /services/domains/:id/zone/preview`, `POST /services/domains/:id/zone/changes`. |

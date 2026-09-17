@@ -65,7 +65,7 @@ async function call(base: string, path: string, init: { method?: string; user?: 
 }
 
 const allOff = readServicesConfig({});
-const allOn: ServicesConfig = { ...allOff, catalog: true, sales: true, dnsWrite: true, renewals: true };
+const allOn: ServicesConfig = { ...allOff, catalog: true, sales: true, dnsWrite: true, worker: true };
 
 let off: string;
 let on: string;
@@ -86,7 +86,7 @@ afterAll(async () => {
 describe("with every flag off", () => {
   test("status says so and nothing is purchasable", async () => {
     const res = await call(off, "/status");
-    expect(res.json<ServicesStatus>()).toEqual({ catalog: false, dnsWrite: false, renewals: false, purchasable: false, purchaseBlockedReason: "sales_disabled" });
+    expect(res.json<ServicesStatus>()).toEqual({ catalog: false, dnsWrite: false, purchasable: false, purchaseBlockedReason: "sales_disabled" });
   });
 
   test("search, quotes, orders and zone edits are refused without touching the provider", async () => {

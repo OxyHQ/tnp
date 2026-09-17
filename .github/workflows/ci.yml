@@ -178,8 +178,8 @@ jobs:
             exit 1
           fi
 
-          # With every flag off the worker must refuse to run rather than
-          # start polling providers.
+          # Without TNP_SERVICES_WORKER the worker must refuse to run rather
+          # than start polling providers.
           worker=$(docker run --rm --network tnp-ci \
             -e DATABASE_URL=postgres://tnp:tnp@pg:5432/tnp \
             tnp-api:ci bun apps/api/src/workers/commerce.ts)

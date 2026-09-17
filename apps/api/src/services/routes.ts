@@ -32,6 +32,7 @@ import {
 } from "@tnp/shared-types";
 import type { Database } from "../db/postgres.js";
 import { dnsZones, operations, providerAccounts, publicDomains, users } from "../db/schema/index.js";
+import { recordAudit } from "./audit.js";
 import { Catalog, readOnlyCall } from "./catalog.js";
 import type { ServicesConfig } from "./config.js";
 import { diffZones, hashZone, mergeZoneChanges, type ZoneChange } from "./dns/zone.js";
@@ -200,7 +201,6 @@ export function createServicesRouter(options: ServicesRouterOptions): Router {
     const status: ServicesStatus = {
       catalog: config.catalog,
       dnsWrite: config.dnsWrite,
-      renewals: config.renewals,
       // No payment mechanism is approved (services.md §8), so nothing is
       // purchasable regardless of the sales flag.
       purchasable: false,
@@ -290,6 +290,7 @@ export function createServicesRouter(options: ServicesRouterOptions): Router {
         idempotencyKey: key,
         contacts: { registrant: contact, admin: contact, tech: contact, billing: contact },
         privacy: parsed.value.privacy,
+        actor: { kind: "user", oxyUserId: getRequiredOxyUserId(req) },
       });
       res.status(placed.created ? 201 : 200).json({ id: placed.order.id, state: placed.order.state });
     } catch (err) {
@@ -477,6 +478,15 @@ export function createServicesRouter(options: ServicesRouterOptions): Router {
             environment: ctx.account.environment,
             desiredVersion: zone.desiredVersion,
           },
+        });
+        await recordAudit(tx, {
+          actor: { kind: "user", oxyUserId: getRequiredOxyUserId(req) },
+          action: "dns_zone.change_requested",
+          resourceType: "dns_zone",
+          resourceId: ctx.zone.id,
+          correlationId: op.correlationId,
+          outcome: "queued",
+          metadata: { operationId: op.id, changes: parsed.value.changes.length },
         });
         return op;
       });

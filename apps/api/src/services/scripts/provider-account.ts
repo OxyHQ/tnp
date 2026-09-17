@@ -17,6 +17,7 @@ import { parseArgs } from "node:util";
 import { sql } from "drizzle-orm";
 import { closePostgres, connectPostgres } from "../../db/postgres.js";
 import { providerAccounts } from "../../db/schema/index.js";
+import { recordAudit } from "../audit.js";
 
 const { values } = parseArgs({
   options: {
@@ -81,6 +82,14 @@ try {
       },
     })
     .returning({ id: providerAccounts.id });
+  await recordAudit(db, {
+    actor: { kind: "system" },
+    action: "provider_account.upsert",
+    resourceType: "provider_account",
+    resourceId: row.id,
+    outcome: "applied",
+    metadata: { tool: "provider-account.ts", adapter: values.adapter, environment, sales, management, hasSecretRef: Boolean(values["secret-ref"]) },
+  });
   console.log(JSON.stringify({ id: row.id, adapter: values.adapter, environment, label: values.label, sales, management }));
 } finally {
   await closePostgres();

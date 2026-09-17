@@ -1,5 +1,5 @@
 {
-  "id": "d07f2e68-bf92-45ef-ba12-db7cdfdb5573",
+  "id": "dacdace7-e901-46f8-bbea-e80539317722",
   "prevId": "31614454-e457-4c6c-98c3-e0e653bcd8e4",
   "version": "7",
   "dialect": "postgresql",
@@ -2134,6 +2134,28 @@
         }
       },
       "indexes": {
+        "public_domains_account_name_live_key": {
+          "name": "public_domains_account_name_live_key",
+          "columns": [
+            {
+              "expression": "provider_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ascii_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"public_domains\".\"lifecycle\" not in ('failed', 'transferred_out')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "public_domains_owner_idx": {
           "name": "public_domains_owner_idx",
           "columns": [
@@ -2200,16 +2222,7 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "public_domains_account_name_key": {
-          "name": "public_domains_account_name_key",
-          "nullsNotDistinct": false,
-          "columns": [
-            "provider_account_id",
-            "ascii_name"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
         "public_domains_ascii_canonical": {

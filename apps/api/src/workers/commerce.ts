@@ -22,7 +22,7 @@ import { runMigrations } from "../db/migrate.js";
 import type { Database } from "../db/postgres.js";
 import * as schema from "../db/schema/index.js";
 import { providerAccounts, publicDomains } from "../db/schema/index.js";
-import { anyServiceEnabled, readServicesConfig } from "../services/config.js";
+import { readServicesConfig } from "../services/config.js";
 import { OperationEngine } from "../services/operations/engine.js";
 import { createOperationHandlers, OPERATION_KINDS } from "../services/operations/handlers.js";
 import { enqueueOperation } from "../services/operations/store.js";
@@ -75,8 +75,8 @@ export async function scheduleSyncs(db: Database, now: Date): Promise<number> {
 
 async function main(): Promise<void> {
   const services = readServicesConfig();
-  if (!anyServiceEnabled(services)) {
-    log({ event: "worker.disabled", reason: "no TNP_SERVICES_* flag is set" });
+  if (!services.worker) {
+    log({ event: "worker.disabled", reason: "TNP_SERVICES_WORKER is not set" });
     return;
   }
   if (!apiConfig.databaseUrl) throw new Error("DATABASE_URL is required");

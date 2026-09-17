@@ -19,6 +19,7 @@
  */
 
 import type { Database } from "../../db/postgres.js";
+import { recordAudit } from "../audit.js";
 import type { AdapterCallContext } from "../providers/contracts.js";
 import { isProviderError, provesNothingApplied, type ProviderErrorCode } from "../providers/errors.js";
 import {
@@ -327,6 +328,23 @@ export class OperationEngine {
 
   async #finish(op: Operation, update: FinishUpdate): Promise<boolean> {
     const finished = await finishOperation(this.#db, op.id, this.#workerId, update);
+    if (finished && update.status !== "queued") {
+      try {
+        await recordAudit(this.#db, {
+          actor: { kind: "system" },
+          action: `operation.${op.kind}`,
+          resourceType: op.resourceType,
+          resourceId: op.resourceId,
+          correlationId: op.correlationId,
+          outcome: update.status,
+          metadata: { operationId: op.id, code: update.errorCode ?? null, attempts: op.attempts },
+        });
+      } catch (err) {
+        // The transition is committed; a missing audit row is logged loudly
+        // rather than turned into a second, contradictory state change.
+        this.#log({ event: "operation.audit_failed", operationId: op.id, error: String(err) });
+      }
+    }
     this.#log({
       event: finished ? "operation.transition" : "operation.lease_lost",
       operationId: op.id,

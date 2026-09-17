@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { anyServiceEnabled, readServicesConfig } from "./config.js";
+import { readServicesConfig } from "./config.js";
 import { createEnvSecretResolver, redact } from "./providers/secrets.js";
 
 describe("services flags", () => {
   test("an empty environment turns everything off and points at sandbox", () => {
     const config = readServicesConfig({});
-    expect(config).toMatchObject({ catalog: false, sales: false, dnsWrite: false, renewals: false, environment: "sandbox" });
-    expect(anyServiceEnabled(config)).toBe(false);
+    expect(config).toMatchObject({ catalog: false, sales: false, dnsWrite: false, worker: false, environment: "sandbox" });
   });
 
   test("only the literal values 1 and true enable a flag, and each flag is independent", () => {
@@ -14,7 +13,7 @@ describe("services flags", () => {
       expect(readServicesConfig({ TNP_SERVICES_CATALOG: value }).catalog).toBe(false);
     }
     const catalogOnly = readServicesConfig({ TNP_SERVICES_CATALOG: "1" });
-    expect(catalogOnly).toMatchObject({ catalog: true, sales: false, dnsWrite: false, renewals: false });
+    expect(catalogOnly).toMatchObject({ catalog: true, sales: false, dnsWrite: false, worker: false });
   });
 
   test("production is only ever chosen explicitly", () => {

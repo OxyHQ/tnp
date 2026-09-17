@@ -63,6 +63,7 @@ try {
     idempotencyKey: `sandbox-order:${quote.id}`,
     contacts: { registrant: c, admin: c, tech: c, billing: c },
     privacy: false,
+    actor: { kind: "system" },
   });
   console.log(JSON.stringify({ quote: quote.id, order: placed.order.id, state: placed.order.state }));
 } finally {

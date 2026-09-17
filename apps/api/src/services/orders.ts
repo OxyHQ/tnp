@@ -23,6 +23,7 @@ import {
   publicDomains,
   quotes,
 } from "../db/schema/index.js";
+import { recordAudit, type AuditActor } from "./audit.js";
 import { addMoney, type Money } from "./money.js";
 import { hashIntent, IdempotencyConflictError } from "./operations/intent.js";
 import { OPERATION_KINDS } from "./operations/handlers.js";
@@ -94,6 +95,7 @@ export interface PlaceOrderInput {
   /** Contacts for every registration line. Stored per domain, never in the operation payload. */
   readonly contacts: ContactSet;
   readonly privacy: boolean;
+  readonly actor: AuditActor;
 }
 
 export interface PlacedOrder {
@@ -232,6 +234,14 @@ export async function placeOrder(
       await tx.update(orderLines).set({ operationId: operation.id }).where(eq(orderLines.id, line.id));
     }
 
+    await recordAudit(tx, {
+      actor: input.actor,
+      action: "order.place",
+      resourceType: "order",
+      resourceId: order.id,
+      outcome: "accepted",
+      metadata: { lines: quoteIds.length, currency: total.currency, totalMinor: total.minor.toString(), paymentState: authorization.state },
+    });
     return { order, created: true };
   });
 }
@@ -268,7 +278,13 @@ export async function priceQuotes(
     const [held] = await db
       .select({ id: publicDomains.id })
       .from(publicDomains)
-      .where(and(eq(publicDomains.providerAccountId, row.quote.providerAccountId), eq(publicDomains.asciiName, row.quote.asciiName)))
+      .where(
+        and(
+          eq(publicDomains.providerAccountId, row.quote.providerAccountId),
+          eq(publicDomains.asciiName, row.quote.asciiName),
+          sql`${publicDomains.lifecycle} not in ('failed', 'transferred_out')`,
+        ),
+      )
       .limit(1);
     if (held) throw new QuoteUnusableError(id, "already_in_inventory");
     const price: Money = { currency: row.quote.currency, minor: row.quote.priceMinor };
