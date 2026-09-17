@@ -29,8 +29,10 @@ TNP is **not** only an alternative DNS. Name resolution is one of ten layers.
 - It is not an anonymity network today. Multi-hop onion routing is specified
   (Phase 6) and not implemented. Until it is measured and reviewed, no TNP
   surface may describe TNP as anonymous. See [`privacy-model.md`](./privacy-model.md).
-- It is not a domain registrar. Selling, transferring or renewing ICANN domains,
-  reseller systems and payment integrations are out of scope.
+- The network is not a domain registrar. Public domains, their DNS and hosting
+  are an **optional, separate services layer** that the network never depends
+  on and that never changes what a public name resolves to — see
+  [`services.md`](./services.md).
 
 ---
 
@@ -99,7 +101,12 @@ never *what to do* with what it captured.
 | Proxy | SOCKS5 CONNECT to TNP names only. No IPv6, no auth, no public destinations, ignores the requested port. | 4 |
 | VPN | **Not implemented.** | 8, 9, 10 |
 | Platforms | Linux/macOS/Windows install + service management exist. Mobile does not. | 9, 10 |
-| Control plane | API and dashboard work. No metrics, no diagnostics endpoint, no device management. | 1–11 incrementally |
+| Control plane | API and dashboard work. `/health` is a static liveness answer. No metrics, no device management. | 1–11 incrementally |
+
+The optional services layer (public domains, DNS, hosting) sits beside layer
+10, never below layer 1: nothing in naming, resolution, discovery or transport
+imports it, and it is off unless explicitly enabled. See
+[`services.md`](./services.md).
 
 Evidence for every "today" cell is in [`audit-2026-08-06.md`](./audit-2026-08-06.md).
 
@@ -117,6 +124,7 @@ shape and the phased route to it — no big-bang restructure — are in
 ## Where to go next
 
 - What TNP is trying to be, and in what order → [`product.md`](./product.md)
+- The optional public-domain, DNS and hosting layer → [`services.md`](./services.md)
 - What the words mean → [`glossary.md`](./glossary.md)
 - What a user can turn on, and what each mode costs them → [`operating-modes.md`](./operating-modes.md)
 - Why a public name never changes meaning → [`naming.md`](./naming.md)
