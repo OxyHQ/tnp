@@ -440,6 +440,11 @@ export function createServicesRouter(options: ServicesRouterOptions): Router {
       if (!ctx) return;
       const scope = `user:${ctx.ownerId}`;
       const operation = await ctx.db.transaction(async (tx) => {
+        // Serialize change requests for this zone first, so two identical
+        // requests racing each other see one another's operation rather than
+        // both bumping the version.
+        await tx.select({ id: dnsZones.id }).from(dnsZones).where(eq(dnsZones.id, ctx.zone.id)).for("update");
+
         // A retry of the same request returns the original operation. Checked
         // before the version bump, because the bumped version is part of the
         // intent and would make a genuine retry look like a new request.

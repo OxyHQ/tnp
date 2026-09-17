@@ -122,6 +122,15 @@ export async function claimNextOperation(db: Database, options: ClaimOptions): P
             (${operations.status} in ('queued', 'unknown') and ${operations.nextRunAt} <= now())
             or (${operations.status} = 'running' and ${operations.leaseExpiresAt} < now())
           )`,
+          // Resources held by another operation are filtered here, not after
+          // locking: otherwise a backlog on one busy zone fills every scan
+          // window and starves all other resources.
+          sql`not exists (
+            select 1 from ${operationResourceLeases} l
+            where l.resource_key = ${operations.resourceType} || ':' || ${operations.resourceId}::text
+              and l.operation_id <> ${operations.id}
+              and l.expires_at >= now()
+          )`,
         ),
       )
       .orderBy(operations.nextRunAt)
@@ -247,17 +256,28 @@ export async function finishOperation(
           eq(operations.leaseOwner, workerId),
         ),
       )
-      .returning({ id: operations.id, resourceType: operations.resourceType, resourceId: operations.resourceId });
+      .returning({
+        id: operations.id,
+        resourceType: operations.resourceType,
+        resourceId: operations.resourceId,
+        submittedAt: operations.submittedAt,
+      });
     if (!row) return false;
 
-    await tx
-      .delete(operationResourceLeases)
-      .where(
-        and(
-          eq(operationResourceLeases.resourceKey, resourceKey(row)),
-          eq(operationResourceLeases.operationId, operationId),
-        ),
-      );
+    const leaseOnThis = and(
+      eq(operationResourceLeases.resourceKey, resourceKey(row)),
+      eq(operationResourceLeases.operationId, operationId),
+    );
+    // An operation whose effect is in doubt keeps its resource: another change
+    // to the same zone or domain must not run while an earlier write may still
+    // land. The lease never expires on its own; reconciliation or a person
+    // resolving the review releases it.
+    const inDoubt = update.status === "unknown" || (update.status === "manual_review" && row.submittedAt !== null);
+    if (inDoubt) {
+      await tx.update(operationResourceLeases).set({ expiresAt: sql`'infinity'::timestamptz` }).where(leaseOnThis);
+    } else {
+      await tx.delete(operationResourceLeases).where(leaseOnThis);
+    }
     return true;
   });
 }

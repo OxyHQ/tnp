@@ -134,6 +134,71 @@ describe("dns.apply", () => {
     expect(state.calls.filter((c) => c.method === "replaceZone")).toHaveLength(1);
   });
 
+  test("a re-read refused after the zone was replaced is an unknown outcome, not a retry", async () => {
+    const operationId = await enqueueApply([addA], hashZone(initial));
+    // First read succeeds; the verification read after the replace is refused
+    // before sending, as the shared quota gate would.
+    state.failNext("readZone", { mode: "none" });
+    state.failNext("readZone", { mode: "refuse", code: "rate_limited" });
+    const engine = engineFor(db, state);
+
+    await engine.runOnce();
+    const op = await loadOperation(db, operationId);
+    expect(op.status).toBe("unknown");
+    expect(op.submittedAt).not.toBeNull();
+
+    await makeDue(db, operationId);
+    await engine.runOnce();
+    expect((await loadOperation(db, operationId)).status).toBe("succeeded");
+    expect(state.calls.filter((c) => c.method === "replaceZone")).toHaveLength(1);
+    const [zone] = await db.select().from(dnsZones).where(eq(dnsZones.id, zoneId));
+    expect(zone.state).toBe("in_sync");
+  });
+
+  test("while one change is in doubt, the next change to the same zone waits", async () => {
+    const first = await enqueueApply([addA], hashZone(initial));
+    state.failNext("replaceZone", { mode: "timeout_without_apply" });
+    const engine = engineFor(db, state, { settleMs: 3_600_000 });
+    await engine.runOnce();
+    expect((await loadOperation(db, first)).status).toBe("unknown");
+
+    const second = await enqueueApply(
+      [{ action: "add", record: { host: "api", type: "A", value: "192.0.2.11", ttl: 1800, priority: null } }],
+      hashZone(initial),
+    );
+    // The first is not due yet and the second targets the same zone: nothing runs.
+    expect(await engine.runOnce()).toBe(false);
+    expect((await loadOperation(db, second)).status).toBe("queued");
+    expect(state.calls.filter((c) => c.method === "replaceZone")).toHaveLength(1);
+  });
+
+  test("a backlog on one zone does not starve other resources", async () => {
+    const holder = await enqueueApply([addA], hashZone(initial));
+    state.failNext("replaceZone", { mode: "timeout_without_apply" });
+    const engine = engineFor(db, state, { settleMs: 3_600_000 });
+    await engine.runOnce();
+    expect((await loadOperation(db, holder)).status).toBe("unknown");
+    for (let i = 0; i < 15; i++) {
+      await enqueueApply([{ action: "add", record: { host: `h${i}`, type: "A", value: "192.0.2.20", ttl: 1800, priority: null } }], hashZone(initial));
+    }
+    const other = crypto.randomUUID();
+    const { operation } = await enqueueOperation(db, {
+      kind: OPERATION_KINDS.sync,
+      scope: "system",
+      idempotencyKey: `sync-other-${other}`,
+      ownerId,
+      resourceType: "public_domain",
+      resourceId: other,
+      providerAccountId: account.id,
+      payload: { publicDomainId: other, environment: "sandbox" },
+      runAt: new Date(Date.now() + 1_000),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    expect(await engine.runOnce()).toBe(true);
+    // It ran (and failed on the missing domain) instead of waiting behind the backlog.
+    expect((await loadOperation(db, operation.id)).status).not.toBe("queued");
+  });
+
   test("a change that would put a CNAME beside other records is refused before submission", async () => {
     const operationId = await enqueueApply(
       [{ action: "add", record: { host: "@", type: "CNAME", value: "elsewhere.example", ttl: 1800, priority: null } }],

@@ -199,9 +199,20 @@ describe("owned domains and zones", () => {
     });
     expect(different.status).toBe(409);
 
+    // Two identical retries racing each other both get the one operation.
+    const racing = { changes: [{ action: "add", record: { host: "race", type: "A", value: "192.0.2.3", ttl: 1800 } }], baseHash: previewed.baseHash };
+    const [r1, r2] = await Promise.all([
+      call(on, `/domains/${domainId}/zone/changes`, { method: "POST", user: "u-owner", key: "zone-apply-key-2", body: racing }),
+      call(on, `/domains/${domainId}/zone/changes`, { method: "POST", user: "u-owner", key: "zone-apply-key-2", body: racing }),
+    ]);
+    expect([r1.status, r2.status]).toEqual([202, 202]);
+    expect(r1.json<ZoneApplyResponse>().operation.id).toBe(r2.json<ZoneApplyResponse>().operation.id);
+    const [afterRace] = await db.select().from(dnsZones).where(eq(dnsZones.publicDomainId, domainId));
+    expect(afterRace.desiredVersion).toBe(2);
+
     const ops = await call(on, `/domains/${domainId}/operations`, { user: "u-owner" });
     const list = ops.json<OperationDto[]>();
-    expect(list).toHaveLength(1);
+    expect(list).toHaveLength(2);
     expect(list[0].kind).toBe("dns.apply");
   });
 });

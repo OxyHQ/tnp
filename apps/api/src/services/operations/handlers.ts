@@ -199,6 +199,7 @@ export function createOperationHandlers(registry: ProviderRegistry): OperationHa
         privacy: payload.privacy === true,
         maxCost: maxCost(payload),
       });
+      ctx.mutationReturned();
 
       // Registered. Dates come from the registrar on the follow-up sync, never
       // from `now + years` here.
@@ -227,9 +228,14 @@ export function createOperationHandlers(registry: ProviderRegistry): OperationHa
         await setLineState(ctx.db, ctx.operation.id, "succeeded");
         return { kind: "succeeded", result: { reconciled: true, remoteId: info.remoteId } };
       } catch (err) {
-        // Only this account's explicit "you do not hold it" is evidence of
-        // absence. Anything else leaves the question open.
-        if (isProviderError(err) && err.code === "not_found") return { kind: "absent" };
+        // "Not in this account" is NOT proof the registration is absent: a
+        // registry that confirms asynchronously (Namecheap's non-real-time
+        // domains) does not show the name yet, and a second create could buy
+        // it twice. Registration is therefore never resubmitted automatically;
+        // it stays in doubt until it appears or a person reviews it.
+        if (isProviderError(err) && err.code === "not_found") {
+          return { kind: "undetermined", message: "The registration is not visible at the registrar yet." };
+        }
         throw err;
       }
     },
@@ -255,6 +261,7 @@ export function createOperationHandlers(registry: ProviderRegistry): OperationHa
         years: field(payload, "years", isInt),
         maxCost: maxCost(payload),
       });
+      ctx.mutationReturned();
       if (result.expiresAt) {
         await ctx.db
           .update(publicDomains)
@@ -341,6 +348,7 @@ export function createOperationHandlers(registry: ProviderRegistry): OperationHa
       if (!merged.ok) return { kind: "failed", code: "validation", message: merged.error };
 
       await dns.replaceZone(ctx.call, name, merged.zone);
+      ctx.mutationReturned();
 
       const after = await dns.readZone(ctx.call, name);
       const afterHash = hashZone(after);

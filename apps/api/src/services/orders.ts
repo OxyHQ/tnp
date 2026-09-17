@@ -135,6 +135,35 @@ export async function placeOrder(
     environment,
   });
 
+  try {
+    return await writeOrder(db, input, quoteIds, intentHash, total, authorization);
+  } catch (err) {
+    // Two orders for the same name can both pass the unlocked inventory check;
+    // the partial unique index decides, and the loser is a conflict, not a 500.
+    if (isUniqueViolation(err, "public_domains_account_name_live_key")) {
+      throw new QuoteUnusableError(quoteIds[0] ?? "", "already_in_inventory");
+    }
+    throw err;
+  }
+}
+
+export function isUniqueViolation(err: unknown, constraint: string): boolean {
+  // drizzle wraps the driver error; the SQLSTATE lives on `cause`.
+  for (let e: unknown = err; e instanceof Error; e = e.cause) {
+    const record = e as Error & { code?: unknown; constraint_name?: unknown };
+    if (record.code === "23505" && record.constraint_name === constraint) return true;
+  }
+  return false;
+}
+
+async function writeOrder(
+  db: Database,
+  input: PlaceOrderInput,
+  quoteIds: string[],
+  intentHash: string,
+  total: Money,
+  authorization: PaymentAuthorization,
+): Promise<PlacedOrder> {
   return db.transaction(async (tx) => {
     const [order] = await tx
       .insert(orders)

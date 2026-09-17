@@ -13,6 +13,7 @@ import { OPERATION_KINDS } from "../src/services/operations/handlers.js";
 import { IdempotencyConflictError } from "../src/services/operations/intent.js";
 import { enqueueOperation } from "../src/services/operations/store.js";
 import {
+  isUniqueViolation,
   PaymentsNotConfiguredError,
   placeOrder,
   QuoteUnusableError,
@@ -162,6 +163,15 @@ describe("orders", () => {
     await expect(placeOrder(db, sandboxNoCharge, { ...request, quoteIds: [other.id] })).rejects.toBeInstanceOf(IdempotencyConflictError);
   });
 
+  test("the live-name constraint is recognised on the real driver error, so a racing order maps to a conflict", async () => {
+    const values = { ownerId, asciiName: "race-name.com", unicodeName: "race-name.com", suffix: "com", providerAccountId: account.id, lifecycle: "pending" as const };
+    await db.insert(publicDomains).values(values);
+    const err = await db.insert(publicDomains).values(values).catch((e: unknown) => e);
+    expect(isUniqueViolation(err, "public_domains_account_name_live_key")).toBe(true);
+    expect(isUniqueViolation(err, "some_other_constraint")).toBe(false);
+    expect(isUniqueViolation(new Error("plain"), "public_domains_account_name_live_key")).toBe(false);
+  });
+
   test("a consumed quote cannot be sold again under a different key", async () => {
     const catalog = new Catalog(db, memoryRegistry(state));
     const quote = await catalog.quoteRegistration(account, ownerId, "once.com", 1, readOnlyCall("test"));
@@ -220,41 +230,20 @@ describe("registration fulfilment", () => {
     expect(domain.remoteId).toBe(state.domains.get("timeout.com")?.remoteId ?? "missing");
   });
 
-  test("absence is not believed before the settle window", async () => {
-    const { operationId } = await orderDomain("settle.com");
+  test("a registration that is not visible yet is never sent again: it stays in doubt, then goes to review", async () => {
+    const { operationId, line } = await orderDomain("notyet.com");
     state.failNext("register", { mode: "timeout_without_apply" });
-    const engine = engineFor(db, state, { settleMs: 3_600_000 });
+    const engine = engineFor(db, state, { maxReconcileAttempts: 3 });
 
-    await engine.runOnce();
-    await makeDue(db, operationId);
-    await engine.runOnce();
-    const op = await loadOperation(db, operationId);
-    expect(op.status).toBe("unknown");
-    expect(op.resubmissions).toBe(0);
-    expect(op.reconcileAttempts).toBe(1);
-    expect(await registerCalls("settle.com")).toBe(1);
-  });
-
-  test("proven absent: resubmitted exactly once; absent again goes to manual review", async () => {
-    const { operationId, line } = await orderDomain("absent.com");
-    state.failNext("register", { mode: "timeout_without_apply" });
-    state.failNext("register", { mode: "timeout_without_apply" });
-    const engine = engineFor(db, state);
-
-    await engine.runOnce(); // submitted, lost → unknown
-    await makeDue(db, operationId);
-    await engine.runOnce(); // reconcile: absent → queued, resubmissions = 1
-    const requeued = await loadOperation(db, operationId);
-    expect(requeued.status).toBe("queued");
-    expect(requeued.submittedAt).toBeNull();
-    expect(requeued.resubmissions).toBe(1);
-
-    await engine.runOnce(); // second submission, lost again → unknown
-    await makeDue(db, operationId);
-    await engine.runOnce(); // absent again → manual review, never a third attempt
+    await engine.runOnce(); // submitted, response lost → unknown
+    for (let i = 0; i < 3; i++) {
+      await makeDue(db, operationId);
+      await engine.runOnce(); // getInfo says "not in this account": undetermined, not absent
+    }
     const final = await loadOperation(db, operationId);
     expect(final.status).toBe("manual_review");
-    expect(await registerCalls("absent.com")).toBe(2);
+    expect(final.resubmissions).toBe(0);
+    expect(await registerCalls("notyet.com")).toBe(1);
     const [reviewedLine] = await db.select().from(orderLines).where(eq(orderLines.id, line.id));
     expect(reviewedLine.state).toBe("manual_review");
   });
@@ -312,6 +301,63 @@ describe("registration fulfilment", () => {
 });
 
 describe("renewal reconciliation", () => {
+  async function registeredDomainWithRenewal(name: string) {
+    const { domainId } = await orderDomain(name);
+    const engine = engineFor(db, state);
+    await engine.runOnce(); // register
+    await engine.runOnce(); // sync
+    const [domain] = await db.select().from(publicDomains).where(eq(publicDomains.id, domainId));
+    if (!domain.expiresAt) throw new Error("sync did not set an expiry");
+    const { operation } = await enqueueOperation(db, {
+      kind: OPERATION_KINDS.renew,
+      scope: `user:${ownerId}`,
+      idempotencyKey: `renew-${domainId}`,
+      ownerId,
+      resourceType: "public_domain",
+      resourceId: domainId,
+      providerAccountId: account.id,
+      payload: { publicDomainId: domainId, years: 1, previousExpiresAt: domain.expiresAt.toISOString(), maxCostMinor: null, currency: null, environment: "sandbox" },
+    });
+    return { domainId, operationId: operation.id, previous: domain.expiresAt };
+  }
+  const renewCalls = () => state.calls.filter((c) => c.method === "renew").length;
+
+  test("absence is not believed before the settle window", async () => {
+    const { operationId } = await registeredDomainWithRenewal("settle.com");
+    state.failNext("renew", { mode: "timeout_without_apply" });
+    const engine = engineFor(db, state, { settleMs: 3_600_000 });
+
+    await engine.runOnce();
+    await makeDue(db, operationId);
+    await engine.runOnce();
+    const op = await loadOperation(db, operationId);
+    expect(op.status).toBe("unknown");
+    expect(op.resubmissions).toBe(0);
+    expect(op.reconcileAttempts).toBe(1);
+    expect(renewCalls()).toBe(1);
+  });
+
+  test("proven absent: resubmitted exactly once; absent again goes to manual review", async () => {
+    const { operationId } = await registeredDomainWithRenewal("absent.com");
+    state.failNext("renew", { mode: "timeout_without_apply" });
+    state.failNext("renew", { mode: "timeout_without_apply" });
+    const engine = engineFor(db, state);
+
+    await engine.runOnce(); // submitted, lost → unknown
+    await makeDue(db, operationId);
+    await engine.runOnce(); // reconcile: expiry unchanged → queued, resubmissions = 1
+    const requeued = await loadOperation(db, operationId);
+    expect(requeued.status).toBe("queued");
+    expect(requeued.submittedAt).toBeNull();
+    expect(requeued.resubmissions).toBe(1);
+
+    await engine.runOnce(); // second submission, lost again → unknown
+    await makeDue(db, operationId);
+    await engine.runOnce(); // absent again → manual review, never a third attempt
+    expect((await loadOperation(db, operationId)).status).toBe("manual_review");
+    expect(renewCalls()).toBe(2);
+  });
+
   test("a renewal that applied but timed out is confirmed from the new expiry, not renewed again", async () => {
     const { domainId } = await orderDomain("renewme.com");
     const engine = engineFor(db, state);

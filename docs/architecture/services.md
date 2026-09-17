@@ -196,7 +196,14 @@ States: `queued`, `running`, `succeeded`, `failed`, `unknown`,
   was sent moves the operation to `unknown`. The reconciler looks for evidence
   (remote list/info, dates, ids). Found → `succeeded`; proven absent after the
   provider's settle window → safe to retry once; still unprovable →
-  `manual_review`. It never registers twice, renews twice, switches provider or
+  `manual_review`. A registration is never "proven absent": registries that
+  confirm asynchronously do not show the name yet, so an unconfirmed
+  registration stays in doubt until it appears or a person reviews it. While an
+  operation is `unknown`, or in `manual_review` after submitting, it keeps its
+  resource lease, so no other change to that domain or zone runs until the
+  doubt is resolved (reconciliation, or the reviewer releasing it). An error
+  after the mutating call returned — a refused verification read, say — is an
+  unknown outcome, never evidence that nothing was applied. It never registers twice, renews twice, switches provider or
   refunds automatically while the outcome is unknown.
 - **Retries** — reads retry with backoff; writes retry only on errors that
   prove nothing was applied (`validation` never, `rate_limited` and

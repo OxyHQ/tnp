@@ -52,6 +52,13 @@ export interface HandlerContext {
   readonly now: () => Date;
   /** Pass to every adapter call; `beforeSubmit` persists `submitted_at`. */
   readonly call: AdapterCallContext;
+  /**
+   * Call immediately after the mutating provider call returns. From then on
+   * the change is known to have been sent and accepted, so any later failure —
+   * a re-read refused by the quota gate, say — is an unknown outcome, never
+   * evidence that nothing was applied.
+   */
+  readonly mutationReturned: () => void;
 }
 
 export interface OperationHandler {
@@ -135,6 +142,7 @@ export class OperationEngine {
     }
 
     let submitted = operation.submittedAt !== null;
+    let mutationReturned = false;
     const ctx: HandlerContext = {
       db: this.#db,
       operation,
@@ -145,6 +153,9 @@ export class OperationEngine {
           await markSubmitted(this.#db, operation.id, this.#workerId);
           submitted = true;
         },
+      },
+      mutationReturned: () => {
+        mutationReturned = true;
       },
     };
 
@@ -157,7 +168,7 @@ export class OperationEngine {
       const outcome = await handler.execute(ctx);
       await this.#applyExecuteOutcome(handler, ctx, outcome, submitted);
     } catch (err) {
-      await this.#applyExecuteError(handler, ctx, err, submitted);
+      await this.#applyExecuteError(handler, ctx, err, submitted, mutationReturned);
     }
   }
 
@@ -194,6 +205,7 @@ export class OperationEngine {
     ctx: HandlerContext,
     err: unknown,
     submitted: boolean,
+    mutationReturned: boolean,
   ): Promise<void> {
     const op = ctx.operation;
     if (err instanceof LeaseLostError) {
@@ -211,7 +223,11 @@ export class OperationEngine {
       return;
     }
 
-    if (handler.mutating && submitted && !provesNothingApplied(err)) {
+    // The `submitted` flag on the error describes the call that failed, not the
+    // operation. Only a refusal returned BY the submitting call itself proves
+    // nothing applied; an error after the mutation returned, or a pre-send
+    // failure once `submitted_at` is written, is reconciled instead.
+    if (handler.mutating && submitted && (mutationReturned || !err.submitted || !provesNothingApplied(err))) {
       await this.#toUnknown(op, err.code, err.safeMessage);
       return;
     }

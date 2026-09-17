@@ -60,6 +60,8 @@ export const MEMORY_REGISTRAR_CAPABILITIES: CapabilityMatrix<RegistrarOperation>
 
 /** How the next call to a method misbehaves. */
 export type Fault =
+  /** Behave normally; lets a later call in the same method's queue misbehave. */
+  | { readonly mode: "none" }
   /** Throws before `beforeSubmit`: nothing sent, nothing applied. */
   | { readonly mode: "refuse"; readonly code: ProviderError["code"] }
   /** Sends, applies, then loses the response. */
@@ -118,7 +120,8 @@ export function createMemoryAdapters(account: ProviderAccountRef, state: MemoryP
   async function mutate<T>(method: string, ctx: AdapterCallContext, apply: () => T): Promise<T> {
     state.calls.push({ method });
     await pause(state.latencyMs);
-    const fault = state.takeFault(method);
+    const taken = state.takeFault(method);
+    const fault = taken?.mode === "none" ? undefined : taken;
     if (fault?.mode === "refuse") throw new ProviderError(fault.code, `${method} refused`, { submitted: false });
     await ctx.beforeSubmit();
     if (fault?.mode === "timeout_without_apply") throw timeout(method);
@@ -130,7 +133,8 @@ export function createMemoryAdapters(account: ProviderAccountRef, state: MemoryP
   async function read<T>(method: string, apply: () => T): Promise<T> {
     state.calls.push({ method });
     await pause(state.latencyMs);
-    const fault = state.takeFault(method);
+    const taken = state.takeFault(method);
+    const fault = taken?.mode === "none" ? undefined : taken;
     if (fault?.mode === "refuse") throw new ProviderError(fault.code, `${method} refused`, { submitted: false });
     if (fault) throw new ProviderError("provider_unavailable", `${method} timed out`, { submitted: true });
     return apply();
