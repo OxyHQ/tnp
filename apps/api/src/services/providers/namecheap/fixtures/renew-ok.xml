@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApiResponse xmlns="http://api.namecheap.com/xml.response" Status="OK">
+  <Errors />
+  <Warnings />
+  <RequestedCommand>namecheap.domains.renew</RequestedCommand>
+  <CommandResponse Type="namecheap.domains.renew">
+    <DomainRenewResult DomainName="free-fixture.com" DomainID="151378" Renew="true" OrderID="109116" TransactionID="119569" ChargedAmount="9.5800">
+      <DomainDetails>
+        <ExpiredDate>4/30/2031 11:31:13 PM</ExpiredDate>
+        <NumYears>0</NumYears>
+      </DomainDetails>
+    </DomainRenewResult>
+  </CommandResponse>
+  <Server>FIXTURE-01</Server>
+  <GMTTimeDifference>+5:30</GMTTimeDifference>
+  <ExecutionTime>0.047</ExecutionTime>
+</ApiResponse>

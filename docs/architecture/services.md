@@ -98,7 +98,7 @@ Separate concepts, separate tables:
 | Binding | TNP resource ↔ the account and remote resource that really manages it | `public_domains.provider_account_id` + `remote_id`, `dns_zones` |
 | Operation | Durable intent to change something remotely, reconciled | `operations` |
 
-The same company can have unrelated adapters (Namecheap domains API vs.
+The same company can have unrelated adapters (Namecheap's domains API (adapter `namecheap`) vs.
 Namecheap WHM reseller hosting). A shared brand implies no shared credentials,
 permissions or semantics.
 
@@ -294,7 +294,7 @@ charges, refunds, cancellation and support responsibilities are defined.
 | Gate | Requires | State |
 |---|---|---|
 | Foundation | Contracts, registry, schema, outbox, worker, import gate, commerce-off start, two adapters in tests, real-PostgreSQL tests | **Implemented** (#62 Phase 2) |
-| Namecheap sandbox | Adapter against sandbox with real credentials, capability matrix dated, uncertain-timeout drill | Designed — adapter in progress (#62 Phase 3); **sandbox run Blocked** on credentials and an egress IP in `oxy-infra` |
+| Namecheap sandbox | Adapter against sandbox with real credentials, capability matrix dated, uncertain-timeout drill | Adapter **implemented against documentation and fixtures** (#62 Phase 3), capability matrix undated; **sandbox run Blocked** on credentials and an egress IP in `oxy-infra` |
 | Domain pilot | Approved payment mechanism, terms, support, runbooks, alerts, balance monitoring, limited authorized pilot | **Blocked** (§8) |
 | First hosting | Approved provider and product, API/permission validation, isolation, backup restore demonstrated | **Blocked** — no provider approved |
 | Second provider | A real, evaluated second provider on the same contracts, export/migration rehearsed | **Blocked** — no provider approved |

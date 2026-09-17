@@ -7,11 +7,12 @@
  */
 
 import type { Database } from "../../db/postgres.js";
+import { namecheapFactory } from "./namecheap/factory.js";
 import { createPostgresQuotaGate } from "./rateLimit.js";
 import { ProviderRegistry, type AdapterFactory } from "./registry.js";
 import { createEnvSecretResolver } from "./secrets.js";
 
-export const PRODUCTION_ADAPTERS: readonly AdapterFactory[] = [];
+export const PRODUCTION_ADAPTERS: readonly AdapterFactory[] = [namecheapFactory];
 
 export function createProductionRegistry(db: Database): ProviderRegistry {
   const registry = new ProviderRegistry({
