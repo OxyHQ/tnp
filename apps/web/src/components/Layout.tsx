@@ -8,6 +8,8 @@ const NAV_LINKS = [
   { key: "nav.network", href: "/network" },
   { key: "nav.propose", href: "/propose" },
   { key: "nav.install", href: "/install" },
+  // The optional services area comes after every TNP Network entry.
+  { key: "nav.services", href: "/services" },
 ] as const;
 
 const LANGUAGES = [
@@ -41,8 +43,8 @@ export default function Layout() {
                     <Link
                       to={link.href}
                       className={`font-mono text-sm transition-colors ${
-                        location.pathname === link.href
-                          ? "text-primary-text"
+                        location.pathname === link.href || location.pathname.startsWith(`${link.href}/`)
+                          ?"text-primary-text"
                           : "text-muted-foreground/70 hover:text-muted-foreground"
                       }`}
                     >

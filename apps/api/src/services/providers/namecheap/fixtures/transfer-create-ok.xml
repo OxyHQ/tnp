@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApiResponse xmlns="http://api.namecheap.com/xml.response" Status="OK">
+  <Errors />
+  <Warnings />
+  <RequestedCommand>namecheap.domains.transfer.create</RequestedCommand>
+  <CommandResponse Type="namecheap.domains.transfer.create">
+    <DomainTransferCreateResult Domainname="incoming-fixture.com" Transfer="true" TransferID="15" StatusID="-1" OrderID="575" TransactionID="759" ChargedAmount="8.88" StatusCode="2" />
+  </CommandResponse>
+  <Server>FIXTURE-01</Server>
+  <GMTTimeDifference>+5:30</GMTTimeDifference>
+  <ExecutionTime>0.047</ExecutionTime>
+</ApiResponse>

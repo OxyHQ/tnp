@@ -55,6 +55,9 @@ const RESERVED_TLDS: ReadonlySet<string> = new Set([
 /** Number of reserved labels. Exported so callers can assert the set is populated. */
 export const RESERVED_TLD_COUNT = RESERVED_TLDS.size;
 
+/** The public root zone alone, without the special-use labels. */
+const PUBLIC_ROOT_TLDS: ReadonlySet<string> = new Set(IANA_ROOT_ZONE_TLDS);
+
 /** Normalize a label or name for comparison: lowercase, no trailing root dot. */
 export function normalizeName(name: string): string {
   return name.trim().toLowerCase().replace(/\.$/, "");
@@ -69,6 +72,17 @@ export function normalizeName(name: string): string {
  */
 export function isReservedTld(tld: string): boolean {
   return RESERVED_TLDS.has(normalizeName(tld));
+}
+
+/**
+ * Whether the public DNS root delegates this TLD.
+ *
+ * Narrower than {@link isReservedTld}: `.onion` and `.test` are reserved from
+ * TNP but are not public domains anyone can buy. The services layer uses this
+ * to refuse a native or special-use name presented as a public one.
+ */
+export function isPublicRootTld(tld: string): boolean {
+  return PUBLIC_ROOT_TLDS.has(normalizeName(tld));
 }
 
 /** The last label of a name, normalized. Empty string when there is no TLD. */

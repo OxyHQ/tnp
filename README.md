@@ -37,7 +37,7 @@ This table is the honest state of the code. Full evidence:
 | Exit nodes / public internet routing | ❌ Not implemented |
 | Full or split tunnel VPN | ❌ Not implemented |
 | Mobile apps | ❌ Not implemented |
-| Services: public domains, DNS, hosting | 🧭 Designed, optional and off by default — nothing can be bought yet ([services](docs/architecture/services.md)) |
+| Services: public domains, DNS, hosting | 🧭 Foundation only, optional and off by default — nothing can be bought until a payment mechanism is approved ([services](docs/architecture/services.md)) |
 
 **TNP does not provide anonymity.** It currently provides single-hop encrypted
 transport plus name resolution, and the API is presently able to substitute a
@@ -176,6 +176,8 @@ Base URL `https://api.tnp.network`. Auth is an Oxy bearer token validated throug
 | `POST` | `/relays/register` · `/relays/heartbeat` | ✔ | Relays |
 | `GET` | `/client/latest` | — | Client version and downloads |
 | `GET` | `/health` · `/health/ready` | — | Liveness · database readiness |
+| `GET` | `/services/status` | — | Optional services layer: what is enabled, whether anything is purchasable |
+| `GET` `POST` | `/services/…` | ✔ | Public-domain search, quotes, inventory and zone edits — each behind its own flag, see [services](docs/architecture/services.md) |
 
 ## Services
 

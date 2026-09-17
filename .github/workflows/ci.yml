@@ -51,6 +51,12 @@ jobs:
       - name: Guard the AGENTS.md budget
         run: bun run validate:agents-md
 
+      # TNP Network must never depend on the optional services layer
+      # (docs/architecture/services.md §2). Checked on parsed imports, with its
+      # own mutation self-test.
+      - name: Guard the services-layer import boundary
+        run: bun run validate:boundaries
+
       - name: Test
         run: bun run test
 
@@ -172,6 +178,31 @@ jobs:
           if ! printf '%s' "$tlds" | grep -q '"ox"'; then
             echo "::error::The policy table is missing .ox — the seed did not run"
             docker logs api
+            exit 1
+          fi
+
+          # The image above started with no TNP_SERVICES_* flag, no provider
+          # account and no Namecheap variable. The network answered, and the
+          # services layer must report itself off and unpurchasable.
+          status=$(curl -fsS -m 5 http://127.0.0.1:8080/services/status)
+          echo "services: $status"
+          if ! printf '%s' "$status" | grep -q '"catalog":false'; then
+            echo "::error::The services catalog is on without being enabled"
+            exit 1
+          fi
+          if ! printf '%s' "$status" | grep -q '"purchasable":false'; then
+            echo "::error::Something is purchasable without an approved payment mechanism"
+            exit 1
+          fi
+
+          # Without TNP_SERVICES_WORKER the worker must refuse to run rather
+          # than start polling providers.
+          worker=$(docker run --rm --network tnp-ci \
+            -e DATABASE_URL=postgres://tnp:tnp@pg:5432/tnp \
+            tnp-api:ci bun apps/api/src/workers/commerce.ts)
+          echo "worker: $worker"
+          if ! printf '%s' "$worker" | grep -q '"event":"worker.disabled"'; then
+            echo "::error::The services worker did not stay disabled with every flag off"
             exit 1
           fi
 

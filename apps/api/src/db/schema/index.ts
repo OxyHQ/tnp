@@ -283,3 +283,5 @@ export const votesRelations = relations(votes, ({ one }) => ({
 
 /** `now()` at statement time, for explicit `updatedAt` bumps on update. */
 export const now = sql`now()`;
+
+export * from "./services.js";

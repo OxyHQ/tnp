@@ -5,7 +5,8 @@
     "network": "red",
     "propose": "proponer",
     "install": "instalar",
-    "dashboard": "panel"
+    "dashboard": "panel",
+    "services": "servicios"
   },
   "auth": {
     "signIn": "iniciar sesión",

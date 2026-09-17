@@ -16,6 +16,7 @@
   },
   "include": [
     "src",
-    "test-db"
+    "test-db",
+    "test-sandbox"
   ]
 }

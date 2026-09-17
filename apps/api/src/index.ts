@@ -16,6 +16,8 @@ import { runMigrations } from "./db/migrate.js";
 import { createHealthRouter } from "./health.js";
 import { decideParkingPage, loadNameFacts } from "./registry/resolve.js";
 import { escapeHtml, isValidHostname } from "./utils/hostname.js";
+import { readServicesConfig } from "./services/config.js";
+import { createProductionServicesRouter } from "./services/routes.js";
 
 const app = express();
 app.use((req, res, next) => {
@@ -59,6 +61,11 @@ app.use("/tlds", oxyAuthOptional, tldsRouter);
 app.use("/domains", oxyAuthOptional, domainsRouter);
 app.use("/nodes", oxyAuthOptional, nodesRouter);
 app.use("/relays", oxyAuthOptional, relaysRouter);
+
+// The optional services layer (docs/architecture/services.md). Every action is
+// off unless its flag is set, and no adapter is constructed until a flagged
+// route needs one — the network routes above never depend on it.
+app.use("/services", oxyAuthOptional, createProductionServicesRouter(readServicesConfig(), getDb));
 
 // Serve parking page directly for TNP domain Host headers.
 // When a user visits "nate.ox" in their browser and the domain has no

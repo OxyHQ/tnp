@@ -13,12 +13,15 @@ import Propose from "./pages/Propose";
 import Install from "./pages/Install";
 import DomainDetail from "./pages/DomainDetail";
 import Park from "./pages/Park";
+import Services from "./pages/Services";
+import ServicesDomain from "./pages/ServicesDomain";
 import { AuthBridge } from "./lib/auth";
 
 export default function App() {
   return (
     <HelmetProvider>
     <AuthBridge />
+    {/* One toaster for the app; pages report failed actions through `toast`. */}
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
@@ -47,6 +50,17 @@ export default function App() {
           <Route path="/propose" element={<Propose />} />
           <Route path="/install" element={<Install />} />
           <Route path="/park/:domain" element={<Park />} />
+          {/* Optional services area. Status and explanation are public; the
+              page itself asks for a session before search and inventory. */}
+          <Route path="/services" element={<Services />} />
+          <Route
+            path="/services/domains/:id"
+            element={
+              <ProtectedRoute>
+                <ServicesDomain />
+              </ProtectedRoute>
+            }
+          />
         </Route>
       </Routes>
     </BrowserRouter>

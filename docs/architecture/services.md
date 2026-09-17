@@ -98,7 +98,7 @@ Separate concepts, separate tables:
 | Binding | TNP resource ↔ the account and remote resource that really manages it | `public_domains.provider_account_id` + `remote_id`, `dns_zones` |
 | Operation | Durable intent to change something remotely, reconciled | `operations` |
 
-The same company can have unrelated adapters (Namecheap domains API vs.
+The same company can have unrelated adapters (Namecheap's domains API (adapter `namecheap`) vs.
 Namecheap WHM reseller hosting). A shared brand implies no shared credentials,
 permissions or semantics.
 
@@ -183,17 +183,27 @@ States: `queued`, `running`, `succeeded`, `failed`, `unknown`,
 - **Idempotency** — `(owner, idempotency_key)` is unique and stores a hash of
   the intent. The same key with the same intent returns the existing order; the
   same key with a different intent is `409`.
-- **Claiming** — `FOR UPDATE SKIP LOCKED`, a lease with an expiry, one running
-  operation per resource. A crashed worker's lease expires and the operation is
-  reclaimed; a mutating operation whose `submitted_at` is set is reclaimed into
-  **reconciliation**, not re-execution.
+- **Claiming** — `FOR UPDATE SKIP LOCKED`, a lease with an expiry, and one
+  running operation per resource enforced by a unique
+  `operation_resource_leases` row (an advisory lock cannot outlive the claiming
+  transaction on a pooled connection). A crashed worker's lease expires and the
+  operation is reclaimed; a mutating operation whose `submitted_at` is set is
+  reclaimed into **reconciliation**, not re-execution. A stale worker cannot
+  mark a submission or record a result once its lease is gone.
 - **Persist, then call** — the intent and `submitted_at` are committed before
   the provider is called. No transaction is held open across the call.
 - **Unknown outcome** — a timeout or dropped connection after a mutating call
   was sent moves the operation to `unknown`. The reconciler looks for evidence
   (remote list/info, dates, ids). Found → `succeeded`; proven absent after the
   provider's settle window → safe to retry once; still unprovable →
-  `manual_review`. It never registers twice, renews twice, switches provider or
+  `manual_review`. A registration is never "proven absent": registries that
+  confirm asynchronously do not show the name yet, so an unconfirmed
+  registration stays in doubt until it appears or a person reviews it. While an
+  operation is `unknown`, or in `manual_review` after submitting, it keeps its
+  resource lease, so no other change to that domain or zone runs until the
+  doubt is resolved (reconciliation, or the reviewer releasing it). An error
+  after the mutating call returned — a refused verification read, say — is an
+  unknown outcome, never evidence that nothing was applied. It never registers twice, renews twice, switches provider or
   refunds automatically while the outcome is unknown.
 - **Retries** — reads retry with backoff; writes retry only on errors that
   prove nothing was applied (`validation` never, `rate_limited` and
@@ -217,8 +227,9 @@ change needs preview, consent and a check of the existing zone.
 **Namecheap `domains.dns.setHosts` deletes every record not included in the
 call.** The apply path therefore:
 
-1. Serializes writes per zone across replicas with a PostgreSQL advisory lock
-   (not an in-memory mutex).
+1. Serializes writes per zone across replicas: each change is a `dns.apply`
+   operation on the zone, and the per-resource lease above lets only one run at
+   a time (not an in-memory mutex).
 2. Re-reads the full remote zone and compares its hash with the last observed
    hash. A mismatch is an external change: the operation stops in `conflict`
    and asks the owner to reconcile.
@@ -289,16 +300,33 @@ charges, refunds, cancellation and support responsibilities are defined.
 
 | Gate | Requires | State |
 |---|---|---|
-| Foundation | Contracts, registry, schema, outbox, worker, import gate, commerce-off start, two adapters in tests, real-PostgreSQL tests | Designed — in progress (#62 Phase 2) |
-| Namecheap sandbox | Adapter against sandbox with real credentials, capability matrix dated, uncertain-timeout drill | Designed — adapter in progress (#62 Phase 3); **sandbox run Blocked** on credentials and an egress IP in `oxy-infra` |
+| Foundation | Contracts, registry, schema, outbox, worker, import gate, commerce-off start, two adapters in tests, real-PostgreSQL tests | **Implemented** (#62 Phase 2) |
+| Namecheap sandbox | Adapter against sandbox with real credentials, capability matrix dated, uncertain-timeout drill | Adapter **implemented against documentation and fixtures** (#62 Phase 3), capability matrix undated; **sandbox run Blocked** on credentials and an egress IP in `oxy-infra` |
 | Domain pilot | Approved payment mechanism, terms, support, runbooks, alerts, balance monitoring, limited authorized pilot | **Blocked** (§8) |
 | First hosting | Approved provider and product, API/permission validation, isolation, backup restore demonstrated | **Blocked** — no provider approved |
 | Second provider | A real, evaluated second provider on the same contracts, export/migration rehearsed | **Blocked** — no provider approved |
 | Edge integration | Public gateway, TLS trust design, transport gates of #19 | **Blocked** on #19/#21 |
 
 Feature flags are independent — `TNP_SERVICES_CATALOG`, `TNP_SERVICES_SALES`,
-`TNP_SERVICES_DNS_WRITE`, `TNP_SERVICES_RENEWALS` — and all default to off. No
-flag disables TNP Network.
+`TNP_SERVICES_DNS_WRITE`, and `TNP_SERVICES_WORKER` for the outbox worker — and
+all default to off. No flag disables TNP Network, and turning a product flag off
+never stops the worker syncing and reconciling what already exists. Renewals get
+a switch with the payment mechanism, not before: a flag with no behaviour behind
+it would be a claim the code does not support.
+
+### Operating the foundation
+
+| What | How |
+|---|---|
+| Worker | `bun run worker:services` in `apps/api` (image command `bun apps/api/src/workers/commerce.ts`). Runs only with `TNP_SERVICES_WORKER=1`; otherwise exits, logging `worker.disabled`. |
+| Provider account | `bun src/services/scripts/provider-account.ts --adapter … --environment sandbox --label … --secret-ref env:NAME --config '{…}'`. Production needs `--confirm-production`. |
+| Sandbox order | `bun src/services/scripts/sandbox-order.ts --account <id> --owner <oxy user id> --name … --contact contact.json` — the no-charge authorizer refuses anything but sandbox. |
+| Routes | `GET /services/status`; with flags: `GET /services/domains/availability`, `POST /services/quotes`, `POST /services/orders` (503 `payments_not_configured`), `GET /services/domains[/:id[/operations]]`, `POST /services/domains/:id/zone/preview`, `POST /services/domains/:id/zone/changes`. |
+| Gates | `bun run validate:boundaries`; `bun run test:db` (outbox, reconciliation, quota, DNS apply, routes against PostgreSQL); CI starts the API image with no services configuration and requires `/services/status` to report off and the worker to stay disabled. |
+
+Retail pricing is also undecided: a quote's price is the provider's cost plus
+its itemized fees, with no margin, until a pricing policy is approved with the
+payment mechanism.
 
 ## 10. Hosting — Designed
 

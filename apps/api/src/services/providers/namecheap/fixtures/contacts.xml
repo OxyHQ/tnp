@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApiResponse xmlns="http://api.namecheap.com/xml.response" Status="OK">
+  <Errors />
+  <Warnings />
+  <RequestedCommand>namecheap.domains.getContacts</RequestedCommand>
+  <CommandResponse Type="namecheap.domains.getContacts">
+    <DomainContactsResult Domain="held-fixture.com" domainnameid="3152456">
+      <Registrant ReadOnly="false">
+        <OrganizationName>Fixture Org</OrganizationName>
+        <JobTitle />
+        <FirstName>Rita</FirstName>
+        <LastName>Example</LastName>
+        <Address1>1 Fixture Way</Address1>
+        <Address2 />
+        <City>Testville</City>
+        <StateProvince>TS</StateProvince>
+        <StateProvinceChoice>S</StateProvinceChoice>
+        <PostalCode>00000</PostalCode>
+        <Country>US</Country>
+        <Phone>+1.5550000000</Phone>
+        <Fax />
+        <EmailAddress>rita@example.invalid</EmailAddress>
+        <PhoneExt />
+      </Registrant>
+      <Tech ReadOnly="false">
+        <OrganizationName>Fixture Org</OrganizationName>
+        <JobTitle />
+        <FirstName>Theo</FirstName>
+        <LastName>Example</LastName>
+        <Address1>1 Fixture Way</Address1>
+        <Address2 />
+        <City>Testville</City>
+        <StateProvince>TS</StateProvince>
+        <StateProvinceChoice>S</StateProvinceChoice>
+        <PostalCode>00000</PostalCode>
+        <Country>US</Country>
+        <Phone>+1.5550000000</Phone>
+        <Fax />
+        <EmailAddress>theo@example.invalid</EmailAddress>
+        <PhoneExt />
+      </Tech>
+      <Admin ReadOnly="false">
+        <OrganizationName>Fixture Org</OrganizationName>
+        <JobTitle />
+        <FirstName>Ada</FirstName>
+        <LastName>Example</LastName>
+        <Address1>1 Fixture Way</Address1>
+        <Address2 />
+        <City>Testville</City>
+        <StateProvince>TS</StateProvince>
+        <StateProvinceChoice>S</StateProvinceChoice>
+        <PostalCode>00000</PostalCode>
+        <Country>US</Country>
+        <Phone>+1.5550000000</Phone>
+        <Fax />
+        <EmailAddress>ada@example.invalid</EmailAddress>
+        <PhoneExt />
+      </Admin>
+      <AuxBilling ReadOnly="false">
+        <OrganizationName>Fixture Org</OrganizationName>
+        <JobTitle />
+        <FirstName>Bill</FirstName>
+        <LastName>Example</LastName>
+        <Address1>1 Fixture Way</Address1>
+        <Address2 />
+        <City>Testville</City>
+        <StateProvince>TS</StateProvince>
+        <StateProvinceChoice>S</StateProvinceChoice>
+        <PostalCode>00000</PostalCode>
+        <Country>US</Country>
+        <Phone>+1.5550000000</Phone>
+        <Fax />
+        <EmailAddress>bill@example.invalid</EmailAddress>
+        <PhoneExt />
+      </AuxBilling>
+      <CurrentAttributes />
+      <WhoisGuardContact>
+      <Registrant ReadOnly="true">
+        <OrganizationName>Fixture Org</OrganizationName>
+        <JobTitle />
+        <FirstName>Privacy</FirstName>
+        <LastName>Example</LastName>
+        <Address1>1 Fixture Way</Address1>
+        <Address2 />
+        <City>Testville</City>
+        <StateProvince>TS</StateProvince>
+        <StateProvinceChoice>S</StateProvinceChoice>
+        <PostalCode>00000</PostalCode>
+        <Country>US</Country>
+        <Phone>+1.5550000000</Phone>
+        <Fax />
+        <EmailAddress>privacy@example.invalid</EmailAddress>
+        <PhoneExt />
+      </Registrant>
+      </WhoisGuardContact>
+    </DomainContactsResult>
+  </CommandResponse>
+  <Server>FIXTURE-01</Server>
+  <GMTTimeDifference>+5:30</GMTTimeDifference>
+  <ExecutionTime>0.047</ExecutionTime>
+</ApiResponse>

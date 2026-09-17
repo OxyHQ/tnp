@@ -15,6 +15,7 @@
     "seed": "cd apps/api && bun run seed",
     "typecheck": "bun run --filter '*' typecheck",
     "validate:agents-md": "bun ./scripts/check-agents-md-size.mjs && bun ./scripts/test-check-agents-md-size.mjs",
+    "validate:boundaries": "bun ./scripts/check-import-boundaries.ts && bun ./scripts/test-check-import-boundaries.ts",
     "test": "bun run --filter '*' test",
     "test:db": "bun run --filter '@tnp/api' test:db",
     "release": "release-it",
