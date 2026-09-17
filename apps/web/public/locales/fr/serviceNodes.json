@@ -24,5 +24,8 @@
     "step3Title": "3. Obtenir votre jeton d'authentification",
     "step3Desc": "Exécutez <code>tnp auth login</code> pour vous authentifier avec votre compte Oxy. Le jeton est stocké localement et utilisé pour les commandes suivantes.",
     "footer": "Le nœud de service s'enregistre auprès d'un serveur relais et accepte les connexions entrantes via des tunnels chiffrés. Remplacez <code1>example.ox</code1> par votre domaine réel et <code2>localhost:80</code2> par l'adresse locale de votre service."
-  }
+  },
+  "loadError": "Impossible de charger vos domaines.",
+  "checkFailed": "vérification échouée",
+  "pagination": "Pages de domaines"
 }

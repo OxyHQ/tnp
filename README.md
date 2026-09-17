@@ -160,11 +160,13 @@ Base URL `https://api.tnp.network`. Auth is an Oxy bearer token validated throug
 | `GET` | `/tlds/proposals` | — | Proposals by votes |
 | `GET` | `/domains` | — | Public directory |
 | `GET` | `/domains/search?q=` | — | Search |
-| `GET` | `/domains/check/:name.:tld` | — | Availability |
+| `GET` | `/domains/check/:name.:tld` | — | Native availability, with a reason when unavailable |
 | `POST` | `/domains/register` | ✔ | Register |
-| `GET` | `/domains/mine` | ✔ | Your domains |
-| `DELETE` | `/domains/:id` | ✔ | Release |
-| `GET` | `/domains/:id/records` | — | Records |
+| `GET` | `/domains/owned?page=&limit=` | ✔ | Your domains, paginated, with record counts |
+| `GET` | `/domains/mine` | ✔ | Your domains with records (deprecated: use `/domains/owned`) |
+| `POST` | `/domains/:id/renew` | ✔ | Renew a native name (free; from 90 days before expiry) |
+| `DELETE` | `/domains/:id` | ✔ | Release a native name (irreversible) |
+| `GET` | `/domains/:id/records` | ✔ | Records |
 | `POST` `PUT` `DELETE` | `/domains/:id/records[/:rid]` | ✔ | Manage records |
 | `GET` | `/dns/resolve?name=&type=` | — | Resolve a TNP name |
 | `GET` | `/dns/tlds` | — | TLD policy table |
@@ -173,6 +175,7 @@ Base URL `https://api.tnp.network`. Auth is an Oxy bearer token validated throug
 | `GET` | `/relays` | — | Relay directory |
 | `POST` | `/relays/register` · `/relays/heartbeat` | ✔ | Relays |
 | `GET` | `/client/latest` | — | Client version and downloads |
+| `GET` | `/health` · `/health/ready` | — | Liveness · database readiness |
 | `GET` | `/services/status` | — | Optional services layer: what is enabled, whether anything is purchasable |
 | `GET` `POST` | `/services/…` | ✔ | Public-domain search, quotes, inventory and zone edits — each behind its own flag, see [services](docs/architecture/services.md) |
 

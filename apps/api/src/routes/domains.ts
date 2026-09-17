@@ -1,62 +1,53 @@
 import { Router } from "express";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { requireOxyAuth, getRequiredOxyUserId } from "@oxy.so/core/server";
-import { validateNativeTld } from "@tnp/namespace";
+import { validateNativeLabel, validateNativeTld } from "@tnp/namespace";
+import {
+  parseCreateDnsRecordRequest,
+  parseUpdateDnsRecordRequest,
+  type NativeAvailability,
+  type OwnedDomainPage,
+  type OwnedDomainWithRecords,
+  type PublicDomain,
+  type PublicDomainPage,
+  type PublicDomainWithRecords,
+  type RenewDomainResponse,
+} from "@tnp/shared-types";
 import { getDb } from "../db/postgres.js";
 import { dnsRecords, domains, tlds, users } from "../db/schema/index.js";
+import {
+  checkNativeAvailability,
+  listOwnedDomains,
+  parseAvailabilityQuery,
+  renewNativeDomain,
+} from "../registry/domains.js";
+import {
+  createDnsRecord,
+  deleteDnsRecord,
+  updateDnsRecord,
+  type RecordMutationFailure,
+} from "../registry/records.js";
+import {
+  serializeDnsRecord,
+  toOwnedDomain,
+  toOwnedDomainSummary,
+  toOwnedDomainWithRecords,
+  toPublicDomain,
+  toPublicDomainWithRecords,
+} from "../registry/serialize.js";
 
 const router = Router();
 
-const DOMAIN_NAME_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
-
-/** Record types the registry stores. */
-const RECORD_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "NS"] as const;
-type RecordType = (typeof RECORD_TYPES)[number];
-
-export function serializeDnsRecord(record: typeof dnsRecords.$inferSelect) {
-  return {
-    _id: record.id,
-    type: record.type,
-    name: record.name,
-    value: record.value,
-    ttl: record.ttl,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-  };
-}
-
-export function serializeDomain(domain: typeof domains.$inferSelect) {
-  return {
-    _id: domain.id,
-    name: domain.name,
-    tld: domain.tld,
-    oxyUserId: domain.oxyUserId,
-    status: domain.status,
-    createdAt: domain.createdAt,
-    updatedAt: domain.updatedAt,
-    expiresAt: domain.expiresAt,
-  };
-}
-
-export function serializeDomainWithRecords(
-  domain: typeof domains.$inferSelect,
-  records: (typeof dnsRecords.$inferSelect)[],
-) {
-  return {
-    ...serializeDomain(domain),
-    records: records
-      .filter((record) => record.domainId === domain.id)
-      .map(serializeDnsRecord),
-  };
-}
-
-function isRecordType(value: unknown): value is RecordType {
-  return typeof value === "string" && (RECORD_TYPES as readonly string[]).includes(value);
-}
-
 /** Postgres rejects a malformed uuid rather than returning no rows, so screen first. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** `?page=&limit=`, clamped. Garbage falls back to the defaults rather than failing. */
+function pagination(req: Request, defaultLimit: number): { page: number; limit: number } {
+  const page = Math.max(1, parseInt(String(req.query.page)) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit)) || defaultLimit));
+  return { page, limit };
+}
 
 async function findOrCreateUser(oxyUserId: string): Promise<string> {
   const db = getDb();
@@ -98,11 +89,18 @@ async function requireOwnedDomain(
   return { ok: true, domainId: domain.id };
 }
 
+function sendRecordFailure(res: Response, failure: RecordMutationFailure): void {
+  const { ok: _ok, status, ...body } = failure;
+  res.status(status).json(body);
+}
+
 // GET /domains -- public directory of all registered domains
+//
+// Public reads serialize through `toPublicDomain`, which carries no owner
+// identifier. The directory used to publish every owner's Oxy user id.
 router.get("/", async (req, res) => {
   try {
-    const page = Math.max(1, parseInt(String(req.query.page)) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit)) || 50));
+    const { page, limit } = pagination(req, 50);
     const db = getDb();
 
     const [rows, [{ total }]] = await Promise.all([
@@ -119,7 +117,13 @@ router.get("/", async (req, res) => {
         .where(eq(domains.status, "active")),
     ]);
 
-    res.json({ domains: rows.map(serializeDomain), total, page, pages: Math.ceil(total / limit) });
+    const body: PublicDomainPage = {
+      domains: rows.map(toPublicDomain),
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    };
+    res.json(body);
   } catch (err) {
     console.error("List domains error:", err);
     res.status(500).json({ error: "Failed to list domains" });
@@ -145,28 +149,28 @@ router.get("/search", async (req, res) => {
       .where(and(eq(domains.status, "active"), ilike(domains.name, pattern)))
       .limit(50);
 
-    res.json(rows.map(serializeDomain));
+    const body: PublicDomain[] = rows.map(toPublicDomain);
+    res.json(body);
   } catch (err) {
     console.error("Search domains error:", err);
     res.status(500).json({ error: "Failed to search domains" });
   }
 });
 
-async function isAvailable(name: string, tld: string): Promise<boolean> {
-  const [existing] = await getDb()
-    .select({ id: domains.id })
-    .from(domains)
-    .where(and(eq(domains.name, name), eq(domains.tld, tld)))
-    .limit(1);
-  return !existing;
+/** Refusals that need no query are answered without opening one. */
+async function availability(input: string): Promise<NativeAvailability> {
+  const query = parseAvailabilityQuery(input);
+  return query.ok ? checkNativeAvailability(getDb(), query) : query.answer;
 }
 
 // GET /domains/check/:name/:tld
+//
+// Native availability only, under the full native policy. A public name's
+// availability is a provider question for the services layer and is never
+// answered here.
 router.get("/check/:name/:tld", async (req, res) => {
   try {
-    const name = req.params.name.toLowerCase();
-    const tld = req.params.tld.toLowerCase();
-    res.json({ domain: `${name}.${tld}`, available: await isAvailable(name, tld) });
+    res.json(await availability(`${req.params.name}.${req.params.tld}`));
   } catch (err) {
     console.error("Check domain error:", err);
     res.status(500).json({ error: "Failed to check domain" });
@@ -174,15 +178,13 @@ router.get("/check/:name/:tld", async (req, res) => {
 });
 
 // GET /domains/check/:domain -- name.tld form
+//
+// Malformed input — a subdomain, a single label — is a 200 with
+// `reason: "invalid"` and a message, not a 400: "can I register this?" has an
+// answer, and it is no.
 router.get("/check/:domain", async (req, res) => {
   try {
-    const parts = req.params.domain.split(".");
-    if (parts.length !== 2) {
-      res.status(400).json({ error: "Format must be name.tld" });
-      return;
-    }
-    const [name, tld] = parts.map((p) => p.toLowerCase());
-    res.json({ domain: `${name}.${tld}`, available: await isAvailable(name, tld) });
+    res.json(await availability(req.params.domain));
   } catch (err) {
     console.error("Check domain error:", err);
     res.status(500).json({ error: "Failed to check domain" });
@@ -216,7 +218,8 @@ router.get("/lookup/:domain", async (req, res) => {
       .where(eq(dnsRecords.domainId, domain.id))
       .orderBy(dnsRecords.createdAt);
 
-    res.json(serializeDomainWithRecords(domain, records));
+    const body: PublicDomainWithRecords = toPublicDomainWithRecords(domain, records);
+    res.json(body);
   } catch (err) {
     console.error("Lookup domain error:", err);
     res.status(500).json({ error: "Failed to look up domain" });
@@ -238,16 +241,13 @@ router.post("/register", requireOxyAuth, async (req, res) => {
       return;
     }
 
-    const cleanName = name.toLowerCase().trim();
-    const cleanTld = tld.toLowerCase().trim().replace(/^\./, "");
-
-    if (!DOMAIN_NAME_RE.test(cleanName)) {
-      res.status(400).json({
-        error:
-          "Domain name must be 1-63 characters, alphanumeric and hyphens only, cannot start or end with a hyphen",
-      });
+    const label = validateNativeLabel(name);
+    if (!label.ok) {
+      res.status(400).json({ error: label.detail });
       return;
     }
+    const cleanName = label.label;
+    const cleanTld = tld.toLowerCase().trim().replace(/^\./, "");
 
     // Reserved TLDs are refused before the registry is consulted, so a stale row
     // from an earlier seed cannot make one registrable. TNP is never
@@ -274,7 +274,8 @@ router.post("/register", requireOxyAuth, async (req, res) => {
 
     const ownerId = await findOrCreateUser(userId);
 
-    const expiresAt = new Date();
+    const now = new Date();
+    const expiresAt = new Date(now);
     expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
     // The unique index decides, not a prior existence check: two concurrent
@@ -297,17 +298,50 @@ router.post("/register", requireOxyAuth, async (req, res) => {
       return;
     }
 
-    res.status(201).json({ ...serializeDomain(inserted[0]), records: [] });
+    const body: OwnedDomainWithRecords = toOwnedDomainWithRecords(inserted[0], [], now);
+    res.status(201).json(body);
   } catch (err) {
     console.error("Register domain error:", err);
     res.status(500).json({ error: "Failed to register domain" });
   }
 });
 
+// GET /domains/owned?page=&limit= (auth required)
+//
+// The dashboard's inventory: a page of the caller's domains with record counts
+// and no records, which are fetched per domain when one is opened.
+router.get("/owned", requireOxyAuth, async (req, res) => {
+  try {
+    const { page, limit } = pagination(req, 20);
+    const now = new Date();
+    const { rows, total } = await listOwnedDomains(getDb(), {
+      oxyUserId: getRequiredOxyUserId(req),
+      page,
+      limit,
+    });
+
+    const body: OwnedDomainPage = {
+      domains: rows.map((row) => toOwnedDomainSummary(row.domain, row.recordCount, now)),
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    };
+    res.json(body);
+  } catch (err) {
+    console.error("Owned domains error:", err);
+    res.status(500).json({ error: "Failed to get your domains" });
+  }
+});
+
 // GET /domains/mine (auth required)
+//
+// DEPRECATED: use GET /domains/owned. Unpaginated and loads every record of
+// every domain. Kept unchanged in shape for web builds and CLIs that still call
+// it; remove once none do.
 router.get("/mine", requireOxyAuth, async (req, res) => {
   try {
     const db = getDb();
+    const now = new Date();
     const rows = await db
       .select()
       .from(domains)
@@ -322,16 +356,53 @@ router.get("/mine", requireOxyAuth, async (req, res) => {
             .where(inArray(dnsRecords.domainId, rows.map((domain) => domain.id)))
             .orderBy(dnsRecords.createdAt);
 
-    res.json(
-      rows.map((domain) => serializeDomainWithRecords(domain, records)),
+    const body: OwnedDomainWithRecords[] = rows.map((domain) =>
+      toOwnedDomainWithRecords(domain, records, now),
     );
+    res.json(body);
   } catch (err) {
     console.error("My domains error:", err);
     res.status(500).json({ error: "Failed to get your domains" });
   }
 });
 
-// DELETE /domains/:id -- release a domain (auth required, must be owner)
+// POST /domains/:id/renew -- renew a native registration (auth required, owner only, free)
+router.post("/:id/renew", requireOxyAuth, async (req: Request<{ id: string }>, res) => {
+  try {
+    if (!UUID_RE.test(req.params.id)) {
+      res.status(404).json({ error: "Domain not found" });
+      return;
+    }
+
+    const outcome = await renewNativeDomain(getDb(), {
+      domainId: req.params.id,
+      oxyUserId: getRequiredOxyUserId(req),
+      now: new Date(),
+    });
+
+    if (!outcome.ok) {
+      const { ok: _ok, status, ...body } = outcome;
+      res.status(status).json(body);
+      return;
+    }
+
+    const body: RenewDomainResponse = toOwnedDomain(outcome.domain, new Date());
+    res.json(body);
+  } catch (err) {
+    console.error("Renew domain error:", err);
+    res.status(500).json({ error: "Failed to renew domain" });
+  }
+});
+
+// DELETE /domains/:id -- release a native domain (auth required, must be owner)
+//
+// This is the explicit, irreversible release of a NATIVE name: the row, its
+// records and its service node are deleted and the name becomes registrable by
+// anyone. It is never the implementation of anything in the services layer —
+// not cancelling a public domain, not ending hosting, not a transfer, not
+// "don't renew". Nothing under `apps/api/src/services/` may call this route or
+// delete from `domains` (issue #62, finding A7; services.md §2). The web asks
+// for the full name to be typed before calling it.
 router.delete("/:id", requireOxyAuth, async (req: Request<{ id: string }>, res) => {
   try {
     const owned = await requireOwnedDomain(req.params.id, getRequiredOxyUserId(req));
@@ -378,37 +449,27 @@ router.get("/:id/records", requireOxyAuth, async (req: Request<{ id: string }>, 
 // POST /domains/:id/records (auth required, must be owner)
 router.post("/:id/records", requireOxyAuth, async (req: Request<{ id: string }>, res) => {
   try {
+    // Validated before the ownership lookup: a malformed record is a 400
+    // whoever sends it, and the contract test can reach it without a database.
+    const parsed = parseCreateDnsRecordRequest(req.body);
+    if (!parsed.ok) {
+      res.status(400).json({ error: parsed.error, code: parsed.code, field: parsed.field });
+      return;
+    }
+
     const owned = await requireOwnedDomain(req.params.id, getRequiredOxyUserId(req));
     if (!owned.ok) {
       res.status(owned.status).json({ error: owned.error });
       return;
     }
 
-    const { type, name, value, ttl } = req.body;
-
-    if (!type || !name || !value) {
-      res.status(400).json({ error: "type, name, and value are required" });
-      return;
-    }
-    if (!isRecordType(type)) {
-      res.status(400).json({ error: `type must be one of ${RECORD_TYPES.join(", ")}` });
+    const result = await createDnsRecord(getDb(), owned.domainId, parsed.value);
+    if (!result.ok) {
+      sendRecordFailure(res, result);
       return;
     }
 
-    // domainId comes from the ownership check, never from the body — spreading
-    // req.body here would let a caller write a record onto someone else's domain.
-    const [record] = await getDb()
-      .insert(dnsRecords)
-      .values({
-        domainId: owned.domainId,
-        type,
-        name: String(name),
-        value: String(value),
-        ttl: typeof ttl === "number" && ttl > 0 ? ttl : 3600,
-      })
-      .returning();
-
-    res.status(201).json(serializeDnsRecord(record));
+    res.status(201).json(serializeDnsRecord(result.value));
   } catch (err) {
     console.error("Add record error:", err);
     res.status(500).json({ error: "Failed to add record" });
@@ -421,6 +482,12 @@ router.put(
   requireOxyAuth,
   async (req: Request<{ id: string; rid: string }>, res) => {
     try {
+      const parsed = parseUpdateDnsRecordRequest(req.body);
+      if (!parsed.ok) {
+        res.status(400).json({ error: parsed.error, code: parsed.code, field: parsed.field });
+        return;
+      }
+
       const owned = await requireOwnedDomain(req.params.id, getRequiredOxyUserId(req));
       if (!owned.ok) {
         res.status(owned.status).json({ error: owned.error });
@@ -431,34 +498,15 @@ router.put(
         return;
       }
 
-      const { type, name, value, ttl } = req.body;
-      if (type !== undefined && !isRecordType(type)) {
-        res.status(400).json({ error: `type must be one of ${RECORD_TYPES.join(", ")}` });
+      // The merged record — stored fields overlaid with the patch — is what
+      // is validated, inside the same lock as the write.
+      const result = await updateDnsRecord(getDb(), owned.domainId, req.params.rid, parsed.value);
+      if (!result.ok) {
+        sendRecordFailure(res, result);
         return;
       }
 
-      // An explicit field whitelist. Spreading req.body into the update would
-      // let a caller move the record to another domain.
-      const patch: Partial<typeof dnsRecords.$inferInsert> = { updatedAt: new Date() };
-      if (type !== undefined) patch.type = type;
-      if (name !== undefined) patch.name = String(name);
-      if (value !== undefined) patch.value = String(value);
-      if (typeof ttl === "number" && ttl > 0) patch.ttl = ttl;
-
-      // The domainId predicate is what stops a record id from another domain
-      // being edited through an owned one.
-      const [record] = await getDb()
-        .update(dnsRecords)
-        .set(patch)
-        .where(and(eq(dnsRecords.id, req.params.rid), eq(dnsRecords.domainId, owned.domainId)))
-        .returning();
-
-      if (!record) {
-        res.status(404).json({ error: "Record not found" });
-        return;
-      }
-
-      res.json(serializeDnsRecord(record));
+      res.json(serializeDnsRecord(result.value));
     } catch (err) {
       console.error("Update record error:", err);
       res.status(500).json({ error: "Failed to update record" });
@@ -482,13 +530,9 @@ router.delete(
         return;
       }
 
-      const deleted = await getDb()
-        .delete(dnsRecords)
-        .where(and(eq(dnsRecords.id, req.params.rid), eq(dnsRecords.domainId, owned.domainId)))
-        .returning({ id: dnsRecords.id });
-
-      if (deleted.length === 0) {
-        res.status(404).json({ error: "Record not found" });
+      const result = await deleteDnsRecord(getDb(), owned.domainId, req.params.rid);
+      if (!result.ok) {
+        sendRecordFailure(res, result);
         return;
       }
 

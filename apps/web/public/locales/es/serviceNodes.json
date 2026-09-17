@@ -24,5 +24,8 @@
     "step3Title": "3. Obtén tu token de autenticación",
     "step3Desc": "Ejecuta <code>tnp auth login</code> para autenticarte con tu cuenta Oxy. El token se almacena localmente y se usa para los comandos siguientes.",
     "footer": "El nodo de servicio se registra con un servidor relay y acepta conexiones entrantes a través de túneles cifrados. Reemplaza <code1>example.ox</code1> con tu dominio real y <code2>localhost:80</code2> con la dirección local de tu servicio."
-  }
+  },
+  "loadError": "No se pudieron cargar tus dominios.",
+  "checkFailed": "error al comprobar",
+  "pagination": "Páginas de dominios"
 }

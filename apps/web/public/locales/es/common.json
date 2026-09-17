@@ -36,7 +36,9 @@
     "type": "Tipo",
     "name": "Nombre",
     "value": "Valor",
-    "ttl": "TTL"
+    "ttl": "TTL",
+    "priority": "Prioridad",
+    "mailHost": "Servidor de correo"
   },
   "addRecord": "Agregar registro",
   "copy": "Copiar",
@@ -48,13 +50,20 @@
   "noDomainsFound": "No se encontraron dominios",
   "searchPlaceholder": "Buscar dominios...",
   "pagination": "{{page}} / {{totalPages}}",
-  "confirmReleaseDomain": "¿Estás seguro de que quieres liberar este dominio?",
   "recordCount_one": "{{count}} registro",
   "recordCount_other": "{{count}} registros",
   "releaseDomain": "liberar dominio",
   "placeholder": {
     "recordName": "@",
-    "recordValue": "192.168.1.1"
+    "recordValue": "192.168.1.1",
+    "recordValueByType": {
+      "A": "192.0.2.1",
+      "AAAA": "2001:db8::1",
+      "CNAME": "host.example.ox",
+      "NS": "ns1.example.ox",
+      "MX": "mail.example.ox",
+      "TXT": "v=spf1 -all"
+    }
   },
   "status": {
     "active": "activo",
@@ -68,5 +77,33 @@
     "registrationFailed": "Error en el registro",
     "loadFailed": "Error al cargar",
     "genericError": "Ocurrió un error"
+  },
+  "retry": "reintentar",
+  "saving": "Guardando...",
+  "recordErrors": {
+    "body_invalid": "No se pudo leer el registro. Recarga la página e inténtalo de nuevo.",
+    "type_invalid": "Elige un tipo de registro: A, AAAA, CNAME, TXT, MX o NS.",
+    "name_required": "Escribe un nombre, o @ para el propio dominio.",
+    "name_invalid": "El nombre solo puede tener letras, números y guiones, con partes separadas por puntos (p. ej. www o _dmarc).",
+    "name_wildcard": "Los registros comodín (*) no están admitidos.",
+    "value_required": "Escribe un valor.",
+    "ipv4_invalid": "Un registro A necesita una dirección IPv4 como 192.0.2.1.",
+    "ipv6_invalid": "Un registro AAAA necesita una dirección IPv6 como 2001:db8::1.",
+    "hostname_invalid": "Escribe un nombre de host como host.example.ox, no una dirección IP ni una URL.",
+    "txt_too_long": "Un valor TXT puede tener como máximo 2048 caracteres.",
+    "txt_invalid_chars": "Un valor TXT no puede contener saltos de línea, tabulaciones ni otros caracteres de control.",
+    "priority_invalid": "Un registro MX necesita una prioridad entre 0 y 65535.",
+    "ttl_invalid": "El TTL debe ser un número entero de segundos entre {{min}} y {{max}}.",
+    "cname_conflict": "Un CNAME no puede compartir su nombre con ningún otro registro.",
+    "duplicate": "Ya existe un registro idéntico.",
+    "record_limit": "Este dominio ha alcanzado su límite de 100 registros."
+  },
+  "availability": {
+    "available": "{{domain}} está disponible",
+    "taken": "{{domain}} ya está registrado",
+    "reserved": "{{domain}} pertenece a un TLD del DNS público. TNP solo registra nombres bajo sus propios TLD, como .ox.",
+    "tldNotAvailable": "El TLD de {{domain}} no está disponible en TNP.",
+    "invalid": "{{domain}} no es un nombre válido. Usa letras, números y guiones, como tunombre.ox.",
+    "subdomain": "{{domain}} es un subdominio y no se puede registrar por separado. El propietario de {{parent}} puede crearlo como registro DNS."
   }
 }

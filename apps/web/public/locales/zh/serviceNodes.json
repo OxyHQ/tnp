@@ -24,5 +24,8 @@
     "step3Title": "3. 获取认证令牌",
     "step3Desc": "运行 <code>tnp auth login</code> 使用你的 Oxy 账户进行认证。令牌存储在本地，用于后续命令。",
     "footer": "服务节点注册到中继服务器，并通过加密隧道接受传入连接。将 <code1>example.ox</code1> 替换为你的实际域名，将 <code2>localhost:80</code2> 替换为你服务的本地地址。"
-  }
+  },
+  "loadError": "无法加载你的域名。",
+  "checkFailed": "检查失败",
+  "pagination": "域名分页"
 }

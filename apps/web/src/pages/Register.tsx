@@ -3,6 +3,11 @@ import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../lib/auth";
 import { apiFetch } from "../lib/api";
+import {
+  availabilityMessageKey,
+  parentDomain,
+  type AvailabilityResult,
+} from "../lib/availability";
 
 interface TLD {
   _id: string;
@@ -15,7 +20,8 @@ export default function Register() {
   const [tlds, setTlds] = useState<TLD[]>([]);
   const [name, setName] = useState("");
   const [tld, setTld] = useState("ox");
-  const [available, setAvailable] = useState<boolean | null>(null);
+  const [availability, setAvailability] = useState<AvailabilityResult | null>(null);
+  const available = availability?.available ?? null;
   const [checking, setChecking] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -34,19 +40,20 @@ export default function Register() {
 
   useEffect(() => {
     if (!name.trim()) {
-      setAvailable(null);
+      setAvailability(null);
       return;
     }
     setChecking(true);
     let ignore = false;
     const timer = setTimeout(() => {
-      apiFetch<{ available: boolean }>(`/domains/check/${name}.${tld}`)
+      const domain = `${name.trim()}.${tld}`;
+      apiFetch<AvailabilityResult>(`/domains/check/${encodeURIComponent(domain)}`)
         .then((data) => {
-          if (!ignore) setAvailable(data.available);
+          if (!ignore) setAvailability({ ...data, domain: data.domain ?? domain });
         })
         .catch((err) => {
           console.error("Domain availability check failed:", err);
-          if (!ignore) setAvailable(null);
+          if (!ignore) setAvailability(null);
         })
         .finally(() => {
           if (!ignore) setChecking(false);
@@ -134,9 +141,15 @@ export default function Register() {
           </select>
         </div>
 
-        {name && !checking && available !== null && (
-          <p className={`font-mono text-sm ${available ? "text-primary-text" : "text-error-text"}`}>
-            {available ? t("register:domainAvailable", { domain: `${name}.${tld}` }) : t("register:domainTaken", { domain: `${name}.${tld}` })}
+        {name && !checking && availability !== null && (
+          <p
+            role="status"
+            className={`font-mono text-sm ${availability.available ? "text-primary-text" : "text-error-text"}`}
+          >
+            {t(availabilityMessageKey(availability), {
+              domain: availability.domain,
+              parent: parentDomain(availability.domain),
+            })}
           </p>
         )}
         {checking && (

@@ -8,8 +8,6 @@
   "title": "Registrar un dominio",
   "signInPrompt": "Inicia sesión con tu cuenta Oxy para registrar un dominio TNP.",
   "placeholder": "tunombre",
-  "domainAvailable": "{{domain}} está disponible",
-  "domainTaken": "{{domain}} ya está ocupado",
   "checkingAvailability": "Verificando disponibilidad...",
   "registerButton": "Registrar {{domain}}",
   "registering": "Registrando...",

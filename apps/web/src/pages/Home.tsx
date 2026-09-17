@@ -2,8 +2,13 @@ import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { apiFetch } from "../lib/api";
+import { apiFetch, errorStatus } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import {
+  availabilityMessageKey,
+  parentDomain,
+  type AvailabilityResult,
+} from "../lib/availability";
 
 const QUICK_LINKS = [
   { to: "/explore", key: "explore" },
@@ -16,23 +21,24 @@ export default function Home() {
   const { t } = useTranslation(["home", "common"]);
   const { isAuthenticated, signIn } = useAuth();
   const [query, setQuery] = useState("");
-  const [result, setResult] = useState<{
-    domain: string;
-    available: boolean;
-  } | null>(null);
+  const [result, setResult] = useState<AvailabilityResult | null>(null);
   const [checking, setChecking] = useState(false);
 
   const checkDomain = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.includes(".")) return;
     setChecking(true);
+    const input = query.trim().toLowerCase();
     try {
-      const data = await apiFetch<{ domain: string; available: boolean }>(
-        `/domains/check/${query}`
+      const data = await apiFetch<AvailabilityResult>(
+        `/domains/check/${encodeURIComponent(input)}`
       );
       setResult(data);
-    } catch {
-      setResult(null);
+    } catch (err) {
+      // An API image older than this build answers a malformed name (a
+      // subdomain, say) with a 400 instead of `reason: "invalid"`. Say the
+      // same thing either way. Remove once that image is no longer served.
+      setResult(errorStatus(err) === 400 ? { domain: input, available: false, reason: "invalid" } : null);
     } finally {
       setChecking(false);
     }
@@ -75,9 +81,13 @@ export default function Home() {
           </form>
           {result && (
             <p
+              role="status"
               className={`mb-6 font-mono text-sm ${result.available ? "text-primary-text" : "text-error-text"}`}
             >
-              {result.available ? t("home:domainAvailable", { domain: result.domain }) : t("home:domainTaken", { domain: result.domain })}
+              {t(availabilityMessageKey(result), {
+                domain: result.domain,
+                parent: parentDomain(result.domain),
+              })}
               {result.available && (
                 <>
                   {" "}

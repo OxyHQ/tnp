@@ -11,6 +11,7 @@ import {
 } from "@tnp/shared-types";
 import { getDb } from "../db/postgres.js";
 import { domains, serviceNodes, tlds } from "../db/schema/index.js";
+import { effectiveServiceNodeStatus } from "../registry/nodes.js";
 
 const router = Router();
 
@@ -126,10 +127,14 @@ router.get("/:domain", async (req, res) => {
     // of the serializer is a shape no consumer's type can be checked against.
     // The web dashboard has been rendering a "last seen" line conditionally
     // since it was written, on a field this endpoint never sent.
+    //
+    // `status` is the effective one: nothing ever writes `offline`, so the
+    // stored column says `online` for a node that stopped heartbeating long
+    // ago. Same rule as `/dns/resolve` (registry/nodes.ts).
     const lookup: ServiceNodeLookup = {
       publicKey: node.publicKey,
       connectedRelay: node.connectedRelay,
-      status: node.status,
+      status: effectiveServiceNodeStatus(node, new Date()),
       lastSeen: node.lastSeen.toISOString(),
     };
     res.json(lookup);

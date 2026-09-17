@@ -36,7 +36,9 @@
     "type": "Type",
     "name": "Nom",
     "value": "Valeur",
-    "ttl": "TTL"
+    "ttl": "TTL",
+    "priority": "Priorité",
+    "mailHost": "Serveur de messagerie"
   },
   "addRecord": "Ajouter un enregistrement",
   "copy": "Copier",
@@ -48,13 +50,20 @@
   "noDomainsFound": "Aucun domaine trouvé",
   "searchPlaceholder": "Rechercher des domaines...",
   "pagination": "{{page}} / {{totalPages}}",
-  "confirmReleaseDomain": "Êtes-vous sûr de vouloir libérer ce domaine ?",
   "recordCount_one": "{{count}} enregistrement",
   "recordCount_other": "{{count}} enregistrements",
   "releaseDomain": "libérer le domaine",
   "placeholder": {
     "recordName": "@",
-    "recordValue": "192.168.1.1"
+    "recordValue": "192.168.1.1",
+    "recordValueByType": {
+      "A": "192.0.2.1",
+      "AAAA": "2001:db8::1",
+      "CNAME": "host.example.ox",
+      "NS": "ns1.example.ox",
+      "MX": "mail.example.ox",
+      "TXT": "v=spf1 -all"
+    }
   },
   "status": {
     "active": "actif",
@@ -68,5 +77,33 @@
     "registrationFailed": "Échec de l'enregistrement",
     "loadFailed": "Échec du chargement",
     "genericError": "Une erreur est survenue"
+  },
+  "retry": "réessayer",
+  "saving": "Enregistrement...",
+  "recordErrors": {
+    "body_invalid": "L'enregistrement n'a pas pu être lu. Rechargez la page et réessayez.",
+    "type_invalid": "Choisissez un type d'enregistrement : A, AAAA, CNAME, TXT, MX ou NS.",
+    "name_required": "Saisissez un nom, ou @ pour le domaine lui-même.",
+    "name_invalid": "Le nom ne peut contenir que des lettres, des chiffres et des tirets, avec des parties séparées par des points (par ex. www ou _dmarc).",
+    "name_wildcard": "Les enregistrements génériques (*) ne sont pas pris en charge.",
+    "value_required": "Saisissez une valeur.",
+    "ipv4_invalid": "Un enregistrement A nécessite une adresse IPv4 comme 192.0.2.1.",
+    "ipv6_invalid": "Un enregistrement AAAA nécessite une adresse IPv6 comme 2001:db8::1.",
+    "hostname_invalid": "Saisissez un nom d'hôte comme host.example.ox, pas une adresse IP ni une URL.",
+    "txt_too_long": "Une valeur TXT ne peut pas dépasser 2048 caractères.",
+    "txt_invalid_chars": "Une valeur TXT ne peut pas contenir de sauts de ligne, de tabulations ni d'autres caractères de contrôle.",
+    "priority_invalid": "Un enregistrement MX nécessite une priorité entre 0 et 65535.",
+    "ttl_invalid": "Le TTL doit être un nombre entier de secondes entre {{min}} et {{max}}.",
+    "cname_conflict": "Un CNAME ne peut partager son nom avec aucun autre enregistrement.",
+    "duplicate": "Un enregistrement identique existe déjà.",
+    "record_limit": "Ce domaine a atteint sa limite de 100 enregistrements."
+  },
+  "availability": {
+    "available": "{{domain}} est disponible",
+    "taken": "{{domain}} est déjà enregistré",
+    "reserved": "{{domain}} relève d'un TLD du DNS public. TNP n'enregistre que des noms sous ses propres TLD, comme .ox.",
+    "tldNotAvailable": "Le TLD de {{domain}} n'est pas disponible sur TNP.",
+    "invalid": "{{domain}} n'est pas un nom valide. Utilisez des lettres, des chiffres et des tirets, comme votrenom.ox.",
+    "subdomain": "{{domain}} est un sous-domaine et ne peut pas être enregistré seul. Le propriétaire de {{parent}} peut le créer comme enregistrement DNS."
   }
 }

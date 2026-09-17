@@ -36,7 +36,9 @@
     "type": "प्रकार",
     "name": "नाम",
     "value": "मान",
-    "ttl": "TTL"
+    "ttl": "TTL",
+    "priority": "प्राथमिकता",
+    "mailHost": "मेल सर्वर"
   },
   "addRecord": "रिकॉर्ड जोड़ें",
   "copy": "कॉपी",
@@ -48,13 +50,20 @@
   "noDomainsFound": "कोई डोमेन नहीं मिला",
   "searchPlaceholder": "डोमेन खोजें...",
   "pagination": "{{page}} / {{totalPages}}",
-  "confirmReleaseDomain": "क्या आप वाकई इस डोमेन को रिलीज करना चाहते हैं?",
   "recordCount_one": "{{count}} रिकॉर्ड",
   "recordCount_other": "{{count}} रिकॉर्ड",
   "releaseDomain": "डोमेन रिलीज करें",
   "placeholder": {
     "recordName": "@",
-    "recordValue": "192.168.1.1"
+    "recordValue": "192.168.1.1",
+    "recordValueByType": {
+      "A": "192.0.2.1",
+      "AAAA": "2001:db8::1",
+      "CNAME": "host.example.ox",
+      "NS": "ns1.example.ox",
+      "MX": "mail.example.ox",
+      "TXT": "v=spf1 -all"
+    }
   },
   "status": {
     "active": "सक्रिय",
@@ -68,5 +77,33 @@
     "registrationFailed": "पंजीकरण विफल",
     "loadFailed": "लोड करने में विफल",
     "genericError": "एक त्रुटि हुई"
+  },
+  "retry": "पुनः प्रयास करें",
+  "saving": "सहेजा जा रहा है...",
+  "recordErrors": {
+    "body_invalid": "रिकॉर्ड पढ़ा नहीं जा सका। पेज रीलोड करके फिर से प्रयास करें।",
+    "type_invalid": "रिकॉर्ड प्रकार चुनें: A, AAAA, CNAME, TXT, MX या NS।",
+    "name_required": "नाम दर्ज करें, या डोमेन के लिए @ लिखें।",
+    "name_invalid": "नाम में केवल अक्षर, अंक और हाइफ़न हो सकते हैं, भाग बिंदुओं से अलग हों (जैसे www या _dmarc)।",
+    "name_wildcard": "वाइल्डकार्ड रिकॉर्ड (*) समर्थित नहीं हैं।",
+    "value_required": "मान दर्ज करें।",
+    "ipv4_invalid": "A रिकॉर्ड को 192.0.2.1 जैसा IPv4 पता चाहिए।",
+    "ipv6_invalid": "AAAA रिकॉर्ड को 2001:db8::1 जैसा IPv6 पता चाहिए।",
+    "hostname_invalid": "host.example.ox जैसा होस्टनाम दर्ज करें, IP पता या URL नहीं।",
+    "txt_too_long": "TXT मान अधिकतम 2048 वर्णों का हो सकता है।",
+    "txt_invalid_chars": "TXT मान में लाइन ब्रेक, टैब या अन्य नियंत्रण वर्ण नहीं हो सकते।",
+    "priority_invalid": "MX रिकॉर्ड को 0 से 65535 के बीच प्राथमिकता चाहिए।",
+    "ttl_invalid": "TTL {{min}} और {{max}} के बीच सेकंड की पूर्ण संख्या होना चाहिए।",
+    "cname_conflict": "CNAME अपना नाम किसी अन्य रिकॉर्ड के साथ साझा नहीं कर सकता।",
+    "duplicate": "एक समान रिकॉर्ड पहले से मौजूद है।",
+    "record_limit": "यह डोमेन 100 रिकॉर्ड की सीमा तक पहुँच गया है।"
+  },
+  "availability": {
+    "available": "{{domain}} उपलब्ध है",
+    "taken": "{{domain}} पहले से पंजीकृत है",
+    "reserved": "{{domain}} सार्वजनिक DNS TLD के अंतर्गत है। TNP केवल अपने TLD, जैसे .ox, के अंतर्गत नाम पंजीकृत करता है।",
+    "tldNotAvailable": "{{domain}} का TLD TNP पर उपलब्ध नहीं है।",
+    "invalid": "{{domain}} मान्य नाम नहीं है। अक्षर, अंक और हाइफ़न का उपयोग करें, जैसे yourname.ox।",
+    "subdomain": "{{domain}} एक सबडोमेन है और अलग से पंजीकृत नहीं किया जा सकता। {{parent}} का स्वामी इसे DNS रिकॉर्ड के रूप में बना सकता है।"
   }
 }

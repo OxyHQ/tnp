@@ -16,7 +16,6 @@ interface Domain {
   name: string;
   tld: string;
   status: string;
-  oxyUserId: string;
 }
 
 export default function Explore() {
@@ -103,7 +102,6 @@ export default function Explore() {
               name={d.name}
               tld={d.tld}
               status={d.status}
-              oxyUserId={d.oxyUserId}
             />
           ))
         )}

@@ -8,5 +8,47 @@
   },
   "heading": "Tus dominios",
   "emptyState": "Aún no has registrado ningún dominio.",
-  "addRecord": "Agregar registro"
+  "addRecord": "Agregar registro",
+  "loading": "Cargando tus dominios...",
+  "loadError": "No se pudieron cargar tus dominios.",
+  "emptyStateRegister": "Registra uno",
+  "pagination": "Páginas de dominios",
+  "recordsLoading": "Cargando registros...",
+  "recordsError": "No se pudieron cargar los registros.",
+  "noRecords": "Aún no hay registros DNS.",
+  "recordsCaption": "Registros DNS de {{domain}}",
+  "actions": "Acciones",
+  "deleteRecordLabel": "Eliminar el registro {{type}} {{name}}",
+  "deleting": "eliminando...",
+  "recordAdded": "Registro agregado",
+  "recordAddFailed": "No se pudo agregar el registro.",
+  "recordDeleteFailed": "No se pudo eliminar el registro.",
+  "renewed": "{{domain}} renovado por un año más",
+  "renewFailed": "No se pudo renovar el dominio.",
+  "released": "{{domain}} liberado",
+  "releaseFailed": "No se pudo liberar el dominio.",
+  "expiry": {
+    "state": {
+      "active": "activo",
+      "renewable": "renovar pronto",
+      "grace": "vencido, periodo de gracia",
+      "expired": "vencido, retenido"
+    },
+    "expiresOn": "Vence el {{date}}",
+    "never": "No vence",
+    "renew": "[renovar por 1 año]",
+    "renewing": "renovando..."
+  },
+  "release": {
+    "title": "¿Liberar {{domain}}?",
+    "consequences": "Liberar este dominio:",
+    "recordsDeleted": "elimina todos sus registros DNS;",
+    "nodeDeleted": "elimina su nodo de servicio, así que el servicio deja de ser accesible a través de TNP;",
+    "nameReleased": "deja el nombre disponible para que cualquiera lo registre.",
+    "irreversible": "Esta acción no se puede deshacer.",
+    "typeToConfirm": "Escribe {{domain}} para confirmar",
+    "cancel": "Cancelar",
+    "confirm": "Liberar dominio",
+    "releasing": "Liberando..."
+  }
 }

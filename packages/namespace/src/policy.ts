@@ -177,3 +177,68 @@ export function validateNativeTld(input: string): TldValidation {
 
   return { ok: true, tld };
 }
+
+/** Whether a second-level label may be registered under a native TLD. */
+export type LabelValidation = { ok: true; label: string } | { ok: false; detail: string };
+
+/**
+ * Validate the registrable label of a native name — the `example` in
+ * `example.ox`.
+ *
+ * The rule the registry has always applied at registration, kept in one place
+ * so an availability check can never call a name available that registration
+ * would then refuse.
+ */
+export function validateNativeLabel(input: string): LabelValidation {
+  const label = input.trim().toLowerCase();
+  if (!label) return { ok: false, detail: "Name is empty" };
+  if (label.length > MAX_LABEL_LENGTH || !LABEL_RE.test(label)) {
+    return {
+      ok: false,
+      detail:
+        "Domain name must be 1-63 characters, alphanumeric and hyphens only, cannot start or end with a hyphen",
+    };
+  }
+  return { ok: true, label };
+}
+
+/** A full native name split into its registrable parts, or why it is not one. */
+export type NativeDomainParse =
+  | { ok: true; name: string; tld: string }
+  | { ok: false; reason: "syntax" | "reserved"; detail: string };
+
+/**
+ * Parse `name.tld` as a registrable TNP-native name.
+ *
+ * Exactly two labels. A deeper name like `a.b.ox` is not something anyone
+ * registers: `a` is a record under `b.ox`, created by its owner. It is refused
+ * with a message saying so, rather than split at some dot and answered as if it
+ * were a different question.
+ *
+ * The TLD is checked before the label, so a name under `.com` is reported as
+ * reserved whatever its label looks like.
+ */
+export function parseNativeDomainName(input: string): NativeDomainParse {
+  const normalized = normalizeName(input);
+  const labels = normalized.split(".");
+
+  if (labels.length < 2 || labels.some((label) => label === "")) {
+    return { ok: false, reason: "syntax", detail: "Format must be name.tld (e.g. example.ox)" };
+  }
+  if (labels.length > 2) {
+    return {
+      ok: false,
+      reason: "syntax",
+      detail: `Only name.tld can be registered. ${normalized} is a subdomain: create it as a record under ${labels.slice(-2).join(".")}.`,
+    };
+  }
+
+  const [label, tldInput] = labels;
+  const tld = validateNativeTld(tldInput);
+  if (!tld.ok) return { ok: false, reason: tld.reason, detail: tld.detail };
+
+  const name = validateNativeLabel(label);
+  if (!name.ok) return { ok: false, reason: "syntax", detail: name.detail };
+
+  return { ok: true, name: name.label, tld: tld.tld };
+}

@@ -1,33 +1,22 @@
 import { Router } from "express";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { config } from "../config.js";
 import { getDb } from "../db/postgres.js";
-import { dnsRecords, domains, serviceNodes, tlds } from "../db/schema/index.js";
+import { tlds } from "../db/schema/index.js";
 import { isReservedTld } from "@tnp/namespace";
+import { decideResolution, loadNameFacts } from "../registry/resolve.js";
 
 const router = Router();
-
-interface DnsAnswer {
-  name: string;
-  type: string;
-  value: string;
-  ttl: number;
-}
-
-/** Record types the registry can store, so an unknown `type=` is not a lookup. */
-const RECORD_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "NS"] as const;
-type RecordType = (typeof RECORD_TYPES)[number];
-
-function isRecordType(value: string): value is RecordType {
-  return (RECORD_TYPES as readonly string[]).includes(value);
-}
 
 /**
  * GET /dns/resolve — the hot path. Every TNP name lookup lands here.
  *
- * Under Mongoose this loaded the whole domain document and filtered its
- * records subdocument array in application code. Records are their own table
- * now, so the filter is an index lookup on (domain_id, name, type).
+ * The facts come from `loadNameFacts` and the answer from `decideResolution`,
+ * a pure function whose rules — CNAME at a name, NODATA against NXDOMAIN,
+ * fresh-heartbeat nodes, parking synthesis — are specified in
+ * docs/architecture/resolution.md. The response only ever grows: `rcode` is an
+ * addition, and resolvers that predate it still read empty `answers` the way
+ * they always have.
  */
 router.get("/resolve", async (req, res) => {
   try {
@@ -39,108 +28,14 @@ router.get("/resolve", async (req, res) => {
       return;
     }
 
-    const parts = fqdn.split(".");
-    if (parts.length < 2) {
-      res.json({ name: fqdn, type: qtype, answers: [] });
-      return;
-    }
-
-    const tld = parts[parts.length - 1];
-    const domainName = parts[parts.length - 2];
-    const subdomain = parts.length > 2 ? parts.slice(0, -2).join(".") : "@";
-
-    // TNP never answers for a label the public DNS root delegates, whatever the
-    // TLD table happens to contain (docs/architecture/naming.md, rule N1).
-    // Checked before the lookup so a reserved row left by an earlier seed cannot
-    // produce an answer that shadows the real name.
-    if (isReservedTld(tld)) {
-      res.json({ name: fqdn, type: qtype, answers: [] });
-      return;
-    }
-
-    const db = getDb();
-
-    const [tldRow] = await db
-      .select({ custom: tlds.custom })
-      .from(tlds)
-      .where(and(eq(tlds.name, tld), eq(tlds.status, "active")))
-      .limit(1);
-
-    if (!tldRow) {
-      res.json({ name: fqdn, type: qtype, answers: [] });
-      return;
-    }
-
-    const [domain] = await db
-      .select({ id: domains.id })
-      .from(domains)
-      .where(and(eq(domains.name, domainName), eq(domains.tld, tld), eq(domains.status, "active")))
-      .limit(1);
-
-    if (!domain) {
-      // Unregistered name under a native TLD: hand out the parking address so a
-      // browser lands on the "available" page.
-      const answers: DnsAnswer[] = [];
-      if (tldRow.custom && config.parkingIp && (qtype === "A" || qtype === "ANY")) {
-        answers.push({ name: fqdn, type: "A", value: config.parkingIp, ttl: 300 });
-      }
-      res.json({ name: fqdn, type: qtype, answers });
-      return;
-    }
-
-    // `name` matches either the bare label or the full FQDN, preserving the
-    // Mongoose behaviour where records could be stored either way.
-    const nameMatches = or(eq(dnsRecords.name, subdomain), eq(dnsRecords.name, fqdn));
-    const typeFilter =
-      qtype === "ANY"
-        ? inArray(dnsRecords.type, [...RECORD_TYPES])
-        : isRecordType(qtype)
-          ? eq(dnsRecords.type, qtype)
-          : // An unknown type cannot match a stored record, so do not query for it.
-            null;
-
-    const rows = typeFilter
-      ? await db
-          .select({ type: dnsRecords.type, value: dnsRecords.value, ttl: dnsRecords.ttl })
-          .from(dnsRecords)
-          .where(and(eq(dnsRecords.domainId, domain.id), nameMatches, typeFilter))
-      : [];
-
-    const answers: DnsAnswer[] = rows.map((row) => ({
-      name: fqdn,
-      type: row.type,
-      value: row.value,
-      ttl: row.ttl,
-    }));
-
-    const [node] = await db
-      .select({
-        publicKey: serviceNodes.publicKey,
-        connectedRelay: serviceNodes.connectedRelay,
-        status: serviceNodes.status,
-      })
-      .from(serviceNodes)
-      .where(eq(serviceNodes.domainId, domain.id))
-      .limit(1);
-
-    // Parking fallback only when the name has neither records nor a live node.
-    if (answers.length === 0 && !node && config.parkingIp) {
-      if (qtype === "A" || qtype === "ANY") {
-        answers.push({ name: fqdn, type: "A", value: config.parkingIp, ttl: 300 });
-      }
-    }
-
-    const response: Record<string, unknown> = { name: fqdn, type: qtype, answers };
-
-    if (node && node.status === "online") {
-      response.overlay = {
-        serviceNodePubKey: node.publicKey,
-        relay: node.connectedRelay,
-        available: true,
-      };
-    }
-
-    res.json(response);
+    const facts = await loadNameFacts(getDb(), fqdn);
+    res.json(
+      decideResolution(facts, qtype, {
+        parkingIp: config.parkingIp,
+        expiryEnforced: config.nativeExpiryEnforced,
+        now: new Date(),
+      }),
+    );
   } catch (err) {
     console.error("DNS resolve error:", err);
     res.status(500).json({ error: "Failed to resolve" });

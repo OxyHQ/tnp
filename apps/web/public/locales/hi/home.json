@@ -8,8 +8,6 @@
   "searchPlaceholder": "yourname.ox",
   "checking": "जांच रहा है...",
   "check": "जांचें",
-  "domainAvailable": "{{domain}} उपलब्ध है",
-  "domainTaken": "{{domain}} पहले से लिया गया है",
   "registerNow": "अभी पंजीकृत करें",
   "signInWithOxy": "Oxy से साइन इन करें",
   "learnMore": "और जानें",

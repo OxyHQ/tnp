@@ -148,6 +148,23 @@ jobs:
             sleep 1
           done
 
+          # Liveness alone proves the process is up. Readiness proves the image
+          # reaches its database: /health/ready runs `select 1` and answers 503
+          # when it cannot, so a 200 here is the pool, not the event loop.
+          for i in $(seq 1 30); do
+            code=$(curl -sS -m 5 -o /tmp/ready.json -w '%{http_code}' http://127.0.0.1:8080/health/ready || true)
+            if [ "$code" = "200" ]; then
+              echo "API ready after ${i}s: $(cat /tmp/ready.json)"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "::error::API never reported ready (last status: ${code})"
+              docker logs api
+              exit 1
+            fi
+            sleep 1
+          done
+
           # The namespace policy has to hold in the built image, not only in the
           # test suite: a reserved TLD must not appear in the table clients cache.
           tlds=$(curl -fsS -m 5 http://127.0.0.1:8080/dns/tlds)
