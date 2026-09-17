@@ -54,6 +54,42 @@ jobs:
       - name: Test
         run: bun run test
 
+  # Constraints, locks and ON CONFLICT are server behaviour, so these tests run
+  # against a real PostgreSQL. Each test file migrates its own database from
+  # empty and drops it afterwards (apps/api/test-db/harness.ts). The command
+  # fails when TEST_DATABASE_URL is missing rather than skipping.
+  database:
+    name: PostgreSQL integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tnp
+          POSTGRES_PASSWORD: tnp
+          POSTGRES_DB: tnp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tnp"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --cpu='*' --os='*'
+
+      - name: Test against PostgreSQL
+        env:
+          TEST_DATABASE_URL: postgres://tnp:tnp@127.0.0.1:5432/postgres
+        run: bun run test:db
+
   # Both AWS images consume the monorepo workspace graph. A missing manifest or
   # source COPY is invisible to TypeScript and unit tests, so both Dockerfiles
   # are built before either can be published. Relay is deliberately absent: its
@@ -122,10 +158,10 @@ jobs:
             exit 1
           fi
 
-  # Publish only after BOTH gates pass, on a push to main. The reusable workflow
+  # Publish only after EVERY gate passes, on a push to main. The reusable workflow
   # only writes immutable API/DNS images; it cannot roll out or scale ECS.
   publish_aws_images:
-    needs: [verify, docker]
+    needs: [verify, database, docker]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/deploy-aws.yml
     permissions:
