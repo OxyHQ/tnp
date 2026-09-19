@@ -23,6 +23,7 @@ import type { DnsResolveAnswer, DnsResolveResponse } from "@tnp/shared-types";
 import { dnsRecords, domains, serviceNodes, tlds } from "../db/schema/index.js";
 import type { Executor } from "./db.js";
 import { isServiceNodeOnline, type NodeLiveness } from "./nodes.js";
+import { escapeLikePattern } from "@oxy.so/utils/sql";
 
 /** TTL of a synthesized parking answer: short, so registering a name takes effect quickly. */
 export const PARKING_TTL_SECONDS = 300;
@@ -59,11 +60,6 @@ export interface ResolutionSettings {
   /** `TNP_NATIVE_EXPIRY_ENFORCED`. */
   expiryEnforced: boolean;
   now: Date;
-}
-
-/** Escape `%`, `_` and `\` for a LIKE pattern. */
-function likeLiteral(value: string): string {
-  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 /**
@@ -123,8 +119,8 @@ export async function loadNameFacts(db: Executor, name: string): Promise<NameFac
             and(
               eq(dnsRecords.domainId, domain.id),
               or(
-                like(dnsRecords.name, `%.${likeLiteral(label)}`),
-                like(dnsRecords.name, `%.${likeLiteral(fqdn)}`),
+                like(dnsRecords.name, `%.${escapeLikePattern(label)}`),
+                like(dnsRecords.name, `%.${escapeLikePattern(fqdn)}`),
               ),
             ),
           ),
