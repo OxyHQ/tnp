@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@oxy.so/core": "^1.3.1",
+    "@oxy.so/utils": "^1.0.1",
     "@tnp/namespace": "workspace:*",
     "@tnp/shared-types": "workspace:*",
     "cors": "^2.8.6",

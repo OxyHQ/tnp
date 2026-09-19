@@ -36,6 +36,7 @@ import {
   toPublicDomain,
   toPublicDomainWithRecords,
 } from "../registry/serialize.js";
+import { likeContains } from "@oxy.so/utils/sql";
 
 const router = Router();
 
@@ -141,7 +142,7 @@ router.get("/search", async (req, res) => {
 
     // `ilike` with the pattern escaped: a raw `%` or `_` from the caller would
     // otherwise be a wildcard, turning a search for "a_b" into "a<any>b".
-    const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    const pattern = likeContains(q);
 
     const rows = await getDb()
       .select()
