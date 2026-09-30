@@ -69,6 +69,17 @@ jobs:
       - name: Log in to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # `--cache-from/--cache-to type=gha` below need the Actions runtime token
+      # and cache URL, which GitHub gives to JavaScript actions and NOT to `run:`
+      # steps; without them buildx skips the cache silently. This workflow only
+      # publishes from refs/heads/main (see the preflight above), so
+      # pull-request code never writes these cache scopes.
+      - name: Expose the Actions cache to buildx
+        uses: crazy-max/ghaction-github-runtime@v4
+
       # A full commit SHA is the only tag. There is intentionally no :latest:
       # existing ECS definitions still reference it, and moving that mutable
       # tag would make a later scale-up select an artefact no reviewed infra
@@ -109,7 +120,15 @@ jobs:
             echo "The immutable SHA tag already exists; refusing to overwrite it."
             digest="$existing_digest"
           elif [ "$existing_digest" = "missing" ]; then
-            docker build --platform linux/arm64 -f "$DOCKERFILE" \
+            # --load puts the image in the local store exactly as the plain
+            # `docker build` did, so the inspect and push below are unchanged.
+            # --provenance=false keeps it a single-platform image manifest,
+            # which the registry verification step reads `config` from.
+            docker buildx build --platform linux/arm64 -f "$DOCKERFILE" \
+              --cache-from "type=gha,scope=$APP" \
+              --cache-to "type=gha,scope=$APP,mode=max" \
+              --provenance=false \
+              --load \
               --label "org.opencontainers.image.revision=$SOURCE_SHA" \
               --label 'org.opencontainers.image.source=https://github.com/OxyHQ/tnp' \
               -t "$image" .

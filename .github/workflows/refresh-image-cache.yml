@@ -1,0 +1,58 @@
+# Weekly from-scratch rebuild of the production API and DNS image's layer cache.
+#
+# The deploy builds with `cache-from: type=gha`, so a step such as the base
+# image pull or an OS package upgrade is reused from the cache for as long as
+# its inputs do not change -- and stops picking up upstream security patches.
+# This rebuilds the SAME Dockerfile and context for the same platform with no
+# cache at all, and writes the fresh layers to the SAME cache scope the deploy
+# reads, so the next deploy starts from patched layers.
+#
+# It never pushes and never deploys: no registry login, no AWS credentials, no
+# image output. Scheduled runs execute on the default branch, so the cache
+# they write is main's, the one deploys read.
+name: Refresh image build cache
+
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-image-cache
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    name: Rebuild ${{ matrix.scope }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dockerfile: Dockerfile.api
+            scope: tnp-api
+          - dockerfile: Dockerfile.dns
+            scope: tnp-dns
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Rebuild without cache and refresh the cache scope
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/arm64
+          push: false
+          no-cache: true
+          pull: true
+          provenance: false
+          cache-to: type=gha,mode=max,scope=${{ matrix.scope }}
