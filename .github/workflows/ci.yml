@@ -18,9 +18,15 @@ on:
   push:
     branches: [main]
 
+# A new push to a pull request supersedes the run still testing the old head,
+# so that run is cancelled. Nothing else is ever cancelled or queued: a push to
+# main gets a group of its own through the run id, since a shared group would
+# still let a newer pending run replace an older pending one even with
+# cancel-in-progress off.
+# Cancelling a main run would also cancel publish_aws_images, which needs it.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('{0}-{1}', github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
