@@ -10,6 +10,12 @@ on:
 env:
   VERSION: "0.2.0"
 
+# Releases run one at a time and are never cancelled, so two pushes cannot race
+# on the same release. A newer pending run may replace an older pending one.
+concurrency:
+  group: release-tnp-client
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest

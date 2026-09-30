@@ -4,6 +4,13 @@ on:
   push:
     branches: [main]
 
+# Deploys run one at a time and are never cancelled: a rollout interrupted
+# half-way is worse than a late one. A newer pending run may replace an older
+# pending one, which is safe because main's newer head contains it.
+concurrency:
+  group: deploy-tnp-pages
+  cancel-in-progress: false
+
 jobs:
   # Deploys used to run unconditionally on every push to main with nothing
   # verifying the code first. The gates run here so a red main cannot ship.
