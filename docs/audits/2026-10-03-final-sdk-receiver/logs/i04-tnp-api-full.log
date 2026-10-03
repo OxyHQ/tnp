@@ -1,0 +1,266 @@
+$ bun test src
+bun test v1.4.2 (744846f84)
+
+src/health.test.ts:
+◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+[tnp-api] TNP_PARKING_IP is not set — parking/custom-TLD A records will be omitted. Set it to the TNP public DNS NLB Elastic IP before serving production traffic.
+(pass) /health > is liveness only: it answers without asking the database [5.44ms]
+(pass) /health/ready > is 200 when the database answers, with the bounded timeout [0.85ms]
+(pass) /health/ready > is 503 when it does not [0.55ms]
+(pass) pingDatabase > is false before a pool exists [0.13ms]
+(pass) pingDatabase > gives up at the timeout when the query never returns [50.35ms]
+(pass) pingDatabase > is false, not a throw, when the query fails [0.14ms]
+
+src/config.test.ts:
+(pass) TNP_NATIVE_EXPIRY_ENFORCED > is off unless explicitly true [0.05ms]
+
+src/seed.test.ts:
+(pass) seed TLDs > seeds at least one TLD — an empty list would pass every check below [0.01ms]
+(pass) seed TLDs > seeds no TLD the public DNS root delegates [0.08ms]
+
+src/ecosystemActivity.test.ts:
+(pass) tnp-api ecosystem activity bootstrap > starts on an attestable task role with no key pair anywhere [0.07ms]
+Ecosystem activity is disabled for tnp-api: no attestable task role and no OXY_SERVICE_API_KEY/OXY_SERVICE_API_SECRET
+(pass) tnp-api ecosystem activity bootstrap > refuses when it can neither attest nor present a pair [0.04ms]
+(pass) tnp-api ecosystem activity bootstrap > canAuthenticateAsOxyService > an attestable task role is enough, with no pair anywhere [0.06ms]
+(pass) tnp-api ecosystem activity bootstrap > canAuthenticateAsOxyService > a complete pair is enough where nothing can attest [0.02ms]
+(pass) tnp-api ecosystem activity bootstrap > canAuthenticateAsOxyService > a half pair is not an identity, and neither is nothing [0.02ms]
+
+src/__tests__/receiverSdk.test.ts:
+(pass) validates receiver identity and revocation in an isolated loopback process [136.11ms]
+
+src/services/money.test.ts:
+(pass) money > parses decimal prices exactly, where float arithmetic would not [0.16ms]
+(pass) money > refuses precision the currency does not have instead of rounding [0.04ms]
+(pass) money > refuses malformed amounts and currencies [0.08ms]
+(pass) money > formats and serializes without losing digits beyond 2^53 [0.07ms]
+(pass) money > never adds different currencies [0.02ms]
+
+src/services/config.test.ts:
+(pass) services flags > an empty environment turns everything off and points at sandbox [0.06ms]
+(pass) services flags > only the literal values 1 and true enable a flag, and each flag is independent [0.06ms]
+(pass) services flags > production is only ever chosen explicitly [0.02ms]
+(pass) secrets > resolves env references and refuses other schemes or missing values [0.11ms]
+(pass) secrets > redaction covers raw and URL-encoded forms [0.04ms]
+
+src/services/publicNames.test.ts:
+(pass) public name normalization > case, trailing root dot and whitespace are canonicalized [0.21ms]
+(pass) public name normalization > IDN input becomes Punycode for storage and stays Unicode for display [0.05ms]
+(pass) public name normalization > a TNP-native or special-use TLD is never a public domain [0.02ms]
+(pass) public name normalization > syntax errors are refused [0.04ms]
+(pass) registrable split > uses the longest suffix the provider offers, not split('.') [0.06ms]
+(pass) registrable split > a host under a registrable name is refused, not truncated
+(pass) registrable split > an extension the provider does not offer is reported as such
+(pass) registrable split > IDN TLDs match their Punycode suffix [0.13ms]
+
+src/routes/domains.release-guard.test.ts:
+(pass) native release is never reused by the services layer > positive control: the matcher sees the real release in routes/domains.ts [0.23ms]
+(pass) native release is never reused by the services layer > negative control: prose about the rule is not a violation [0.01ms]
+(pass) native release is never reused by the services layer > no file under src/services deletes a native registration [1.92ms]
+
+src/routes/nodes.contract.test.ts:
+(pass) POST /nodes/register > accepts the contract shape [12.12ms]
+(pass) POST /nodes/register > names the field it rejects [2.06ms]
+(pass) POST /nodes/heartbeat > accepts the contract shape [1.09ms]
+(pass) POST /nodes/heartbeat > requires the relay the node is attached to [0.85ms]
+
+src/routes/domains.contract.test.ts:
+(pass) public domain DTO > carries the directory fields as wire strings and no owner identifier [0.09ms]
+(pass) public domain DTO > the lookup view with records carries no owner identifier either [0.06ms]
+(pass) public domain DTO > serializes only records belonging to the domain [0.08ms]
+(pass) owner domain DTO > adds the expiry state the dashboard shows, still without the owner's ids [0.09ms]
+(pass) owner domain DTO > the inventory summary counts records rather than embedding them [0.01ms]
+(pass) routes, with no database > POST records: a well-formed record reaches the handler [2.53ms]
+(pass) routes, with no database > POST records: the parser's code and field come back with the 400 [1.46ms]
+(pass) routes, with no database > PUT records: a malformed patch is refused before any lookup [1.42ms]
+(pass) routes, with no database > check: a subdomain is invalid with a message, not a crash or a split [0.71ms]
+(pass) routes, with no database > check: both route forms refuse a reserved TLD as reserved [1.06ms]
+(pass) routes, with no database > check: a registrable name goes on to the registry [0.52ms]
+(pass) routes, with no database > renew: a malformed id is a 404 before any lookup [1.29ms]
+(pass) routes, with no database > owned and the deprecated mine both exist behind auth [1.44ms]
+
+src/routes/relays.contract.test.ts:
+(pass) POST /relays/register > accepts the contract shape [2.19ms]
+(pass) POST /relays/register > rejects the body the client sent before @tnp/shared-types existed [0.72ms]
+(pass) POST /relays/register > rejects a registration missing any field the directory depends on [3.07ms]
+(pass) POST /relays/heartbeat > accepts the contract shape [0.76ms]
+(pass) POST /relays/heartbeat > rejects the body the client sent before @tnp/shared-types existed [0.54ms]
+(pass) the gate itself > an unauthenticated request never reaches validation [24.70ms]
+
+src/registry/resolve.test.ts:
+(pass) names TNP does not answer for > are NXDOMAIN with no answers [0.08ms]
+(pass) unregistered native names > are synthesized to the parking address for A and ANY [0.04ms]
+(pass) unregistered native names > are NODATA for other types, because parking makes the name exist [0.01ms]
+(pass) unregistered native names > are NXDOMAIN when no parking address is configured
+(pass) registered names > answer records of the queried type [0.05ms]
+(pass) registered names > an A query on a name with only a CNAME gets the CNAME, never parking [0.04ms]
+(pass) registered names > a name with records of other types is NODATA, not parking and not NXDOMAIN [0.01ms]
+(pass) registered names > a label with nothing at all is parked for A when parking is configured [0.02ms]
+(pass) registered names > without parking: the registered name itself is NODATA, an unknown label NXDOMAIN [0.05ms]
+(pass) registered names > an empty non-terminal exists [0.02ms]
+(pass) registered names > ANY returns every record at the name [0.01ms]
+(pass) service nodes > an online node with a fresh heartbeat attaches the overlay and suppresses parking [0.02ms]
+(pass) service nodes > a node marked offline counts for nothing: the name parks [0.02ms]
+(pass) service nodes > an 'online' node whose heartbeat is stale counts for nothing either [0.03ms]
+(pass) service nodes > records are still answered alongside an online node [0.01ms]
+(pass) expiry > is not enforced by default: an expired name still resolves [0.03ms]
+(pass) expiry > when enforced, an expired name is withheld: no records, no overlay, parking only [0.02ms]
+(pass) expiry > when enforced, grace still resolves
+(pass) decideParkingPage > mirrors resolution [0.02ms]
+(pass) decideParkingPage > a held name is never offered as available [0.01ms]
+
+src/registry/records.test.ts:
+(pass) findRecordConflict > a CNAME cannot join a name that has any record [0.07ms]
+(pass) findRecordConflict > no other type can join a name that has a CNAME [0.03ms]
+(pass) findRecordConflict > an exact duplicate is refused; the same type with another value is fine [0.01ms]
+(pass) findRecordConflict > a record does not conflict with its own previous version
+(pass) findRecordConflict > other names are unaffected [0.03ms]
+(pass) relativeRecordName > strips the domain from a fully-qualified name [0.03ms]
+(pass) relativeRecordName > leaves relative names alone, including ones that merely end in the label
+
+src/middleware/auth.test.ts:
+2026-10-03T17:40:38.254Z WARN [oxy.auth] refused SESSION_REQUIRED: User access token is not bound to a session {
+  component: "auth",
+  method: "auth",
+  code: "SESSION_REQUIRED",
+  stage: "token",
+  reason: "User access token is not bound to a session",
+  status: 401,
+  optional: true,
+  path: "/guarded",
+}
+2026-10-03T17:40:38.254Z WARN [oxy.auth] 401 after refusal SESSION_REQUIRED: User access token is not bound to a session {
+  component: "auth",
+  method: "requireOxyAuth",
+  code: "SESSION_REQUIRED",
+  stage: "token",
+  reason: "User access token is not bound to a session",
+}
+(pass) a forged, session-less bearer token is refused on a guarded route [2.69ms]
+(pass) a request with no bearer token is refused on a guarded route [1.08ms]
+
+src/utils/hostname.test.ts:
+(pass) isValidHostname > accepts ordinary hostnames [0.06ms]
+(pass) isValidHostname > is case-insensitive
+(pass) isValidHostname > rejects the injection payload that reaches this code path [0.01ms]
+(pass) isValidHostname > rejects characters that are not legal in a DNS label [0.02ms]
+(pass) isValidHostname > rejects malformed label boundaries [0.02ms]
+(pass) isValidHostname > enforces the 63-character label limit [0.03ms]
+(pass) isValidHostname > enforces the 253-character total limit independently of the label limit [0.03ms]
+(pass) escapeHtml > escapes every character that can break out of text or an attribute [0.04ms]
+(pass) escapeHtml > escapes the ampersand first so an escape is not double-encoded into a payload
+(pass) escapeHtml > escapes every occurrence, not just the first
+(pass) escapeHtml > leaves an ordinary hostname untouched
+
+src/services/dns/zone.test.ts:
+(pass) zone hashing > is independent of record order and provider casing [0.52ms]
+(pass) zone hashing > changes when any record or setting changes [0.09ms]
+(pass) merging a change set into the full zone > records the change does not mention — including unsupported types — are carried through [0.43ms]
+(pass) merging a change set into the full zone > update and delete must match an existing record, or the whole merge fails [0.18ms]
+(pass) merging a change set into the full zone > validation: CNAME exclusivity, duplicates, types, TTL, addresses [0.22ms]
+
+src/services/operations/intent.test.ts:
+(pass) intent hashing > key order does not change the hash; values do [0.12ms]
+(pass) intent hashing > bigints and dates are canonical, undefined fields are ignored [0.02ms]
+(pass) intent hashing > idempotency keys are bounded and plain [0.03ms]
+
+src/services/providers/namecheap/xml.test.ts:
+(pass) parseNamecheapDate > MM/DD/YYYY is midnight UTC regardless of the host time zone [0.13ms]
+(pass) parseNamecheapDate > the renew format with a 12-hour clock [0.02ms]
+(pass) parseNamecheapDate > rolled-over and foreign formats are rejected rather than reinterpreted [0.06ms]
+(pass) parseXml > decodes predefined entities once and leaves unknown entities literal [0.06ms]
+(pass) parseXml > rejects DOCTYPE and ENTITY in any case [0.08ms]
+(pass) parseXml > rejects unclosed and garbage documents [0.37ms]
+
+src/services/providers/namecheap/factory.test.ts:
+(pass) ClientIp validation > accepts public IPv4 literals [0.14ms]
+(pass) ClientIp validation > rejects private, loopback, link-local, CGNAT, documentation, multicast and malformed values [0.11ms]
+(pass) namecheapFactory > is named for the adapter and builds both families [0.25ms]
+(pass) namecheapFactory > refuses bad configuration with a credentials error and no request [0.33ms]
+
+src/services/providers/namecheap/client.test.ts:
+(pass) endpoint and request encoding > sandbox and production accounts call their own allowlisted endpoint [3.09ms]
+(pass) endpoint and request encoding > an endpoint in account config is ignored [0.49ms]
+(pass) endpoint and request encoding > global parameters travel in a POST form body, never the URL [0.66ms]
+(pass) endpoint and request encoding > the API key is not reachable by serializing the adapter [0.19ms]
+(pass) HTTP 200 with Status=ERROR > is a failure, mapped by error number [1.56ms]
+(pass) HTTP 200 with Status=ERROR > the documented IP-not-whitelisted response is a credentials error [0.33ms]
+(pass) HTTP 200 with Status=ERROR > getInfo on a name this account does not hold is not_found [0.80ms]
+(pass) HTTP 200 with Status=ERROR > 4011103 describing the user name is a configuration problem, not a missing domain [0.27ms]
+(pass) HTTP 200 with Status=ERROR > domain taken on create is not_available and proves nothing was applied [1.98ms]
+(pass) HTTP 200 with Status=ERROR > order creation failed citing funds is insufficient_funds [0.94ms]
+(pass) HTTP 200 with Status=ERROR > a provider-side error after a create was sent is unknown_outcome [3.40ms]
+(pass) HTTP 200 with Status=ERROR > the same provider-side number on a read is provider_unavailable, not unknown_outcome [0.39ms]
+(pass) HTTP 200 with Status=ERROR > Status=ERROR with no error element is still a failure [0.19ms]
+(pass) HTTP 200 with Status=ERROR > Status=OK with a create that did not register is unknown_outcome [0.85ms]
+(pass) hostile and broken bodies > a DOCTYPE or ENTITY declaration is rejected before parsing [0.19ms]
+(pass) hostile and broken bodies > a DOCTYPE on a mutating call is unknown_outcome [0.17ms]
+(pass) hostile and broken bodies > malformed and truncated bodies are failures for reads and unknown for writes [0.71ms]
+(pass) hostile and broken bodies > a well-formed response without the expected element is not a success [0.16ms]
+(pass) hostile and broken bodies > a body over the cap is abandoned while streaming, without a content-length [0.61ms]
+(pass) hostile and broken bodies > a declared content-length over the cap is refused, and is unknown for a write [0.88ms]
+(pass) HTTP and transport failures > 429 and 5xx on a read are retryable failures, on a write unknown [0.30ms]
+(pass) HTTP and transport failures > a failure proven before sending is submitted:false even for a write [0.27ms]
+(pass) HTTP and transport failures > a reset or unclassified transport error on a write is unknown_outcome [0.17ms]
+(pass) timeouts > timeout on domains.create, domains.renew and dns.setHosts is unknown_outcome, submitted [63.24ms]
+(pass) timeouts > timeout on a read is not unknown_outcome [20.45ms]
+(pass) timeouts > a caller's abort during a write is unknown_outcome [0.39ms]
+(pass) beforeSubmit and quota ordering > a write acquires quota, awaits beforeSubmit, then sends — in that order [10.80ms]
+(pass) beforeSubmit and quota ordering > every mutating command awaits beforeSubmit exactly once, immediately before its request [3.19ms]
+(pass) beforeSubmit and quota ordering > a rejecting beforeSubmit means no request is sent [0.13ms]
+(pass) beforeSubmit and quota ordering > a rejecting beforeSubmit on create sends no create [3.25ms]
+(pass) beforeSubmit and quota ordering > quota refusal means no request and no beforeSubmit [0.17ms]
+(pass) beforeSubmit and quota ordering > search-path commands are interactive; everything else is critical [1.57ms]
+(pass) secrets never leak into errors > the API key is redacted from provider descriptions and transport causes [0.43ms]
+(pass) secrets never leak into errors > the EPP code is redacted, plain and base64, from every error path [1.60ms]
+(pass) secrets never leak into errors > contact values echoed by the provider are redacted [0.32ms]
+
+src/services/providers/namecheap/dns.test.ts:
+(pass) readZone (domains.dns.getHosts) > records, MX preferences, decoded TXT, EmailType and DNS authority [0.40ms]
+(pass) readZone (domains.dns.getHosts) > a multi-label suffix is sent as the TLD [0.35ms]
+(pass) readZone (domains.dns.getHosts) > a domain not on Namecheap DNS reports servedByProvider false [0.28ms]
+(pass) readZone (domains.dns.getHosts) > the documented 'not using proper DNS servers' error is unsupported [0.20ms]
+(pass) replaceZone (domains.dns.setHosts) > sends the complete record set, numbered, with MXPref only on MX, plus EmailType [0.37ms]
+(pass) replaceZone (domains.dns.setHosts) > a zone read back and replaced unchanged round-trips byte for byte [0.45ms]
+(pass) replaceZone (domains.dns.setHosts) > refuses, without sending, anything it cannot write faithfully [0.49ms]
+(pass) replaceZone (domains.dns.setHosts) > IsSuccess other than true is unknown_outcome [0.27ms]
+(pass) replaceZone (domains.dns.setHosts) > too many records is a refusal, not an unknown outcome [0.18ms]
+(pass) replaceZone (domains.dns.setHosts) > capabilities declare no validation and document the missing compare-and-swap [0.02ms]
+
+src/services/providers/namecheap/registrar.test.ts:
+(pass) listSuffixes (domains.getTldList) > maps each Tld's API flags and year limits [0.37ms]
+(pass) listSuffixes (domains.getTldList) > a flag that is not a boolean is a provider failure, not false [0.41ms]
+(pass) checkAvailability (domains.check) > available, taken, premium, per-name error and unanswered names [0.36ms]
+(pass) checkAvailability (domains.check) > more than 50 names are split into documented-size batches [1.15ms]
+(pass) getPrices (users.getPricing) > requests one product and prices per year, taking the larger of Price and YourPrice [0.43ms]
+(pass) getPrices (users.getPricing) > a category for another action is not read as this one [0.32ms]
+(pass) getPrices (users.getPricing) > a price with more precision than the currency allows is refused, not rounded [0.45ms]
+(pass) getBalance (users.getBalances) > AvailableBalance in the stated currency [0.22ms]
+(pass) register (domains.create) > sends every contact role, nameservers and privacy; returns ids and the charge [0.91ms]
+(pass) register (domains.create) > maxCost below the quoted price refuses before anything is bought [0.41ms]
+(pass) register (domains.create) > maxCost in another currency refuses; maxCost equal to the price proceeds [0.85ms]
+(pass) register (domains.create) > a premium name is refused without a create [0.52ms]
+(pass) register (domains.create) > extended-attribute extensions, IDN names, bad years and bad contacts send nothing [0.36ms]
+(pass) register (domains.create) > an extension with no price for the term is unsupported [0.44ms]
+(pass) renew (domains.renew) > returns the new expiry parsed as UTC, and the charge [0.69ms]
+(pass) renew (domains.renew) > an expired domain is refused as documented [0.40ms]
+(pass) getInfo (domains.getInfo) > dates, privacy, DNS and lifecycle [0.43ms]
+(pass) getInfo (domains.getInfo) > the documented example shape: no IsUsingOurDNS means unknown, not false [0.25ms]
+(pass) getInfo (domains.getInfo) > a domain another user shares with this account is not_found [0.27ms]
+(pass) getInfo (domains.getInfo) > an unparseable date is a provider failure, not a null expiry [0.27ms]
+(pass) getInfo (domains.getInfo) > lifecycle mapping table with unknown fallback [0.03ms]
+(pass) listDomains (domains.getList) > rows and paging [0.46ms]
+(pass) listDomains (domains.getList) > page sizes outside the documented 10–100 are refused, not clamped [0.18ms]
+(pass) contacts > getContacts reads the four roles and ignores the privacy-service contacts [0.76ms]
+(pass) contacts > setContacts sends all four roles and requires IsSuccess [0.55ms]
+(pass) registrar lock > getLock reads RegistrarLockStatus; setLock sends LOCK/UNLOCK [0.44ms]
+(pass) transfers > transferIn sends an alphanumeric EPP code as-is and maps StatusID [0.48ms]
+(pass) transfers > transferIn refuses unlisted extensions and terms other than one year [0.21ms]
+(pass) transfers > getTransferStatus maps documented ids and keeps the raw text [0.81ms]
+(pass) transfers > a non-numeric transfer id is refused before sending [0.09ms]
+(pass) capabilities > nothing is claimed as validated, and transfer_out is manual [0.05ms]
+
+ 193 pass
+ 0 fail
+ 725 expect() calls
+Ran 193 tests across 23 files. [604.00ms]

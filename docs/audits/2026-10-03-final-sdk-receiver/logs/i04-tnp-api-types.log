@@ -1,0 +1,4 @@
+$ tsc --noEmit
+src/__tests__/fixtures/receiver-sdk-probe.ts(66,42): error TS7006: Parameter 'req' implicitly has an 'any' type.
+src/__tests__/fixtures/receiver-sdk-probe.ts(66,47): error TS7006: Parameter 'res' implicitly has an 'any' type.
+error: script "typecheck" exited with code 1

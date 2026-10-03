@@ -1,0 +1,53 @@
+{
+  "name": "tnp",
+  "version": "0.1.0",
+  "license": "SEE LICENSE IN LICENSE",
+  "private": true,
+  "packageManager": "bun@1.4.2",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"bun run dev:api\" \"bun run dev:web\"",
+    "dev:api": "cd apps/api && bun run dev",
+    "dev:web": "cd apps/web && bun run dev",
+    "seed": "cd apps/api && bun run seed",
+    "typecheck": "bun run --filter '*' typecheck",
+    "validate:agents-md": "bun ./scripts/check-agents-md-size.mjs && bun ./scripts/test-check-agents-md-size.mjs",
+    "validate:boundaries": "bun ./scripts/check-import-boundaries.ts && bun ./scripts/test-check-import-boundaries.ts",
+    "test": "bun run --filter '*' test",
+    "test:db": "bun run --filter '@tnp/api' test:db",
+    "release": "release-it",
+    "test:edge": "bun test scripts/edge-activity.test.ts"
+  },
+  "release-it": {
+    "git": {
+      "tagName": "tnp@${version}",
+      "tagAnnotation": "Release tnp@${version}",
+      "commitMessage": "chore: release tnp@${version}"
+    },
+    "github": {
+      "release": true,
+      "releaseName": "tnp@${version}"
+    },
+    "npm": {
+      "publish": false
+    }
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3",
+    "release-it": "^20.2.1"
+  },
+  "overrides": {
+    "@oxy.so/telemetry": "^1.2.0",
+    "@oxy.so/contracts": "file:/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-contracts-4.9.0.tgz",
+    "@oxy.so/core": "file:/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-core-4.2.0.tgz",
+    "@oxy.so/protocol": "file:/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-protocol-1.2.2.tgz",
+    "@oxy.so/services": "file:/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-services-11.1.0.tgz",
+    "@oxy.so/bloom": "6.2.1"
+  },
+  "resolutions": {
+    "@oxy.so/telemetry": "^1.2.0"
+  }
+}

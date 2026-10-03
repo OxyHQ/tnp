@@ -1,0 +1,12 @@
+bun install v1.4.2 (744846f84)
+Resolving dependencies
+Resolved, downloaded and extracted [86]
+warn: incorrect peer dependency "react-native@0.87.1"
+
+warn: incorrect peer dependency "react-native-gesture-handler@3.0.2"
+Saved lockfile
+
++ concurrently@10.0.5
++ release-it@20.2.1
+
+902 packages installed [2.18s]
