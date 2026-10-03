@@ -1,6 +1,16 @@
 name: Deploy to Cloudflare Pages
 
 on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact reviewed current main SHA
+        required: true
+        type: string
+      ci_run_id:
+        description: Successful push CI run for this exact main SHA
+        required: true
+        type: string
   push:
     branches: [main]
 
@@ -15,12 +25,24 @@ jobs:
   # Deploys used to run unconditionally on every push to main with nothing
   # verifying the code first. The gates run here so a red main cannot ship.
   verify:
+    if: github.ref == 'refs/heads/main' && vars.OXY_1519_ROLLOUT_HOLD != 'true'
     name: Typecheck and test
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify manual release source and CI
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_CI_RUN_ID: ${{ inputs.ci_run_id }}
+          EXPECTED_CI_WORKFLOW: .github/workflows/ci.yml
+          OXY_1519_ROLLOUT_HOLD: ${{ vars.OXY_1519_ROLLOUT_HOLD }}
+        run: python3 .github/scripts/verify-manual-frontend.py
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -36,11 +58,13 @@ jobs:
         run: bun run test
 
   deploy:
+    if: github.ref == 'refs/heads/main' && vars.OXY_1519_ROLLOUT_HOLD != 'true'
     needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: read
       deployments: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
 
@@ -63,6 +87,16 @@ jobs:
       # publishes nothing. Pinned to a major so the deploy path cannot change with
       # no diff to show for it; wrangler reads its credentials from the
       # environment, hence `env:`.
+      - name: Verify manual release source and CI
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_CI_RUN_ID: ${{ inputs.ci_run_id }}
+          EXPECTED_CI_WORKFLOW: .github/workflows/ci.yml
+          OXY_1519_ROLLOUT_HOLD: ${{ vars.OXY_1519_ROLLOUT_HOLD }}
+        run: python3 .github/scripts/verify-manual-frontend.py
+
       - name: Deploy to Cloudflare Pages
         run: bunx wrangler@4 pages deploy apps/web/dist --project-name=tnp --branch=main
         env:
