@@ -1,0 +1,38 @@
+{
+  "sourcePin": "4b759df0b15cc3e832fa9bcdca77c3765b51ba38",
+  "classification": "planned; not installed or active",
+  "runtimeUnchanged": true,
+  "inputs": [
+    {
+      "path": "apps/api/src/services/orders.ts",
+      "sha256": "3ede27c2e14d82a1b5cff450b5eb695cbb0e4c90324687850e358cda9183f52f"
+    },
+    {
+      "path": "apps/api/src/services/config.ts",
+      "sha256": "959428c7336a5e6cb77c5442357353fa8a2112cbd5caf1e5646cc69ca429b0d3"
+    },
+    {
+      "path": "apps/api/src/services/routes.ts",
+      "sha256": "7eee9e83c37293f60c1fab6d7375dd40be7c8d81cffc426270da067aae3cde92"
+    },
+    {
+      "path": "apps/api/package.json",
+      "sha256": "eb601dfdc394cd315e8534b9c2c97e354d2b6c3a589627972492e9e7b496ad17"
+    },
+    {
+      "path": "bun.lock",
+      "sha256": "724c9d9f1dc71ca17025b84f6466447bd3e863e1d8abd28199f832b121a6538d"
+    }
+  ],
+  "sdkRuntimeDependencyOrImportMatches": 0,
+  "productionAuthorizer": "unconfiguredPayments throws PaymentsNotConfiguredError",
+  "sandboxAuthorizer": "sandboxNoCharge is not processor evidence",
+  "validation": "read-only tracked-source census and git diff --check; no runtime tests needed for documentation-only change",
+  "notExecuted": [
+    "SDK install",
+    "credential creation",
+    "merchant registration",
+    "payment or provider operation",
+    "deployment"
+  ]
+}

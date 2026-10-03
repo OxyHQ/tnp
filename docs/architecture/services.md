@@ -291,6 +291,32 @@ This supersedes "payment method undecided". It does **not** revive #14's
 FairCoin-*only* requirement: which of Peable's rails (`faircoin`, `card` in
 USD/EUR) are offered is a pricing decision below, not an architectural one.
 
+### Consumer classification — 2026-10-03
+
+TNP is a **planned consumer**, not an installed or active Peable integration.
+The reviewed source at [`4b759df`](https://github.com/OxyHQ/tnp/tree/4b759df)
+has no `@peable.to/sdk` dependency or runtime import. The production
+`unconfiguredPayments` authorizer in `apps/api/src/services/orders.ts` still
+throws `PaymentsNotConfiguredError`; `sandboxNoCharge` only acknowledges an
+explicit sandbox request and is not processor evidence. Services flags default
+to off and remain independent of the network layer.
+
+The upstream package prerequisite is now available: published
+`@peable.to/sdk@0.2.2` / `@peable.to/shared-types@0.3.0` includes checkout
+idempotency, refund/transfer surfaces and the ten canonical webhook event
+families ([registry evidence](https://github.com/OxyHQ/Peable/pull/98)). This
+removes the old missing-SDK-surface assumption; it does not implement the TNP
+order transition, select a rail, establish a merchant namespace or approve
+retail prices/renewal consent. The published billing provider's approved
+Mercaria cohort is not a TNP subscription or renewal authorization.
+
+No TNP runtime, dependencies, configuration or deployment is changed by this
+classification. Before connecting it, retain the identity/rail/pricing gates
+below and test timeout/retry with the same intent key, parameter conflicts,
+verified raw-body ingress, order ownership and deduplication, atomic paid/order
+transitions, and separation from provider fulfilment. No speculative payment
+adapter is introduced simply because the SDK is available.
+
 ### What integrating Peable changes in the order flow
 
 Peable confirms payment **asynchronously** (a signed webhook when the intent is
@@ -315,8 +341,8 @@ quote -> order (awaiting_payment) + Peable checkout session, one idempotency key
   `expiresAt` bounds the quote's, and a price change past the quote's tolerance
   needs new consent (§5), not a silent adjustment.
 - A line that fails after payment (registration refused, `manual_review`
-  resolved as not registered) is refunded through Peable's refund flow once it
-  is exposed in the SDK, per the published refund policy. Nothing is refunded
+  resolved as not registered) uses Peable's published refund flow only after it
+  is authorized by TNP's refund policy using the published SDK surface. Nothing is refunded
   automatically while an operation is `unknown`.
 
 ### Still open before sales
@@ -328,9 +354,9 @@ quote -> order (awaiting_payment) + Peable checkout session, one idempotency key
    top-up.
 2. Retail pricing policy (today a quote is cost plus fees, no margin), taxes and
    invoices.
-3. Renewal consent and how a renewal is charged (Peable has no subscriptions
-   yet: each renewal is a new intent the owner pays, or TNP-owned renewals wait
-   for that capability).
+3. Renewal consent and how a renewal is charged. The published Peable billing
+   operations do not define TNP's renewal policy or activate a TNP cohort; each
+   renewal needs its explicitly approved owner/payment flow.
 4. Refund and cancellation policy, and support responsibilities.
 5. Peable-side setup: an Oxy service credential for TNP with `payments:read` +
    `payments:write` (test environment first), TNP registered as a Peable
