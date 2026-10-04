@@ -16,7 +16,7 @@
     "test:sandbox:namecheap": "bun test test-sandbox"
   },
   "dependencies": {
-    "@oxy.so/core": "^3.0.0",
+    "@oxy.so/core": "4.2.0",
     "@oxy.so/utils": "^1.0.1",
     "@tnp/namespace": "workspace:*",
     "@tnp/shared-types": "workspace:*",

@@ -40,9 +40,14 @@
     "release-it": "^20.2.1"
   },
   "overrides": {
-    "@oxy.so/telemetry": "^1.2.0"
+    "@oxy.so/telemetry": "1.2.0",
+    "@oxy.so/contracts": "4.9.0",
+    "@oxy.so/core": "4.2.0",
+    "@oxy.so/protocol": "1.2.2",
+    "@oxy.so/services": "11.1.0",
+    "@oxy.so/bloom": "6.2.1"
   },
   "resolutions": {
-    "@oxy.so/telemetry": "^1.2.0"
+    "@oxy.so/telemetry": "1.2.0"
   }
 }
