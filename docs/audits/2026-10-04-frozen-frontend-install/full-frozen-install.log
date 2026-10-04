@@ -1,0 +1,6 @@
+bun install v1.4.2 (744846f84)
+
++ concurrently@10.0.5
++ release-it@20.2.1
+
+240 packages installed [418.00ms]

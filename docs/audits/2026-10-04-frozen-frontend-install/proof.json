@@ -1,0 +1,61 @@
+{
+  "kind": "tnp-frozen-filter-frontend-source-proof-v1",
+  "sourceSha": "42d03272aac16f3f223f12a4cc7e11b7e9d7a381",
+  "parentSha": "a0f6b351bf67b9a49e4c71ab70fdc5420756b453",
+  "change": "Frontend deploy install retains @tnp/web filter and now enforces frozen-lockfile plus minimum-release-age=0.",
+  "sources": [
+    {
+      "path": ".github/workflows/deploy.yml",
+      "sha256": "75116923dbbb8777c158ef0644fbc465eca4f8da8bd638c59073bd612c5ee47c",
+      "bytes": 3625
+    },
+    {
+      "path": "package.json",
+      "sha256": "72b77317a1aba52ad8060703b09918bd645ab4ae789040546f258589a827c9f3",
+      "bytes": 1542
+    },
+    {
+      "path": "apps/web/package.json",
+      "sha256": "59f5b433785ead1fa12881e5826fa188b0f151a4701107ea94d737a130b069a8",
+      "bytes": 1791
+    },
+    {
+      "path": "bun.lock",
+      "sha256": "28f10df6795087c67bdbb197943f519edc6db8ed50e4c50b8068305355e8234d",
+      "bytes": 326275
+    }
+  ],
+  "records": [
+    {
+      "path": "docs/audits/2026-10-04-frozen-frontend-install/frozen-filter-install.log",
+      "sha256": "5d108e1204acab4b297211fbc1bab7a4faca8cd1cf3f768c28c35fcc8377d19f",
+      "bytes": 63
+    },
+    {
+      "path": "docs/audits/2026-10-04-frozen-frontend-install/full-frozen-install.log",
+      "sha256": "0fd71d65aa09e54c2e1978545df946af5a4a2c31c1056669e37db11cab1b313d",
+      "bytes": 109
+    },
+    {
+      "path": "docs/audits/2026-10-04-frozen-frontend-install/typecheck.log",
+      "sha256": "0f0f130580b86ab3aa3ea850bec4cabb427339558e7c21ff408e7ed251286859",
+      "bytes": 419
+    },
+    {
+      "path": "docs/audits/2026-10-04-frozen-frontend-install/test.log",
+      "sha256": "fc177d50a0c8f2c6ebef432ae92b73d8f1dc422a91e39bd4cbd5caf834e49434",
+      "bytes": 61912
+    }
+  ],
+  "checks": {
+    "filteredInstallExit": 0,
+    "fullFrozenInstallExit": 0,
+    "typecheckExit": 0,
+    "rootTestExit": 0,
+    "tests": 505,
+    "packages": 8,
+    "manifestAndLockUnchanged": true,
+    "noBackendRuntimeChanges": true
+  },
+  "limits": "Local checks only; PR CI and merged-current-main dispatch remain. No Cloudflare/AWS/DB writes."
+}
