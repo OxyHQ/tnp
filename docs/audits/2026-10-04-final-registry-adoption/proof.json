@@ -1,0 +1,158 @@
+{
+  "source": "4a7b5437f1869b77f5ed652a50a0b07871c4b8be",
+  "sources": [
+    {
+      "path": "apps/api/package.json",
+      "sha256": "721766d7b66f1bd51aebcf000bb6eedc5227fda190ba0d10d775ef1573f7dd93"
+    },
+    {
+      "path": "apps/dns-server/package.json",
+      "sha256": "450a5259de645d9a50ca066d280279d9ce6e58f63efee11f01220961cf249362"
+    },
+    {
+      "path": "apps/relay/package.json",
+      "sha256": "da6444b7634e5133a121e81f1d4b826ef419cfc28130e2c2e0886dd5c6056966"
+    },
+    {
+      "path": "apps/web/package.json",
+      "sha256": "59f5b433785ead1fa12881e5826fa188b0f151a4701107ea94d737a130b069a8"
+    },
+    {
+      "path": "bun.lock",
+      "sha256": "28f10df6795087c67bdbb197943f519edc6db8ed50e4c50b8068305355e8234d"
+    },
+    {
+      "path": "package.json",
+      "sha256": "72b77317a1aba52ad8060703b09918bd645ab4ae789040546f258589a827c9f3"
+    }
+  ],
+  "records": [
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/bloom-final-importers.json",
+      "sha256": "959b4d5a019c724e63fb644eda7845ddfb22850d548384114c385ff52ce226c5",
+      "bytes": 350
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/check-0.log",
+      "sha256": "b27fcde1c0efa6ba1a23243dacc31df995367757241ba091b5eaa7bb67dc9307",
+      "bytes": 1400
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/check-1.log",
+      "sha256": "e9425658dc80f90bec6ca2830eb4d3d827fed8f8ad333a81713da5a53a04f8a9",
+      "bytes": 13245
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/check-2.log",
+      "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+      "bytes": 15
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/check-3.log",
+      "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+      "bytes": 15
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/check-4.log",
+      "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+      "bytes": 15
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/check-5.log",
+      "sha256": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+      "bytes": 9
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/checks-final.json",
+      "sha256": "527d938d60573baae8cc2657a018ead5f00c34206d2e293ec5bdccb5b7f972d6",
+      "bytes": 1169
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/contracts-registry.json",
+      "sha256": "fb1ded2797bdbd0ca31460f3cba087f078a86dc201365c923da9fcc23b07ed7b",
+      "bytes": 380
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/core-registry.json",
+      "sha256": "99b7f8a1cc87cf46ff54b3113a1911a938f39b4f086537e0a4138ee38dd035b7",
+      "bytes": 375
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/failed.json",
+      "sha256": "e45a08861b705a4bd04a1ac5bec7dfdc902621991070d99debf9062f9e6cfe3d",
+      "bytes": 89
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/intent.json",
+      "sha256": "bdcd9c9d4dad4d6bb1f0f2402bb2828d45ac5d9549627ece2756eb0389eaf925",
+      "bytes": 147
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/local-final-checks.json",
+      "sha256": "126544fcec6ee82bf3054a2e03812f061ce04529cd396b855752c09e0bd905f5",
+      "bytes": 1076
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/materialization-frozen.log",
+      "sha256": "c5bffd82c761b190c261c9981ae168fe4006bf68325bbdbfbfea3d00784237a2",
+      "bytes": 62
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/materialization-repair-intent.json",
+      "sha256": "48ae7aef6c0b05ac45393e07b503b1a6019404e6072c268908c94ab23cf32627",
+      "bytes": 527
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/mcp-registry.json",
+      "sha256": "cc279f4f5b1ca68041f6f0d3583e4d9dc218bd7c0b77846207aa3b981086d7ac",
+      "bytes": 373
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/preflight.json",
+      "sha256": "5a27ce8f67b0c248f333f77e3297ce24ae6de09eb02771b13e2cfe89c4c36aab",
+      "bytes": 248
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/protocol-registry.json",
+      "sha256": "cc0b427dca92d55ea5e1debe7e76580618a26f997b2c888b8484537b64b70bbd",
+      "bytes": 379
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/registry.json",
+      "sha256": "a39da224fafeec388f0ac27e08ea13cf666427a0177b67f7b077c65cadb59df0",
+      "bytes": 415373
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/services-registry.json",
+      "sha256": "444599f0eb56d104d64c288ed3a6544163e54430c0f275c2feec219d5f624611",
+      "bytes": 381
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/tnp-frozen.log",
+      "sha256": "aee88468de3b61e338da388ba104a71e7e98542e626aadcd498bc344263b41de",
+      "bytes": 98
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/tnp-installed.json",
+      "sha256": "9a2623def427b99a37e2b73f76abf9e6418324916b1378aaaf13cde9833952a5",
+      "bytes": 1595
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/tnp-resolve.log",
+      "sha256": "fab44c6082f0802a33bade8d7843f313216ed7dee49e37af83288c8d52e0f97b",
+      "bytes": 511
+    }
+  ],
+  "validation": {
+    "receiverPassed": 1,
+    "sdkImporterMembers": 4742,
+    "bloomImporterMembers": 20940,
+    "typesBuildExport": "passed"
+  },
+  "limits": [
+    "Published registry archives and all installed SDK importer members were compared byte for byte. Stale same-version candidate materializations were retained and repaired with a frozen install; their setup failures remain in the records.",
+    "Local web export proves compilation, not browser/native acceptance or deployed public-client configuration. Required PR/main CI and root image/promotion remain separate.",
+    "No production database, provider writes, grants, credentials or auth fixtures were changed. Receiver uses a loopback-only synthetic issuer in an isolated child.",
+    "Filtered receiver tests are not full-suite acceptance. Syra notifications retain their pre-existing scope denial; no permission expansion. TNP DNS/relay checks do not claim an API image was deployed."
+  ]
+}
