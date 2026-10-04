@@ -73,7 +73,7 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dependencies
-        run: bun install --filter '@tnp/web'
+        run: bun install --filter '@tnp/web' --frozen-lockfile --minimum-release-age=0
 
       - name: Build
         run: cd apps/web && bun run build
