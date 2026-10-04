@@ -1,0 +1,699 @@
+$ bun run --filter '*' test
+@tnp/protocol test: bun test v1.4.2 (744846f84)
+@tnp/shared-types test: bun test v1.4.2 (744846f84)
+@tnp/crypto test: bun test v1.4.2 (744846f84)
+@tnp/namespace test: bun test v1.4.2 (744846f84)
+@tnp/crypto test: 
+@tnp/crypto test: src/grants.test.ts:
+@tnp/shared-types test: 
+@tnp/shared-types test: src/service-nodes.test.ts:
+@tnp/protocol test: 
+@tnp/protocol test: src/v1.test.ts:
+@tnp/namespace test: 
+@tnp/namespace test: src/policy.test.ts:
+@tnp/shared-types test: (pass) parseRegisterServiceNodeRequest > accepts the contract shape [0.17ms]
+@tnp/shared-types test: (pass) parseRegisterServiceNodeRequest > names the field for every rejection [0.09ms]
+@tnp/shared-types test: (pass) parseServiceNodeHeartbeatRequest > accepts the contract shape [0.03ms]
+@tnp/shared-types test: (pass) parseServiceNodeHeartbeatRequest > requires the relay the node is attached to [0.01ms]
+@tnp/shared-types test: 
+@tnp/shared-types test: src/dns-records.test.ts:
+@tnp/shared-types test: (pass) isValidIpv4 > accepts strict dotted quads [0.30ms]
+@tnp/shared-types test: (pass) isValidIpv4 > rejects everything a loose parser lets through [0.04ms]
+@tnp/namespace test: (pass) reserved TLD set > is populated — a truncated snapshot would fail open [0.02ms]
+@tnp/namespace test: (pass) reserved TLD set > covers the TLDs TNP currently ships as its own [0.08ms]
+@tnp/namespace test: (pass) reserved TLD set > covers ordinary public TLDs [0.03ms]
+@tnp/namespace test: (pass) reserved TLD set > covers IETF special-use names absent from the root zone [0.02ms]
+@tnp/namespace test: (pass) reserved TLD set > does not reserve TNP's own native TLD
+@tnp/namespace test: (pass) reserved TLD set > normalizes case and the trailing root dot [0.01ms]
+@tnp/shared-types test: (pass) isValidIpv6 > accepts every legal text form [0.27ms]
+@tnp/namespace test: (pass) classifyName > a native TLD is TNP's [0.12ms]
+@tnp/namespace test: (pass) classifyName > a public TLD is never TNP's [0.03ms]
+@tnp/namespace test: (pass) classifyName > classification does not depend on registration state
+@tnp/namespace test: (pass) classifyName > a reserved TLD stays public even if the registry claims it [0.06ms]
+@tnp/namespace test: (pass) classifyName > a single-label name is public [0.02ms]
+@tnp/shared-types test: (pass) isValidIpv6 > rejects malformed addresses [0.16ms]
+@tnp/namespace test: (pass) classifyName > an empty policy table makes everything public [0.04ms]
+@tnp/namespace test: (pass) classifyName > does not match a TLD as a substring of a longer label
+@tnp/namespace test: (pass) tldOf > returns the last label
+@tnp/namespace test: (pass) tldOf > returns empty for a single label
+@tnp/namespace test: (pass) normalizeName > lowercases, trims and drops one trailing dot
+@tnp/namespace test: (pass) validateNativeTld > accepts a plausible native TLD [0.06ms]
+@tnp/namespace test: (pass) validateNativeTld > normalizes before validating [0.02ms]
+@tnp/namespace test: (pass) validateNativeTld > rejects a TLD the public root delegates, and says why [0.04ms]
+@tnp/namespace test: (pass) validateNativeTld > rejects IETF special-use names as reserved, not as syntax errors [0.03ms]
+@tnp/namespace test: (pass) validateNativeTld > rejects malformed labels as syntax errors [0.04ms]
+@tnp/namespace test: (pass) validateNativeTld > rejects the IDN prefix [0.01ms]
+@tnp/namespace test: (pass) validateNativeTld > accepts the longest legal label
+@tnp/shared-types test: (pass) normalizeHostname > lowercases and drops one trailing root dot [0.33ms]
+@tnp/namespace test: 
+@tnp/namespace test: src/native-name.test.ts:
+@tnp/shared-types test: (pass) normalizeHostname > enforces label and total length and LDH syntax [0.22ms]
+@tnp/namespace test: (pass) validateNativeLabel > accepts and lowercases a legal label [0.05ms]
+@tnp/namespace test: (pass) validateNativeLabel > refuses what registration refuses [0.06ms]
+@tnp/shared-types test: (pass) parseCreateDnsRecordRequest > accepts one well-formed record of every type, normalized [0.30ms]
+@tnp/namespace test: (pass) parseNativeDomainName > splits a registrable native name, normalizing case and the root dot [0.09ms]
+@tnp/namespace test: (pass) parseNativeDomainName > a subdomain is invalid and says it is a record, never a crash or a split [0.04ms]
+@tnp/namespace test: (pass) parseNativeDomainName > a single label or an empty label is a format error [0.02ms]
+@tnp/shared-types test: (pass) parseCreateDnsRecordRequest > MX takes a structured priority and stores the resolver's form [0.07ms]
+@tnp/namespace test: (pass) parseNativeDomainName > a reserved TLD is reported as reserved, whatever the label [0.02ms]
+@tnp/namespace test: (pass) parseNativeDomainName > an illegal label under a native TLD is a syntax error [0.03ms]
+@tnp/namespace test: 
+@tnp/namespace test: src/expiry.test.ts:
+@tnp/shared-types test: (pass) parseCreateDnsRecordRequest > MX without a priority, or with one out of range, is refused [0.06ms]
+@tnp/shared-types test: (pass) parseCreateDnsRecordRequest > TTL defaults only when absent; out of range is an error, not a silent replacement [0.05ms]
+@tnp/shared-types test: (pass) parseCreateDnsRecordRequest > names: @ or relative labels, lowercased; wildcards refused because the resolver cannot answer them [0.31ms]
+@tnp/shared-types test: (pass) parseCreateDnsRecordRequest > each type refuses a value of another type's shape [0.17ms]
+@tnp/shared-types test: (pass) parseCreateDnsRecordRequest > TXT is bounded and free of control characters [0.10ms]
+@tnp/namespace test: (pass) nativeExpiryState > a registration without an expiry is active forever [0.03ms]
+@tnp/namespace test: (pass) nativeExpiryState > is active until the renewal window opens [0.02ms]
+@tnp/shared-types test: (pass) parseCreateDnsRecordRequest > type, value and body shape [0.05ms]
+@tnp/shared-types test: (pass) parseCreateDnsRecordRequest > names the field each error belongs to [0.02ms]
+@tnp/namespace test: (pass) nativeExpiryState > the renewal window opens exactly 90 days before expiry [0.01ms]
+@tnp/namespace test: (pass) nativeExpiryState > grace starts at the instant of expiry and lasts 30 days inclusive
+@tnp/namespace test: (pass) nativeExpiryState > is expired once the grace period is over [0.01ms]
+@tnp/namespace test: (pass) renewal and serving > only an active name cannot be renewed [0.01ms]
+@tnp/namespace test: (pass) renewal and serving > only an expired name stops being served [0.01ms]
+@tnp/namespace test: (pass) nextNativeExpiry > an early renewal extends from the current expiry, keeping the time left [0.04ms]
+@tnp/namespace test: (pass) nextNativeExpiry > a lapsed name renews from now, not from its old expiry [0.01ms]
+@tnp/namespace test: (pass) nextNativeExpiry > never mutates its input
+@tnp/namespace test: (pass) nextNativeExpiry > a renewed name is active again, so a second renewal is refused [0.03ms]
+@tnp/namespace test: 
+@tnp/namespace test:  41 pass
+@tnp/namespace test:  0 fail
+@tnp/namespace test:  161 expect() calls
+@tnp/namespace test: Ran 41 tests across 3 files. [6.00ms]
+@tnp/shared-types test: (pass) parseUpdateDnsRecordRequest > validates only the fields present [0.26ms]
+@tnp/shared-types test: (pass) mergeDnsRecordUpdate > validates the resulting record, not the patch alone [0.08ms]
+@tnp/namespace test: Exited with code 0
+@tnp/shared-types test: (pass) mergeDnsRecordUpdate > MX keeps the half of its value the update does not send [0.27ms]
+@tnp/protocol test: (pass) frame codec > round-trips every field [0.43ms]
+@tnp/protocol test: (pass) frame codec > carries the full 64-bit circuit id without loss [0.04ms]
+@tnp/protocol test: (pass) frame codec > an empty payload is valid [0.02ms]
+@tnp/protocol test: (pass) frame codec > header is exactly HEADER_SIZE bytes [0.01ms]
+@tnp/shared-types test: (pass) mergeDnsRecordUpdate > a legacy record that was never valid cannot be carried through an unrelated edit [0.39ms]
+@tnp/protocol test: (pass) frame decoding rejects malformed input > a short frame [0.06ms]
+@tnp/shared-types test: (pass) mergeDnsRecordUpdate > changing an A record to MX needs a priority [0.05ms]
+@tnp/shared-types test: 
+@tnp/shared-types test: src/relays.test.ts:
+@tnp/protocol test: (pass) frame decoding rejects malformed input > a wrong version, distinctly from a parse failure [0.04ms]
+@tnp/protocol test: (pass) frame decoding rejects malformed input > an unknown frame type [0.06ms]
+@tnp/protocol test: (pass) frame decoding rejects malformed input > an unknown flag bit, rather than ignoring it [0.03ms]
+@tnp/protocol test: (pass) frame decoding rejects malformed input > a declared length larger than the frame [0.04ms]
+@tnp/protocol test: (pass) frame decoding rejects malformed input > a declared length smaller than the frame [0.02ms]
+@tnp/protocol test: (pass) frame decoding rejects malformed input > a declared length beyond MAX_FRAME_PAYLOAD [0.03ms]
+@tnp/protocol test: (pass) frame decoding rejects malformed input > encoding refuses an oversized payload locally [0.02ms]
+@tnp/protocol test: (pass) frame decoding rejects malformed input > encoding refuses an unknown flag bit locally [0.03ms]
+@tnp/protocol test: (pass) structured errors > round-trip code, scope and detail [0.09ms]
+@tnp/protocol test: (pass) structured errors > every code is distinct [0.01ms]
+@tnp/protocol test: (pass) structured errors > detail is capped, and cut on a character boundary [0.07ms]
+@tnp/protocol test: (pass) structured errors > a truncated error payload is rejected [0.03ms]
+@tnp/shared-types test: (pass) normalizeRelayEndpoint > keeps a canonical endpoint untouched [0.08ms]
+@tnp/shared-types test: (pass) normalizeRelayEndpoint > collapses the spellings that would otherwise be different relays [0.04ms]
+@tnp/shared-types test: (pass) normalizeRelayEndpoint > keeps a path, because a relay may be mounted under one
+@tnp/shared-types test: (pass) normalizeRelayEndpoint > refuses anything that is not a bare ws endpoint [0.07ms]
+@tnp/protocol test: (pass) circuit identifiers > are never the reserved zero [0.85ms]
+@tnp/shared-types test: (pass) parseRegisterRelayRequest > accepts the contract shape and returns a canonical endpoint [0.11ms]
+@tnp/shared-types test: (pass) parseRegisterRelayRequest > rejects the body the client sent before @tnp/shared-types existed [0.01ms]
+@tnp/shared-types test: (pass) parseRegisterRelayRequest > names the missing field for every field the registry depends on [0.09ms]
+@tnp/shared-types test: (pass) parseRegisterRelayRequest > rejects capacity numbers a Postgres integer column cannot hold [0.06ms]
+@tnp/shared-types test: (pass) parseRegisterRelayRequest > treats an absent location as unlabelled, not as an error [0.03ms]
+@tnp/shared-types test: (pass) parseRegisterRelayRequest > rejects bodies that are not objects [0.01ms]
+@tnp/protocol test: (pass) circuit identifiers > are not sequential [0.24ms]
+@tnp/shared-types test: (pass) parseRelayHeartbeatRequest > accepts an endpoint and canonicalizes it the same way registration did [0.02ms]
+@tnp/shared-types test: (pass) parseRelayHeartbeatRequest > rejects the body the client sent before @tnp/shared-types existed [0.01ms]
+@tnp/shared-types test: 
+@tnp/shared-types test: src/services.test.ts:
+@tnp/protocol test: (pass) circuit identifiers > span the full 64-bit space [0.13ms]
+@tnp/protocol test: (pass) CircuitTable > is per connection: the same id in two tables is two circuits [0.06ms]
+@tnp/protocol test: (pass) CircuitTable > refuses a duplicate rather than evicting the incumbent [0.01ms]
+@tnp/protocol test: (pass) CircuitTable > enforces its capacity [0.04ms]
+@tnp/protocol test: (pass) CircuitTable > refuses the reserved zero id
+@tnp/protocol test: (pass) CircuitTable > drain empties the table and returns everything, for teardown [0.04ms]
+@tnp/protocol test: (pass) flow control > a sender cannot exceed its window [0.04ms]
+@tnp/protocol test: (pass) flow control > credit is granted back as the receiver consumes [0.02ms]
+@tnp/protocol test: (pass) flow control > a grant beyond the initial window is clamped
+@tnp/protocol test: (pass) flow control > the circuit window is a real ceiling across its streams [0.05ms]
+@tnp/protocol test: (pass) flow control > a failed consume debits neither window [0.01ms]
+@tnp/protocol test: (pass) flow control > negative amounts are rejected rather than granting credit [0.03ms]
+@tnp/protocol test: (pass) capabilities > replay protection and flow control are required, not negotiable away [0.01ms]
+@tnp/protocol test: (pass) capabilities > onion routing is NOT required — it is not implemented
+@tnp/protocol test: 
+@tnp/protocol test: src/frames.test.ts:
+@tnp/shared-types test: (pass) services contracts > availability accepts a comma list or repeated params, bounded [0.17ms]
+@tnp/shared-types test: (pass) services contracts > quote years default to 1 and are bounded integers [0.18ms]
+@tnp/protocol test: (pass) encodeFrame layout > writes a 5-byte header before the payload [0.17ms]
+@tnp/protocol test: (pass) encodeFrame layout > encodes circuitId as a big-endian uint32 [0.05ms]
+@tnp/protocol test: (pass) encodeFrame layout > writes the frame type in byte index 4 [0.02ms]
+@tnp/protocol test: (pass) encodeFrame layout > copies the payload starting at byte index 5 [0.02ms]
+@tnp/protocol test: (pass) encodeFrame layout > produces a 5-byte frame for an empty payload
+@tnp/shared-types test: (pass) services contracts > zone changes: each action has its required parts, and the list is bounded [0.29ms]
+@tnp/protocol test: (pass) encode/decode round-trip > round-trips a DATA frame [0.07ms]
+@tnp/protocol test: (pass) encode/decode round-trip > round-trips a OPEN frame
+@tnp/protocol test: (pass) encode/decode round-trip > round-trips a OPENED frame
+@tnp/protocol test: (pass) encode/decode round-trip > round-trips a CLOSE frame
+@tnp/protocol test: (pass) encode/decode round-trip > round-trips a ERROR frame
+@tnp/protocol test: (pass) encode/decode round-trip > preserves the maximum uint32 circuitId (0xFFFFFFFF)
+@tnp/protocol test: (pass) encode/decode round-trip > preserves a zero circuitId
+@tnp/shared-types test: (pass) services contracts > applying needs the preview's hash [0.14ms]
+@tnp/protocol test: (pass) encode/decode round-trip > round-trips a large 64 KiB payload byte-for-byte [0.43ms]
+@tnp/protocol test: (pass) encode/decode round-trip > decodes an empty payload as a zero-length array [0.02ms]
+@tnp/protocol test: (pass) decodeFrame with a byte offset > decodes a frame embedded inside a larger buffer [0.03ms]
+@tnp/protocol test: (pass) decodeFrame rejects malformed input > throws when the buffer is shorter than the 5-byte header [0.04ms]
+@tnp/protocol test: (pass) decodeFrame rejects malformed input > throws on an unknown frame type byte [0.03ms]
+@tnp/shared-types test: (pass) services contracts > contacts are validated and normalized, and optional fields are dropped when empty [0.41ms]
+@tnp/protocol test: (pass) decodeFrame rejects malformed input > throws on a frame type byte above the defined range [0.02ms]
+@tnp/protocol test: 
+@tnp/protocol test:  51 pass
+@tnp/protocol test:  0 fail
+@tnp/protocol test:  497 expect() calls
+@tnp/protocol test: Ran 51 tests across 2 files. [13.00ms]
+@tnp/shared-types test: (pass) services contracts > an order needs quote ids, a valid contact and explicit acceptance [0.40ms]
+@tnp/shared-types test: 
+@tnp/shared-types test:  42 pass
+@tnp/shared-types test:  0 fail
+@tnp/shared-types test:  287 expect() calls
+@tnp/shared-types test: Ran 42 tests across 4 files. [13.00ms]
+@tnp/protocol test: Exited with code 0
+@tnp/shared-types test: Exited with code 0
+@tnp/relay test: bun test v1.4.2 (744846f84)
+@tnp/api test: bun test v1.4.2 (744846f84)
+@tnp/web test: bun test v1.4.2 (744846f84)
+@tnp/relay test: 
+@tnp/relay test: src/ecosystemActivity.test.ts:
+@tnp/client test: bun test v1.4.2 (744846f84)
+@tnp/web test: 
+@tnp/web test: tests/availability.test.ts:
+@tnp/api test: 
+@tnp/api test: src/health.test.ts:
+@tnp/web test: (pass) availabilityMessageKey > maps every reason, and the legacy reason-less refusal to 'taken' [0.14ms]
+@tnp/client test: 
+@tnp/client test: src/config.test.ts:
+@tnp/web test: (pass) availabilityMessageKey > every key it can return exists in all five locales [0.35ms]
+@tnp/web test: (pass) locale parity for the namespaces this change touched > common: every locale has exactly the English keys [1.43ms]
+@tnp/web test: (pass) locale parity for the namespaces this change touched > dashboard: every locale has exactly the English keys [0.37ms]
+@tnp/web test: (pass) locale parity for the namespaces this change touched > serviceNodes: every locale has exactly the English keys [0.37ms]
+@tnp/web test: (pass) locale parity for the namespaces this change touched > home: every locale has exactly the English keys [0.10ms]
+@tnp/web test: (pass) locale parity for the namespaces this change touched > register: every locale has exactly the English keys [0.06ms]
+@tnp/web test: 
+@tnp/web test: tests/theme-tokens.test.ts:
+@tnp/web test: (pass) the app scans enough files to be a real check > finds the component tree [0.22ms]
+@tnp/web test: (pass) Bloom is the single source of colour > the app declares no colour tokens of its own [0.10ms]
+@tnp/web test: (pass) Bloom is the single source of colour > Bloom's token map is imported [0.01ms]
+@tnp/web test: (pass) Bloom is the single source of colour > no base token is wrapped in hsl() [0.02ms]
+@tnp/web test: (pass) surface roles are never used as text > text-accent is not used [0.35ms]
+@tnp/web test: (pass) surface roles are never used as text > text-muted is not used [0.29ms]
+@tnp/web test: (pass) surface roles are never used as text > text-card is not used [0.25ms]
+@tnp/web test: (pass) surface roles are never used as text > text-background is not used [0.26ms]
+@tnp/client test: (pass) parsePrivacyLevel > accepts the level the client can actually provide [0.06ms]
+@tnp/client test: (pass) parsePrivacyLevel > rejects "private" by name, because multi-hop routing is not implemented [0.10ms]
+@tnp/web test: (pass) surface roles are never used as text > text-surface is not used [0.26ms]
+@tnp/client test: (pass) parsePrivacyLevel > distinguishes a planned level from an unknown one [0.06ms]
+@tnp/client test: (pass) parsePrivacyLevel > rejects near-misses rather than coercing them [0.07ms]
+@tnp/web test: (pass) surface roles are never used as text > text-popover is not used [0.24ms]
+@tnp/client test: (pass) parsePrivacyLevel > does not inherit a level from Object.prototype [0.07ms]
+@tnp/client test: (pass) applyStoredConfig > fills defaults for absent keys [0.08ms]
+@tnp/client test: (pass) applyStoredConfig > stored values override defaults [0.04ms]
+@tnp/client test: [tnp] stored privacy level "private" is unavailable: multi-hop onion routing is not implemented yet (see #22) Falling back to "access".
+@tnp/client test: (pass) applyStoredConfig > normalizes a stored "private" back to "access" [0.08ms]
+@tnp/web test: (pass) surface roles are never used as text > text-sidebar is not used [0.24ms]
+@tnp/client test: [tnp] stored unknown privacy level "paranoid". The only available level is "access". Falling back to "access".
+@tnp/client test: [tnp] stored unknown privacy level "". The only available level is "access". Falling back to "access".
+@tnp/client test: [tnp] stored unknown privacy level "PRIVATE". The only available level is "access". Falling back to "access".
+@tnp/client test: [tnp] stored unknown privacy level "42". The only available level is "access". Falling back to "access".
+@tnp/client test: [tnp] stored unknown privacy level "null". The only available level is "access". Falling back to "access".
+@tnp/client test: (pass) applyStoredConfig > normalizes any unusable stored level, not only the known-planned one [0.10ms]
+@tnp/client test: (pass) applyStoredConfig > leaves a valid stored level alone [0.02ms]
+@tnp/client test: 
+@tnp/client test: src/relay-node.contract.test.ts:
+@tnp/web test: (pass) no colour bypasses the theme > no Tailwind palette classes [0.49ms]
+@tnp/web test: (pass) no colour bypasses the theme > no literal white or black backgrounds [0.16ms]
+@tnp/web test: (pass) no colour bypasses the theme > no hex literals outside the theme seed [0.10ms]
+@tnp/web test: 
+@tnp/web test: tests/services-money.test.ts:
+@tnp/web test: (pass) currency decimals come from ISO 4217 via Intl > 0, 2 and 3 decimal currencies [1.09ms]
+@tnp/web test: (pass) currency decimals come from ISO 4217 via Intl > an invalid code is null, not a guess [0.04ms]
+@tnp/crypto test: (pass) a well-formed chain verifies > identity -> device -> node, scoped to a domain [30.44ms]
+@tnp/web test: (pass) formatMinorUnits > two decimals [6.95ms]
+@tnp/web test: (pass) formatMinorUnits > zero decimals: the minor unit is the unit [0.13ms]
+@tnp/web test: (pass) formatMinorUnits > three decimals [0.22ms]
+@tnp/web test: (pass) formatMinorUnits > values beyond 2^53 keep every digit [0.41ms]
+@tnp/web test: (pass) formatMinorUnits > negative amounts, including under one unit [0.25ms]
+@tnp/web test: (pass) formatMinorUnits > follows the locale's separators [0.37ms]
+@tnp/web test: (pass) formatMinorUnits > a locale with its own digits gets its own digits in the fraction too [0.32ms]
+@tnp/web test: (pass) formatMinorUnits > rejects anything that is not an integer string [0.03ms]
+@tnp/web test: 
+@tnp/web test: tests/services-status.test.ts:
+@tnp/web test: (pass) availability never overstates > only `available` is presented as success and offers a quote [0.05ms]
+@tnp/web test: (pass) availability never overstates > unknown and unsupported are distinct from each other and from available [0.13ms]
+@tnp/web test: (pass) an unconfirmed outcome is never a failure > unknown and manual_review are warnings, not errors [0.02ms]
+@tnp/web test: (pass) an unconfirmed outcome is never a failure > polling stops on the API's terminal set only [0.03ms]
+@tnp/web test: (pass) services availability from /services/status > a 404 means not deployed, and is not an error [0.02ms]
+@tnp/web test: (pass) services availability from /services/status > no response or a server error is unreachable
+@tnp/web test: (pass) services availability from /services/status > the catalog flag gates the area [0.02ms]
+@tnp/web test: (pass) services availability from /services/status > each purchase block reason has its own explanation
+@tnp/web test: (pass) every presented label is translated in every locale > en [0.27ms]
+@tnp/web test: (pass) every presented label is translated in every locale > zh [0.11ms]
+@tnp/web test: (pass) every presented label is translated in every locale > es [0.09ms]
+@tnp/web test: (pass) every presented label is translated in every locale > hi [0.07ms]
+@tnp/web test: (pass) every presented label is translated in every locale > fr [0.05ms]
+@tnp/web test: (pass) search input > splits, trims, de-duplicates and caps at the API limit [0.13ms]
+@tnp/web test: (pass) search input > empty input is no search [0.01ms]
+@tnp/web test: (pass) search input > names are URL-encoded in the query [0.02ms]
+@tnp/web test: (pass) search input > idempotency keys fit the API's 8–128 character rule and differ [0.12ms]
+@tnp/web test: (pass) zone draft > rows become the wire changes the API parser accepts [0.30ms]
+@tnp/web test: (pass) zone draft > an invalid row is reported, not truncated [0.03ms]
+@tnp/web test: (pass) zone draft > an intent is the same only for the same changes against the same base [0.04ms]
+@tnp/web test: 
+@tnp/web test: tests/owned-domains.test.ts:
+@tnp/web test: (pass) loadInventoryPage > uses the paginated endpoint when the API has it [0.19ms]
+@tnp/web test: (pass) loadInventoryPage > falls back to the legacy endpoint on a 404 only, counting its records [0.16ms]
+@tnp/web test: (pass) loadInventoryPage > any other failure is an error, not a silent fallback [0.08ms]
+@tnp/web test: (pass) canRenew > only inside the renewal window or after expiry, and never on a legacy response [0.03ms]
+@tnp/web test: 
+@tnp/web test:  55 pass
+@tnp/web test:  0 fail
+@tnp/web test:  158 expect() calls
+@tnp/web test: Ran 55 tests across 5 files. [29.00ms]
+@tnp/web test: Exited with code 0
+@tnp/crypto test: (pass) S3: a substituted key must not verify > a key the owner never authorized is refused [14.50ms]
+@tnp/client test: (pass) RelayNode.start > registers with a body POST /relays/register accepts [22.33ms]
+@tnp/crypto test: (pass) S3: a substituted key must not verify > an attacker's own self-rooted chain is refused [17.45ms]
+@tnp/client test: (pass) RelayNode.start > publishes the canonical form of the endpoint the operator typed [17.71ms]
+@tnp/client test: (pass) RelayNode.start > refuses to start without a public endpoint, before binding a port [0.37ms]
+@tnp/crypto test: (pass) S3: a substituted key must not verify > a key authorized for one domain does not verify for another [16.51ms]
+@tnp/client test: (pass) RelayNode.start > runs unregistered when no auth token is configured [21.12ms]
+@tnp/client test: 
+@tnp/client test: src/proxy.activity.test.ts:
+@tnp/relay test: (pass) relay uses the canonical activity region prefix for Cloudflare PoPs [0.15ms]
+@tnp/relay test: (pass) a visitor country or address cannot become an activity location [0.03ms]
+@tnp/relay test: 
+@tnp/relay test:  2 pass
+@tnp/relay test:  0 fail
+@tnp/relay test:  3 expect() calls
+@tnp/relay test: Ran 2 tests across 1 file. [81.00ms]
+@tnp/crypto test: (pass) S3: a substituted key must not verify > a key authorized for a different purpose does not verify [19.00ms]
+@tnp/relay test: Exited with code 0
+@tnp/api test: ◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+@tnp/api test: [tnp-api] TNP_PARKING_IP is not set — parking/custom-TLD A records will be omitted. Set it to the TNP public DNS NLB Elastic IP before serving production traffic.
+@tnp/crypto test: (pass) chain structure > a leaf cannot mint its own siblings [15.53ms]
+@tnp/crypto test: (pass) chain structure > links must actually connect [25.91ms]
+@tnp/crypto test: (pass) chain structure > a self-issued grant is refused [3.04ms]
+@tnp/client test: (pass) DNS traffic observation > reports actual upstream send and receive with only direction, never the queried name or address [49.40ms]
+@tnp/crypto test: (pass) chain structure > an over-long chain is refused rather than walked [8.62ms]
+@tnp/crypto test: (pass) chain structure > an empty chain is refused [8.80ms]
+@tnp/crypto test: (pass) time and revocation > an expired grant is refused [9.10ms]
+@tnp/crypto test: (pass) time and revocation > a not-yet-valid grant is refused [9.02ms]
+@tnp/api test: (pass) /health > is liveness only: it answers without asking the database [6.05ms]
+@tnp/api test: (pass) /health/ready > is 200 when the database answers, with the bounded timeout [1.15ms]
+@tnp/api test: (pass) /health/ready > is 503 when it does not [0.82ms]
+@tnp/api test: (pass) pingDatabase > is false before a pool exists [0.14ms]
+@tnp/crypto test: (pass) time and revocation > a revoked leaf is refused [7.57ms]
+@tnp/crypto test: (pass) time and revocation > a revoked DEVICE is refused, not just a revoked leaf [7.93ms]
+@tnp/crypto test: (pass) time and revocation > a revoked ROOT IDENTITY is refused [10.30ms]
+@tnp/crypto test: (pass) time and revocation > a rolled-back serial is refused [6.71ms]
+@tnp/client test: (pass) DNS traffic observation > a failing observer cannot change the DNS response [72.30ms]
+@tnp/client test: 
+@tnp/client test: src/proxy.test.ts:
+@tnp/client test: [tnp] loaded 1 TLDs: ox
+@tnp/client test: (pass) DnsProxy.classify > a name under a native TLD belongs to TNP [0.23ms]
+@tnp/client test: [tnp] loaded 1 TLDs: ox
+@tnp/client test: (pass) DnsProxy.classify > normalizes case and the trailing root dot [0.06ms]
+@tnp/client test: [tnp] loaded 1 TLDs: ox
+@tnp/client test: (pass) DnsProxy.classify > an unknown TLD is public [0.04ms]
+@tnp/client test: [tnp] loaded 1 TLDs: ox
+@tnp/client test: (pass) DnsProxy.classify > a single-label name is public [0.04ms]
+@tnp/client test: [tnp] loaded 1 TLDs: ox
+@tnp/client test: (pass) DnsProxy.classify > classification ignores registration state [0.02ms]
+@tnp/client test: [tnp] loaded 1 TLDs: ox
+@tnp/client test: [tnp] loaded 1 TLDs: zzt
+@tnp/client test: (pass) DnsProxy.classify > setTlds replaces the previous table rather than merging [0.05ms]
+@tnp/client test: [tnp] loaded 1 TLDs: ox
+@tnp/client test: [tnp] refused 3 reserved TLD(s) offered by the API: com, app, net. These are delegated by the public DNS root and are resolved upstream, not by TNP.
+@tnp/client test: (pass) DnsProxy namespace policy > refuses reserved TLDs the API offers, in either wire form [0.07ms]
+@tnp/client test: [tnp] loaded 0 TLDs: 
+@tnp/client test: [tnp] refused 1 reserved TLD(s) offered by the API: com. These are delegated by the public DNS root and are resolved upstream, not by TNP.
+@tnp/client test: (pass) DnsProxy namespace policy > a custom:true flag does not make a reserved TLD TNP-native [0.04ms]
+@tnp/client test: [tnp] loaded 1 TLDs: ox
+@tnp/client test: [tnp] refused 4 reserved TLD(s) offered by the API: localhost, onion, test, internal. These are delegated by the public DNS root and are resolved upstream, not by TNP.
+@tnp/client test: (pass) DnsProxy namespace policy > refuses IETF special-use names [0.07ms]
+@tnp/client test: [tnp] loaded 0 TLDs: 
+@tnp/client test: [tnp] refused 5 reserved TLD(s) offered by the API: com, app, net, org, dev. These are delegated by the public DNS root and are resolved upstream, not by TNP.
+@tnp/client test: (pass) DnsProxy namespace policy > an all-reserved table leaves the client resolving nothing as TNP [0.06ms]
+@tnp/client test: (pass) DnsProxy.getOverlayInfo > returns undefined for a domain with no cached overlay [0.03ms]
+@tnp/client test: 
+@tnp/client test: src/api.contract.test.ts:
+@tnp/client test: (pass) relay registration > registerRelay sends a body POST /relays/register accepts [0.23ms]
+@tnp/client test: (pass) relay registration > sendRelayHeartbeat sends a body POST /relays/heartbeat accepts [0.12ms]
+@tnp/client test: (pass) relay registration > the shapes the client used to send are still rejected [0.02ms]
+@tnp/client test: (pass) service node registration > registerServiceNode sends a body POST /nodes/register accepts [0.15ms]
+@tnp/client test: (pass) service node registration > sendHeartbeat sends a body POST /nodes/heartbeat accepts [0.11ms]
+@tnp/client test: (pass) the gate itself > a client that sends nothing fails instead of passing vacuously [0.05ms]
+@tnp/client test: (pass) the gate itself > expectAccepted reports the rejected field, not just a boolean [0.03ms]
+@tnp/client test: 
+@tnp/client test: src/crypto.test.ts:
+@tnp/client test: (pass) base64 helpers > round-trips arbitrary bytes [0.03ms]
+@tnp/client test: (pass) base64 helpers > round-trips the empty array [0.02ms]
+@tnp/client test: (pass) base64 helpers > round-trips 256 random bytes [0.06ms]
+@tnp/crypto test: (pass) time and revocation > an equal or higher serial is accepted [14.19ms]
+@tnp/crypto test: (pass) canonical encoding > field boundaries cannot be moved [0.10ms]
+@tnp/crypto test: (pass) canonical encoding > purpose order does not change the bytes [0.05ms]
+@tnp/client test: (pass) generateIdentity > produces Ed25519 key sizes (32-byte public, 64-byte secret) [1.90ms]
+@tnp/client test: (pass) generateIdentity > produces a distinct keypair on each call [4.48ms]
+@tnp/api test: (pass) pingDatabase > gives up at the timeout when the query never returns [50.27ms]
+@tnp/api test: (pass) pingDatabase > is false, not a throw, when the query fails [0.15ms]
+@tnp/api test: 
+@tnp/api test: src/config.test.ts:
+@tnp/api test: (pass) TNP_NATIVE_EXPIRY_ENFORCED > is off unless explicitly true [0.06ms]
+@tnp/api test: 
+@tnp/api test: src/seed.test.ts:
+@tnp/api test: (pass) seed TLDs > seeds at least one TLD — an empty list would pass every check below [0.01ms]
+@tnp/api test: (pass) seed TLDs > seeds no TLD the public DNS root delegates [0.08ms]
+@tnp/api test: 
+@tnp/api test: src/ecosystemActivity.test.ts:
+@tnp/client test: (pass) generateIdentity > keypair actually signs and verifies [11.23ms]
+@tnp/client test: (pass) generateEphemeralKeypair + computeSharedKey > produces X25519 key sizes (32-byte public and secret) [1.17ms]
+@tnp/client test: (pass) generateEphemeralKeypair + computeSharedKey > both parties derive the same shared key (ECDH agreement) [3.40ms]
+@tnp/crypto test: (pass) canonical encoding > changing any signed field breaks the signature [24.79ms]
+@tnp/client test: (pass) generateEphemeralKeypair + computeSharedKey > a different peer key yields a different shared key [4.03ms]
+@tnp/client test: (pass) encrypt / decrypt > round-trips a payload through a shared key [3.09ms]
+@tnp/client test: (pass) encrypt / decrypt > round-trips an empty payload [2.36ms]
+@tnp/crypto test: (pass) canonical encoding > a malformed signature is refused, not thrown on [8.00ms]
+@tnp/client test: (pass) encrypt / decrypt > prepends a 24-byte nonce and a 16-byte Poly1305 tag [2.36ms]
+@tnp/client test: (pass) encrypt / decrypt > is non-deterministic: same plaintext + key yields different ciphertext [2.79ms]
+@tnp/crypto test: (pass) malformed grants > an inverted or empty validity window is refused [7.00ms]
+@tnp/client test: (pass) encrypt / decrypt > rejects decryption under the wrong key [5.07ms]
+@tnp/client test: (pass) encrypt / decrypt > rejects a tampered ciphertext byte [2.79ms]
+@tnp/client test: (pass) encrypt / decrypt > rejects a tampered nonce [2.65ms]
+@tnp/crypto test: (pass) malformed grants > an unknown purpose is refused rather than ignored [8.98ms]
+@tnp/client test: (pass) encrypt / decrypt > rejects input too short to hold a nonce [2.60ms]
+@tnp/client test: (pass) loadOrCreateIdentity > creates, persists, and reloads the same identity [1.85ms]
+@tnp/client test: (pass) loadOrCreateIdentity > stores keys as base64 JSON that decodes back to the raw bytes [1.62ms]
+@tnp/client test: 
+@tnp/client test: src/dns/upstream.test.ts:
+@tnp/client test: (pass) parseUpstream > a bare IPv4 address is classic DNS on port 53 [0.03ms]
+@tnp/client test: (pass) parseUpstream > an explicit port is honoured [0.02ms]
+@tnp/client test: (pass) parseUpstream > a bracketed IPv6 address parses, with and without a port [0.01ms]
+@tnp/client test: (pass) parseUpstream > a bare IPv6 address is not mistaken for host:port
+@tnp/client test: (pass) parseUpstream > an https URL is DoH [0.01ms]
+@tnp/client test: (pass) parseUpstream > surrounding whitespace is ignored [0.02ms]
+@tnp/client test: (pass) parseUpstreams > splits a comma-separated list, preserving failover order [0.04ms]
+@tnp/client test: (pass) parseUpstreams > ignores empty entries
+@tnp/client test: (pass) parseUpstreams > refuses to start with no upstream rather than picking one silently [0.11ms]
+@tnp/client test: 
+@tnp/client test: src/dns/cache.test.ts:
+@tnp/client test: (pass) TTL handling > expires with the record's own TTL, not a fixed lifetime [0.36ms]
+@tnp/client test: (pass) TTL handling > a long TTL is honoured well past the old fixed 300s [0.03ms]
+@tnp/client test: (pass) TTL handling > expires with the SHORTEST record in a set [0.02ms]
+@tnp/client test: (pass) TTL handling > decrements the served TTL by the time held [0.03ms]
+@tnp/client test: (pass) TTL handling > never serves a TTL below the floor [0.02ms]
+@tnp/client test: (pass) TTL handling > clamps an absurd TTL rather than pinning the entry for years [0.02ms]
+@tnp/client test: (pass) TTL handling > survives a non-finite TTL [0.01ms]
+@tnp/client test: (pass) negative caching > a cached NXDOMAIN is distinguishable from a cached empty set [0.04ms]
+@tnp/client test: (pass) negative caching > a miss and a cached negative are different states [0.01ms]
+@tnp/client test: (pass) negative caching > honours the SOA minimum [0.02ms]
+@tnp/client test: (pass) negative caching > falls back to a bounded default with no SOA [0.02ms]
+@tnp/client test: (pass) negative caching > caps a negative TTL at one hour, however large the SOA claims [0.01ms]
+@tnp/crypto test: (pass) malformed grants > no purposes at all is refused [6.90ms]
+@tnp/crypto test: 
+@tnp/crypto test:  24 pass
+@tnp/crypto test:  0 fail
+@tnp/crypto test:  48 expect() calls
+@tnp/crypto test: Ran 24 tests across 1 file. [286.00ms]
+@tnp/client test: (pass) bounds > never exceeds maxEntries [1.82ms]
+@tnp/client test: (pass) bounds > evicts expired entries before live ones [0.10ms]
+@tnp/client test: (pass) bounds > re-setting a key refreshes it rather than aging it out [0.03ms]
+@tnp/client test: (pass) keys > name and type are both part of the key [0.03ms]
+@tnp/client test: (pass) keys > is case-insensitive on both name and type [0.01ms]
+@tnp/client test: (pass) keys > clear empties the cache [0.01ms]
+@tnp/client test: 
+@tnp/client test: src/dns/wire.test.ts:
+@tnp/crypto test: Exited with code 0
+@tnp/client test: (pass) response codes > every code round-trips through the wire [0.44ms]
+@tnp/client test: (pass) response codes > NXDOMAIN is distinguishable from an empty NOERROR [0.07ms]
+@tnp/client test: (pass) response codes > setting the dns-packet `rcode` field alone does NOT work [0.04ms]
+@tnp/client test: (pass) header flags > mirrors RD and always sets RA [0.10ms]
+@tnp/client test: (pass) header flags > sets AA only for authoritative answers [0.09ms]
+@tnp/client test: (pass) header flags > echoes the query id and question [0.08ms]
+@tnp/client test: (pass) RDATA encoding > each record type survives a round trip intact [0.97ms]
+@tnp/client test: (pass) RDATA encoding > a record's RDATA is never empty [0.25ms]
+@tnp/client test: (pass) EDNS(0) > reports the advertised buffer size, clamped [0.29ms]
+@tnp/client test: (pass) EDNS(0) > is null when the query carries no OPT record [0.03ms]
+@tnp/client test: (pass) EDNS(0) > echoes an OPT record back so the client is not downgraded to 512 [0.11ms]
+@tnp/client test: (pass) truncation > the fixture straddles both UDP limits [0.37ms]
+@tnp/client test: (pass) truncation > sets TC and drops the body when the response exceeds the UDP budget [0.25ms]
+@tnp/client test: (pass) truncation > does not truncate when EDNS advertises enough room [0.17ms]
+@tnp/client test: (pass) truncation > leaves a small response alone [0.06ms]
+@tnp/client test: (pass) encodeRawError > replies to an undecodable query using the raw header [0.06ms]
+@tnp/client test: (pass) encodeRawError > returns null when there is not even a header to answer
+@tnp/client test: 
+@tnp/client test:  97 pass
+@tnp/client test:  0 fail
+@tnp/client test:  228 expect() calls
+@tnp/client test: Ran 97 tests across 9 files. [275.00ms]
+@tnp/client test: Exited with code 0
+@tnp/api test: (pass) tnp-api ecosystem activity bootstrap > starts on an attestable task role with no key pair anywhere [0.08ms]
+@tnp/api test: Ecosystem activity is disabled for tnp-api: no attestable task role and no OXY_SERVICE_API_KEY/OXY_SERVICE_API_SECRET
+@tnp/api test: (pass) tnp-api ecosystem activity bootstrap > refuses when it can neither attest nor present a pair [0.05ms]
+@tnp/api test: (pass) tnp-api ecosystem activity bootstrap > canAuthenticateAsOxyService > an attestable task role is enough, with no pair anywhere [0.04ms]
+@tnp/api test: (pass) tnp-api ecosystem activity bootstrap > canAuthenticateAsOxyService > a complete pair is enough where nothing can attest [0.02ms]
+@tnp/api test: (pass) tnp-api ecosystem activity bootstrap > canAuthenticateAsOxyService > a half pair is not an identity, and neither is nothing [0.02ms]
+@tnp/api test: 
+@tnp/api test: src/__tests__/receiverSdk.test.ts:
+@tnp/api test: (pass) validates receiver identity and revocation in an isolated loopback process [135.87ms]
+@tnp/api test: 
+@tnp/api test: src/services/money.test.ts:
+@tnp/api test: (pass) money > parses decimal prices exactly, where float arithmetic would not [0.15ms]
+@tnp/api test: (pass) money > refuses precision the currency does not have instead of rounding [0.05ms]
+@tnp/api test: (pass) money > refuses malformed amounts and currencies [0.07ms]
+@tnp/api test: (pass) money > formats and serializes without losing digits beyond 2^53 [0.07ms]
+@tnp/api test: (pass) money > never adds different currencies [0.03ms]
+@tnp/api test: 
+@tnp/api test: src/services/config.test.ts:
+@tnp/api test: (pass) services flags > an empty environment turns everything off and points at sandbox [0.06ms]
+@tnp/api test: (pass) services flags > only the literal values 1 and true enable a flag, and each flag is independent [0.06ms]
+@tnp/api test: (pass) services flags > production is only ever chosen explicitly [0.02ms]
+@tnp/api test: (pass) secrets > resolves env references and refuses other schemes or missing values [0.12ms]
+@tnp/api test: (pass) secrets > redaction covers raw and URL-encoded forms [0.05ms]
+@tnp/api test: 
+@tnp/api test: src/services/publicNames.test.ts:
+@tnp/api test: (pass) public name normalization > case, trailing root dot and whitespace are canonicalized [0.16ms]
+@tnp/api test: (pass) public name normalization > IDN input becomes Punycode for storage and stays Unicode for display [0.04ms]
+@tnp/api test: (pass) public name normalization > a TNP-native or special-use TLD is never a public domain [0.02ms]
+@tnp/api test: (pass) public name normalization > syntax errors are refused [0.05ms]
+@tnp/api test: (pass) registrable split > uses the longest suffix the provider offers, not split('.') [0.07ms]
+@tnp/api test: (pass) registrable split > a host under a registrable name is refused, not truncated [0.02ms]
+@tnp/api test: (pass) registrable split > an extension the provider does not offer is reported as such [0.01ms]
+@tnp/api test: (pass) registrable split > IDN TLDs match their Punycode suffix [0.04ms]
+@tnp/api test: 
+@tnp/api test: src/routes/domains.release-guard.test.ts:
+@tnp/api test: (pass) native release is never reused by the services layer > positive control: the matcher sees the real release in routes/domains.ts [0.28ms]
+@tnp/api test: (pass) native release is never reused by the services layer > negative control: prose about the rule is not a violation [0.02ms]
+@tnp/api test: (pass) native release is never reused by the services layer > no file under src/services deletes a native registration [2.39ms]
+@tnp/api test: 
+@tnp/api test: src/routes/nodes.contract.test.ts:
+@tnp/api test: (pass) POST /nodes/register > accepts the contract shape [12.63ms]
+@tnp/api test: (pass) POST /nodes/register > names the field it rejects [2.36ms]
+@tnp/api test: (pass) POST /nodes/heartbeat > accepts the contract shape [1.13ms]
+@tnp/api test: (pass) POST /nodes/heartbeat > requires the relay the node is attached to [1.00ms]
+@tnp/api test: 
+@tnp/api test: src/routes/domains.contract.test.ts:
+@tnp/api test: (pass) public domain DTO > carries the directory fields as wire strings and no owner identifier [0.09ms]
+@tnp/api test: (pass) public domain DTO > the lookup view with records carries no owner identifier either [0.07ms]
+@tnp/api test: (pass) public domain DTO > serializes only records belonging to the domain [0.06ms]
+@tnp/api test: (pass) owner domain DTO > adds the expiry state the dashboard shows, still without the owner's ids [0.09ms]
+@tnp/api test: (pass) owner domain DTO > the inventory summary counts records rather than embedding them [0.02ms]
+@tnp/api test: (pass) routes, with no database > POST records: a well-formed record reaches the handler [2.88ms]
+@tnp/api test: (pass) routes, with no database > POST records: the parser's code and field come back with the 400 [2.11ms]
+@tnp/api test: (pass) routes, with no database > PUT records: a malformed patch is refused before any lookup [2.08ms]
+@tnp/api test: (pass) routes, with no database > check: a subdomain is invalid with a message, not a crash or a split [0.80ms]
+@tnp/api test: (pass) routes, with no database > check: both route forms refuse a reserved TLD as reserved [1.27ms]
+@tnp/api test: (pass) routes, with no database > check: a registrable name goes on to the registry [0.52ms]
+@tnp/api test: (pass) routes, with no database > renew: a malformed id is a 404 before any lookup [1.41ms]
+@tnp/api test: (pass) routes, with no database > owned and the deprecated mine both exist behind auth [1.88ms]
+@tnp/api test: 
+@tnp/api test: src/routes/relays.contract.test.ts:
+@tnp/api test: (pass) POST /relays/register > accepts the contract shape [2.40ms]
+@tnp/api test: (pass) POST /relays/register > rejects the body the client sent before @tnp/shared-types existed [0.78ms]
+@tnp/api test: (pass) POST /relays/register > rejects a registration missing any field the directory depends on [3.23ms]
+@tnp/api test: (pass) POST /relays/heartbeat > accepts the contract shape [0.81ms]
+@tnp/api test: (pass) POST /relays/heartbeat > rejects the body the client sent before @tnp/shared-types existed [0.62ms]
+@tnp/api test: (pass) the gate itself > an unauthenticated request never reaches validation [25.79ms]
+@tnp/api test: 
+@tnp/api test: src/registry/resolve.test.ts:
+@tnp/api test: (pass) names TNP does not answer for > are NXDOMAIN with no answers [0.08ms]
+@tnp/api test: (pass) unregistered native names > are synthesized to the parking address for A and ANY [0.06ms]
+@tnp/api test: (pass) unregistered native names > are NODATA for other types, because parking makes the name exist [0.02ms]
+@tnp/api test: (pass) unregistered native names > are NXDOMAIN when no parking address is configured
+@tnp/api test: (pass) registered names > answer records of the queried type [0.06ms]
+@tnp/api test: (pass) registered names > an A query on a name with only a CNAME gets the CNAME, never parking [0.05ms]
+@tnp/api test: (pass) registered names > a name with records of other types is NODATA, not parking and not NXDOMAIN [0.02ms]
+@tnp/api test: (pass) registered names > a label with nothing at all is parked for A when parking is configured [0.02ms]
+@tnp/api test: (pass) registered names > without parking: the registered name itself is NODATA, an unknown label NXDOMAIN [0.04ms]
+@tnp/api test: (pass) registered names > an empty non-terminal exists [0.02ms]
+@tnp/api test: (pass) registered names > ANY returns every record at the name [0.02ms]
+@tnp/api test: (pass) service nodes > an online node with a fresh heartbeat attaches the overlay and suppresses parking [0.02ms]
+@tnp/api test: (pass) service nodes > a node marked offline counts for nothing: the name parks [0.02ms]
+@tnp/api test: (pass) service nodes > an 'online' node whose heartbeat is stale counts for nothing either [0.06ms]
+@tnp/api test: (pass) service nodes > records are still answered alongside an online node [0.03ms]
+@tnp/api test: (pass) expiry > is not enforced by default: an expired name still resolves [0.03ms]
+@tnp/api test: (pass) expiry > when enforced, an expired name is withheld: no records, no overlay, parking only [0.03ms]
+@tnp/api test: (pass) expiry > when enforced, grace still resolves [0.01ms]
+@tnp/api test: (pass) decideParkingPage > mirrors resolution [0.03ms]
+@tnp/api test: (pass) decideParkingPage > a held name is never offered as available [0.01ms]
+@tnp/api test: 
+@tnp/api test: src/registry/records.test.ts:
+@tnp/api test: (pass) findRecordConflict > a CNAME cannot join a name that has any record [0.09ms]
+@tnp/api test: (pass) findRecordConflict > no other type can join a name that has a CNAME [0.04ms]
+@tnp/api test: (pass) findRecordConflict > an exact duplicate is refused; the same type with another value is fine [0.02ms]
+@tnp/api test: (pass) findRecordConflict > a record does not conflict with its own previous version [0.01ms]
+@tnp/api test: (pass) findRecordConflict > other names are unaffected [0.02ms]
+@tnp/api test: (pass) relativeRecordName > strips the domain from a fully-qualified name [0.03ms]
+@tnp/api test: (pass) relativeRecordName > leaves relative names alone, including ones that merely end in the label [0.01ms]
+@tnp/api test: 
+@tnp/api test: src/middleware/auth.test.ts:
+@tnp/api test: 2026-10-04T05:35:14.365Z WARN [oxy.auth] refused SESSION_REQUIRED: User access token is not bound to a session {
+@tnp/api test:   component: "auth",
+@tnp/api test:   method: "auth",
+@tnp/api test:   code: "SESSION_REQUIRED",
+@tnp/api test:   stage: "token",
+@tnp/api test:   reason: "User access token is not bound to a session",
+@tnp/api test:   status: 401,
+@tnp/api test:   optional: true,
+@tnp/api test:   path: "/guarded",
+@tnp/api test: }
+@tnp/api test: 2026-10-04T05:35:14.366Z WARN [oxy.auth] 401 after refusal SESSION_REQUIRED: User access token is not bound to a session {
+@tnp/api test:   component: "auth",
+@tnp/api test:   method: "requireOxyAuth",
+@tnp/api test:   code: "SESSION_REQUIRED",
+@tnp/api test:   stage: "token",
+@tnp/api test:   reason: "User access token is not bound to a session",
+@tnp/api test: }
+@tnp/api test: (pass) a forged, session-less bearer token is refused on a guarded route [3.20ms]
+@tnp/api test: (pass) a request with no bearer token is refused on a guarded route [1.11ms]
+@tnp/api test: 
+@tnp/api test: src/utils/hostname.test.ts:
+@tnp/api test: (pass) isValidHostname > accepts ordinary hostnames [0.07ms]
+@tnp/api test: (pass) isValidHostname > is case-insensitive [0.01ms]
+@tnp/api test: (pass) isValidHostname > rejects the injection payload that reaches this code path [0.02ms]
+@tnp/api test: (pass) isValidHostname > rejects characters that are not legal in a DNS label [0.06ms]
+@tnp/api test: (pass) isValidHostname > rejects malformed label boundaries [0.03ms]
+@tnp/api test: (pass) isValidHostname > enforces the 63-character label limit [0.03ms]
+@tnp/api test: (pass) isValidHostname > enforces the 253-character total limit independently of the label limit [0.04ms]
+@tnp/api test: (pass) escapeHtml > escapes every character that can break out of text or an attribute [0.04ms]
+@tnp/api test: (pass) escapeHtml > escapes the ampersand first so an escape is not double-encoded into a payload
+@tnp/api test: (pass) escapeHtml > escapes every occurrence, not just the first
+@tnp/api test: (pass) escapeHtml > leaves an ordinary hostname untouched
+@tnp/api test: 
+@tnp/api test: src/services/dns/zone.test.ts:
+@tnp/api test: (pass) zone hashing > is independent of record order and provider casing [0.45ms]
+@tnp/api test: (pass) zone hashing > changes when any record or setting changes [0.10ms]
+@tnp/api test: (pass) merging a change set into the full zone > records the change does not mention — including unsupported types — are carried through [0.50ms]
+@tnp/api test: (pass) merging a change set into the full zone > update and delete must match an existing record, or the whole merge fails [0.22ms]
+@tnp/api test: (pass) merging a change set into the full zone > validation: CNAME exclusivity, duplicates, types, TTL, addresses [0.23ms]
+@tnp/api test: 
+@tnp/api test: src/services/operations/intent.test.ts:
+@tnp/api test: (pass) intent hashing > key order does not change the hash; values do [0.14ms]
+@tnp/api test: (pass) intent hashing > bigints and dates are canonical, undefined fields are ignored [0.03ms]
+@tnp/api test: (pass) intent hashing > idempotency keys are bounded and plain [0.04ms]
+@tnp/api test: 
+@tnp/api test: src/services/providers/namecheap/xml.test.ts:
+@tnp/api test: (pass) parseNamecheapDate > MM/DD/YYYY is midnight UTC regardless of the host time zone [0.15ms]
+@tnp/api test: (pass) parseNamecheapDate > the renew format with a 12-hour clock [0.03ms]
+@tnp/api test: (pass) parseNamecheapDate > rolled-over and foreign formats are rejected rather than reinterpreted [0.07ms]
+@tnp/api test: (pass) parseXml > decodes predefined entities once and leaves unknown entities literal [0.08ms]
+@tnp/api test: (pass) parseXml > rejects DOCTYPE and ENTITY in any case [0.09ms]
+@tnp/api test: (pass) parseXml > rejects unclosed and garbage documents [0.44ms]
+@tnp/api test: 
+@tnp/api test: src/services/providers/namecheap/factory.test.ts:
+@tnp/api test: (pass) ClientIp validation > accepts public IPv4 literals [0.16ms]
+@tnp/api test: (pass) ClientIp validation > rejects private, loopback, link-local, CGNAT, documentation, multicast and malformed values [0.12ms]
+@tnp/api test: (pass) namecheapFactory > is named for the adapter and builds both families [0.32ms]
+@tnp/api test: (pass) namecheapFactory > refuses bad configuration with a credentials error and no request [0.38ms]
+@tnp/api test: 
+@tnp/api test: src/services/providers/namecheap/client.test.ts:
+@tnp/api test: (pass) endpoint and request encoding > sandbox and production accounts call their own allowlisted endpoint [3.32ms]
+@tnp/api test: (pass) endpoint and request encoding > an endpoint in account config is ignored [0.51ms]
+@tnp/api test: (pass) endpoint and request encoding > global parameters travel in a POST form body, never the URL [0.65ms]
+@tnp/api test: (pass) endpoint and request encoding > the API key is not reachable by serializing the adapter [0.19ms]
+@tnp/api test: (pass) HTTP 200 with Status=ERROR > is a failure, mapped by error number [1.93ms]
+@tnp/api test: (pass) HTTP 200 with Status=ERROR > the documented IP-not-whitelisted response is a credentials error [0.42ms]
+@tnp/api test: (pass) HTTP 200 with Status=ERROR > getInfo on a name this account does not hold is not_found [0.89ms]
+@tnp/api test: (pass) HTTP 200 with Status=ERROR > 4011103 describing the user name is a configuration problem, not a missing domain [0.29ms]
+@tnp/api test: (pass) HTTP 200 with Status=ERROR > domain taken on create is not_available and proves nothing was applied [2.17ms]
+@tnp/api test: (pass) HTTP 200 with Status=ERROR > order creation failed citing funds is insufficient_funds [0.95ms]
+@tnp/api test: (pass) HTTP 200 with Status=ERROR > a provider-side error after a create was sent is unknown_outcome [3.28ms]
+@tnp/api test: (pass) HTTP 200 with Status=ERROR > the same provider-side number on a read is provider_unavailable, not unknown_outcome [0.39ms]
+@tnp/api test: (pass) HTTP 200 with Status=ERROR > Status=ERROR with no error element is still a failure [0.21ms]
+@tnp/api test: (pass) HTTP 200 with Status=ERROR > Status=OK with a create that did not register is unknown_outcome [0.85ms]
+@tnp/api test: (pass) hostile and broken bodies > a DOCTYPE or ENTITY declaration is rejected before parsing [0.23ms]
+@tnp/api test: (pass) hostile and broken bodies > a DOCTYPE on a mutating call is unknown_outcome [0.16ms]
+@tnp/api test: (pass) hostile and broken bodies > malformed and truncated bodies are failures for reads and unknown for writes [1.04ms]
+@tnp/api test: (pass) hostile and broken bodies > a well-formed response without the expected element is not a success [0.23ms]
+@tnp/api test: (pass) hostile and broken bodies > a body over the cap is abandoned while streaming, without a content-length [0.87ms]
+@tnp/api test: (pass) hostile and broken bodies > a declared content-length over the cap is refused, and is unknown for a write [1.12ms]
+@tnp/api test: (pass) HTTP and transport failures > 429 and 5xx on a read are retryable failures, on a write unknown [0.33ms]
+@tnp/api test: (pass) HTTP and transport failures > a failure proven before sending is submitted:false even for a write [0.33ms]
+@tnp/api test: (pass) HTTP and transport failures > a reset or unclassified transport error on a write is unknown_outcome [0.21ms]
+@tnp/api test: (pass) timeouts > timeout on domains.create, domains.renew and dns.setHosts is unknown_outcome, submitted [63.41ms]
+@tnp/api test: (pass) timeouts > timeout on a read is not unknown_outcome [20.56ms]
+@tnp/api test: (pass) timeouts > a caller's abort during a write is unknown_outcome [0.38ms]
+@tnp/api test: (pass) beforeSubmit and quota ordering > a write acquires quota, awaits beforeSubmit, then sends — in that order [10.86ms]
+@tnp/api test: (pass) beforeSubmit and quota ordering > every mutating command awaits beforeSubmit exactly once, immediately before its request [3.33ms]
+@tnp/api test: (pass) beforeSubmit and quota ordering > a rejecting beforeSubmit means no request is sent [0.14ms]
+@tnp/api test: (pass) beforeSubmit and quota ordering > a rejecting beforeSubmit on create sends no create [5.03ms]
+@tnp/api test: (pass) beforeSubmit and quota ordering > quota refusal means no request and no beforeSubmit [0.24ms]
+@tnp/api test: (pass) beforeSubmit and quota ordering > search-path commands are interactive; everything else is critical [1.76ms]
+@tnp/api test: (pass) secrets never leak into errors > the API key is redacted from provider descriptions and transport causes [0.41ms]
+@tnp/api test: (pass) secrets never leak into errors > the EPP code is redacted, plain and base64, from every error path [1.81ms]
+@tnp/api test: (pass) secrets never leak into errors > contact values echoed by the provider are redacted [0.31ms]
+@tnp/api test: 
+@tnp/api test: src/services/providers/namecheap/dns.test.ts:
+@tnp/api test: (pass) readZone (domains.dns.getHosts) > records, MX preferences, decoded TXT, EmailType and DNS authority [0.53ms]
+@tnp/api test: (pass) readZone (domains.dns.getHosts) > a multi-label suffix is sent as the TLD [0.40ms]
+@tnp/api test: (pass) readZone (domains.dns.getHosts) > a domain not on Namecheap DNS reports servedByProvider false [0.30ms]
+@tnp/api test: (pass) readZone (domains.dns.getHosts) > the documented 'not using proper DNS servers' error is unsupported [0.19ms]
+@tnp/api test: (pass) replaceZone (domains.dns.setHosts) > sends the complete record set, numbered, with MXPref only on MX, plus EmailType [0.41ms]
+@tnp/api test: (pass) replaceZone (domains.dns.setHosts) > a zone read back and replaced unchanged round-trips byte for byte [0.47ms]
+@tnp/api test: (pass) replaceZone (domains.dns.setHosts) > refuses, without sending, anything it cannot write faithfully [0.51ms]
+@tnp/api test: (pass) replaceZone (domains.dns.setHosts) > IsSuccess other than true is unknown_outcome [0.28ms]
+@tnp/api test: (pass) replaceZone (domains.dns.setHosts) > too many records is a refusal, not an unknown outcome [0.20ms]
+@tnp/api test: (pass) replaceZone (domains.dns.setHosts) > capabilities declare no validation and document the missing compare-and-swap [0.03ms]
+@tnp/api test: 
+@tnp/api test: src/services/providers/namecheap/registrar.test.ts:
+@tnp/api test: (pass) listSuffixes (domains.getTldList) > maps each Tld's API flags and year limits [0.43ms]
+@tnp/api test: (pass) listSuffixes (domains.getTldList) > a flag that is not a boolean is a provider failure, not false [0.32ms]
+@tnp/api test: (pass) checkAvailability (domains.check) > available, taken, premium, per-name error and unanswered names [0.36ms]
+@tnp/api test: (pass) checkAvailability (domains.check) > more than 50 names are split into documented-size batches [0.87ms]
+@tnp/api test: (pass) getPrices (users.getPricing) > requests one product and prices per year, taking the larger of Price and YourPrice [0.40ms]
+@tnp/api test: (pass) getPrices (users.getPricing) > a category for another action is not read as this one [0.35ms]
+@tnp/api test: (pass) getPrices (users.getPricing) > a price with more precision than the currency allows is refused, not rounded [0.45ms]
+@tnp/api test: (pass) getBalance (users.getBalances) > AvailableBalance in the stated currency [0.29ms]
+@tnp/api test: (pass) register (domains.create) > sends every contact role, nameservers and privacy; returns ids and the charge [0.87ms]
+@tnp/api test: (pass) register (domains.create) > maxCost below the quoted price refuses before anything is bought [0.46ms]
+@tnp/api test: (pass) register (domains.create) > maxCost in another currency refuses; maxCost equal to the price proceeds [0.94ms]
+@tnp/api test: (pass) register (domains.create) > a premium name is refused without a create [0.57ms]
+@tnp/api test: (pass) register (domains.create) > extended-attribute extensions, IDN names, bad years and bad contacts send nothing [0.35ms]
+@tnp/api test: (pass) register (domains.create) > an extension with no price for the term is unsupported [0.35ms]
+@tnp/api test: (pass) renew (domains.renew) > returns the new expiry parsed as UTC, and the charge [0.58ms]
+@tnp/api test: (pass) renew (domains.renew) > an expired domain is refused as documented [0.43ms]
+@tnp/api test: (pass) getInfo (domains.getInfo) > dates, privacy, DNS and lifecycle [0.36ms]
+@tnp/api test: (pass) getInfo (domains.getInfo) > the documented example shape: no IsUsingOurDNS means unknown, not false [0.25ms]
+@tnp/api test: (pass) getInfo (domains.getInfo) > a domain another user shares with this account is not_found [0.27ms]
+@tnp/api test: (pass) getInfo (domains.getInfo) > an unparseable date is a provider failure, not a null expiry [0.29ms]
+@tnp/api test: (pass) getInfo (domains.getInfo) > lifecycle mapping table with unknown fallback [0.03ms]
+@tnp/api test: (pass) listDomains (domains.getList) > rows and paging [0.48ms]
+@tnp/api test: (pass) listDomains (domains.getList) > page sizes outside the documented 10–100 are refused, not clamped [0.18ms]
+@tnp/api test: (pass) contacts > getContacts reads the four roles and ignores the privacy-service contacts [0.73ms]
+@tnp/api test: (pass) contacts > setContacts sends all four roles and requires IsSuccess [0.55ms]
+@tnp/api test: (pass) registrar lock > getLock reads RegistrarLockStatus; setLock sends LOCK/UNLOCK [0.49ms]
+@tnp/api test: (pass) transfers > transferIn sends an alphanumeric EPP code as-is and maps StatusID [0.46ms]
+@tnp/api test: (pass) transfers > transferIn refuses unlisted extensions and terms other than one year [0.19ms]
+@tnp/api test: (pass) transfers > getTransferStatus maps documented ids and keeps the raw text [0.79ms]
+@tnp/api test: (pass) transfers > a non-numeric transfer id is refused before sending [0.10ms]
+@tnp/api test: (pass) capabilities > nothing is claimed as validated, and transfer_out is manual [0.05ms]
+@tnp/api test: 
+@tnp/api test:  193 pass
+@tnp/api test:  0 fail
+@tnp/api test:  725 expect() calls
+@tnp/api test: Ran 193 tests across 23 files. [742.00ms]
+@tnp/api test: Exited with code 0
