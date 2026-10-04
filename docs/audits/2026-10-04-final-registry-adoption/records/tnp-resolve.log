@@ -1,0 +1,18 @@
+bun install v1.3.14 (0d9b296a)
+2 |   "lockfileVersion": 2,
+                         ^
+error: Unknown lockfile version
+    at bun.lock:2:22
+UnknownLockfileVersion: failed to parse lockfile: 'bun.lock'
+
+warn: Ignoring lockfile
+Resolving dependencies
+Resolved, downloaded and extracted [832]
+warn: incorrect peer dependency "react-native-gesture-handler@3.0.2"
+
+warn: incorrect peer dependency "typescript@7.0.2"
+
+warn: incorrect peer dependency "react-native@0.87.1"
+Saved lockfile
+
+43 packages installed [4.90s]

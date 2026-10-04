@@ -1,0 +1,10 @@
+$ bun run --filter '*' typecheck
+@tnp/crypto typecheck: Exited with code 0
+@tnp/namespace typecheck: Exited with code 0
+@tnp/protocol typecheck: Exited with code 0
+@tnp/shared-types typecheck: Exited with code 0
+@tnp/dns-server typecheck: Exited with code 0
+@tnp/relay typecheck: Exited with code 0
+@tnp/client typecheck: Exited with code 0
+@tnp/web typecheck: Exited with code 0
+@tnp/api typecheck: Exited with code 0

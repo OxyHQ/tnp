@@ -16,7 +16,7 @@
     "test:sandbox:namecheap": "bun test test-sandbox"
   },
   "dependencies": {
-    "@oxy.so/core": "4.2.0",
+    "@oxy.so/core": "file:/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-core-4.2.0.tgz",
     "@oxy.so/utils": "^1.0.1",
     "@tnp/namespace": "workspace:*",
     "@tnp/shared-types": "workspace:*",

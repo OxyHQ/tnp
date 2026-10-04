@@ -1,0 +1,63 @@
+{
+  "worktree": "/home/nate/Oxy/tnp/.worktrees/1519-final-sdk-adoption-20261003",
+  "output": "/home/nate/Oxy/.agent-evidence/i04-consumer-final-prs/registry-tnp-20261004",
+  "receipt": "local-final-checks.json",
+  "jobs": [
+    {
+      "name": "check-0",
+      "cwd": "apps/api",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--test-name-pattern",
+        "validates receiver identity and revocation in an isolated loopback process"
+      ]
+    },
+    {
+      "name": "check-1",
+      "cwd": "apps/web",
+      "argv": [
+        "bun",
+        "run",
+        "build"
+      ]
+    },
+    {
+      "name": "check-2",
+      "cwd": "apps/api",
+      "argv": [
+        "bun",
+        "run",
+        "typecheck"
+      ]
+    },
+    {
+      "name": "check-3",
+      "cwd": "apps/dns-server",
+      "argv": [
+        "bun",
+        "run",
+        "typecheck"
+      ]
+    },
+    {
+      "name": "check-4",
+      "cwd": "apps/relay",
+      "argv": [
+        "bun",
+        "run",
+        "typecheck"
+      ]
+    },
+    {
+      "name": "check-5",
+      "cwd": "apps/web",
+      "argv": [
+        "bun",
+        "run",
+        "typecheck"
+      ]
+    }
+  ]
+}

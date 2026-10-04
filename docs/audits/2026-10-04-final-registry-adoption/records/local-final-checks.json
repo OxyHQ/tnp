@@ -1,0 +1,70 @@
+[
+  {
+    "name": "check-0",
+    "cwd": "apps/api",
+    "argv": [
+      "bun",
+      "run",
+      "test",
+      "--test-name-pattern",
+      "validates receiver identity and revocation in an isolated loopback process"
+    ],
+    "exitCode": 0,
+    "seconds": 0.566
+  },
+  {
+    "name": "check-1",
+    "cwd": "apps/web",
+    "argv": [
+      "bun",
+      "run",
+      "build"
+    ],
+    "exitCode": 0,
+    "seconds": 1.317
+  },
+  {
+    "name": "check-2",
+    "cwd": "apps/api",
+    "argv": [
+      "bun",
+      "run",
+      "typecheck"
+    ],
+    "exitCode": 0,
+    "seconds": 0.465
+  },
+  {
+    "name": "check-3",
+    "cwd": "apps/dns-server",
+    "argv": [
+      "bun",
+      "run",
+      "typecheck"
+    ],
+    "exitCode": 0,
+    "seconds": 0.164
+  },
+  {
+    "name": "check-4",
+    "cwd": "apps/relay",
+    "argv": [
+      "bun",
+      "run",
+      "typecheck"
+    ],
+    "exitCode": 0,
+    "seconds": 0.114
+  },
+  {
+    "name": "check-5",
+    "cwd": "apps/web",
+    "argv": [
+      "bun",
+      "run",
+      "typecheck"
+    ],
+    "exitCode": 0,
+    "seconds": 0.265
+  }
+]

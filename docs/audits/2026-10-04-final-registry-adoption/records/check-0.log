@@ -1,0 +1,57 @@
+$ bun test src --test-name-pattern "validates receiver identity and revocation in an isolated loopback process"
+bun test v1.3.14 (0d9b296a)
+
+src/health.test.ts:
+◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+[tnp-api] TNP_PARKING_IP is not set — parking/custom-TLD A records will be omitted. Set it to the TNP public DNS NLB Elastic IP before serving production traffic.
+
+src/config.test.ts:
+
+src/seed.test.ts:
+
+src/ecosystemActivity.test.ts:
+
+src/__tests__/receiverSdk.test.ts:
+(pass) validates receiver identity and revocation in an isolated loopback process [186.92ms]
+
+src/services/money.test.ts:
+
+src/services/config.test.ts:
+
+src/services/publicNames.test.ts:
+
+src/routes/domains.release-guard.test.ts:
+
+src/routes/nodes.contract.test.ts:
+
+src/routes/domains.contract.test.ts:
+
+src/routes/relays.contract.test.ts:
+
+src/registry/resolve.test.ts:
+
+src/registry/records.test.ts:
+
+src/middleware/auth.test.ts:
+
+src/utils/hostname.test.ts:
+
+src/services/dns/zone.test.ts:
+
+src/services/operations/intent.test.ts:
+
+src/services/providers/namecheap/xml.test.ts:
+
+src/services/providers/namecheap/factory.test.ts:
+
+src/services/providers/namecheap/client.test.ts:
+
+src/services/providers/namecheap/dns.test.ts:
+
+src/services/providers/namecheap/registrar.test.ts:
+
+ 1 pass
+ 192 filtered out
+ 0 fail
+ 5 expect() calls
+Ran 1 test across 23 files. [512.00ms]

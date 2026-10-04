@@ -1,0 +1,120 @@
+{
+  "sourceCommit": "b04def02a2a72cc57d576fdd1626d306b5daa596",
+  "base": "8ee271e576ce618ba7511c44ddabcd170b4dd1fe",
+  "sources": [
+    {
+      "path": "apps/api/src/__tests__/receiverSdk.test.ts",
+      "bytes": 1268,
+      "sha256": "a8aa2978f1fc0247b9b7df0ebc53f350e2fa37a8f8a36e1de5f92b3dea48ec66"
+    },
+    {
+      "path": "apps/api/src/__tests__/fixtures/receiver-sdk-probe.ts",
+      "bytes": 4698,
+      "sha256": "2cdfd1bb3bcb1d1e5632c26c386f3c7535429f7159c686fd42dca708ffda2559"
+    }
+  ],
+  "records": [
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/logs/i04-tnp-api-full.log",
+      "bytes": 20531,
+      "sha256": "4e551be2311f4488dbc023ef82c38b9c8bd542af2911d12af55bb396617aa1dc"
+    },
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/logs/i04-tnp-api-types-final.log",
+      "bytes": 15,
+      "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+    },
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/logs/i04-tnp-api-types.log",
+      "bytes": 286,
+      "sha256": "e5468aa38433882a567a1715f8a13a1a772f51de7eedd1e35b9b93f64ff0b35c"
+    },
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/logs/i04-tnp-candidate-install.log",
+      "bytes": 308,
+      "sha256": "01e937ea4f6d747853e3c9fc63ab069ebc7079c76cb6b67402f1e3ac70c91a9c"
+    },
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/logs/i04-tnp-web-build.log",
+      "bytes": 13245,
+      "sha256": "70f7c1062c728950e98b0b0c99fd17ca8c72e6c74430d283e4a4f689fcdbdd1a"
+    },
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/logs/i04-tnp-web-types.log",
+      "bytes": 9,
+      "sha256": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f"
+    },
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/logs/i04-tnp-workspace-tests.log",
+      "bytes": 61948,
+      "sha256": "249cacd023aaf014f73e90ba198298622a2ce2dff052fed0b85dc3ef91360cac"
+    },
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/logs/i04-tnp-workspace-types.log",
+      "bytes": 419,
+      "sha256": "492da5ccc0c854e2814902db0b9efeaca424e29230e650e0abde3db5b33b2fff"
+    }
+  ],
+  "inputs": [
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/inputs/package.json",
+      "bytes": 1881,
+      "sha256": "8560f262a99a27620b0cd4d4ab1df2d4256ba94825e5d42346f8bdf41a2122ce"
+    },
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/inputs/bun.lock",
+      "bytes": 330835,
+      "sha256": "b1fa5eece4c1377d59851b22f32aa618551cb5ec018123eab119e607070591b9"
+    },
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/inputs/apps/api/package.json",
+      "bytes": 1076,
+      "sha256": "47e9336ad074feb0a319adf997ce5a77c4fcc4a7e4a4937c0afe550b13f112ea"
+    }
+  ],
+  "installed": [
+    {
+      "name": "@oxy.so/contracts",
+      "version": "4.9.0",
+      "path": "/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-contracts-4.9.0.tgz",
+      "source": "1b50557ccfe28b382f5b219405a616b332036d42",
+      "sourceTree": "6ff8352ea7920065590dceda3fff3ca420b94b69",
+      "sha256": "6b1e6a8da92341871d2832834ad063df1a1e84a46dc367786599fdd26be6e635",
+      "published": false,
+      "resolved": "/home/nate/Oxy/tnp/.worktrees/1519-final-sdk-adoption-20261003/node_modules/@oxy.so/contracts",
+      "filesByteEqual": 198,
+      "importers": [
+        "apps/web"
+      ]
+    },
+    {
+      "name": "@oxy.so/protocol",
+      "version": "1.2.2",
+      "path": "/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-protocol-1.2.2.tgz",
+      "source": "1b50557ccfe28b382f5b219405a616b332036d42",
+      "sourceTree": "77ed4e428f59cff076fd44daf42e18a1b39f7fdb",
+      "sha256": "325b20125f1cf5159c36ca7a75f32c83a4560cf41c55526828b1718595acc843",
+      "published": false,
+      "resolved": "/home/nate/Oxy/tnp/.worktrees/1519-final-sdk-adoption-20261003/node_modules/@oxy.so/protocol",
+      "filesByteEqual": 145,
+      "importers": [
+        "apps/web"
+      ]
+    },
+    {
+      "name": "@oxy.so/core",
+      "version": "4.2.0",
+      "path": "/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-core-4.2.0.tgz",
+      "source": "1b50557ccfe28b382f5b219405a616b332036d42",
+      "sourceTree": "3937031b8c95a6b8feff65720905de1ad651689d",
+      "sha256": "83059583068cf96d8dc7e4335fe226126cb795f7c6cfba469f8cec4ef9c6a385",
+      "published": false,
+      "resolved": "/home/nate/Oxy/tnp/.worktrees/1519-final-sdk-adoption-20261003/node_modules/@oxy.so/core",
+      "filesByteEqual": 581,
+      "importers": [
+        "apps/web"
+      ]
+    }
+  ],
+  "published": false
+}

@@ -216,7 +216,8 @@ jobs:
   # only writes immutable API/DNS images; it cannot roll out or scale ECS.
   publish_aws_images:
     needs: [verify, database, docker]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      ${{ vars.OXY_1519_ROLLOUT_HOLD != 'true' && (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     uses: ./.github/workflows/deploy-aws.yml
     permissions:
       id-token: write

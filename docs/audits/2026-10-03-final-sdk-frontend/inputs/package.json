@@ -40,14 +40,14 @@
     "release-it": "^20.2.1"
   },
   "overrides": {
-    "@oxy.so/telemetry": "1.2.0",
-    "@oxy.so/contracts": "4.9.0",
-    "@oxy.so/core": "4.2.0",
-    "@oxy.so/protocol": "1.2.2",
-    "@oxy.so/services": "11.1.0",
+    "@oxy.so/telemetry": "^1.2.0",
+    "@oxy.so/contracts": "file:/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-contracts-4.9.0.tgz",
+    "@oxy.so/core": "file:/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-core-4.2.0.tgz",
+    "@oxy.so/protocol": "file:/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-protocol-1.2.2.tgz",
+    "@oxy.so/services": "file:/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-services-11.1.0.tgz",
     "@oxy.so/bloom": "6.2.1"
   },
   "resolutions": {
-    "@oxy.so/telemetry": "1.2.0"
+    "@oxy.so/telemetry": "^1.2.0"
   }
 }
