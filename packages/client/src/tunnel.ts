@@ -43,6 +43,11 @@ export class TunnelCircuit {
     this.sharedKey = sharedKey;
   }
 
+  /** Whether this circuit runs over the given relay connection. */
+  isOn(relayWs: WebSocket): boolean {
+    return this.relayWs === relayWs;
+  }
+
   /**
    * Send data through the tunnel (encrypts with shared key, wraps in frame).
    */
@@ -215,7 +220,7 @@ export class TunnelManager {
       this.relayConnections.delete(endpoint);
     }
 
-    const tunnelUrl = endpoint.replace(/\/$/, '') + '/tunnel';
+    const tunnelUrl = `${endpoint.replace(/\/$/, '')}/tunnel`;
     const ws = new WebSocket(tunnelUrl);
     ws.binaryType = 'arraybuffer';
 
@@ -239,7 +244,7 @@ export class TunnelManager {
           this.relayConnections.delete(endpoint);
           // Close all circuits on this relay
           for (const [id, circuit] of this.circuits) {
-            if (circuit['relayWs'] === ws) {
+            if (circuit.isOn(ws)) {
               circuit._deliverClose();
               this.circuits.delete(id);
             }

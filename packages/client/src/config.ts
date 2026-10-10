@@ -213,7 +213,7 @@ export function loadConfig(): TnpConfig {
 export function saveConfig(cfg: TnpConfig): void {
   const dir = configDir();
   mkdirSync(dir, { recursive: true });
-  writeFileSync(configPath(), JSON.stringify(cfg, null, 2) + '\n', { mode: 0o600 });
+  writeFileSync(configPath(), `${JSON.stringify(cfg, null, 2)}\n`, { mode: 0o600 });
 }
 
 /** Regex to validate network interface names, preventing command injection. */

@@ -181,7 +181,7 @@ export class SocksProxy {
       // If not cached, query the API directly
       if (!overlayInfo) {
         const nodeInfo = await this.apiClient.getServiceNode(domain);
-        if (nodeInfo && nodeInfo.connectedRelay) {
+        if (nodeInfo?.connectedRelay) {
           overlayInfo = {
             pubKey: nodeInfo.publicKey,
             relay: nodeInfo.connectedRelay,

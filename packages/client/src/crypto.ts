@@ -59,14 +59,14 @@ export function loadOrCreateIdentity(keyPath: string): IdentityKeypair {
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     keyPath,
-    JSON.stringify(
+    `${JSON.stringify(
       {
         publicKey: toBase64(identity.publicKey),
         secretKey: toBase64(identity.secretKey),
       },
       null,
       2,
-    ) + '\n',
+    )}\n`,
     { mode: 0o600 },
   );
 
