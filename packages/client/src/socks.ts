@@ -12,7 +12,7 @@
  * 3. Data:     bidirectional pipe through tunnel
  */
 
-import net from 'net';
+import net from 'node:net';
 import type { TunnelManager } from './tunnel';
 import type { TnpApiClient } from './api';
 

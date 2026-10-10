@@ -14,8 +14,8 @@
  * decide whether a name is TNP's leaks every lookup the user makes.
  */
 
-import { writeFileSync } from 'fs';
-import { join } from 'path';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const SOURCE_URL = 'https://data.iana.org/TLD/tlds-alpha-by-domain.txt';
 const OUTPUT = join(import.meta.dir, '..', 'src', 'iana-root-zone.ts');

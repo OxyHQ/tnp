@@ -10,7 +10,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
-import { join } from 'path';
+import { join } from 'node:path';
 import { config } from '../config.js';
 
 const MIGRATIONS_FOLDER = join(import.meta.dir, '..', '..', 'drizzle');

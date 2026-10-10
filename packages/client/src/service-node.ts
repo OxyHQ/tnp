@@ -10,7 +10,7 @@
  * 6. Sends heartbeats every 30 seconds
  */
 
-import net from 'net';
+import net from 'node:net';
 import {
   loadOrCreateIdentity,
   generateEphemeralKeypair,

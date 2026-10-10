@@ -21,8 +21,8 @@ import {
   type UpstreamConfig,
 } from './dns/upstream';
 import { DnsCache } from './dns/cache';
-import dgram from 'dgram';
-import net from 'net';
+import dgram from 'node:dgram';
+import net from 'node:net';
 
 /**
  * TTL for the synthetic 127.0.0.1 answer that routes an overlay domain into the

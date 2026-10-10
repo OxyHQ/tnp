@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { existsSync, unlinkSync, writeFileSync } from 'fs';
-import { resolve, join } from 'path';
+import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
+import { resolve, join } from 'node:path';
 import {
   loadConfig,
   saveConfig,
@@ -25,11 +25,11 @@ const VERSION = '0.2.0';
 function resolveRealBinaryPath(): string {
   try {
     if (process.platform === 'linux' && existsSync('/proc/self/exe')) {
-      const { readlinkSync } = require('fs');
+      const { readlinkSync } = require('node:fs');
       const real = readlinkSync('/proc/self/exe');
       if (!real.includes('bunfs')) return real;
     }
-    const { execSync } = require('child_process');
+    const { execSync } = require('node:child_process');
     return execSync('which tnp', { encoding: 'utf-8', stdio: 'pipe' }).trim();
   } catch {
     return '/usr/local/bin/tnp';
@@ -229,7 +229,7 @@ function configureDns(config: TnpConfig): boolean {
         );
         return false;
       }
-      const { execSync } = require('child_process');
+      const { execSync } = require('node:child_process');
       execSync(
         `powershell -Command "Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses ('${dnsIp}','1.1.1.1') }"`,
         { stdio: 'pipe' },
@@ -238,8 +238,8 @@ function configureDns(config: TnpConfig): boolean {
       return true;
     } else if (process.platform === 'darwin') {
       // macOS: create resolver files for TNP TLDs
-      const { execSync } = require('child_process');
-      const { mkdirSync: mkdirSyncFs, writeFileSync: writeFileSyncFs } = require('fs');
+      const { execSync } = require('node:child_process');
+      const { mkdirSync: mkdirSyncFs, writeFileSync: writeFileSyncFs } = require('node:fs');
       removeReservedResolverFiles();
       mkdirSyncFs('/etc/resolver', { recursive: true });
       for (const tld of NATIVE_TLDS) {
@@ -265,7 +265,7 @@ function configureDns(config: TnpConfig): boolean {
 
 /** Linux-specific DNS configuration with systemd-resolved or resolv.conf fallback. */
 function configureLinuxDns(config: TnpConfig, addr: string, dnsIp: string): boolean {
-  const { execSync } = require('child_process');
+  const { execSync } = require('node:child_process');
 
   const iface = getDefaultInterface();
   if (!iface) {
@@ -299,7 +299,7 @@ function configureLinuxResolvConf(dnsIp: string): boolean {
     return false;
   }
   try {
-    const { readFileSync: readFileSyncFs, writeFileSync: writeFileSyncFs } = require('fs');
+    const { readFileSync: readFileSyncFs, writeFileSync: writeFileSyncFs } = require('node:fs');
     const current = readFileSyncFs('/etc/resolv.conf', 'utf-8') as string;
     if (!current.includes(dnsIp)) {
       writeFileSyncFs('/etc/resolv.conf', `nameserver ${dnsIp}\n${current}`);
@@ -324,7 +324,7 @@ function restoreDns(): void {
 
   try {
     if (process.platform === 'win32') {
-      const { execSync } = require('child_process');
+      const { execSync } = require('node:child_process');
       execSync(
         `powershell -Command "Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ResetServerAddresses }"`,
         { stdio: 'pipe' },
@@ -347,7 +347,7 @@ function restoreDns(): void {
     } else {
       // Linux: remove our entry from resolv.conf if we added it
       try {
-        const { readFileSync: readFileSyncFs, writeFileSync: writeFileSyncFs } = require('fs');
+        const { readFileSync: readFileSyncFs, writeFileSync: writeFileSyncFs } = require('node:fs');
         const current = readFileSyncFs('/etc/resolv.conf', 'utf-8') as string;
         const restored = current.replace(new RegExp(`nameserver ${escapedIp}\\n?`), '');
         if (restored !== current) {
@@ -369,7 +369,7 @@ function restoreDns(): void {
 
 /** Install autoconnect — register tnp connect to run on system boot/login. */
 function installAutoConnect(): void {
-  const { execSync } = require('child_process');
+  const { execSync } = require('node:child_process');
   const binaryPath = resolveRealBinaryPath();
 
   try {
@@ -381,9 +381,9 @@ function installAutoConnect(): void {
       );
     } else if (process.platform === 'darwin') {
       // macOS: create a LaunchAgent plist
-      const { writeFileSync, mkdirSync } = require('fs');
-      const { homedir } = require('os');
-      const { join } = require('path');
+      const { writeFileSync, mkdirSync } = require('node:fs');
+      const { homedir } = require('node:os');
+      const { join } = require('node:path');
       const plistDir = join(homedir(), 'Library', 'LaunchAgents');
       mkdirSync(plistDir, { recursive: true });
       writeFileSync(
@@ -402,9 +402,9 @@ function installAutoConnect(): void {
       execSync(`launchctl load ~/Library/LaunchAgents/so.oxy.tnp.connect.plist`, { stdio: 'pipe' });
     } else {
       // Linux: create a systemd user service
-      const { writeFileSync, mkdirSync } = require('fs');
-      const { homedir } = require('os');
-      const { join } = require('path');
+      const { writeFileSync, mkdirSync } = require('node:fs');
+      const { homedir } = require('node:os');
+      const { join } = require('node:path');
       const unitDir = join(homedir(), '.config', 'systemd', 'user');
       mkdirSync(unitDir, { recursive: true });
       writeFileSync(
@@ -434,7 +434,7 @@ WantedBy=default.target
 
 /** Remove autoconnect service. */
 function removeAutoConnect(): void {
-  const { execSync } = require('child_process');
+  const { execSync } = require('node:child_process');
   try {
     if (process.platform === 'win32') {
       execSync(`schtasks /Delete /TN "TnpAutoConnect" /F`, { stdio: 'pipe' });
@@ -443,8 +443,8 @@ function removeAutoConnect(): void {
         stdio: 'pipe',
       });
       try {
-        require('fs').unlinkSync(
-          `${require('os').homedir()}/Library/LaunchAgents/so.oxy.tnp.connect.plist`,
+        require('node:fs').unlinkSync(
+          `${require('node:os').homedir()}/Library/LaunchAgents/so.oxy.tnp.connect.plist`,
         );
       } catch (err: unknown) {
         console.warn(
@@ -455,8 +455,8 @@ function removeAutoConnect(): void {
       execSync('systemctl --user stop tnp-connect.service 2>/dev/null', { stdio: 'pipe' });
       execSync('systemctl --user disable tnp-connect.service 2>/dev/null', { stdio: 'pipe' });
       try {
-        require('fs').unlinkSync(
-          `${require('os').homedir()}/.config/systemd/user/tnp-connect.service`,
+        require('node:fs').unlinkSync(
+          `${require('node:os').homedir()}/.config/systemd/user/tnp-connect.service`,
         );
       } catch (err: unknown) {
         console.warn(
@@ -473,7 +473,7 @@ function removeAutoConnect(): void {
 
 /** Kill switch: block all DNS except through TNP. If the tunnel drops, nothing leaks. */
 function enableKillSwitch(): void {
-  const { execSync } = require('child_process');
+  const { execSync } = require('node:child_process');
   const dnsIp = loadConfig().publicDnsIp;
   console.log('[tnp] enabling kill switch...');
 
@@ -541,7 +541,7 @@ function enableKillSwitch(): void {
 
 /** Disable kill switch -- restore normal DNS access. */
 function disableKillSwitch(): void {
-  const { execSync } = require('child_process');
+  const { execSync } = require('node:child_process');
   const dnsIp = loadConfig().publicDnsIp;
   console.log('[tnp] disabling kill switch...');
 
@@ -782,7 +782,7 @@ async function cmdUpdate() {
     }
 
     await Bun.write(tmpPath, dlRes);
-    const { chmodSync, renameSync } = require('fs');
+    const { chmodSync, renameSync } = require('node:fs');
     chmodSync(tmpPath, 0o755);
     renameSync(tmpPath, currentPath);
 

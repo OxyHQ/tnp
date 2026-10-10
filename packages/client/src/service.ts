@@ -1,6 +1,13 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
-import { execSync } from 'child_process';
-import { join } from 'path';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+} from 'node:fs';
+import { execSync } from 'node:child_process';
+import { join } from 'node:path';
 import type { TnpConfig } from './config';
 import { logPath, getDefaultInterface } from './config';
 import { isReservedTld } from '@tnp/namespace';
