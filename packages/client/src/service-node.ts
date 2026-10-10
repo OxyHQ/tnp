@@ -22,6 +22,7 @@ import {
 } from './crypto';
 import { encodeFrame, decodeFrame, FrameType } from '@tnp/protocol';
 import type { TnpApiClient } from './api';
+import { parseLocalTarget } from './parse-input';
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const RECONNECT_DELAY_MS = 5_000;
@@ -57,6 +58,10 @@ export async function startServiceNode(
   config: ServiceNodeConfig,
   apiClient: TnpApiClient,
 ): Promise<void> {
+  // Parse the local target first, so a bad target fails before any key is
+  // written or the domain is registered as served.
+  const { host: targetHost, port: targetPort } = parseLocalTarget(config.localTarget);
+
   // 1. Load or create identity (Ed25519 for signing)
   const identity = loadOrCreateIdentity(config.identityKeyPath);
   console.log(`[service-node] identity public key: ${toBase64(identity.publicKey)}`);
@@ -71,23 +76,9 @@ export async function startServiceNode(
   const domainId = await registerWithApi(config, apiClient, x25519PubKeyBase64);
   console.log(`[service-node] registered for domain: ${config.domain} (id: ${domainId})`);
 
-  // 4. Parse local target (use lastIndexOf to handle IPv6 addresses like [::1]:8080)
-  const lastColon = config.localTarget.lastIndexOf(':');
-  let targetHost: string;
-  let targetPort: number;
-  if (lastColon > 0) {
-    targetHost = config.localTarget.substring(0, lastColon);
-    targetPort = parseInt(config.localTarget.substring(lastColon + 1), 10);
-  } else {
-    targetHost = config.localTarget;
-    targetPort = 80;
-  }
-  if (isNaN(targetPort) || targetPort < 1 || targetPort > 65535) {
-    targetPort = 80;
-  }
   console.log(`[service-node] forwarding to ${targetHost}:${targetPort}`);
 
-  // 5. Connect to relay
+  // 4. Connect to relay
   const circuits = new Map<number, CircuitState>();
   let reconnectDelay = RECONNECT_DELAY_MS;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;

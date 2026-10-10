@@ -9,6 +9,7 @@ import {
   getDefaultInterface,
   type TnpConfig,
 } from './config';
+import { parseLocalTarget } from './parse-input';
 import { DnsProxy } from './proxy';
 import {
   installService,
@@ -610,6 +611,13 @@ async function cmdServe() {
 
   if (!authToken) {
     console.error('[tnp] --token is required for serve mode (Oxy auth token)');
+    process.exit(1);
+  }
+
+  try {
+    parseLocalTarget(target);
+  } catch (err) {
+    console.error(`[tnp] ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
 
