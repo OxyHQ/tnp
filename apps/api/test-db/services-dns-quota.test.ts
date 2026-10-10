@@ -5,7 +5,7 @@ import {
   dnsZones,
   dnsZoneSnapshots,
   operations,
-  providerAccounts,
+  type providerAccounts,
   publicDomains,
 } from '../src/db/schema/index.js';
 import { hashZone, type ZoneChange } from '../src/services/dns/zone.js';
