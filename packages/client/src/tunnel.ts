@@ -17,7 +17,7 @@ import {
   fromBase64,
   toBase64,
 } from './crypto';
-import { encodeFrame, decodeFrame, FrameType } from '@tnp/protocol';
+import { encodeFrame, decodeFrame, type Frame, FrameType } from '@tnp/protocol';
 
 const OPEN_TIMEOUT_MS = 10_000;
 const RELAY_CONNECT_TIMEOUT_MS = 8_000;
@@ -266,7 +266,7 @@ export class TunnelManager {
     const bytes = toUint8Array(data);
     if (bytes.byteLength === 0) return;
 
-    let frame;
+    let frame: Frame;
     try {
       frame = decodeFrame(bytes);
     } catch {

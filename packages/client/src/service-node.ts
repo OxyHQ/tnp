@@ -20,7 +20,7 @@ import {
   toBase64,
   fromBase64,
 } from './crypto';
-import { encodeFrame, decodeFrame, FrameType } from '@tnp/protocol';
+import { encodeFrame, decodeFrame, type Frame, FrameType } from '@tnp/protocol';
 import type { TnpApiClient } from './api';
 import { parseLocalTarget } from './parse-input';
 
@@ -120,7 +120,7 @@ export async function startServiceNode(
       const bytes = raw instanceof ArrayBuffer ? new Uint8Array(raw) : new Uint8Array(0);
       if (bytes.byteLength === 0) return;
 
-      let frame;
+      let frame: Frame;
       try {
         frame = decodeFrame(bytes);
       } catch (err) {

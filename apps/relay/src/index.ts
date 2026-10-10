@@ -6,7 +6,7 @@ import {
 } from './ecosystemActivity.js';
 import type { ServerWebSocket } from 'bun';
 import { ConnectionManager, type ClientData, type ServiceNodeData } from './connections.js';
-import { decodeFrame, encodeFrame, FrameType } from '@tnp/protocol';
+import { decodeFrame, encodeFrame, type Frame, FrameType } from '@tnp/protocol';
 
 const RELAY_PORT = Number(process.env.RELAY_PORT) || 8080;
 const RELAY_HOST = process.env.RELAY_HOST ?? '0.0.0.0';
@@ -127,7 +127,7 @@ const server = Bun.serve<WsData>({
       recordTransport('inbound', ws.data.edgeRegion);
       const bytes = toUint8Array(raw);
 
-      let frame;
+      let frame: Frame;
       try {
         frame = decodeFrame(bytes);
       } catch (err: unknown) {

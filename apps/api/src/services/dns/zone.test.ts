@@ -120,6 +120,13 @@ describe('merging a change set into the full zone', () => {
     expect(add({ host: 'x', type: 'TXT', value: `bad${NUL}`, ttl: 1800, priority: null }).ok).toBe(
       false,
     );
+    const US = String.fromCharCode(0x1f);
+    expect(add({ host: 'x', type: 'TXT', value: `bad${US}`, ttl: 1800, priority: null }).ok).toBe(
+      false,
+    );
+    expect(
+      add({ host: 'x', type: 'TXT', value: 'fine ~ text', ttl: 1800, priority: null }).ok,
+    ).toBe(true);
     expect(
       add({ host: 'bad host', type: 'A', value: '192.0.2.1', ttl: 1800, priority: null }).ok,
     ).toBe(false);

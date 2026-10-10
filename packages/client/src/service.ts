@@ -312,11 +312,14 @@ function statusWindows(): boolean {
 export function installService(binaryPath: string, cfg: TnpConfig): void {
   switch (platform) {
     case 'darwin':
-      return installDarwin(binaryPath, cfg);
+      installDarwin(binaryPath, cfg);
+      return;
     case 'linux':
-      return installLinux(binaryPath, cfg);
+      installLinux(binaryPath, cfg);
+      return;
     case 'win32':
-      return installWindows(binaryPath, cfg);
+      installWindows(binaryPath, cfg);
+      return;
     default:
       throw new Error(`Unsupported platform: ${platform}`);
   }
@@ -325,11 +328,14 @@ export function installService(binaryPath: string, cfg: TnpConfig): void {
 export function uninstallService(): void {
   switch (platform) {
     case 'darwin':
-      return uninstallDarwin();
+      uninstallDarwin();
+      return;
     case 'linux':
-      return uninstallLinux();
+      uninstallLinux();
+      return;
     case 'win32':
-      return uninstallWindows();
+      uninstallWindows();
+      return;
     default:
       throw new Error(`Unsupported platform: ${platform}`);
   }
