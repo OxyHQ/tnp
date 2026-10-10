@@ -11,19 +11,19 @@
  * NXDOMAIN arrives as NXDOMAIN and nothing has to be reconstructed.
  */
 
-import dgram from "dgram";
-import net from "net";
+import dgram from 'dgram';
+import net from 'net';
 
 /** Per-attempt timeout. Kept short because a failover attempt follows. */
 const QUERY_TIMEOUT_MS = 4_000;
 
 /** DNS-over-HTTPS media type, RFC 8484 §4.1. */
-const DOH_CONTENT_TYPE = "application/dns-message";
+const DOH_CONTENT_TYPE = 'application/dns-message';
 
 /** Guard against a hostile or broken upstream returning an enormous body. */
 const MAX_RESPONSE_BYTES = 65535;
 
-export type UpstreamTransport = "classic" | "doh";
+export type UpstreamTransport = 'classic' | 'doh';
 
 export interface UpstreamConfig {
   transport: UpstreamTransport;
@@ -38,7 +38,7 @@ export class UpstreamError extends Error {
     readonly upstream: string,
   ) {
     super(message);
-    this.name = "UpstreamError";
+    this.name = 'UpstreamError';
   }
 }
 
@@ -51,15 +51,15 @@ export class UpstreamError extends Error {
 export function parseUpstream(spec: string): UpstreamConfig {
   const trimmed = spec.trim();
 
-  if (trimmed.startsWith("https://")) {
-    return { transport: "doh", address: trimmed };
+  if (trimmed.startsWith('https://')) {
+    return { transport: 'doh', address: trimmed };
   }
 
   // IPv6 in brackets, optionally with a port: [2001:db8::1]:53
   const bracketed = /^\[([^\]]+)\](?::(\d+))?$/.exec(trimmed);
   if (bracketed) {
     return {
-      transport: "classic",
+      transport: 'classic',
       address: bracketed[1],
       port: bracketed[2] ? Number(bracketed[2]) : 53,
     };
@@ -69,18 +69,15 @@ export function parseUpstream(spec: string): UpstreamConfig {
   // trailing colon-number as a port.
   const withPort = /^([^:]+):(\d+)$/.exec(trimmed);
   if (withPort) {
-    return { transport: "classic", address: withPort[1], port: Number(withPort[2]) };
+    return { transport: 'classic', address: withPort[1], port: Number(withPort[2]) };
   }
 
-  return { transport: "classic", address: trimmed, port: 53 };
+  return { transport: 'classic', address: trimmed, port: 53 };
 }
 
 /** Send a query and return the raw wire response. */
-export async function queryUpstream(
-  upstream: UpstreamConfig,
-  queryBuf: Buffer,
-): Promise<Buffer> {
-  return upstream.transport === "doh"
+export async function queryUpstream(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Buffer> {
+  return upstream.transport === 'doh'
     ? queryDoh(upstream, queryBuf)
     : queryClassicUdp(upstream, queryBuf);
 }
@@ -97,7 +94,7 @@ export async function queryUpstreamTcp(
   queryBuf: Buffer,
 ): Promise<Buffer> {
   // DoH has no truncation: HTTP carries the whole message either way.
-  if (upstream.transport === "doh") return queryDoh(upstream, queryBuf);
+  if (upstream.transport === 'doh') return queryDoh(upstream, queryBuf);
   return queryClassicTcp(upstream, queryBuf);
 }
 
@@ -107,7 +104,7 @@ export async function queryUpstreamTcp(
 
 function queryClassicUdp(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const socket = dgram.createSocket(net.isIPv6(upstream.address) ? "udp6" : "udp4");
+    const socket = dgram.createSocket(net.isIPv6(upstream.address) ? 'udp6' : 'udp4');
     let settled = false;
 
     const finish = (err: Error | null, response?: Buffer) => {
@@ -120,12 +117,12 @@ function queryClassicUdp(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Bu
     };
 
     const timer = setTimeout(
-      () => finish(new UpstreamError("timed out", upstream.address)),
+      () => finish(new UpstreamError('timed out', upstream.address)),
       QUERY_TIMEOUT_MS,
     );
 
-    socket.on("message", (msg) => finish(null, Buffer.from(msg)));
-    socket.on("error", (err) => finish(new UpstreamError(err.message, upstream.address)));
+    socket.on('message', (msg) => finish(null, Buffer.from(msg)));
+    socket.on('error', (err) => finish(new UpstreamError(err.message, upstream.address)));
     socket.send(queryBuf, upstream.port ?? 53, upstream.address, (err) => {
       if (err) finish(new UpstreamError(err.message, upstream.address));
     });
@@ -157,20 +154,22 @@ function queryClassicTcp(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Bu
     };
 
     const timer = setTimeout(
-      () => finish(new UpstreamError("timed out", upstream.address)),
+      () => finish(new UpstreamError('timed out', upstream.address)),
       QUERY_TIMEOUT_MS,
     );
 
-    socket.on("connect", () => socket.write(framed));
-    socket.on("error", (err) => finish(new UpstreamError(err.message, upstream.address)));
-    socket.on("close", () =>
-      finish(new UpstreamError("closed before a complete response", upstream.address)),
+    socket.on('connect', () => socket.write(framed));
+    socket.on('error', (err) => finish(new UpstreamError(err.message, upstream.address)));
+    socket.on('close', () =>
+      finish(new UpstreamError('closed before a complete response', upstream.address)),
     );
 
-    socket.on("data", (chunk: Buffer) => {
+    socket.on('data', (chunk: Buffer) => {
       buffer = Buffer.concat([buffer, chunk]);
       if (buffer.byteLength > MAX_RESPONSE_BYTES + 2) {
-        finish(new UpstreamError("response exceeded the maximum DNS message size", upstream.address));
+        finish(
+          new UpstreamError('response exceeded the maximum DNS message size', upstream.address),
+        );
         return;
       }
       if (buffer.byteLength < 2) return;
@@ -192,8 +191,8 @@ async function queryDoh(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Buf
   outgoing.writeUInt16BE(0, 0);
 
   const response = await fetch(upstream.address, {
-    method: "POST",
-    headers: { "content-type": DOH_CONTENT_TYPE, accept: DOH_CONTENT_TYPE },
+    method: 'POST',
+    headers: { 'content-type': DOH_CONTENT_TYPE, accept: DOH_CONTENT_TYPE },
     body: outgoing,
     signal: AbortSignal.timeout(QUERY_TIMEOUT_MS),
   });
@@ -202,7 +201,7 @@ async function queryDoh(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Buf
     throw new UpstreamError(`returned HTTP ${response.status}`, upstream.address);
   }
 
-  const contentType = response.headers.get("content-type") ?? "";
+  const contentType = response.headers.get('content-type') ?? '';
   if (!contentType.startsWith(DOH_CONTENT_TYPE)) {
     // A JSON body here means the endpoint speaks the JSON API, not RFC 8484 —
     // a misconfiguration worth naming rather than failing to parse later.
@@ -214,7 +213,7 @@ async function queryDoh(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Buf
 
   const body = Buffer.from(await response.arrayBuffer());
   if (body.byteLength > MAX_RESPONSE_BYTES) {
-    throw new UpstreamError("response exceeded the maximum DNS message size", upstream.address);
+    throw new UpstreamError('response exceeded the maximum DNS message size', upstream.address);
   }
 
   // Restore the caller's ID, which we zeroed above.

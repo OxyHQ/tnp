@@ -9,7 +9,7 @@ import type {
   RelayRegistration,
   ServiceNodeHeartbeatRequest,
   ServiceNodeLookup,
-} from "@tnp/shared-types";
+} from '@tnp/shared-types';
 
 // The `/dns/resolve` response is declared once, in @tnp/shared-types, next to
 // the other registry contracts. `rcode` is optional there because an older API
@@ -41,9 +41,9 @@ export class TnpApiClient {
     timeoutMs: number,
   ): Promise<TResponse> {
     const res = await fetch(`${this.baseUrl}${path}`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify(body),
@@ -92,10 +92,12 @@ export class TnpApiClient {
       throw new Error(`TNP API returned ${res.status}`);
     }
 
-    const data = await res.json() as Array<string | { name: string; custom?: boolean }>;
+    const data = (await res.json()) as Array<string | { name: string; custom?: boolean }>;
     // Handle both old format (string[]) and new format ({ name, custom }[])
     return data.map((t) =>
-      typeof t === "string" ? { name: t, custom: true } : { name: t.name, custom: t.custom ?? true }
+      typeof t === 'string'
+        ? { name: t, custom: true }
+        : { name: t.name, custom: t.custom ?? true },
     );
   }
 
@@ -119,7 +121,7 @@ export class TnpApiClient {
   /**
    * Get list of active relays.
    */
-  async getRelays(operator?: "oxy" | "community"): Promise<RelayDirectoryEntry[]> {
+  async getRelays(operator?: 'oxy' | 'community'): Promise<RelayDirectoryEntry[]> {
     let url = `${this.baseUrl}/relays`;
     if (operator) {
       url += `?operator=${encodeURIComponent(operator)}`;
@@ -136,35 +138,17 @@ export class TnpApiClient {
   /**
    * Register a service node (auth required).
    */
-  async registerServiceNode(
-    domainId: string,
-    publicKey: string,
-    authToken: string,
-  ): Promise<void> {
+  async registerServiceNode(domainId: string, publicKey: string, authToken: string): Promise<void> {
     const request: RegisterServiceNodeRequest = { domainId, publicKey };
-    await this.postContract(
-      "/nodes/register",
-      request,
-      authToken,
-      WRITE_TIMEOUT_MS,
-    );
+    await this.postContract('/nodes/register', request, authToken, WRITE_TIMEOUT_MS);
   }
 
   /**
    * Send service node heartbeat (auth required).
    */
-  async sendHeartbeat(
-    domainId: string,
-    connectedRelay: string,
-    authToken: string,
-  ): Promise<void> {
+  async sendHeartbeat(domainId: string, connectedRelay: string, authToken: string): Promise<void> {
     const request: ServiceNodeHeartbeatRequest = { domainId, connectedRelay };
-    await this.postContract(
-      "/nodes/heartbeat",
-      request,
-      authToken,
-      WRITE_TIMEOUT_MS,
-    );
+    await this.postContract('/nodes/heartbeat', request, authToken, WRITE_TIMEOUT_MS);
   }
 
   /**
@@ -180,7 +164,7 @@ export class TnpApiClient {
     authToken: string,
   ): Promise<RelayRegistration> {
     return this.postContract<RegisterRelayRequest, RelayRegistration>(
-      "/relays/register",
+      '/relays/register',
       request,
       authToken,
       REGISTER_TIMEOUT_MS,
@@ -196,11 +180,6 @@ export class TnpApiClient {
    */
   async sendRelayHeartbeat(endpoint: string, authToken: string): Promise<void> {
     const request: RelayHeartbeatRequest = { endpoint };
-    await this.postContract(
-      "/relays/heartbeat",
-      request,
-      authToken,
-      WRITE_TIMEOUT_MS,
-    );
+    await this.postContract('/relays/heartbeat', request, authToken, WRITE_TIMEOUT_MS);
   }
 }

@@ -79,11 +79,5 @@
         "noUselessEscapeInString": "warn"
       }
     }
-  },
-  "overrides": [
-    {
-      "includes": ["packages/client/**"],
-      "formatter": { "enabled": false }
-    }
-  ]
+  }
 }

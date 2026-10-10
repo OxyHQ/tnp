@@ -8,7 +8,7 @@
  * ignored on ENCODE — the header encoder reads only `flags`. It is therefore
  * declared read-only-in-practice and never set on a packet being encoded.
  */
-declare module "dns-packet" {
+declare module 'dns-packet' {
   interface DecodedPacket {
     /** e.g. "NOERROR", "NXDOMAIN", "SERVFAIL". Populated on decode only. */
     rcode: string;

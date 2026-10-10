@@ -1,6 +1,6 @@
-import { TnpApiClient, type DnsAnswer } from "./api";
-import type { DnsProxyConfig } from "./config";
-import { classifyName, isReservedTld, normalizeName, type NamespaceType } from "@tnp/namespace";
+import { TnpApiClient, type DnsAnswer } from './api';
+import type { DnsProxyConfig } from './config';
+import { classifyName, isReservedTld, normalizeName, type NamespaceType } from '@tnp/namespace';
 import {
   buildResponse,
   decodeQuery,
@@ -12,17 +12,17 @@ import {
   type Answer,
   type DecodedPacket,
   type Packet,
-} from "./dns/wire";
+} from './dns/wire';
 import {
   parseUpstream,
   queryUpstream,
   queryUpstreamTcp,
   UpstreamError,
   type UpstreamConfig,
-} from "./dns/upstream";
-import { DnsCache } from "./dns/cache";
-import dgram from "dgram";
-import net from "net";
+} from './dns/upstream';
+import { DnsCache } from './dns/cache';
+import dgram from 'dgram';
+import net from 'net';
 
 /**
  * TTL for the synthetic 127.0.0.1 answer that routes an overlay domain into the
@@ -33,7 +33,7 @@ import net from "net";
 const OVERLAY_TTL_SECONDS = 60;
 
 /** Record types the TNP registry can serve. */
-const TNP_RECORD_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "NS"] as const;
+const TNP_RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'TXT', 'MX', 'NS'] as const;
 type TnpRecordType = (typeof TNP_RECORD_TYPES)[number];
 
 /**
@@ -69,7 +69,10 @@ export class DnsProxy {
   /** Handle for the periodic TLD sync interval, so it can be cleared on stop. */
   private tldSyncInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor(config: DnsProxyConfig, private readonly onTraffic?: (direction: 'inbound' | 'outbound') => void) {
+  constructor(
+    config: DnsProxyConfig,
+    private readonly onTraffic?: (direction: 'inbound' | 'outbound') => void,
+  ) {
     this.config = config;
     this.apiClient = new TnpApiClient(config.apiBaseUrl);
     this.cache = new DnsCache<DnsAnswer>({ maxEntries: config.cacheMaxEntries });
@@ -78,12 +81,19 @@ export class DnsProxy {
 
   /** Observability must never change DNS answers or expose query contents. */
   private observeTraffic(direction: 'inbound' | 'outbound'): void {
-    try { this.onTraffic?.(direction); } catch { /* Best-effort counters. */ }
+    try {
+      this.onTraffic?.(direction);
+    } catch {
+      /* Best-effort counters. */
+    }
   }
 
   get listening(): boolean {
-    try { return Boolean(this.tcpServer?.listening && this.udpServer?.address()); }
-    catch { return false; }
+    try {
+      return Boolean(this.tcpServer?.listening && this.udpServer?.address());
+    } catch {
+      return false;
+    }
   }
 
   /** Enable overlay routing (DNS returns 127.0.0.1 for overlay domains). */
@@ -127,12 +137,12 @@ export class DnsProxy {
     const refused: string[] = [];
 
     for (const t of tlds) {
-      const name = normalizeName(typeof t === "string" ? t : t.name);
+      const name = normalizeName(typeof t === 'string' ? t : t.name);
       if (isReservedTld(name)) {
         refused.push(name);
         continue;
       }
-      const custom = typeof t === "string" ? true : (t.custom ?? true);
+      const custom = typeof t === 'string' ? true : (t.custom ?? true);
       this.tlds.set(name, custom);
     }
 
@@ -140,10 +150,10 @@ export class DnsProxy {
     // one may now belong to the other namespace.
     this.cache.clear();
 
-    console.log(`[tnp] loaded ${this.tlds.size} TLDs: ${[...this.tlds.keys()].join(", ")}`);
+    console.log(`[tnp] loaded ${this.tlds.size} TLDs: ${[...this.tlds.keys()].join(', ')}`);
     if (refused.length > 0) {
       console.warn(
-        `[tnp] refused ${refused.length} reserved TLD(s) offered by the API: ${refused.join(", ")}. ` +
+        `[tnp] refused ${refused.length} reserved TLD(s) offered by the API: ${refused.join(', ')}. ` +
           `These are delegated by the public DNS root and are resolved upstream, not by TNP.`,
       );
     }
@@ -171,20 +181,20 @@ export class DnsProxy {
     const value = record.value.trim();
 
     switch (record.type.toUpperCase() as TnpRecordType) {
-      case "A":
-        return net.isIPv4(value) ? { type: "A", name, ttl, data: value } : null;
-      case "AAAA":
-        return net.isIPv6(value) ? { type: "AAAA", name, ttl, data: value } : null;
-      case "CNAME":
-        return { type: "CNAME", name, ttl, data: value };
-      case "NS":
-        return { type: "NS", name, ttl, data: value };
-      case "TXT":
-        return { type: "TXT", name, ttl, data: value };
-      case "MX": {
+      case 'A':
+        return net.isIPv4(value) ? { type: 'A', name, ttl, data: value } : null;
+      case 'AAAA':
+        return net.isIPv6(value) ? { type: 'AAAA', name, ttl, data: value } : null;
+      case 'CNAME':
+        return { type: 'CNAME', name, ttl, data: value };
+      case 'NS':
+        return { type: 'NS', name, ttl, data: value };
+      case 'TXT':
+        return { type: 'TXT', name, ttl, data: value };
+      case 'MX': {
         const match = /^(\d+)\s+(\S+)$/.exec(value);
         return {
-          type: "MX",
+          type: 'MX',
           name,
           ttl,
           data: match
@@ -222,9 +232,9 @@ export class DnsProxy {
         relay: response.overlay.relay,
       });
 
-      if (type === "A" || type === "ANY") {
+      if (type === 'A' || type === 'ANY') {
         const synthetic: DnsAnswer[] = [
-          { name: clean, type: "A", value: "127.0.0.1", ttl: OVERLAY_TTL_SECONDS },
+          { name: clean, type: 'A', value: '127.0.0.1', ttl: OVERLAY_TTL_SECONDS },
         ];
         this.cache.set(clean, type, synthetic);
         return synthetic;
@@ -277,9 +287,9 @@ export class DnsProxy {
     // returned an empty NOERROR here, which tells the client the name exists
     // and simply has no records (audit B3).
     console.error(
-      `[tnp] all ${this.upstreams.length} upstream(s) failed: ${lastError?.message ?? "unknown"}`,
+      `[tnp] all ${this.upstreams.length} upstream(s) failed: ${lastError?.message ?? 'unknown'}`,
     );
-    return encode(buildResponse(query, { rcode: "SERVFAIL" }));
+    return encode(buildResponse(query, { rcode: 'SERVFAIL' }));
   }
 
   /**
@@ -293,19 +303,19 @@ export class DnsProxy {
       query = decodeQuery(queryBuf);
     } catch (err) {
       console.warn(`[tnp] malformed query: ${err instanceof Error ? err.message : String(err)}`);
-      return encodeRawError(queryBuf, "FORMERR") ?? Buffer.alloc(0);
+      return encodeRawError(queryBuf, 'FORMERR') ?? Buffer.alloc(0);
     }
 
     const question = query.questions?.[0];
     if (!question) {
-      return encode(buildResponse(query, { rcode: "FORMERR" }));
+      return encode(buildResponse(query, { rcode: 'FORMERR' }));
     }
 
     // Classification happens first, offline, always. A public-dns name never
     // reaches the TNP API — that is both the namespace guarantee and a privacy
     // property, since it stops the API from learning the user's public
     // browsing (docs/architecture/naming.md rule N4).
-    if (this.classify(question.name) !== "tnp-native") {
+    if (this.classify(question.name) !== 'tnp-native') {
       const response = await this.forwardUpstream(query, queryBuf);
       return forUdp ? capUdp(query, response) : response;
     }
@@ -321,11 +331,7 @@ export class DnsProxy {
    * upstream would let a TNP registration outrank a public one by simply not
    * existing yet.
    */
-  private async resolveNative(
-    query: DecodedPacket,
-    qname: string,
-    qtype: string,
-  ): Promise<Packet> {
+  private async resolveNative(query: DecodedPacket, qname: string, qtype: string): Promise<Packet> {
     let records: DnsAnswer[] | null;
     try {
       records = await this.resolveTnp(qname, qtype);
@@ -336,21 +342,21 @@ export class DnsProxy {
       console.error(
         `[tnp] registry lookup failed for ${qname}: ${err instanceof Error ? err.message : String(err)}`,
       );
-      return buildResponse(query, { rcode: "SERVFAIL" });
+      return buildResponse(query, { rcode: 'SERVFAIL' });
     }
 
     // The registry knows of no such name. NXDOMAIN is distinguishable from
     // "exists, no records of this type"; the old resolver returned NOERROR for
     // both, so a client could not tell them apart.
     if (records === null) {
-      return buildResponse(query, { rcode: "NXDOMAIN", authoritative: true });
+      return buildResponse(query, { rcode: 'NXDOMAIN', authoritative: true });
     }
 
     const answers = records
       .map((record) => this.toAnswer(qname, record))
       .filter((answer): answer is NonNullable<typeof answer> => answer !== null);
 
-    return buildResponse(query, { rcode: "NOERROR", answers, authoritative: true });
+    return buildResponse(query, { rcode: 'NOERROR', answers, authoritative: true });
   }
 
   async start(): Promise<void> {
@@ -359,12 +365,12 @@ export class DnsProxy {
     console.log(
       `[tnp] upstream resolvers: ${this.upstreams
         .map((u) => `${u.transport}:${u.address}`)
-        .join(", ")}`,
+        .join(', ')}`,
     );
 
-    this.udpServer = dgram.createSocket({ type: "udp4", reuseAddr: true });
+    this.udpServer = dgram.createSocket({ type: 'udp4', reuseAddr: true });
 
-    this.udpServer.on("message", (msg: Buffer, rinfo: dgram.RemoteInfo) => {
+    this.udpServer.on('message', (msg: Buffer, rinfo: dgram.RemoteInfo) => {
       this.observeTraffic('inbound');
       // Defer to the next tick so a synchronous handler cannot block Bun's
       // event loop while the upstream fetch is in flight.
@@ -383,7 +389,7 @@ export class DnsProxy {
       }, 0);
     });
 
-    this.udpServer.on("error", (err: Error) => console.error(`[tnp] udp server error: ${err}`));
+    this.udpServer.on('error', (err: Error) => console.error(`[tnp] udp server error: ${err}`));
     this.udpServer.bind(listenPort, listenAddr);
 
     // TCP DNS frames each message with a two-byte length prefix.
@@ -394,14 +400,14 @@ export class DnsProxy {
       let buffer = Buffer.alloc(0);
 
       socket.setTimeout(TCP_IDLE_TIMEOUT_MS);
-      socket.on("timeout", () => socket.destroy());
-      socket.on("error", () => socket.destroy());
+      socket.on('timeout', () => socket.destroy());
+      socket.on('error', () => socket.destroy());
 
-      socket.on("data", (data: Buffer) => {
+      socket.on('data', (data: Buffer) => {
         buffer = Buffer.concat([buffer, data]);
 
         if (buffer.length > TCP_MAX_BUFFER) {
-          console.warn("[tnp] tcp client exceeded max buffer size, closing connection");
+          console.warn('[tnp] tcp client exceeded max buffer size, closing connection');
           socket.destroy();
           return;
         }
@@ -474,14 +480,14 @@ export class DnsProxy {
  */
 export function parseUpstreams(spec: string): UpstreamConfig[] {
   const entries = spec
-    .split(",")
+    .split(',')
     .map((part) => part.trim())
     .filter((part) => part.length > 0)
     .map(parseUpstream);
 
   if (entries.length === 0) {
     throw new Error(
-      "No upstream DNS resolver configured. Set upstreamDns to an address " +
+      'No upstream DNS resolver configured. Set upstreamDns to an address ' +
         '(e.g. "1.1.1.1") or an RFC 8484 DoH URL.',
     );
   }
@@ -509,8 +515,8 @@ function capUdp(query: DecodedPacket, response: Buffer): Buffer {
 }
 
 function ednsLimit(query: DecodedPacket): number {
-  const opt = query.additionals?.find((record) => record.type === "OPT");
-  if (opt && opt.type === "OPT") return Math.min(Math.max(opt.udpPayloadSize, 512), 4096);
+  const opt = query.additionals?.find((record) => record.type === 'OPT');
+  if (opt && opt.type === 'OPT') return Math.min(Math.max(opt.udpPayloadSize, 512), 4096);
   return 512;
 }
 

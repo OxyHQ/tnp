@@ -7,20 +7,20 @@
  * - XSalsa20-Poly1305 symmetric encryption (data payloads)
  */
 
-import nacl from "tweetnacl";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname } from "path";
+import nacl from 'tweetnacl';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname } from 'path';
 
 // ---------------------------------------------------------------------------
 // Base64 helpers
 // ---------------------------------------------------------------------------
 
 export function toBase64(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString("base64");
+  return Buffer.from(bytes).toString('base64');
 }
 
 export function fromBase64(base64: string): Uint8Array {
-  return new Uint8Array(Buffer.from(base64, "base64"));
+  return new Uint8Array(Buffer.from(base64, 'base64'));
 }
 
 // ---------------------------------------------------------------------------
@@ -46,7 +46,7 @@ export function generateIdentity(): IdentityKeypair {
  */
 export function loadOrCreateIdentity(keyPath: string): IdentityKeypair {
   if (existsSync(keyPath)) {
-    const raw = readFileSync(keyPath, "utf-8");
+    const raw = readFileSync(keyPath, 'utf-8');
     const data = JSON.parse(raw) as { publicKey: string; secretKey: string };
     return {
       publicKey: fromBase64(data.publicKey),
@@ -66,7 +66,7 @@ export function loadOrCreateIdentity(keyPath: string): IdentityKeypair {
       },
       null,
       2,
-    ) + "\n",
+    ) + '\n',
     { mode: 0o600 },
   );
 
@@ -94,10 +94,7 @@ export function generateEphemeralKeypair(): EphemeralKeypair {
  * Compute a shared secret from our X25519 secret key and the peer's public key.
  * Uses nacl.box.before() to precompute the XSalsa20 key.
  */
-export function computeSharedKey(
-  ourSecretKey: Uint8Array,
-  theirPublicKey: Uint8Array,
-): Uint8Array {
+export function computeSharedKey(ourSecretKey: Uint8Array, theirPublicKey: Uint8Array): Uint8Array {
   return nacl.box.before(theirPublicKey, ourSecretKey);
 }
 
@@ -125,7 +122,7 @@ export function encrypt(data: Uint8Array, sharedKey: Uint8Array): Uint8Array {
  */
 export function decrypt(encrypted: Uint8Array, sharedKey: Uint8Array): Uint8Array {
   if (encrypted.byteLength < nacl.secretbox.nonceLength) {
-    throw new Error("Encrypted data too short to contain a nonce");
+    throw new Error('Encrypted data too short to contain a nonce');
   }
 
   const nonce = encrypted.subarray(0, nacl.secretbox.nonceLength);
@@ -133,7 +130,7 @@ export function decrypt(encrypted: Uint8Array, sharedKey: Uint8Array): Uint8Arra
   const plaintext = nacl.secretbox.open(ciphertext, nonce, sharedKey);
 
   if (plaintext === null) {
-    throw new Error("Decryption failed: invalid key or tampered data");
+    throw new Error('Decryption failed: invalid key or tampered data');
   }
 
   return plaintext;

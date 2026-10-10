@@ -10,14 +10,14 @@
  * (circuitId + type) to route traffic.
  */
 
-import { decodeFrame, encodeFrame, FrameType } from "@tnp/protocol";
+import { decodeFrame, encodeFrame, FrameType } from '@tnp/protocol';
 import {
   normalizeRelayEndpoint,
   parseRegisterRelayRequest,
   type RegisterRelayRequest,
-} from "@tnp/shared-types";
-import type { TnpApiClient } from "./api";
-import { loadOrCreateIdentity, toBase64 } from "./crypto";
+} from '@tnp/shared-types';
+import type { TnpApiClient } from './api';
+import { loadOrCreateIdentity, toBase64 } from './crypto';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -99,11 +99,7 @@ class EmbeddedConnectionManager {
     return this.serviceNodes.get(domain);
   }
 
-  openCircuit(
-    circuitId: number,
-    clientWs: WsSender,
-    domain: string,
-  ): boolean {
+  openCircuit(circuitId: number, clientWs: WsSender, domain: string): boolean {
     const serviceWs = this.serviceNodes.get(domain);
     if (!serviceWs) return false;
 
@@ -202,7 +198,7 @@ export class RelayNode {
     if (endpoint === null) {
       throw new Error(
         `Cannot register relay: endpoint ${JSON.stringify(this.config.endpoint)} is not a ws:// or wss:// URL. ` +
-          "Set the public URL clients dial, e.g. --endpoint wss://relay.example.com",
+          'Set the public URL clients dial, e.g. --endpoint wss://relay.example.com',
       );
     }
 
@@ -214,7 +210,7 @@ export class RelayNode {
       // A relay run from the `tnp` binary is community-operated by definition.
       // The registry currently takes this claim on trust; authenticating it is
       // relay authentication, which is Phase 3 work (docs/architecture/relays.md §2).
-      operator: "community",
+      operator: 'community',
       capacity: {
         maxConnections: this.config.maxConnections,
         bandwidth: this.config.bandwidth,
@@ -231,7 +227,7 @@ export class RelayNode {
 
   async start(apiClient: TnpApiClient): Promise<void> {
     if (this.running) {
-      throw new Error("Relay node is already running");
+      throw new Error('Relay node is already running');
     }
 
     // Register with the API before binding anything. A relay that cannot be
@@ -268,41 +264,41 @@ export class RelayNode {
       fetch(req, server) {
         const url = new URL(req.url);
 
-        if (url.pathname === "/service") {
-          const domain = url.searchParams.get("domain")?.trim().toLowerCase();
+        if (url.pathname === '/service') {
+          const domain = url.searchParams.get('domain')?.trim().toLowerCase();
           if (!domain) {
-            return new Response("Missing ?domain query parameter", { status: 400 });
+            return new Response('Missing ?domain query parameter', { status: 400 });
           }
-          const upgraded = server.upgrade(req, { data: { type: "service" as const, domain } });
+          const upgraded = server.upgrade(req, { data: { type: 'service' as const, domain } });
           if (!upgraded) {
-            return new Response("WebSocket upgrade failed", { status: 500 });
+            return new Response('WebSocket upgrade failed', { status: 500 });
           }
           return undefined;
         }
 
-        if (url.pathname === "/tunnel") {
+        if (url.pathname === '/tunnel') {
           if (manager.circuitCount >= maxConn) {
-            return new Response("Max connections reached", { status: 503 });
+            return new Response('Max connections reached', { status: 503 });
           }
-          const upgraded = server.upgrade(req, { data: { type: "client" as const } });
+          const upgraded = server.upgrade(req, { data: { type: 'client' as const } });
           if (!upgraded) {
-            return new Response("WebSocket upgrade failed", { status: 500 });
+            return new Response('WebSocket upgrade failed', { status: 500 });
           }
           return undefined;
         }
 
-        if (url.pathname === "/health") {
-          return Response.json({ ok: true, service: "tnp-relay-node" });
+        if (url.pathname === '/health') {
+          return Response.json({ ok: true, service: 'tnp-relay-node' });
         }
 
-        if (url.pathname === "/stats") {
+        if (url.pathname === '/stats') {
           return Response.json({
             serviceNodes: manager.serviceNodeCount,
             activeCircuits: manager.circuitCount,
           });
         }
 
-        return new Response("Not Found", { status: 404 });
+        return new Response('Not Found', { status: 404 });
       },
 
       websocket: {
@@ -311,7 +307,7 @@ export class RelayNode {
         open(ws) {
           trackConnection();
           const data = ws.data as { type: string; domain?: string };
-          if (data.type === "service" && data.domain) {
+          if (data.type === 'service' && data.domain) {
             manager.registerServiceNode(data.domain, ws);
           }
         },
@@ -329,7 +325,7 @@ export class RelayNode {
 
           const data = ws.data as { type: string; domain?: string };
 
-          if (data.type === "service") {
+          if (data.type === 'service') {
             handleServiceMessage(manager, ws, frame);
           } else {
             handleClientMessage(manager, ws, frame);
@@ -338,7 +334,7 @@ export class RelayNode {
 
         close(ws) {
           const data = ws.data as { type: string; domain?: string };
-          if (data.type === "service" && data.domain) {
+          if (data.type === 'service' && data.domain) {
             manager.removeServiceNode(data.domain);
           } else {
             manager.removeAllCircuitsForSocket(ws);
@@ -404,7 +400,7 @@ function handleClientMessage(
     case FrameType.OPEN: {
       const domain = textDecoder.decode(frame.payload).trim().toLowerCase();
       if (!domain) {
-        sendError(clientWs, frame.circuitId, "Empty domain in OPEN frame");
+        sendError(clientWs, frame.circuitId, 'Empty domain in OPEN frame');
         return;
       }
 
@@ -431,7 +427,7 @@ function handleClientMessage(
     case FrameType.DATA: {
       const circuit = manager.getCircuit(frame.circuitId);
       if (!circuit) {
-        sendError(clientWs, frame.circuitId, "Unknown circuit");
+        sendError(clientWs, frame.circuitId, 'Unknown circuit');
         return;
       }
       circuit.serviceWs.sendBinary(encodeFrame(frame.circuitId, FrameType.DATA, frame.payload));
@@ -441,14 +437,16 @@ function handleClientMessage(
     case FrameType.CLOSE: {
       const circuit = manager.getCircuit(frame.circuitId);
       if (circuit) {
-        circuit.serviceWs.sendBinary(encodeFrame(frame.circuitId, FrameType.CLOSE, new Uint8Array(0)));
+        circuit.serviceWs.sendBinary(
+          encodeFrame(frame.circuitId, FrameType.CLOSE, new Uint8Array(0)),
+        );
       }
       manager.closeCircuit(frame.circuitId);
       break;
     }
 
     default:
-      sendError(clientWs, frame.circuitId, "Unexpected frame type from client");
+      sendError(clientWs, frame.circuitId, 'Unexpected frame type from client');
   }
 }
 

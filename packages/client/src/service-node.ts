@@ -10,7 +10,7 @@
  * 6. Sends heartbeats every 30 seconds
  */
 
-import net from "net";
+import net from 'net';
 import {
   loadOrCreateIdentity,
   generateEphemeralKeypair,
@@ -19,9 +19,9 @@ import {
   decrypt,
   toBase64,
   fromBase64,
-} from "./crypto";
-import { encodeFrame, decodeFrame, FrameType } from "@tnp/protocol";
-import type { TnpApiClient } from "./api";
+} from './crypto';
+import { encodeFrame, decodeFrame, FrameType } from '@tnp/protocol';
+import type { TnpApiClient } from './api';
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const RECONNECT_DELAY_MS = 5_000;
@@ -72,7 +72,7 @@ export async function startServiceNode(
   console.log(`[service-node] registered for domain: ${config.domain} (id: ${domainId})`);
 
   // 4. Parse local target (use lastIndexOf to handle IPv6 addresses like [::1]:8080)
-  const lastColon = config.localTarget.lastIndexOf(":");
+  const lastColon = config.localTarget.lastIndexOf(':');
   let targetHost: string;
   let targetPort: number;
   if (lastColon > 0) {
@@ -94,15 +94,15 @@ export async function startServiceNode(
 
   function connectToRelay(): void {
     const serviceUrl =
-      config.relayEndpoint.replace(/\/$/, "") +
+      config.relayEndpoint.replace(/\/$/, '') +
       `/service?domain=${encodeURIComponent(config.domain)}`;
 
     console.log(`[service-node] connecting to relay: ${serviceUrl}`);
     const ws = new WebSocket(serviceUrl);
-    ws.binaryType = "arraybuffer";
+    ws.binaryType = 'arraybuffer';
 
-    ws.addEventListener("open", () => {
-      console.log("[service-node] connected to relay");
+    ws.addEventListener('open', () => {
+      console.log('[service-node] connected to relay');
       reconnectDelay = RECONNECT_DELAY_MS;
 
       // Start heartbeats
@@ -124,7 +124,7 @@ export async function startServiceNode(
         });
     });
 
-    ws.addEventListener("message", (event: MessageEvent) => {
+    ws.addEventListener('message', (event: MessageEvent) => {
       const raw = event.data;
       const bytes = raw instanceof ArrayBuffer ? new Uint8Array(raw) : new Uint8Array(0);
       if (bytes.byteLength === 0) return;
@@ -141,8 +141,8 @@ export async function startServiceNode(
       handleFrame(ws, frame, circuits, x25519Keypair, targetHost, targetPort);
     });
 
-    ws.addEventListener("close", () => {
-      console.log("[service-node] disconnected from relay");
+    ws.addEventListener('close', () => {
+      console.log('[service-node] disconnected from relay');
       cleanupCircuits(circuits);
 
       if (heartbeatTimer) {
@@ -156,7 +156,7 @@ export async function startServiceNode(
       reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
     });
 
-    ws.addEventListener("error", () => {
+    ws.addEventListener('error', () => {
       // The close event will fire after this, triggering reconnect
     });
   }
@@ -164,15 +164,15 @@ export async function startServiceNode(
   connectToRelay();
 
   // Keep the process alive
-  process.on("SIGINT", () => {
-    console.log("\n[service-node] shutting down...");
+  process.on('SIGINT', () => {
+    console.log('\n[service-node] shutting down...');
     cleanupCircuits(circuits);
     if (heartbeatTimer) clearInterval(heartbeatTimer);
     process.exit(0);
   });
 
-  process.on("SIGTERM", () => {
-    console.log("[service-node] shutting down...");
+  process.on('SIGTERM', () => {
+    console.log('[service-node] shutting down...');
     cleanupCircuits(circuits);
     if (heartbeatTimer) clearInterval(heartbeatTimer);
     process.exit(0);
@@ -193,7 +193,15 @@ function handleFrame(
 ): void {
   switch (frame.type) {
     case FrameType.OPEN: {
-      handleOpen(ws, frame.circuitId, frame.payload, circuits, x25519Keypair, targetHost, targetPort);
+      handleOpen(
+        ws,
+        frame.circuitId,
+        frame.payload,
+        circuits,
+        x25519Keypair,
+        targetHost,
+        targetPort,
+      );
       break;
     }
     case FrameType.DATA: {
@@ -224,11 +232,11 @@ function handleOpen(
 ): void {
   // Parse payload: domain\0base64(clientEphemeralPubKey)
   const payloadStr = textDecoder.decode(payload);
-  const nullIdx = payloadStr.indexOf("\0");
+  const nullIdx = payloadStr.indexOf('\0');
 
   if (nullIdx === -1) {
     console.error(`[service-node] OPEN frame for circuit ${circuitId}: missing key in payload`);
-    const errPayload = textEncoder.encode("Missing ephemeral key in OPEN");
+    const errPayload = textEncoder.encode('Missing ephemeral key in OPEN');
     ws.send(encodeFrame(circuitId, FrameType.ERROR, errPayload));
     return;
   }
@@ -241,7 +249,7 @@ function handleOpen(
     clientPubKey = fromBase64(clientPubKeyBase64);
   } catch {
     console.error(`[service-node] OPEN frame for circuit ${circuitId}: invalid key encoding`);
-    const errPayload = textEncoder.encode("Invalid ephemeral key encoding");
+    const errPayload = textEncoder.encode('Invalid ephemeral key encoding');
     ws.send(encodeFrame(circuitId, FrameType.ERROR, errPayload));
     return;
   }
@@ -260,7 +268,7 @@ function handleOpen(
   circuits.set(circuitId, state);
 
   // Local target -> encrypted -> relay
-  localSocket.on("data", (chunk: Buffer) => {
+  localSocket.on('data', (chunk: Buffer) => {
     const encrypted = encrypt(
       new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength),
       sharedKey,
@@ -268,12 +276,12 @@ function handleOpen(
     ws.send(encodeFrame(circuitId, FrameType.DATA, encrypted));
   });
 
-  localSocket.on("close", () => {
+  localSocket.on('close', () => {
     circuits.delete(circuitId);
     ws.send(encodeFrame(circuitId, FrameType.CLOSE, new Uint8Array(0)));
   });
 
-  localSocket.on("error", (err: Error) => {
+  localSocket.on('error', (err: Error) => {
     console.error(`[service-node] circuit ${circuitId} local error: ${err.message}`);
     circuits.delete(circuitId);
     const errPayload = textEncoder.encode(`Local connection error: ${err.message}`);
@@ -299,7 +307,7 @@ function handleData(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[service-node] circuit ${circuitId} decrypt error: ${msg}`);
-    const errPayload = textEncoder.encode("Decryption failed");
+    const errPayload = textEncoder.encode('Decryption failed');
     ws.send(encodeFrame(circuitId, FrameType.ERROR, errPayload));
   }
 }
@@ -307,10 +315,7 @@ function handleData(
 /**
  * Handle CLOSE frame: close the local TCP connection.
  */
-function handleClose(
-  circuitId: number,
-  circuits: Map<number, CircuitState>,
-): void {
+function handleClose(circuitId: number, circuits: Map<number, CircuitState>): void {
   const state = circuits.get(circuitId);
   if (!state) return;
 
