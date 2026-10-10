@@ -12,8 +12,8 @@
  * nothing about purchasability.
  */
 
-import { domainToASCII, domainToUnicode } from "node:url";
-import { isPublicRootTld } from "@tnp/namespace";
+import { domainToASCII, domainToUnicode } from 'node:url';
+import { isPublicRootTld } from '@tnp/namespace';
 
 /** A public name, split at the suffix a provider offers. */
 export interface PublicDomainName {
@@ -28,8 +28,13 @@ export interface PublicDomainName {
 }
 
 export type NormalizedName =
-  | { readonly ok: true; readonly ascii: string; readonly unicode: string; readonly labels: readonly string[] }
-  | { readonly ok: false; readonly reason: "syntax" | "not_public"; readonly detail: string };
+  | {
+      readonly ok: true;
+      readonly ascii: string;
+      readonly unicode: string;
+      readonly labels: readonly string[];
+    }
+  | { readonly ok: false; readonly reason: 'syntax' | 'not_public'; readonly detail: string };
 
 const MAX_NAME_LENGTH = 253;
 const MAX_LABEL_LENGTH = 63;
@@ -44,25 +49,29 @@ const ASCII_LABEL_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
  * never silently accepted as a public domain.
  */
 export function normalizePublicName(input: string): NormalizedName {
-  const trimmed = input.trim().replace(/\.$/, "");
-  if (!trimmed) return { ok: false, reason: "syntax", detail: "name is empty" };
+  const trimmed = input.trim().replace(/\.$/, '');
+  if (!trimmed) return { ok: false, reason: 'syntax', detail: 'name is empty' };
   if (/[\s/@:]/.test(trimmed)) {
-    return { ok: false, reason: "syntax", detail: "name may not contain spaces, slashes, @ or :" };
+    return { ok: false, reason: 'syntax', detail: 'name may not contain spaces, slashes, @ or :' };
   }
 
   const ascii = domainToASCII(trimmed).toLowerCase();
-  if (!ascii) return { ok: false, reason: "syntax", detail: "name is not a valid domain name" };
+  if (!ascii) return { ok: false, reason: 'syntax', detail: 'name is not a valid domain name' };
   if (ascii.length > MAX_NAME_LENGTH) {
-    return { ok: false, reason: "syntax", detail: `name must be at most ${MAX_NAME_LENGTH} characters` };
+    return {
+      ok: false,
+      reason: 'syntax',
+      detail: `name must be at most ${MAX_NAME_LENGTH} characters`,
+    };
   }
 
-  const labels = ascii.split(".");
+  const labels = ascii.split('.');
   if (labels.length < 2) {
-    return { ok: false, reason: "syntax", detail: "name must include a top-level domain" };
+    return { ok: false, reason: 'syntax', detail: 'name must include a top-level domain' };
   }
   for (const label of labels) {
     if (label.length === 0 || label.length > MAX_LABEL_LENGTH || !ASCII_LABEL_RE.test(label)) {
-      return { ok: false, reason: "syntax", detail: `invalid label ${JSON.stringify(label)}` };
+      return { ok: false, reason: 'syntax', detail: `invalid label ${JSON.stringify(label)}` };
     }
   }
 
@@ -70,7 +79,7 @@ export function normalizePublicName(input: string): NormalizedName {
   if (!isPublicRootTld(tld)) {
     return {
       ok: false,
-      reason: "not_public",
+      reason: 'not_public',
       detail: `.${tld} is not delegated by the public DNS root`,
     };
   }
@@ -80,7 +89,11 @@ export function normalizePublicName(input: string): NormalizedName {
 
 export type SplitResult =
   | { readonly ok: true; readonly name: PublicDomainName }
-  | { readonly ok: false; readonly reason: "syntax" | "not_public" | "suffix_not_offered" | "not_registrable"; readonly detail: string };
+  | {
+      readonly ok: false;
+      readonly reason: 'syntax' | 'not_public' | 'suffix_not_offered' | 'not_registrable';
+      readonly detail: string;
+    };
 
 /**
  * Split a name at the longest suffix in `offeredSuffixes`.
@@ -98,13 +111,13 @@ export function splitRegistrableName(
 
   const { labels } = normalized;
   for (let i = 1; i < labels.length; i++) {
-    const suffix = labels.slice(i).join(".");
+    const suffix = labels.slice(i).join('.');
     if (!offeredSuffixes.has(suffix)) continue;
     if (i !== 1) {
       return {
         ok: false,
-        reason: "not_registrable",
-        detail: `${normalized.ascii} is a host under ${labels.slice(i - 1).join(".")}, not a registrable name`,
+        reason: 'not_registrable',
+        detail: `${normalized.ascii} is a host under ${labels.slice(i - 1).join('.')}, not a registrable name`,
       };
     }
     return {
@@ -115,7 +128,7 @@ export function splitRegistrableName(
 
   return {
     ok: false,
-    reason: "suffix_not_offered",
+    reason: 'suffix_not_offered',
     detail: `no offered extension matches ${normalized.ascii}`,
   };
 }

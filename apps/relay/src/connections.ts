@@ -1,4 +1,4 @@
-import type { ServerWebSocket } from "bun";
+import type { ServerWebSocket } from 'bun';
 
 export interface ServiceNodeData {
   edgeRegion?: string;
@@ -7,7 +7,7 @@ export interface ServiceNodeData {
 
 export interface ClientData {
   edgeRegion?: string;
-  type: "client";
+  type: 'client';
 }
 
 export interface Circuit {
@@ -41,17 +41,13 @@ export class ConnectionManager {
       this.removeAllCircuitsForServiceNode(domain);
     }
     this.serviceNodes.set(domain, ws);
-    console.log(
-      `[relay] service node registered: ${domain} (total: ${this.serviceNodes.size})`,
-    );
+    console.log(`[relay] service node registered: ${domain} (total: ${this.serviceNodes.size})`);
   }
 
   removeServiceNode(domain: string): void {
     this.serviceNodes.delete(domain);
     this.removeAllCircuitsForServiceNode(domain);
-    console.log(
-      `[relay] service node removed: ${domain} (total: ${this.serviceNodes.size})`,
-    );
+    console.log(`[relay] service node removed: ${domain} (total: ${this.serviceNodes.size})`);
   }
 
   hasServiceNode(domain: string): boolean {
@@ -69,11 +65,7 @@ export class ConnectionManager {
    * Returns `true` if the service node exists and the circuit was created,
    * `false` otherwise (caller should send an ERROR frame).
    */
-  openCircuit(
-    circuitId: number,
-    clientWs: ServerWebSocket<ClientData>,
-    domain: string,
-  ): boolean {
+  openCircuit(circuitId: number, clientWs: ServerWebSocket<ClientData>, domain: string): boolean {
     const serviceWs = this.serviceNodes.get(domain);
     if (!serviceWs) {
       return false;
@@ -98,9 +90,7 @@ export class ConnectionManager {
   closeCircuit(circuitId: number): void {
     const removed = this.circuits.delete(circuitId);
     if (removed) {
-      console.log(
-        `[relay] circuit closed: ${circuitId} (active: ${this.circuits.size})`,
-      );
+      console.log(`[relay] circuit closed: ${circuitId} (active: ${this.circuits.size})`);
     }
   }
 

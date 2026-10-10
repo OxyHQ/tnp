@@ -47,6 +47,10 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile --cpu='*' --os='*'
 
+      # Formatting and lint for every workspace, from the root biome.json.
+      - name: Lint and format check (Biome)
+        run: bunx biome ci .
+
       - name: Typecheck
         run: bun run typecheck
 

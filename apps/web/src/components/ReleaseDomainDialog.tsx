@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { useEffect, useId, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface ReleaseDomainDialogProps {
   /** The full name, e.g. `nate.ox`, which must be typed to confirm. */
@@ -26,11 +26,11 @@ export default function ReleaseDomainDialog({
   onConfirm,
   onCancel,
 }: ReleaseDomainDialogProps) {
-  const { t } = useTranslation("dashboard");
+  const { t } = useTranslation('dashboard');
   const id = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [typed, setTyped] = useState("");
+  const [typed, setTyped] = useState('');
 
   const matches = typed.trim().toLowerCase() === domain.toLowerCase();
 
@@ -41,15 +41,15 @@ export default function ReleaseDomainDialog({
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Escape" && !pending) {
+    if (e.key === 'Escape' && !pending) {
       e.stopPropagation();
       onCancel();
       return;
     }
-    if (e.key !== "Tab" || !dialogRef.current) return;
+    if (e.key !== 'Tab' || !dialogRef.current) return;
 
     const focusable = Array.from(
-      dialogRef.current.querySelectorAll<HTMLElement>("input, button:not([disabled])"),
+      dialogRef.current.querySelectorAll<HTMLElement>('input, button:not([disabled])'),
     );
     if (focusable.length === 0) return;
     const first = focusable[0];
@@ -85,21 +85,24 @@ export default function ReleaseDomainDialog({
         className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-lg"
       >
         <h2 id={`${id}-title`} className="mb-3 font-mono text-sm font-medium text-destructive">
-          {t("release.title", { domain })}
+          {t('release.title', { domain })}
         </h2>
-        <div id={`${id}-description`} className="mb-4 space-y-2 font-mono text-xs text-muted-foreground">
-          <p>{t("release.consequences")}</p>
+        <div
+          id={`${id}-description`}
+          className="mb-4 space-y-2 font-mono text-xs text-muted-foreground"
+        >
+          <p>{t('release.consequences')}</p>
           <ul className="list-disc space-y-1 pl-5">
-            <li>{t("release.recordsDeleted")}</li>
-            <li>{t("release.nodeDeleted")}</li>
-            <li>{t("release.nameReleased")}</li>
+            <li>{t('release.recordsDeleted')}</li>
+            <li>{t('release.nodeDeleted')}</li>
+            <li>{t('release.nameReleased')}</li>
           </ul>
-          <p>{t("release.irreversible")}</p>
+          <p>{t('release.irreversible')}</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <label htmlFor={`${id}-confirm`} className="font-mono text-xs text-muted-foreground">
-              {t("release.typeToConfirm", { domain })}
+              {t('release.typeToConfirm', { domain })}
             </label>
             <input
               ref={inputRef}
@@ -122,7 +125,7 @@ export default function ReleaseDomainDialog({
               disabled={pending}
               className="cursor-pointer rounded-md border border-border px-3 py-2 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
             >
-              {t("release.cancel")}
+              {t('release.cancel')}
             </button>
             <button
               type="submit"
@@ -130,7 +133,7 @@ export default function ReleaseDomainDialog({
               aria-busy={pending}
               className="cursor-pointer rounded-md border border-destructive/40 bg-error-subtle px-3 py-2 font-mono text-xs text-error-text transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {pending ? t("release.releasing") : t("release.confirm")}
+              {pending ? t('release.releasing') : t('release.confirm')}
             </button>
           </div>
         </form>

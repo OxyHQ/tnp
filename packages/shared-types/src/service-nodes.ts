@@ -7,9 +7,9 @@
  * endpoints were on right up until they did not.
  */
 
-import { asRecord, stringField, type ParseResult } from "./parse.js";
+import { asRecord, stringField, type ParseResult } from './parse.js';
 
-export type ServiceNodeStatus = "online" | "offline";
+export type ServiceNodeStatus = 'online' | 'offline';
 
 /**
  * A domain id as the registry issues it.
@@ -43,7 +43,7 @@ export interface ServiceNodeHeartbeatRequest {
 }
 
 export interface ServiceNodeHeartbeatResponse {
-  status: "ok";
+  status: 'ok';
 }
 
 /** `GET /nodes/:domain` response. */
@@ -56,11 +56,11 @@ export interface ServiceNodeLookup {
 }
 
 function domainIdField(record: Record<string, unknown>): ParseResult<string> {
-  const domainId = stringField(record, "domainId");
+  const domainId = stringField(record, 'domainId');
   if (!domainId.ok) return domainId;
 
   if (!UUID_RE.test(domainId.value)) {
-    return { ok: false, error: "domainId must be a uuid" };
+    return { ok: false, error: 'domainId must be a uuid' };
   }
   return domainId;
 }
@@ -69,12 +69,12 @@ export function parseRegisterServiceNodeRequest(
   body: unknown,
 ): ParseResult<RegisterServiceNodeRequest> {
   const record = asRecord(body);
-  if (!record) return { ok: false, error: "request body must be an object" };
+  if (!record) return { ok: false, error: 'request body must be an object' };
 
   const domainId = domainIdField(record);
   if (!domainId.ok) return domainId;
 
-  const publicKey = stringField(record, "publicKey");
+  const publicKey = stringField(record, 'publicKey');
   if (!publicKey.ok) return publicKey;
 
   return { ok: true, value: { domainId: domainId.value, publicKey: publicKey.value } };
@@ -84,12 +84,12 @@ export function parseServiceNodeHeartbeatRequest(
   body: unknown,
 ): ParseResult<ServiceNodeHeartbeatRequest> {
   const record = asRecord(body);
-  if (!record) return { ok: false, error: "request body must be an object" };
+  if (!record) return { ok: false, error: 'request body must be an object' };
 
   const domainId = domainIdField(record);
   if (!domainId.ok) return domainId;
 
-  const connectedRelay = stringField(record, "connectedRelay");
+  const connectedRelay = stringField(record, 'connectedRelay');
   if (!connectedRelay.ok) return connectedRelay;
 
   return {

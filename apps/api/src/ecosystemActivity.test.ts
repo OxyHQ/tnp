@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import type { createEcosystemTraffic } from '@oxy.so/core/server';
-import { canAuthenticateAsOxyService, getEcosystemActivity, startEcosystemActivity } from './ecosystemActivity';
+import {
+  canAuthenticateAsOxyService,
+  getEcosystemActivity,
+  startEcosystemActivity,
+} from './ecosystemActivity';
 
 /**
  * The identity answer is INJECTED rather than arranged.
@@ -21,8 +25,17 @@ describe('tnp-api ecosystem activity bootstrap', () => {
     delete process.env.OXY_SERVICE_API_KEY;
     delete process.env.OXY_SERVICE_API_SECRET;
     let installations = 0;
-    const create = (() => ({ installFetch() { installations++; }, record() {} })) as unknown as typeof createEcosystemTraffic;
-    startEcosystemActivity(() => true, () => true, create);
+    const create = (() => ({
+      installFetch() {
+        installations++;
+      },
+      record() {},
+    })) as unknown as typeof createEcosystemTraffic;
+    startEcosystemActivity(
+      () => true,
+      () => true,
+      create,
+    );
     expect(installations).toBe(1);
     expect(getEcosystemActivity()).toBeDefined();
   });
@@ -31,8 +44,16 @@ describe('tnp-api ecosystem activity bootstrap', () => {
     // The honest "this process cannot act as itself here" — a laptop, a CI box.
     // Asserted through the injected answer, which is what production computes
     // from the two together.
-    const create = (() => { throw new Error('must not run'); }) as unknown as typeof createEcosystemTraffic;
-    expect(() => startEcosystemActivity(() => true, () => false, create)).not.toThrow();
+    const create = (() => {
+      throw new Error('must not run');
+    }) as unknown as typeof createEcosystemTraffic;
+    expect(() =>
+      startEcosystemActivity(
+        () => true,
+        () => false,
+        create,
+      ),
+    ).not.toThrow();
   });
 
   /**

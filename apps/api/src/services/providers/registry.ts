@@ -8,15 +8,11 @@
  * and can never be selected by a running process.
  */
 
-import type {
-  DnsAdapter,
-  ProviderAccountRef,
-  RegistrarAdapter,
-} from "./contracts.js";
-import { ProviderError } from "./errors.js";
-import type { SecretResolver } from "./secrets.js";
+import type { DnsAdapter, ProviderAccountRef, RegistrarAdapter } from './contracts.js';
+import { ProviderError } from './errors.js';
+import type { SecretResolver } from './secrets.js';
 
-export type QuotaPriority = "interactive" | "critical";
+export type QuotaPriority = 'interactive' | 'critical';
 
 /**
  * Admission control for provider calls, shared by every replica.
@@ -72,7 +68,10 @@ export class ProviderRegistry {
   registrar(account: ProviderAccountConfig): RegistrarAdapter {
     const factory = this.#factory(account);
     if (!factory.createRegistrar) {
-      throw new ProviderError("unsupported", `adapter ${factory.adapter} does not implement registration`);
+      throw new ProviderError(
+        'unsupported',
+        `adapter ${factory.adapter} does not implement registration`,
+      );
     }
     return factory.createRegistrar(account, this.deps);
   }
@@ -80,7 +79,10 @@ export class ProviderRegistry {
   dns(account: ProviderAccountConfig): DnsAdapter {
     const factory = this.#factory(account);
     if (!factory.createDns) {
-      throw new ProviderError("unsupported", `adapter ${factory.adapter} does not implement DNS hosting`);
+      throw new ProviderError(
+        'unsupported',
+        `adapter ${factory.adapter} does not implement DNS hosting`,
+      );
     }
     return factory.createDns(account, this.deps);
   }
@@ -88,7 +90,7 @@ export class ProviderRegistry {
   #factory(account: ProviderAccountConfig): AdapterFactory {
     const factory = this.#factories.get(account.ref.adapter);
     if (!factory) {
-      throw new ProviderError("unsupported", `no adapter registered for ${account.ref.adapter}`);
+      throw new ProviderError('unsupported', `no adapter registered for ${account.ref.adapter}`);
     }
     return factory;
   }

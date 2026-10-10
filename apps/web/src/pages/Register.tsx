@@ -1,13 +1,9 @@
-import { useState, useEffect } from "react";
-import { Helmet } from "react-helmet-async";
-import { useTranslation } from "react-i18next";
-import { useAuth } from "../lib/auth";
-import { apiFetch } from "../lib/api";
-import {
-  availabilityMessageKey,
-  parentDomain,
-  type AvailabilityResult,
-} from "../lib/availability";
+import { useState, useEffect } from 'react';
+import { Helmet } from 'react-helmet-async';
+import { useTranslation } from 'react-i18next';
+import { useAuth } from '../lib/auth';
+import { apiFetch } from '../lib/api';
+import { availabilityMessageKey, parentDomain, type AvailabilityResult } from '../lib/availability';
 
 interface TLD {
   _id: string;
@@ -15,11 +11,11 @@ interface TLD {
 }
 
 export default function Register() {
-  const { t } = useTranslation(["register", "common"]);
+  const { t } = useTranslation(['register', 'common']);
   const { isAuthenticated, signIn } = useAuth();
   const [tlds, setTlds] = useState<TLD[]>([]);
-  const [name, setName] = useState("");
-  const [tld, setTld] = useState("ox");
+  const [name, setName] = useState('');
+  const [tld, setTld] = useState('ox');
   const [availability, setAvailability] = useState<AvailabilityResult | null>(null);
   const available = availability?.available ?? null;
   const [checking, setChecking] = useState(false);
@@ -29,13 +25,17 @@ export default function Register() {
 
   useEffect(() => {
     let ignore = false;
-    apiFetch<TLD[]>("/tlds").then((data) => {
-      if (!ignore) {
-        setTlds(data);
-        if (data.length > 0) setTld(data[0].name);
-      }
-    }).catch((err) => console.error("Failed to load TLDs:", err));
-    return () => { ignore = true; };
+    apiFetch<TLD[]>('/tlds')
+      .then((data) => {
+        if (!ignore) {
+          setTlds(data);
+          if (data.length > 0) setTld(data[0].name);
+        }
+      })
+      .catch((err) => console.error('Failed to load TLDs:', err));
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -52,14 +52,17 @@ export default function Register() {
           if (!ignore) setAvailability({ ...data, domain: data.domain ?? domain });
         })
         .catch((err) => {
-          console.error("Domain availability check failed:", err);
+          console.error('Domain availability check failed:', err);
           if (!ignore) setAvailability(null);
         })
         .finally(() => {
           if (!ignore) setChecking(false);
         });
     }, 400);
-    return () => { ignore = true; clearTimeout(timer); };
+    return () => {
+      ignore = true;
+      clearTimeout(timer);
+    };
   }, [name, tld]);
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -68,14 +71,14 @@ export default function Register() {
     setSuccess(null);
     setRegistering(true);
     try {
-      await apiFetch("/domains/register", {
-        method: "POST",
+      await apiFetch('/domains/register', {
+        method: 'POST',
         body: JSON.stringify({ name, tld }),
       });
-      setSuccess(t("register:registerSuccess", { domain: `${name}.${tld}` }));
-      setName("");
+      setSuccess(t('register:registerSuccess', { domain: `${name}.${tld}` }));
+      setName('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("register:registrationFailed"));
+      setError(err instanceof Error ? err.message : t('register:registrationFailed'));
     } finally {
       setRegistering(false);
     }
@@ -85,24 +88,22 @@ export default function Register() {
     return (
       <div className="mx-auto max-w-[1200px] px-4 py-24 text-center lg:px-6">
         <Helmet>
-          <title>{t("register:meta.title")} — TNP</title>
-          <meta name="description" content={t("register:meta.description")} />
+          <title>{t('register:meta.title')} — TNP</title>
+          <meta name="description" content={t('register:meta.description')} />
           <link rel="canonical" href="https://tnp.network/register" />
-          <meta property="og:title" content={`${t("register:meta.title")} — TNP`} />
-          <meta property="og:description" content={t("register:meta.ogDescription")} />
+          <meta property="og:title" content={`${t('register:meta.title')} — TNP`} />
+          <meta property="og:description" content={t('register:meta.ogDescription')} />
           <meta property="og:url" content="https://tnp.network/register" />
         </Helmet>
-        <h1 className="mb-4 font-pixel text-xl text-primary-text">
-          {t("register:title")}
-        </h1>
+        <h1 className="mb-4 font-pixel text-xl text-primary-text">{t('register:title')}</h1>
         <p className="mb-8 font-mono text-sm text-muted-foreground/70">
-          {t("register:signInPrompt")}
+          {t('register:signInPrompt')}
         </p>
         <button
           onClick={() => signIn()}
           className="cursor-pointer rounded-md border border-primary/30 bg-primary/10 px-4 py-2.5 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20"
         >
-          [{t("common:auth.signInWithOxy")}]
+          [{t('common:auth.signInWithOxy')}]
         </button>
       </div>
     );
@@ -111,12 +112,10 @@ export default function Register() {
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
       <Helmet>
-        <title>{t("register:meta.title")} — TNP</title>
-        <meta name="description" content={t("register:meta.descriptionForm")} />
+        <title>{t('register:meta.title')} — TNP</title>
+        <meta name="description" content={t('register:meta.descriptionForm')} />
       </Helmet>
-      <h1 className="mb-8 font-pixel text-xl text-primary-text">
-        {t("register:title")}
-      </h1>
+      <h1 className="mb-8 font-pixel text-xl text-primary-text">{t('register:title')}</h1>
 
       <form onSubmit={handleRegister} className="space-y-5">
         <div className="flex gap-2">
@@ -124,7 +123,7 @@ export default function Register() {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value.toLowerCase())}
-            placeholder={t("register:placeholder")}
+            placeholder={t('register:placeholder')}
             className="flex-1 rounded-md border border-border bg-surface px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
             required
           />
@@ -144,7 +143,7 @@ export default function Register() {
         {name && !checking && availability !== null && (
           <p
             role="status"
-            className={`font-mono text-sm ${availability.available ? "text-primary-text" : "text-error-text"}`}
+            className={`font-mono text-sm ${availability.available ? 'text-primary-text' : 'text-error-text'}`}
           >
             {t(availabilityMessageKey(availability), {
               domain: availability.domain,
@@ -153,7 +152,9 @@ export default function Register() {
           </p>
         )}
         {checking && (
-          <p className="font-mono text-sm text-muted-foreground/70">{t("register:checkingAvailability")}</p>
+          <p className="font-mono text-sm text-muted-foreground/70">
+            {t('register:checkingAvailability')}
+          </p>
         )}
 
         {error && <p className="font-mono text-sm text-error-text">{error}</p>}
@@ -164,7 +165,9 @@ export default function Register() {
           disabled={!available || registering}
           className="w-full cursor-pointer rounded-md border border-primary/30 bg-primary/10 px-4 py-2.5 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {registering ? t("register:registering") : t("register:registerButton", { domain: `${name || "domain"}.${tld}` })}
+          {registering
+            ? t('register:registering')
+            : t('register:registerButton', { domain: `${name || 'domain'}.${tld}` })}
         </button>
       </form>
     </div>

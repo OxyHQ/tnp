@@ -36,6 +36,8 @@ bun run dev                 # Both API & web (concurrent)
 bun run dev:api             # API only (Bun watch)
 bun run dev:web             # Web only (Vite)
 bun run seed                # Seed database with initial TLDs
+bun run lint                # Biome lint + format check (CI runs `bunx biome ci .`)
+bun run lint:fix            # Biome safe fixes + formatting
 cd apps/web && bun run build        # Build web (tsc + vite build)
 cd packages/client && bun run build # Compile CLI to binary (dist/tnp)
 ```
@@ -110,7 +112,7 @@ Key modules in `packages/client/src/`:
 ## Gotchas
 
 - **DNS/parking IP**: `TNP_PARKING_IP` and `TNP_PUBLIC_DNS` MUST be set to the AWS NLB EIP at deploy time. Never hardcode IP values.
-- **Gates**: `bun run typecheck` and `bun run test` at the repo root fan out to every workspace with `bun run --filter '*'` and exit non-zero if any fails. `ci.yml` runs both on every PR, and both deploy workflows `needs:` them, so a red `main` cannot ship. Run them locally before pushing.
+- **Gates**: `bun run typecheck` and `bun run test` at the repo root fan out to every workspace with `bun run --filter '*'` and exit non-zero if any fails. `ci.yml` runs both on every PR, and both deploy workflows `needs:` them, so a red `main` cannot ship. Run them locally before pushing. `ci.yml` also runs `bunx biome ci .` (root `biome.json`); `packages/client/**` is linted but not formatted, because any change under it triggers `release-client.yml`, which rebuilds and republishes the CLI release — format it only alongside a real client release.
 - **`apps/dns-server` imports `packages/client` by relative path** without declaring the dependency. That is why audit B1 (a `TnpConfig` built with 5 of 18 required fields) went unnoticed for so long. The resolver now takes a narrow `DnsProxyConfig` instead, but the relative import stands until Phase 2 extracts `@tnp/resolver` — do not add more cross-workspace relative imports; extract a package instead.
 - **The relay implementation exists twice** — `apps/relay/src/` and `packages/client/src/relay-node.ts` — with the same bugs in both. A fix to one is not a fix.
 - **A request body is a contract, and a contract lives in `@tnp/shared-types`.** Never write a request shape twice. An API route validates with the package's parser and destructures the parsed value; the client builds a value of the same declared type. Both hold for the relay, service-node and DNS-record endpoints; move any other endpoint the same way when you touch it, rather than hand-matching a new literal against a route you read once — that is exactly how `registerRelay` came to send `{port, location}` to an endpoint requiring `{endpoint, publicKey, operator, capacity}` for the whole life of the feature (audit B2). The gate is two-sided and both halves are needed: `packages/client/src/api.contract.test.ts` captures the bytes the real client sends and feeds them to the real parser, `apps/api/src/routes/*.contract.test.ts` drives the real router over HTTP with no database (a rejected body is a 400 from the contract, an accepted one reaches the handler and 500s at `getDb()`).

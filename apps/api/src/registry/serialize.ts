@@ -7,7 +7,7 @@
  * `...row`. The owner DTO is the public one plus what only the owner needs.
  */
 
-import { nativeExpiryState } from "@tnp/namespace";
+import { nativeExpiryState } from '@tnp/namespace';
 import type {
   DnsRecordDto,
   OwnedDomain,
@@ -15,8 +15,8 @@ import type {
   OwnedDomainWithRecords,
   PublicDomain,
   PublicDomainWithRecords,
-} from "@tnp/shared-types";
-import type { dnsRecords, domains } from "../db/schema/index.js";
+} from '@tnp/shared-types';
+import type { dnsRecords, domains } from '../db/schema/index.js';
 
 type DomainRow = typeof domains.$inferSelect;
 type DnsRecordRow = typeof dnsRecords.$inferSelect;

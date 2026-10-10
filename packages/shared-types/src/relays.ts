@@ -21,16 +21,16 @@ import {
   optionalStringField,
   stringField,
   type ParseResult,
-} from "./parse.js";
+} from './parse.js';
 
 /**
  * Who runs a relay. A directory fact clients may weigh, not a privileged
  * status — see `docs/architecture/relays.md` §1.
  */
-export type RelayOperator = "oxy" | "community";
+export type RelayOperator = 'oxy' | 'community';
 
 /** Directory liveness, driven by heartbeats. */
-export type RelayStatus = "active" | "degraded" | "offline";
+export type RelayStatus = 'active' | 'degraded' | 'offline';
 
 /**
  * What a relay advertises it can carry.
@@ -83,7 +83,7 @@ export interface RelayHeartbeatRequest {
 }
 
 export interface RelayHeartbeatResponse {
-  status: "ok";
+  status: 'ok';
 }
 
 /** One entry of the `GET /relays` directory listing. */
@@ -95,7 +95,7 @@ export interface RelayDirectoryEntry {
   status: RelayStatus;
 }
 
-const RELAY_ENDPOINT_PROTOCOLS = new Set(["ws:", "wss:"]);
+const RELAY_ENDPOINT_PROTOCOLS = new Set(['ws:', 'wss:']);
 
 /**
  * Canonical form of a relay endpoint, or `null` if it is not one.
@@ -120,59 +120,55 @@ export function normalizeRelayEndpoint(raw: string): string | null {
   }
 
   if (!RELAY_ENDPOINT_PROTOCOLS.has(url.protocol)) return null;
-  if (url.username !== "" || url.password !== "") return null;
-  if (url.search !== "" || url.hash !== "") return null;
-  if (url.hostname === "") return null;
+  if (url.username !== '' || url.password !== '') return null;
+  if (url.search !== '' || url.hash !== '') return null;
+  if (url.hostname === '') return null;
 
   // `url.host` is already lowercased and carries the port only when it is
   // non-default for the scheme.
-  return `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, "")}`;
+  return `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, '')}`;
 }
 
-function relayEndpointField(
-  record: Record<string, unknown>,
-): ParseResult<string> {
-  const raw = stringField(record, "endpoint");
+function relayEndpointField(record: Record<string, unknown>): ParseResult<string> {
+  const raw = stringField(record, 'endpoint');
   if (!raw.ok) return raw;
 
   const endpoint = normalizeRelayEndpoint(raw.value);
   if (endpoint === null) {
     return {
       ok: false,
-      error: "endpoint must be a ws:// or wss:// URL with no credentials, query or fragment",
+      error: 'endpoint must be a ws:// or wss:// URL with no credentials, query or fragment',
     };
   }
   return { ok: true, value: endpoint };
 }
 
-export function parseRegisterRelayRequest(
-  body: unknown,
-): ParseResult<RegisterRelayRequest> {
+export function parseRegisterRelayRequest(body: unknown): ParseResult<RegisterRelayRequest> {
   const record = asRecord(body);
-  if (!record) return { ok: false, error: "request body must be an object" };
+  if (!record) return { ok: false, error: 'request body must be an object' };
 
   const endpoint = relayEndpointField(record);
   if (!endpoint.ok) return endpoint;
 
-  const publicKey = stringField(record, "publicKey");
+  const publicKey = stringField(record, 'publicKey');
   if (!publicKey.ok) return publicKey;
 
   const operator = record.operator;
-  if (operator !== "oxy" && operator !== "community") {
+  if (operator !== 'oxy' && operator !== 'community') {
     return { ok: false, error: "operator must be 'oxy' or 'community'" };
   }
 
   const capacity = asRecord(record.capacity);
   if (!capacity) {
-    return { ok: false, error: "capacity with maxConnections and bandwidth is required" };
+    return { ok: false, error: 'capacity with maxConnections and bandwidth is required' };
   }
 
-  const maxConnections = integerField(capacity, "maxConnections", 1, MAX_RELAY_CONNECTIONS);
+  const maxConnections = integerField(capacity, 'maxConnections', 1, MAX_RELAY_CONNECTIONS);
   if (!maxConnections.ok) {
     return { ok: false, error: `capacity.${maxConnections.error}` };
   }
 
-  const bandwidth = integerField(capacity, "bandwidth", 0, MAX_RELAY_BANDWIDTH_MBPS);
+  const bandwidth = integerField(capacity, 'bandwidth', 0, MAX_RELAY_BANDWIDTH_MBPS);
   if (!bandwidth.ok) {
     return { ok: false, error: `capacity.${bandwidth.error}` };
   }
@@ -180,7 +176,7 @@ export function parseRegisterRelayRequest(
   // Tolerant only here, and only in the safe direction: an unlabelled relay is
   // a relay, so an absent label is `""` rather than a rejection. Every field
   // the registry actually depends on is required above.
-  const location = optionalStringField(record, "location");
+  const location = optionalStringField(record, 'location');
   if (!location.ok) return location;
 
   return {
@@ -195,11 +191,9 @@ export function parseRegisterRelayRequest(
   };
 }
 
-export function parseRelayHeartbeatRequest(
-  body: unknown,
-): ParseResult<RelayHeartbeatRequest> {
+export function parseRelayHeartbeatRequest(body: unknown): ParseResult<RelayHeartbeatRequest> {
   const record = asRecord(body);
-  if (!record) return { ok: false, error: "request body must be an object" };
+  if (!record) return { ok: false, error: 'request body must be an object' };
 
   const endpoint = relayEndpointField(record);
   if (!endpoint.ok) return endpoint;

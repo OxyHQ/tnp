@@ -35,7 +35,7 @@ import {
   type ErrorCodeValue,
   type ErrorScopeValue,
   type FrameTypeValue,
-} from "./constants.js";
+} from './constants.js';
 
 export interface Frame {
   version: number;
@@ -59,7 +59,7 @@ export class FrameDecodeError extends Error {
     readonly code: ErrorCodeValue,
   ) {
     super(message);
-    this.name = "FrameDecodeError";
+    this.name = 'FrameDecodeError';
   }
 }
 
@@ -126,7 +126,7 @@ export function decodeFrame(data: Uint8Array): Frame {
     // version needs to be told that, not handed a generic parse failure it
     // cannot act on.
     throw new FrameDecodeError(
-      `Unsupported protocol version 0x${version.toString(16).padStart(2, "0")}`,
+      `Unsupported protocol version 0x${version.toString(16).padStart(2, '0')}`,
       ErrorCode.UNSUPPORTED_VERSION,
     );
   }
@@ -134,7 +134,7 @@ export function decodeFrame(data: Uint8Array): Frame {
   const rawType = data[1];
   if (!isFrameType(rawType)) {
     throw new FrameDecodeError(
-      `Unknown frame type 0x${rawType.toString(16).padStart(2, "0")}`,
+      `Unknown frame type 0x${rawType.toString(16).padStart(2, '0')}`,
       ErrorCode.PROTOCOL_VIOLATION,
     );
   }

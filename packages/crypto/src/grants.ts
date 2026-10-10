@@ -25,20 +25,20 @@
  * unverifiable link is REJECTED — never partially trusted.
  */
 
-import nacl from "tweetnacl";
+import nacl from 'tweetnacl';
 
 /** What a child key is allowed to be used for. */
 export const GrantPurpose = {
   /** Authorize further keys. Only a device identity should hold this. */
-  DELEGATE: "delegate",
+  DELEGATE: 'delegate',
   /** Terminate a circuit's end-to-end encryption for a domain. */
-  SERVICE_NODE: "service-node",
+  SERVICE_NODE: 'service-node',
   /** Sign a domain's record set. */
-  DOMAIN_RECORDS: "domain-records",
+  DOMAIN_RECORDS: 'domain-records',
   /** Authenticate as a relay in the directory. */
-  RELAY: "relay",
+  RELAY: 'relay',
   /** Open circuits as a client. */
-  CLIENT: "client",
+  CLIENT: 'client',
 } as const;
 
 export type GrantPurposeValue = (typeof GrantPurpose)[keyof typeof GrantPurpose];
@@ -78,20 +78,20 @@ export interface Grant {
 }
 
 /** A grant with everything but the signature — what gets signed. */
-export type UnsignedGrant = Omit<Grant, "signature">;
+export type UnsignedGrant = Omit<Grant, 'signature'>;
 
 export type VerifyFailure =
-  | "bad-signature"
-  | "not-yet-valid"
-  | "expired"
-  | "revoked"
-  | "purpose-not-granted"
-  | "scope-mismatch"
-  | "chain-broken"
-  | "chain-too-long"
-  | "untrusted-root"
-  | "rolled-back"
-  | "malformed";
+  | 'bad-signature'
+  | 'not-yet-valid'
+  | 'expired'
+  | 'revoked'
+  | 'purpose-not-granted'
+  | 'scope-mismatch'
+  | 'chain-broken'
+  | 'chain-too-long'
+  | 'untrusted-root'
+  | 'rolled-back'
+  | 'malformed';
 
 export type VerifyResult =
   | { ok: true; purposes: GrantPurposeValue[] }
@@ -135,16 +135,16 @@ export function canonicalGrantBytes(grant: UnsignedGrant): Uint8Array {
     parts.push(bytes);
   };
 
-  field("tnp-grant-v1");
+  field('tnp-grant-v1');
   field(grant.issuer);
   field(grant.subject);
   // Sorted, so the order a caller happened to list purposes in cannot change
   // the bytes and invalidate an otherwise-good signature.
-  field([...grant.purposes].sort().join(","));
+  field([...grant.purposes].sort().join(','));
   number(grant.notBefore);
   number(grant.notAfter);
   number(grant.serial);
-  field(grant.scope ?? "");
+  field(grant.scope ?? '');
 
   const total = parts.reduce((n, p) => n + p.byteLength, 0);
   const out = new Uint8Array(total);
@@ -158,7 +158,7 @@ export function canonicalGrantBytes(grant: UnsignedGrant): Uint8Array {
 
 export function signGrant(grant: UnsignedGrant, issuerSecretKey: Uint8Array): Grant {
   const signature = nacl.sign.detached(canonicalGrantBytes(grant), issuerSecretKey);
-  return { ...grant, signature: Buffer.from(signature).toString("base64") };
+  return { ...grant, signature: Buffer.from(signature).toString('base64') };
 }
 
 export interface VerifyOptions {
@@ -187,12 +187,12 @@ export interface VerifyOptions {
  */
 export function verifyChain(chain: readonly Grant[], options: VerifyOptions): VerifyResult {
   if (chain.length === 0) {
-    return { ok: false, reason: "malformed", detail: "empty chain" };
+    return { ok: false, reason: 'malformed', detail: 'empty chain' };
   }
   if (chain.length > MAX_CHAIN_DEPTH) {
     return {
       ok: false,
-      reason: "chain-too-long",
+      reason: 'chain-too-long',
       detail: `chain of ${chain.length} exceeds MAX_CHAIN_DEPTH (${MAX_CHAIN_DEPTH})`,
     };
   }
@@ -208,30 +208,30 @@ export function verifyChain(chain: readonly Grant[], options: VerifyOptions): Ve
     // Revocation is checked on BOTH ends of every link. Checking only the leaf
     // would let a revoked device keep authorizing fresh node keys.
     if (revoked.has(grant.subject)) {
-      return { ok: false, reason: "revoked", detail: `subject ${grant.subject} is revoked` };
+      return { ok: false, reason: 'revoked', detail: `subject ${grant.subject} is revoked` };
     }
     if (revoked.has(grant.issuer)) {
-      return { ok: false, reason: "revoked", detail: `issuer ${grant.issuer} is revoked` };
+      return { ok: false, reason: 'revoked', detail: `issuer ${grant.issuer} is revoked` };
     }
 
     if (options.now < grant.notBefore) {
-      return { ok: false, reason: "not-yet-valid", detail: `grant ${i} is not valid yet` };
+      return { ok: false, reason: 'not-yet-valid', detail: `grant ${i} is not valid yet` };
     }
     if (options.now >= grant.notAfter) {
-      return { ok: false, reason: "expired", detail: `grant ${i} expired` };
+      return { ok: false, reason: 'expired', detail: `grant ${i} expired` };
     }
 
     const seen = options.knownSerials?.get(`${grant.issuer}|${grant.subject}`);
     if (seen !== undefined && grant.serial < seen) {
       return {
         ok: false,
-        reason: "rolled-back",
+        reason: 'rolled-back',
         detail: `grant ${i} serial ${grant.serial} is below the highest seen (${seen})`,
       };
     }
 
     if (!verifySignature(grant)) {
-      return { ok: false, reason: "bad-signature", detail: `grant ${i} signature does not verify` };
+      return { ok: false, reason: 'bad-signature', detail: `grant ${i} signature does not verify` };
     }
 
     // Every link above the leaf authorizes a key that goes on to sign another
@@ -241,7 +241,7 @@ export function verifyChain(chain: readonly Grant[], options: VerifyOptions): Ve
     if (i > 0 && !grant.purposes.includes(GrantPurpose.DELEGATE)) {
       return {
         ok: false,
-        reason: "purpose-not-granted",
+        reason: 'purpose-not-granted',
         detail: `grant ${i} authorizes a key that signs other grants, but does not carry the delegate purpose`,
       };
     }
@@ -251,7 +251,7 @@ export function verifyChain(chain: readonly Grant[], options: VerifyOptions): Ve
     if (i > 0 && grant.subject !== chain[i - 1].issuer) {
       return {
         ok: false,
-        reason: "chain-broken",
+        reason: 'chain-broken',
         detail: `grant ${i} authorizes ${grant.subject}, but grant ${i - 1} was issued by ${chain[i - 1].issuer}`,
       };
     }
@@ -261,7 +261,7 @@ export function verifyChain(chain: readonly Grant[], options: VerifyOptions): Ve
   if (!options.trustedRoots.includes(root.issuer)) {
     return {
       ok: false,
-      reason: "untrusted-root",
+      reason: 'untrusted-root',
       detail: `chain terminates at ${root.issuer}, which is not a trusted root`,
     };
   }
@@ -270,7 +270,7 @@ export function verifyChain(chain: readonly Grant[], options: VerifyOptions): Ve
   if (!leaf.purposes.includes(options.requirePurpose)) {
     return {
       ok: false,
-      reason: "purpose-not-granted",
+      reason: 'purpose-not-granted',
       detail: `leaf does not carry the ${options.requirePurpose} purpose`,
     };
   }
@@ -281,8 +281,8 @@ export function verifyChain(chain: readonly Grant[], options: VerifyOptions): Ve
   if (options.requireScope !== undefined && leaf.scope !== options.requireScope) {
     return {
       ok: false,
-      reason: "scope-mismatch",
-      detail: `leaf is scoped to ${leaf.scope ?? "(none)"}, not ${options.requireScope}`,
+      reason: 'scope-mismatch',
+      detail: `leaf is scoped to ${leaf.scope ?? '(none)'}, not ${options.requireScope}`,
     };
   }
 
@@ -291,29 +291,29 @@ export function verifyChain(chain: readonly Grant[], options: VerifyOptions): Ve
 
 function checkShape(grant: Grant): VerifyResult | null {
   if (!grant.issuer || !grant.subject || !grant.signature) {
-    return { ok: false, reason: "malformed", detail: "missing issuer, subject or signature" };
+    return { ok: false, reason: 'malformed', detail: 'missing issuer, subject or signature' };
   }
   if (grant.issuer === grant.subject) {
     // A key authorizing itself proves nothing and would let any key present
     // itself as its own root.
-    return { ok: false, reason: "malformed", detail: "grant is self-issued" };
+    return { ok: false, reason: 'malformed', detail: 'grant is self-issued' };
   }
   if (!Array.isArray(grant.purposes) || grant.purposes.length === 0) {
-    return { ok: false, reason: "malformed", detail: "no purposes" };
+    return { ok: false, reason: 'malformed', detail: 'no purposes' };
   }
   for (const purpose of grant.purposes) {
     if (!PURPOSES.has(purpose)) {
-      return { ok: false, reason: "malformed", detail: `unknown purpose ${purpose}` };
+      return { ok: false, reason: 'malformed', detail: `unknown purpose ${purpose}` };
     }
   }
   if (!Number.isFinite(grant.notBefore) || !Number.isFinite(grant.notAfter)) {
-    return { ok: false, reason: "malformed", detail: "non-finite validity window" };
+    return { ok: false, reason: 'malformed', detail: 'non-finite validity window' };
   }
   if (grant.notAfter <= grant.notBefore) {
-    return { ok: false, reason: "malformed", detail: "validity window is empty or inverted" };
+    return { ok: false, reason: 'malformed', detail: 'validity window is empty or inverted' };
   }
   if (!Number.isInteger(grant.serial) || grant.serial < 0) {
-    return { ok: false, reason: "malformed", detail: "serial must be a non-negative integer" };
+    return { ok: false, reason: 'malformed', detail: 'serial must be a non-negative integer' };
   }
   return null;
 }
@@ -322,8 +322,8 @@ function verifySignature(grant: Grant): boolean {
   let signature: Uint8Array;
   let issuer: Uint8Array;
   try {
-    signature = new Uint8Array(Buffer.from(grant.signature, "base64"));
-    issuer = new Uint8Array(Buffer.from(grant.issuer, "base64"));
+    signature = new Uint8Array(Buffer.from(grant.signature, 'base64'));
+    issuer = new Uint8Array(Buffer.from(grant.issuer, 'base64'));
   } catch {
     return false;
   }

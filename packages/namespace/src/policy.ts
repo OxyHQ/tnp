@@ -12,7 +12,7 @@
  * and never depends on whether a registration happens to exist.
  */
 
-import { IANA_ROOT_ZONE_TLDS } from "./iana-root-zone.js";
+import { IANA_ROOT_ZONE_TLDS } from './iana-root-zone.js';
 
 /**
  * Which authority owns a name.
@@ -23,7 +23,7 @@ import { IANA_ROOT_ZONE_TLDS } from "./iana-root-zone.js";
  * simply not existing yet. A `public-dns` name is never looked up in the TNP
  * registry at all, which is what makes the rule above hold by construction.
  */
-export type NamespaceType = "tnp-native" | "public-dns";
+export type NamespaceType = 'tnp-native' | 'public-dns';
 
 /**
  * Names reserved by the IETF for special use, which no registry may delegate.
@@ -33,13 +33,13 @@ export type NamespaceType = "tnp-native" | "public-dns";
  * IANA snapshot alone would leave them registrable.
  */
 export const SPECIAL_USE_TLDS: readonly string[] = [
-  "example",
-  "internal",
-  "invalid",
-  "local",
-  "localhost",
-  "onion",
-  "test",
+  'example',
+  'internal',
+  'invalid',
+  'local',
+  'localhost',
+  'onion',
+  'test',
 ];
 
 /**
@@ -47,10 +47,7 @@ export const SPECIAL_USE_TLDS: readonly string[] = [
  *
  * `arpa` is in the IANA snapshot, which covers `home.arpa` at the TLD level.
  */
-const RESERVED_TLDS: ReadonlySet<string> = new Set([
-  ...IANA_ROOT_ZONE_TLDS,
-  ...SPECIAL_USE_TLDS,
-]);
+const RESERVED_TLDS: ReadonlySet<string> = new Set([...IANA_ROOT_ZONE_TLDS, ...SPECIAL_USE_TLDS]);
 
 /** Number of reserved labels. Exported so callers can assert the set is populated. */
 export const RESERVED_TLD_COUNT = RESERVED_TLDS.size;
@@ -60,7 +57,7 @@ const PUBLIC_ROOT_TLDS: ReadonlySet<string> = new Set(IANA_ROOT_ZONE_TLDS);
 
 /** Normalize a label or name for comparison: lowercase, no trailing root dot. */
 export function normalizeName(name: string): string {
-  return name.trim().toLowerCase().replace(/\.$/, "");
+  return name.trim().toLowerCase().replace(/\.$/, '');
 }
 
 /**
@@ -88,8 +85,8 @@ export function isPublicRootTld(tld: string): boolean {
 /** The last label of a name, normalized. Empty string when there is no TLD. */
 export function tldOf(name: string): string {
   const normalized = normalizeName(name);
-  const lastDot = normalized.lastIndexOf(".");
-  return lastDot === -1 ? "" : normalized.slice(lastDot + 1);
+  const lastDot = normalized.lastIndexOf('.');
+  return lastDot === -1 ? '' : normalized.slice(lastDot + 1);
 }
 
 /**
@@ -104,27 +101,24 @@ export function tldOf(name: string): string {
  * A single-label name (no dot) is `public-dns`: it is a local hostname or a
  * search-domain lookup, and TNP has no business answering it.
  */
-export function classifyName(
-  name: string,
-  nativeTlds: Iterable<string>,
-): NamespaceType {
+export function classifyName(name: string, nativeTlds: Iterable<string>): NamespaceType {
   const tld = tldOf(name);
-  if (!tld) return "public-dns";
-  if (isReservedTld(tld)) return "public-dns";
+  if (!tld) return 'public-dns';
+  if (isReservedTld(tld)) return 'public-dns';
 
   for (const candidate of nativeTlds) {
-    if (normalizeName(candidate) === tld) return "tnp-native";
+    if (normalizeName(candidate) === tld) return 'tnp-native';
   }
 
-  return "public-dns";
+  return 'public-dns';
 }
 
 /** Why a TLD may not be registered as a TNP-native TLD. */
 export type TldRejection =
-  | { reason: "reserved"; detail: string }
-  | { reason: "syntax"; detail: string };
+  | { reason: 'reserved'; detail: string }
+  | { reason: 'syntax'; detail: string };
 
-export type TldValidation = { ok: true; tld: string } | { ok: false } & TldRejection;
+export type TldValidation = { ok: true; tld: string } | ({ ok: false } & TldRejection);
 
 /** Longest legal DNS label (RFC 1035 §2.3.4). */
 const MAX_LABEL_LENGTH = 63;
@@ -143,34 +137,34 @@ export function validateNativeTld(input: string): TldValidation {
   const tld = normalizeName(input);
 
   if (!tld) {
-    return { ok: false, reason: "syntax", detail: "TLD is empty" };
+    return { ok: false, reason: 'syntax', detail: 'TLD is empty' };
   }
-  if (tld.includes(".")) {
-    return { ok: false, reason: "syntax", detail: "TLD must be a single label" };
+  if (tld.includes('.')) {
+    return { ok: false, reason: 'syntax', detail: 'TLD must be a single label' };
   }
   if (tld.length > MAX_LABEL_LENGTH) {
     return {
       ok: false,
-      reason: "syntax",
+      reason: 'syntax',
       detail: `TLD must be at most ${MAX_LABEL_LENGTH} characters`,
     };
   }
   if (!LABEL_RE.test(tld)) {
     return {
       ok: false,
-      reason: "syntax",
-      detail: "TLD may contain only letters, digits and interior hyphens",
+      reason: 'syntax',
+      detail: 'TLD may contain only letters, digits and interior hyphens',
     };
   }
   // Reserved by the IETF for future IDN use; a TNP TLD starting with `xn--`
   // would be read as Punycode by resolvers that never heard of TNP.
-  if (tld.startsWith("xn--")) {
-    return { ok: false, reason: "syntax", detail: "TLD may not use the IDN prefix xn--" };
+  if (tld.startsWith('xn--')) {
+    return { ok: false, reason: 'syntax', detail: 'TLD may not use the IDN prefix xn--' };
   }
   if (isReservedTld(tld)) {
     return {
       ok: false,
-      reason: "reserved",
+      reason: 'reserved',
       detail: `.${tld} is delegated by the public DNS root or reserved by the IETF. TNP does not serve names it does not own.`,
     };
   }
@@ -191,12 +185,12 @@ export type LabelValidation = { ok: true; label: string } | { ok: false; detail:
  */
 export function validateNativeLabel(input: string): LabelValidation {
   const label = input.trim().toLowerCase();
-  if (!label) return { ok: false, detail: "Name is empty" };
+  if (!label) return { ok: false, detail: 'Name is empty' };
   if (label.length > MAX_LABEL_LENGTH || !LABEL_RE.test(label)) {
     return {
       ok: false,
       detail:
-        "Domain name must be 1-63 characters, alphanumeric and hyphens only, cannot start or end with a hyphen",
+        'Domain name must be 1-63 characters, alphanumeric and hyphens only, cannot start or end with a hyphen',
     };
   }
   return { ok: true, label };
@@ -205,7 +199,7 @@ export function validateNativeLabel(input: string): LabelValidation {
 /** A full native name split into its registrable parts, or why it is not one. */
 export type NativeDomainParse =
   | { ok: true; name: string; tld: string }
-  | { ok: false; reason: "syntax" | "reserved"; detail: string };
+  | { ok: false; reason: 'syntax' | 'reserved'; detail: string };
 
 /**
  * Parse `name.tld` as a registrable TNP-native name.
@@ -220,16 +214,16 @@ export type NativeDomainParse =
  */
 export function parseNativeDomainName(input: string): NativeDomainParse {
   const normalized = normalizeName(input);
-  const labels = normalized.split(".");
+  const labels = normalized.split('.');
 
-  if (labels.length < 2 || labels.some((label) => label === "")) {
-    return { ok: false, reason: "syntax", detail: "Format must be name.tld (e.g. example.ox)" };
+  if (labels.length < 2 || labels.some((label) => label === '')) {
+    return { ok: false, reason: 'syntax', detail: 'Format must be name.tld (e.g. example.ox)' };
   }
   if (labels.length > 2) {
     return {
       ok: false,
-      reason: "syntax",
-      detail: `Only name.tld can be registered. ${normalized} is a subdomain: create it as a record under ${labels.slice(-2).join(".")}.`,
+      reason: 'syntax',
+      detail: `Only name.tld can be registered. ${normalized} is a subdomain: create it as a record under ${labels.slice(-2).join('.')}.`,
     };
   }
 
@@ -238,7 +232,7 @@ export function parseNativeDomainName(input: string): NativeDomainParse {
   if (!tld.ok) return { ok: false, reason: tld.reason, detail: tld.detail };
 
   const name = validateNativeLabel(label);
-  if (!name.ok) return { ok: false, reason: "syntax", detail: name.detail };
+  if (!name.ok) return { ok: false, reason: 'syntax', detail: name.detail };
 
   return { ok: true, name: name.label, tld: tld.tld };
 }

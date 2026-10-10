@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from 'react-router-dom';
 
 interface DomainCardProps {
   name: string;
@@ -6,11 +6,7 @@ interface DomainCardProps {
   status: string;
 }
 
-export default function DomainCard({
-  name,
-  tld,
-  status,
-}: DomainCardProps) {
+export default function DomainCard({ name, tld, status }: DomainCardProps) {
   return (
     <Link
       to={`/d/${name}.${tld}`}
@@ -23,9 +19,9 @@ export default function DomainCard({
         </span>
         <span
           className={`rounded-md px-2.5 py-0.5 font-mono text-xs font-medium ${
-            status === "active"
-              ? "bg-primary/10 text-primary-text"
-              : "bg-accent text-muted-foreground/70"
+            status === 'active'
+              ? 'bg-primary/10 text-primary-text'
+              : 'bg-accent text-muted-foreground/70'
           }`}
         >
           {status}

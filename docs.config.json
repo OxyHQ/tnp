@@ -5,15 +5,11 @@
   "repo": "https://github.com/OxyHQ/tnp",
   "category": "service",
   "versioned": false,
-  "versions": [
-    "main"
-  ],
+  "versions": ["main"],
   "latestVersion": null,
   "deprecatedVersions": [],
   "defaultVersion": "main",
   "docsPath": "docs/",
-  "docsIgnore": [
-    "superpowers"
-  ],
+  "docsIgnore": ["superpowers"],
   "description": "Universal network layer — namespace, resolution, encrypted overlay, Vite web + Bun API + DNS server + relay"
 }

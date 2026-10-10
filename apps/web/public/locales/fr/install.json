@@ -99,10 +99,7 @@
       "title": "Linux",
       "description": "Fonctionne avec systemd-resolved, NetworkManager et les configurations resolv.conf autonomes. L'installateur détecte automatiquement votre configuration DNS.",
       "requirementsTitle": "Prérequis :",
-      "requirements": [
-        "Toute distribution Linux moderne",
-        "Accès sudo"
-      ]
+      "requirements": ["Toute distribution Linux moderne", "Accès sudo"]
     },
     "windows": {
       "title": "Windows",

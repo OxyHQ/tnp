@@ -19,7 +19,10 @@
     "test": "bun run --filter '*' test",
     "test:db": "bun run --filter '@tnp/api' test:db",
     "release": "release-it",
-    "test:edge": "bun test scripts/edge-activity.test.ts"
+    "test:edge": "bun test scripts/edge-activity.test.ts",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
   },
   "release-it": {
     "git": {
@@ -36,6 +39,7 @@
     }
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "concurrently": "^10.0.3",
     "release-it": "^20.2.1"
   },

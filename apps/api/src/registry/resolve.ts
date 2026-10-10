@@ -12,18 +12,18 @@
  * docs/architecture/resolution.md, "Registry answers".
  */
 
-import { and, eq, like, or, sql } from "drizzle-orm";
+import { and, eq, like, or, sql } from 'drizzle-orm';
 import {
   isNativeNameServed,
   isReservedTld,
   nativeExpiryState,
   normalizeName,
-} from "@tnp/namespace";
-import type { DnsResolveAnswer, DnsResolveResponse } from "@tnp/shared-types";
-import { dnsRecords, domains, serviceNodes, tlds } from "../db/schema/index.js";
-import type { Executor } from "./db.js";
-import { isServiceNodeOnline, type NodeLiveness } from "./nodes.js";
-import { escapeLikePattern } from "@oxy.so/utils/sql";
+} from '@tnp/namespace';
+import type { DnsResolveAnswer, DnsResolveResponse } from '@tnp/shared-types';
+import { dnsRecords, domains, serviceNodes, tlds } from '../db/schema/index.js';
+import type { Executor } from './db.js';
+import { isServiceNodeOnline, type NodeLiveness } from './nodes.js';
+import { escapeLikePattern } from '@oxy.so/utils/sql';
 
 /** TTL of a synthesized parking answer: short, so registering a name takes effect quickly. */
 export const PARKING_TTL_SECONDS = 300;
@@ -35,9 +35,9 @@ export interface ServiceNodeFacts extends NodeLiveness {
 
 export type NameFacts =
   /** Not a name TNP answers for: a single label, a reserved TLD, or no active TLD row. */
-  | { kind: "not-native"; fqdn: string }
+  | { kind: 'not-native'; fqdn: string }
   | {
-      kind: "native";
+      kind: 'native';
       fqdn: string;
       /** The vestigial `tlds.custom` flag; every native TLD has it set. */
       tldCustom: boolean;
@@ -72,33 +72,33 @@ export interface ResolutionSettings {
  */
 export async function loadNameFacts(db: Executor, name: string): Promise<NameFacts> {
   const fqdn = normalizeName(name);
-  const labels = fqdn.split(".");
-  if (labels.length < 2 || labels.some((label) => label === "")) {
-    return { kind: "not-native", fqdn };
+  const labels = fqdn.split('.');
+  if (labels.length < 2 || labels.some((label) => label === '')) {
+    return { kind: 'not-native', fqdn };
   }
 
   const tld = labels[labels.length - 1];
   // TNP never answers for a label the public DNS root delegates, whatever the
   // TLD table happens to contain (naming.md rule N1). Checked before the lookup
   // so a reserved row left by an earlier seed cannot produce an answer.
-  if (isReservedTld(tld)) return { kind: "not-native", fqdn };
+  if (isReservedTld(tld)) return { kind: 'not-native', fqdn };
 
   const [tldRow] = await db
     .select({ custom: tlds.custom })
     .from(tlds)
-    .where(and(eq(tlds.name, tld), eq(tlds.status, "active")))
+    .where(and(eq(tlds.name, tld), eq(tlds.status, 'active')))
     .limit(1);
-  if (!tldRow) return { kind: "not-native", fqdn };
+  if (!tldRow) return { kind: 'not-native', fqdn };
 
   const domainName = labels[labels.length - 2];
   const [domain] = await db
     .select({ id: domains.id, expiresAt: domains.expiresAt })
     .from(domains)
-    .where(and(eq(domains.name, domainName), eq(domains.tld, tld), eq(domains.status, "active")))
+    .where(and(eq(domains.name, domainName), eq(domains.tld, tld), eq(domains.status, 'active')))
     .limit(1);
-  if (!domain) return { kind: "native", fqdn, tldCustom: tldRow.custom, domain: null };
+  if (!domain) return { kind: 'native', fqdn, tldCustom: tldRow.custom, domain: null };
 
-  const label = labels.length > 2 ? labels.slice(0, -2).join(".") : "@";
+  const label = labels.length > 2 ? labels.slice(0, -2).join('.') : '@';
 
   const [records, [descendants], [node]] = await Promise.all([
     db
@@ -110,7 +110,7 @@ export async function loadNameFacts(db: Executor, name: string): Promise<NameFac
           or(eq(dnsRecords.name, label), eq(dnsRecords.name, fqdn)),
         ),
       ),
-    label === "@"
+    label === '@'
       ? Promise.resolve([{ present: false }])
       : db
           .select({ present: sql<boolean>`count(*) > 0` })
@@ -137,7 +137,7 @@ export async function loadNameFacts(db: Executor, name: string): Promise<NameFac
   ]);
 
   return {
-    kind: "native",
+    kind: 'native',
     fqdn,
     tldCustom: tldRow.custom,
     domain: {
@@ -176,18 +176,18 @@ export function decideResolution(
   settings: ResolutionSettings,
 ): DnsResolveResponse {
   const base = { name: facts.fqdn, type: qtype };
-  const nxdomain: DnsResolveResponse = { ...base, answers: [], rcode: "NXDOMAIN" };
-  if (facts.kind === "not-native") return nxdomain;
+  const nxdomain: DnsResolveResponse = { ...base, answers: [], rcode: 'NXDOMAIN' };
+  if (facts.kind === 'not-native') return nxdomain;
 
   const parking: DnsResolveAnswer[] =
-    settings.parkingIp && (qtype === "A" || qtype === "ANY")
-      ? [{ name: facts.fqdn, type: "A", value: settings.parkingIp, ttl: PARKING_TTL_SECONDS }]
+    settings.parkingIp && (qtype === 'A' || qtype === 'ANY')
+      ? [{ name: facts.fqdn, type: 'A', value: settings.parkingIp, ttl: PARKING_TTL_SECONDS }]
       : [];
 
   const { domain } = facts;
   if (!domain || isHeld(domain.expiresAt, settings)) {
     if (!facts.tldCustom || !settings.parkingIp) return nxdomain;
-    return { ...base, answers: parking, rcode: "NOERROR" };
+    return { ...base, answers: parking, rcode: 'NOERROR' };
   }
 
   const nodeOnline = isServiceNodeOnline(domain.node, settings.now);
@@ -203,9 +203,9 @@ export function decideResolution(
       : {};
 
   let matching =
-    qtype === "ANY" ? domain.records : domain.records.filter((record) => record.type === qtype);
-  if (matching.length === 0 && qtype !== "CNAME") {
-    matching = domain.records.filter((record) => record.type === "CNAME");
+    qtype === 'ANY' ? domain.records : domain.records.filter((record) => record.type === qtype);
+  if (matching.length === 0 && qtype !== 'CNAME') {
+    matching = domain.records.filter((record) => record.type === 'CNAME');
   }
 
   if (matching.length > 0) {
@@ -217,21 +217,21 @@ export function decideResolution(
         value: record.value,
         ttl: record.ttl,
       })),
-      rcode: "NOERROR",
+      rcode: 'NOERROR',
       ...overlay,
     };
   }
 
   if (domain.records.length === 0 && !nodeOnline) {
-    if (settings.parkingIp) return { ...base, answers: parking, rcode: "NOERROR" };
-    const exists = domain.label === "@" || domain.hasDescendants;
-    return exists ? { ...base, answers: [], rcode: "NOERROR" } : nxdomain;
+    if (settings.parkingIp) return { ...base, answers: parking, rcode: 'NOERROR' };
+    const exists = domain.label === '@' || domain.hasDescendants;
+    return exists ? { ...base, answers: [], rcode: 'NOERROR' } : nxdomain;
   }
 
-  return { ...base, answers: [], rcode: "NOERROR", ...overlay };
+  return { ...base, answers: [], rcode: 'NOERROR', ...overlay };
 }
 
-export type ParkingPage = "available" | "registered" | "held";
+export type ParkingPage = 'available' | 'registered' | 'held';
 
 /**
  * Which page the API serves for a Host, or null to pass the request on.
@@ -247,10 +247,10 @@ export function decideParkingPage(
   facts: NameFacts,
   settings: ResolutionSettings,
 ): ParkingPage | null {
-  if (facts.kind === "not-native") return null;
+  if (facts.kind === 'not-native') return null;
   const { domain } = facts;
-  if (!domain) return facts.tldCustom ? "available" : null;
-  if (isHeld(domain.expiresAt, settings)) return "held";
+  if (!domain) return facts.tldCustom ? 'available' : null;
+  if (isHeld(domain.expiresAt, settings)) return 'held';
   if (isServiceNodeOnline(domain.node, settings.now)) return null;
-  return "registered";
+  return 'registered';
 }

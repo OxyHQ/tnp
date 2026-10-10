@@ -5,10 +5,10 @@
  * a fixture does not change meaning as the calendar moves.
  */
 
-import { sql } from "drizzle-orm";
-import type postgres from "postgres";
-import { domains, tlds, users } from "../src/db/schema/index.js";
-import type { TestDb } from "./harness.js";
+import { sql } from 'drizzle-orm';
+import type postgres from 'postgres';
+import { domains, tlds, users } from '../src/db/schema/index.js';
+import type { TestDb } from './harness.js';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -16,15 +16,18 @@ export function daysFrom(now: Date, days: number): Date {
   return new Date(now.getTime() + days * DAY_MS);
 }
 
-export async function seedTld(db: TestDb, name = "ox"): Promise<void> {
-  await db.insert(tlds).values({ name, status: "active" }).onConflictDoNothing({ target: tlds.name });
+export async function seedTld(db: TestDb, name = 'ox'): Promise<void> {
+  await db
+    .insert(tlds)
+    .values({ name, status: 'active' })
+    .onConflictDoNothing({ target: tlds.name });
 }
 
 export async function seedDomain(
   db: TestDb,
   values: { name: string; tld?: string; oxyUserId?: string; expiresAt?: Date | null },
 ) {
-  const oxyUserId = values.oxyUserId ?? "owner-under-test";
+  const oxyUserId = values.oxyUserId ?? 'owner-under-test';
   const [owner] = await db
     .insert(users)
     .values({ oxyUserId })
@@ -34,7 +37,7 @@ export async function seedDomain(
     .insert(domains)
     .values({
       name: values.name,
-      tld: values.tld ?? "ox",
+      tld: values.tld ?? 'ox',
       ownerId: owner.id,
       oxyUserId,
       expiresAt: values.expiresAt === undefined ? null : values.expiresAt,
@@ -44,12 +47,14 @@ export async function seedDomain(
 }
 
 /** The server pid of the connection a transaction runs on. */
-export async function backendPid(
-  tx: { execute: (query: ReturnType<typeof sql>) => PromiseLike<unknown> },
-): Promise<number> {
-  const rows = (await tx.execute(sql`select pg_backend_pid() as pid`)) as unknown as { pid: number }[];
+export async function backendPid(tx: {
+  execute: (query: ReturnType<typeof sql>) => PromiseLike<unknown>;
+}): Promise<number> {
+  const rows = (await tx.execute(sql`select pg_backend_pid() as pid`)) as unknown as {
+    pid: number;
+  }[];
   const pid = rows[0]?.pid;
-  if (typeof pid !== "number") throw new Error("could not read pg_backend_pid()");
+  if (typeof pid !== 'number') throw new Error('could not read pg_backend_pid()');
   return pid;
 }
 

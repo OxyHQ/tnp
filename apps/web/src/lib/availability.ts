@@ -1,4 +1,4 @@
-import type { NativeAvailabilityReason } from "@tnp/shared-types";
+import type { NativeAvailabilityReason } from '@tnp/shared-types';
 
 /**
  * A native availability answer as the web holds it.
@@ -21,22 +21,22 @@ export interface AvailabilityResult {
  * language, rather than showing the API's English `detail`.
  */
 export function availabilityMessageKey(result: AvailabilityResult): string {
-  if (result.available) return "common:availability.available";
+  if (result.available) return 'common:availability.available';
   switch (result.reason) {
-    case "reserved":
-      return "common:availability.reserved";
-    case "tld_not_available":
-      return "common:availability.tldNotAvailable";
-    case "invalid":
-      return result.domain.replace(/\.$/, "").split(".").length > 2
-        ? "common:availability.subdomain"
-        : "common:availability.invalid";
+    case 'reserved':
+      return 'common:availability.reserved';
+    case 'tld_not_available':
+      return 'common:availability.tldNotAvailable';
+    case 'invalid':
+      return result.domain.replace(/\.$/, '').split('.').length > 2
+        ? 'common:availability.subdomain'
+        : 'common:availability.invalid';
     default:
-      return "common:availability.taken";
+      return 'common:availability.taken';
   }
 }
 
 /** The registrable parent of a subdomain, for the "add a record under …" message. */
 export function parentDomain(domain: string): string {
-  return domain.replace(/\.$/, "").split(".").slice(-2).join(".");
+  return domain.replace(/\.$/, '').split('.').slice(-2).join('.');
 }

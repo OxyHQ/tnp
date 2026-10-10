@@ -1,5 +1,5 @@
-import { OxyServer, createOptionalOxyAuth } from "@oxy.so/core/server";
-import { config } from "../config.js";
+import { OxyServer, createOptionalOxyAuth } from '@oxy.so/core/server';
+import { config } from '../config.js';
 
 const oxy = new OxyServer({ baseURL: config.oxyApiUrl });
 

@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
-import { Helmet } from "react-helmet-async";
-import { useTranslation } from "react-i18next";
-import { useAuth } from "../lib/auth";
-import type { TldProposalEntry } from "@tnp/shared-types";
-import { apiFetch } from "../lib/api";
+import { useState, useEffect } from 'react';
+import { Helmet } from 'react-helmet-async';
+import { useTranslation } from 'react-i18next';
+import { useAuth } from '../lib/auth';
+import type { TldProposalEntry } from '@tnp/shared-types';
+import { apiFetch } from '../lib/api';
 
 /**
  * `TldProposalEntry`, plus the legacy `proposedBy` an API image older than
@@ -11,35 +11,37 @@ import { apiFetch } from "../lib/api";
  * vote buttons on the caller's own proposals, never displayed.
  * TODO: drop `proposedBy` once the API digest with `proposedByMe` is promoted.
  */
-type Proposal = Omit<TldProposalEntry, "proposedByMe"> & {
+type Proposal = Omit<TldProposalEntry, 'proposedByMe'> & {
   proposedByMe?: boolean;
   proposedBy?: { oxyUserId?: string };
 };
 
 const STATUS_KEYS = {
-  open: "statusOpen",
-  approved: "statusApproved",
-  rejected: "statusRejected",
+  open: 'statusOpen',
+  approved: 'statusApproved',
+  rejected: 'statusRejected',
 } as const;
 
 export default function Propose() {
-  const { t } = useTranslation(["propose", "common"]);
+  const { t } = useTranslation(['propose', 'common']);
   const { isAuthenticated, signIn, user } = useAuth();
   const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [tld, setTld] = useState("");
-  const [reason, setReason] = useState("");
+  const [tld, setTld] = useState('');
+  const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     let ignore = false;
-    apiFetch<Proposal[]>("/tlds/proposals")
+    apiFetch<Proposal[]>('/tlds/proposals')
       .then((data) => {
         if (!ignore) setProposals(data);
       })
-      .catch((err) => console.error("Failed to load proposals:", err));
-    return () => { ignore = true; };
+      .catch((err) => console.error('Failed to load proposals:', err));
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -48,23 +50,23 @@ export default function Propose() {
     setSuccess(null);
     setSubmitting(true);
     try {
-      await apiFetch("/tlds/propose", {
-        method: "POST",
+      await apiFetch('/tlds/propose', {
+        method: 'POST',
         body: JSON.stringify({ tld, reason }),
       });
-      setSuccess(t("propose:proposeSuccess", { tld }));
-      setTld("");
-      setReason("");
-      const updated = await apiFetch<Proposal[]>("/tlds/proposals");
+      setSuccess(t('propose:proposeSuccess', { tld }));
+      setTld('');
+      setReason('');
+      const updated = await apiFetch<Proposal[]>('/tlds/proposals');
       setProposals(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("propose:proposeFailed"));
+      setError(err instanceof Error ? err.message : t('propose:proposeFailed'));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleVote = async (proposalId: string, direction: "up" | "down") => {
+  const handleVote = async (proposalId: string, direction: 'up' | 'down') => {
     const proposal = proposals.find((p) => p._id === proposalId);
     if (!proposal) return;
 
@@ -78,30 +80,28 @@ export default function Propose() {
         if (isToggle) {
           return {
             ...p,
-            score: currentScore + (direction === "up" ? -1 : 1),
+            score: currentScore + (direction === 'up' ? -1 : 1),
             userVote: null,
           };
         }
         const scoreDelta =
-          direction === "up"
-            ? p.userVote === "down" ? 2 : 1
-            : p.userVote === "up" ? -2 : -1;
+          direction === 'up' ? (p.userVote === 'down' ? 2 : 1) : p.userVote === 'up' ? -2 : -1;
         return { ...p, score: currentScore + scoreDelta, userVote: direction };
-      })
+      }),
     );
 
     try {
       if (isToggle) {
-        await apiFetch(`/tlds/proposals/${proposalId}/vote`, { method: "DELETE" });
+        await apiFetch(`/tlds/proposals/${proposalId}/vote`, { method: 'DELETE' });
       } else {
         await apiFetch(`/tlds/proposals/${proposalId}/vote`, {
-          method: "POST",
+          method: 'POST',
           body: JSON.stringify({ direction }),
         });
       }
     } catch {
       // Revert on error
-      const updated = await apiFetch<Proposal[]>("/tlds/proposals");
+      const updated = await apiFetch<Proposal[]>('/tlds/proposals');
       setProposals(updated);
     }
   };
@@ -109,19 +109,15 @@ export default function Propose() {
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
       <Helmet>
-        <title>{t("propose:meta.title")} — TNP</title>
-        <meta name="description" content={t("propose:meta.description")} />
+        <title>{t('propose:meta.title')} — TNP</title>
+        <meta name="description" content={t('propose:meta.description')} />
         <link rel="canonical" href="https://tnp.network/propose" />
-        <meta property="og:title" content={`${t("propose:meta.title")} — TNP`} />
-        <meta property="og:description" content={t("propose:meta.ogDescription")} />
+        <meta property="og:title" content={`${t('propose:meta.title')} — TNP`} />
+        <meta property="og:description" content={t('propose:meta.ogDescription')} />
         <meta property="og:url" content="https://tnp.network/propose" />
       </Helmet>
-      <h1 className="mb-2 font-pixel text-xl text-primary-text">
-        {t("propose:title")}
-      </h1>
-      <p className="mb-8 font-mono text-sm text-muted-foreground/70">
-        {t("propose:subtitle")}
-      </p>
+      <h1 className="mb-2 font-pixel text-xl text-primary-text">{t('propose:title')}</h1>
+      <p className="mb-8 font-mono text-sm text-muted-foreground/70">{t('propose:subtitle')}</p>
 
       {isAuthenticated ? (
         <form onSubmit={handleSubmit} className="mb-12 space-y-4">
@@ -132,7 +128,7 @@ export default function Propose() {
                 type="text"
                 value={tld}
                 onChange={(e) => setTld(e.target.value.toLowerCase())}
-                placeholder={t("propose:tldPlaceholder")}
+                placeholder={t('propose:tldPlaceholder')}
                 className="rounded-r-md bg-transparent px-2 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
                 required
               />
@@ -141,7 +137,7 @@ export default function Propose() {
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder={t("propose:reasonPlaceholder")}
+              placeholder={t('propose:reasonPlaceholder')}
               className="flex-1 rounded-md border border-border bg-surface px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none transition-colors"
               required
               maxLength={500}
@@ -154,24 +150,28 @@ export default function Propose() {
             disabled={submitting}
             className="cursor-pointer rounded-md border border-primary/30 bg-primary/10 px-4 py-2.5 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20 disabled:opacity-50"
           >
-            {submitting ? t("propose:proposing") : t("propose:proposeTld")}
+            {submitting ? t('propose:proposing') : t('propose:proposeTld')}
           </button>
         </form>
       ) : (
         <div className="mb-12 rounded-lg border border-border bg-card p-6 text-center">
-          <p className="mb-4 font-mono text-sm text-muted-foreground/70">{t("propose:signInPrompt")}</p>
+          <p className="mb-4 font-mono text-sm text-muted-foreground/70">
+            {t('propose:signInPrompt')}
+          </p>
           <button
             onClick={() => signIn()}
             className="cursor-pointer rounded-md border border-primary/30 bg-primary/10 px-4 py-2.5 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20"
           >
-            [{t("common:auth.signInWithOxy")}]
+            [{t('common:auth.signInWithOxy')}]
           </button>
         </div>
       )}
 
-      <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">{t("propose:openProposals")}</h2>
+      <h2 className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">
+        {t('propose:openProposals')}
+      </h2>
       {proposals.length === 0 ? (
-        <p className="font-mono text-sm text-muted-foreground/70">{t("propose:noProposals")}</p>
+        <p className="font-mono text-sm text-muted-foreground/70">{t('propose:noProposals')}</p>
       ) : (
         <div className="space-y-3">
           {proposals.map((p) => (
@@ -180,45 +180,58 @@ export default function Propose() {
               className="flex items-center gap-4 rounded-lg border border-border bg-card p-4"
             >
               {(() => {
-                const mine = p.proposedByMe ?? (user?.id !== undefined && user.id === p.proposedBy?.oxyUserId);
-                const canVote = p.status === "open" && isAuthenticated && !mine;
+                const mine =
+                  p.proposedByMe ?? (user?.id !== undefined && user.id === p.proposedBy?.oxyUserId);
+                const canVote = p.status === 'open' && isAuthenticated && !mine;
                 const score = p.score ?? 0;
                 const abs = Math.abs(score);
-                const compact = abs >= 1_000_000 ? `${(abs / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`
-                  : abs >= 1_000 ? `${(abs / 1_000).toFixed(1).replace(/\.0$/, "")}K`
-                  : `${abs}`;
-                const formattedScore = score > 0 ? `+${compact}` : score < 0 ? `-${compact}` : compact;
+                const compact =
+                  abs >= 1_000_000
+                    ? `${(abs / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+                    : abs >= 1_000
+                      ? `${(abs / 1_000).toFixed(1).replace(/\.0$/, '')}K`
+                      : `${abs}`;
+                const formattedScore =
+                  score > 0 ? `+${compact}` : score < 0 ? `-${compact}` : compact;
                 return (
-                  <div className={`flex w-10 flex-col items-center gap-0.5${!canVote ? " justify-center" : ""}`}>
+                  <div
+                    className={`flex w-10 flex-col items-center gap-0.5${!canVote ? ' justify-center' : ''}`}
+                  >
                     {canVote && (
                       <button
-                        onClick={() => handleVote(p._id, "up")}
+                        onClick={() => handleVote(p._id, 'up')}
                         className={`cursor-pointer rounded p-1.5 transition-all duration-150 ${
-                          p.userVote === "up"
-                            ? "bg-primary/10 text-primary-text"
-                            : "text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                          p.userVote === 'up'
+                            ? 'bg-primary/10 text-primary-text'
+                            : 'text-muted-foreground/70 hover:bg-accent hover:text-foreground'
                         }`}
-                        aria-label={t("propose:upvote")}
+                        aria-label={t('propose:upvote')}
                       >
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M12 4l-8 8h5v8h6v-8h5z" />
                         </svg>
                       </button>
                     )}
-                    <span className={`font-mono text-xs font-medium ${
-                      score > 0 ? "text-primary-text" : score < 0 ? "text-error-text" : "text-muted-foreground/70"
-                    }${!canVote ? " cursor-default" : ""}`}>
+                    <span
+                      className={`font-mono text-xs font-medium ${
+                        score > 0
+                          ? 'text-primary-text'
+                          : score < 0
+                            ? 'text-error-text'
+                            : 'text-muted-foreground/70'
+                      }${!canVote ? ' cursor-default' : ''}`}
+                    >
                       {formattedScore}
                     </span>
                     {canVote && (
                       <button
-                        onClick={() => handleVote(p._id, "down")}
+                        onClick={() => handleVote(p._id, 'down')}
                         className={`cursor-pointer rounded p-1.5 transition-all duration-150 ${
-                          p.userVote === "down"
-                            ? "bg-error-subtle text-error-text"
-                            : "text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                          p.userVote === 'down'
+                            ? 'bg-error-subtle text-error-text'
+                            : 'text-muted-foreground/70 hover:bg-accent hover:text-foreground'
                         }`}
-                        aria-label={t("propose:downvote")}
+                        aria-label={t('propose:downvote')}
                       >
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M12 20l8-8h-5V4H9v8H4z" />
@@ -234,11 +247,11 @@ export default function Propose() {
               </div>
               <span
                 className={`rounded-md px-2.5 py-0.5 font-mono text-xs font-medium ${
-                  p.status === "open"
-                    ? "bg-primary/10 text-primary-text"
-                    : p.status === "approved"
-                      ? "bg-success-subtle text-success-text"
-                      : "bg-error-subtle text-error-text"
+                  p.status === 'open'
+                    ? 'bg-primary/10 text-primary-text'
+                    : p.status === 'approved'
+                      ? 'bg-success-subtle text-success-text'
+                      : 'bg-error-subtle text-error-text'
                 }`}
               >
                 {t(`propose:${STATUS_KEYS[p.status]}`)}

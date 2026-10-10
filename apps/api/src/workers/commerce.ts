@@ -12,22 +12,22 @@
  * it expires and is then reconciled by the next worker, never re-executed.
  */
 
-import { drizzle } from "drizzle-orm/postgres-js";
-import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
-import postgres from "postgres";
-import { hostname } from "node:os";
-import { config as apiConfig } from "../config.js";
-import { DATABASE_CASING } from "../db/casing.js";
-import { runMigrations } from "../db/migrate.js";
-import type { Database } from "../db/postgres.js";
-import * as schema from "../db/schema/index.js";
-import { providerAccounts, publicDomains } from "../db/schema/index.js";
-import { readServicesConfig } from "../services/config.js";
-import { OperationEngine } from "../services/operations/engine.js";
-import { createOperationHandlers, OPERATION_KINDS } from "../services/operations/handlers.js";
-import { enqueueOperation } from "../services/operations/store.js";
-import { createProductionRegistry } from "../services/providers/production.js";
-import { pruneRateWindows } from "../services/providers/rateLimit.js";
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { and, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import postgres from 'postgres';
+import { hostname } from 'node:os';
+import { config as apiConfig } from '../config.js';
+import { DATABASE_CASING } from '../db/casing.js';
+import { runMigrations } from '../db/migrate.js';
+import type { Database } from '../db/postgres.js';
+import * as schema from '../db/schema/index.js';
+import { providerAccounts, publicDomains } from '../db/schema/index.js';
+import { readServicesConfig } from '../services/config.js';
+import { OperationEngine } from '../services/operations/engine.js';
+import { createOperationHandlers, OPERATION_KINDS } from '../services/operations/handlers.js';
+import { enqueueOperation } from '../services/operations/store.js';
+import { createProductionRegistry } from '../services/providers/production.js';
+import { pruneRateWindows } from '../services/providers/rateLimit.js';
 
 const IDLE_POLL_MS = 2_000;
 const SHUTDOWN_DEADLINE_MS = 30_000;
@@ -35,7 +35,9 @@ const MAINTENANCE_INTERVAL_MS = 15 * 60_000;
 const SYNC_AFTER_MS = 24 * 60 * 60_000;
 
 function log(event: Record<string, unknown>): void {
-  console.log(JSON.stringify({ at: new Date().toISOString(), service: "tnp-services-worker", ...event }));
+  console.log(
+    JSON.stringify({ at: new Date().toISOString(), service: 'tnp-services-worker', ...event }),
+  );
 }
 
 /**
@@ -44,14 +46,22 @@ function log(event: Record<string, unknown>): void {
  */
 export async function scheduleSyncs(db: Database, now: Date): Promise<number> {
   const stale = await db
-    .select({ id: publicDomains.id, ownerId: publicDomains.ownerId, accountId: publicDomains.providerAccountId, environment: providerAccounts.environment })
+    .select({
+      id: publicDomains.id,
+      ownerId: publicDomains.ownerId,
+      accountId: publicDomains.providerAccountId,
+      environment: providerAccounts.environment,
+    })
     .from(publicDomains)
     .innerJoin(providerAccounts, eq(providerAccounts.id, publicDomains.providerAccountId))
     .where(
       and(
         sql`${publicDomains.lifecycle} not in ('pending', 'failed')`,
         sql`${providerAccounts.managementMode} <> 'disabled'`,
-        or(isNull(publicDomains.lastSyncedAt), lt(publicDomains.lastSyncedAt, new Date(now.getTime() - SYNC_AFTER_MS))),
+        or(
+          isNull(publicDomains.lastSyncedAt),
+          lt(publicDomains.lastSyncedAt, new Date(now.getTime() - SYNC_AFTER_MS)),
+        ),
       ),
     )
     .limit(500);
@@ -60,10 +70,10 @@ export async function scheduleSyncs(db: Database, now: Date): Promise<number> {
   for (const domain of stale) {
     const result = await enqueueOperation(db, {
       kind: OPERATION_KINDS.sync,
-      scope: "system",
+      scope: 'system',
       idempotencyKey: `daily-sync:${domain.id}:${day}`,
       ownerId: domain.ownerId,
-      resourceType: "public_domain",
+      resourceType: 'public_domain',
       resourceId: domain.id,
       providerAccountId: domain.accountId,
       payload: { publicDomainId: domain.id, environment: domain.environment },
@@ -76,13 +86,17 @@ export async function scheduleSyncs(db: Database, now: Date): Promise<number> {
 async function main(): Promise<void> {
   const services = readServicesConfig();
   if (!services.worker) {
-    log({ event: "worker.disabled", reason: "TNP_SERVICES_WORKER is not set" });
+    log({ event: 'worker.disabled', reason: 'TNP_SERVICES_WORKER is not set' });
     return;
   }
-  if (!apiConfig.databaseUrl) throw new Error("DATABASE_URL is required");
+  if (!apiConfig.databaseUrl) throw new Error('DATABASE_URL is required');
 
   await runMigrations();
-  const client = postgres(apiConfig.databaseUrl, { max: services.workerPoolSize, idle_timeout: 30, connect_timeout: 10 });
+  const client = postgres(apiConfig.databaseUrl, {
+    max: services.workerPoolSize,
+    idle_timeout: 30,
+    connect_timeout: 10,
+  });
   const db: Database = drizzle(client, { schema, casing: DATABASE_CASING });
   await client`select 1`;
 
@@ -99,19 +113,19 @@ async function main(): Promise<void> {
   const stop = () => {
     if (stopping) return;
     stopping = true;
-    log({ event: "worker.stopping" });
+    log({ event: 'worker.stopping' });
     deadline = new Promise((resolve) => setTimeout(resolve, SHUTDOWN_DEADLINE_MS).unref());
   };
-  process.once("SIGTERM", stop);
-  process.once("SIGINT", stop);
+  process.once('SIGTERM', stop);
+  process.once('SIGINT', stop);
 
   const maintenance = async () => {
     try {
       await pruneRateWindows(db);
       const queued = await scheduleSyncs(db, new Date());
-      log({ event: "worker.maintenance", syncsQueued: queued });
+      log({ event: 'worker.maintenance', syncsQueued: queued });
     } catch (err) {
-      log({ event: "worker.maintenance_failed", error: String(err) });
+      log({ event: 'worker.maintenance_failed', error: String(err) });
     }
   };
   await maintenance();
@@ -123,13 +137,18 @@ async function main(): Promise<void> {
         const worked = await engine.runOnce();
         if (!worked) await new Promise((resolve) => setTimeout(resolve, IDLE_POLL_MS));
       } catch (err) {
-        log({ event: "worker.loop_error", slot, error: String(err) });
+        log({ event: 'worker.loop_error', slot, error: String(err) });
         await new Promise((resolve) => setTimeout(resolve, IDLE_POLL_MS));
       }
     }
   };
 
-  log({ event: "worker.started", workerId, concurrency: services.workerConcurrency, kinds: engine.kinds });
+  log({
+    event: 'worker.started',
+    workerId,
+    concurrency: services.workerConcurrency,
+    kinds: engine.kinds,
+  });
   const loops = Array.from({ length: services.workerConcurrency }, (_, slot) => loop(slot));
   // Loops finish their current operation and return once `stopping` is set;
   // the deadline only matters if a provider call hangs past it. `deadline` is
@@ -139,12 +158,12 @@ async function main(): Promise<void> {
   await Promise.race([allLoops, deadline]);
   clearInterval(timer);
   await client.end({ timeout: 5 });
-  log({ event: "worker.stopped" });
+  log({ event: 'worker.stopped' });
 }
 
 if (import.meta.main) {
   main().catch((err) => {
-    console.error("services worker failed:", err);
+    console.error('services worker failed:', err);
     process.exit(1);
   });
 }

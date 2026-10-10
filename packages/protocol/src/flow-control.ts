@@ -11,7 +11,7 @@
  * (audit S6).
  */
 
-import { CIRCUIT_WINDOW_INITIAL, STREAM_WINDOW_INITIAL } from "./constants.js";
+import { CIRCUIT_WINDOW_INITIAL, STREAM_WINDOW_INITIAL } from './constants.js';
 
 /**
  * One direction of one window.

@@ -1,4 +1,4 @@
-import { MAX_AVAILABILITY_NAMES } from "@tnp/shared-types";
+import { MAX_AVAILABILITY_NAMES } from '@tnp/shared-types';
 
 export interface SearchInput {
   /** Distinct names to send, in the order typed, at most MAX_AVAILABILITY_NAMES. */
@@ -29,13 +29,14 @@ export function parseSearchInput(raw: string): SearchInput {
 
 /** Query string for `GET /services/domains/availability`. */
 export function availabilityPath(names: string[]): string {
-  return `/services/domains/availability?name=${names.map(encodeURIComponent).join(",")}`;
+  return `/services/domains/availability?name=${names.map(encodeURIComponent).join(',')}`;
 }
 
 /** An `Idempotency-Key`: 8–128 characters, generated once per confirmed intent. */
 export function newIdempotencyKey(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    return crypto.randomUUID();
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }

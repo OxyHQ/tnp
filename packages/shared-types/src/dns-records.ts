@@ -13,9 +13,9 @@
  * the right input without parsing prose.
  */
 
-import { asRecord } from "./parse.js";
+import { asRecord } from './parse.js';
 
-export const DNS_RECORD_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "NS"] as const;
+export const DNS_RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'TXT', 'MX', 'NS'] as const;
 export type DnsRecordType = (typeof DNS_RECORD_TYPES)[number];
 
 export const DNS_RECORD_TTL_MIN = 60;
@@ -70,22 +70,22 @@ export interface DnsRecordDto {
   updatedAt: string;
 }
 
-export type DnsRecordField = "body" | "type" | "name" | "value" | "priority" | "ttl";
+export type DnsRecordField = 'body' | 'type' | 'name' | 'value' | 'priority' | 'ttl';
 
 export type DnsRecordErrorCode =
-  | "body_invalid"
-  | "type_invalid"
-  | "name_required"
-  | "name_invalid"
-  | "name_wildcard"
-  | "value_required"
-  | "ipv4_invalid"
-  | "ipv6_invalid"
-  | "hostname_invalid"
-  | "txt_too_long"
-  | "txt_invalid_chars"
-  | "priority_invalid"
-  | "ttl_invalid";
+  | 'body_invalid'
+  | 'type_invalid'
+  | 'name_required'
+  | 'name_invalid'
+  | 'name_wildcard'
+  | 'value_required'
+  | 'ipv4_invalid'
+  | 'ipv6_invalid'
+  | 'hostname_invalid'
+  | 'txt_too_long'
+  | 'txt_invalid_chars'
+  | 'priority_invalid'
+  | 'ttl_invalid';
 
 export interface DnsRecordParseError {
   readonly ok: false;
@@ -94,23 +94,23 @@ export interface DnsRecordParseError {
   readonly code: DnsRecordErrorCode;
 }
 
-export type DnsRecordParseResult<T> = { readonly ok: true; readonly value: T } | DnsRecordParseError;
+export type DnsRecordParseResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | DnsRecordParseError;
 
 function fail(field: DnsRecordField, code: DnsRecordErrorCode, error: string): DnsRecordParseError {
   return { ok: false, field, code, error };
 }
 
 export function isDnsRecordType(value: unknown): value is DnsRecordType {
-  return typeof value === "string" && (DNS_RECORD_TYPES as readonly string[]).includes(value);
+  return typeof value === 'string' && (DNS_RECORD_TYPES as readonly string[]).includes(value);
 }
 
 /** Strict dotted quad: four decimal octets, 0-255, no leading zeros. */
 export function isValidIpv4(value: string): boolean {
-  const parts = value.split(".");
+  const parts = value.split('.');
   if (parts.length !== 4) return false;
-  return parts.every(
-    (part) => /^(0|[1-9][0-9]{0,2})$/.test(part) && Number(part) <= 255,
-  );
+  return parts.every((part) => /^(0|[1-9][0-9]{0,2})$/.test(part) && Number(part) <= 255);
 }
 
 /**
@@ -123,13 +123,13 @@ export function isValidIpv4(value: string): boolean {
 export function isValidIpv6(value: string): boolean {
   if (value.length === 0 || value.length > 45) return false;
 
-  const doubleColon = value.indexOf("::");
-  if (doubleColon !== -1 && value.indexOf("::", doubleColon + 1) !== -1) return false;
+  const doubleColon = value.indexOf('::');
+  if (doubleColon !== -1 && value.indexOf('::', doubleColon + 1) !== -1) return false;
 
   const groupsOf = (part: string): string[] | null => {
-    if (part === "") return [];
-    const groups = part.split(":");
-    return groups.some((group) => group === "") ? null : groups;
+    if (part === '') return [];
+    const groups = part.split(':');
+    return groups.some((group) => group === '') ? null : groups;
   };
 
   let head: string[] | null;
@@ -148,7 +148,7 @@ export function isValidIpv6(value: string): boolean {
   for (let i = 0; i < groups.length; i++) {
     const group = groups[i];
     const isLast = i === groups.length - 1;
-    if (isLast && group.includes(".")) {
+    if (isLast && group.includes('.')) {
       if (!isValidIpv4(group)) return false;
       width += 2;
     } else if (/^[0-9a-fA-F]{1,4}$/.test(group)) {
@@ -174,9 +174,9 @@ const HOST_LABEL_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
  * would otherwise pass as a four-label name.
  */
 export function normalizeHostname(input: string): string | null {
-  const host = input.trim().toLowerCase().replace(/\.$/, "");
+  const host = input.trim().toLowerCase().replace(/\.$/, '');
   if (!host || host.length > MAX_HOSTNAME_LENGTH) return null;
-  const labels = host.split(".");
+  const labels = host.split('.');
   const valid = labels.every(
     (label) => label.length <= MAX_LABEL_LENGTH && HOST_LABEL_RE.test(label),
   );
@@ -192,38 +192,36 @@ export function normalizeHostname(input: string): string | null {
 const RECORD_NAME_LABEL_RE = /^_?[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 
 function parseRecordName(raw: unknown): DnsRecordParseResult<string> {
-  if (typeof raw !== "string" || raw.trim() === "") {
-    return fail("name", "name_required", "name is required");
+  if (typeof raw !== 'string' || raw.trim() === '') {
+    return fail('name', 'name_required', 'name is required');
   }
   const name = raw.trim().toLowerCase();
-  if (name === "@") return { ok: true, value: name };
+  if (name === '@') return { ok: true, value: name };
 
   // The resolver matches record names exactly; a wildcard would be stored and
   // then never answered, which is worse than refusing it.
-  if (name.split(".").includes("*")) {
-    return fail("name", "name_wildcard", "Wildcard records are not supported");
+  if (name.split('.').includes('*')) {
+    return fail('name', 'name_wildcard', 'Wildcard records are not supported');
   }
 
-  const labels = name.split(".");
+  const labels = name.split('.');
   const valid =
     name.length <= MAX_HOSTNAME_LENGTH &&
-    labels.every(
-      (label) => label.length <= MAX_LABEL_LENGTH && RECORD_NAME_LABEL_RE.test(label),
-    );
+    labels.every((label) => label.length <= MAX_LABEL_LENGTH && RECORD_NAME_LABEL_RE.test(label));
   if (!valid) {
     return fail(
-      "name",
-      "name_invalid",
-      "name must be @ or labels of letters, digits and hyphens relative to the domain",
+      'name',
+      'name_invalid',
+      'name must be @ or labels of letters, digits and hyphens relative to the domain',
     );
   }
   return { ok: true, value: name };
 }
 
 function parseType(raw: unknown): DnsRecordParseResult<DnsRecordType> {
-  const type = typeof raw === "string" ? raw.trim().toUpperCase() : raw;
+  const type = typeof raw === 'string' ? raw.trim().toUpperCase() : raw;
   if (!isDnsRecordType(type)) {
-    return fail("type", "type_invalid", `type must be one of ${DNS_RECORD_TYPES.join(", ")}`);
+    return fail('type', 'type_invalid', `type must be one of ${DNS_RECORD_TYPES.join(', ')}`);
   }
   return { ok: true, value: type };
 }
@@ -232,14 +230,14 @@ function parseType(raw: unknown): DnsRecordParseResult<DnsRecordType> {
 function parseTtl(raw: unknown): DnsRecordParseResult<number | undefined> {
   if (raw === undefined || raw === null) return { ok: true, value: undefined };
   if (
-    typeof raw !== "number" ||
+    typeof raw !== 'number' ||
     !Number.isInteger(raw) ||
     raw < DNS_RECORD_TTL_MIN ||
     raw > DNS_RECORD_TTL_MAX
   ) {
     return fail(
-      "ttl",
-      "ttl_invalid",
+      'ttl',
+      'ttl_invalid',
       `ttl must be an integer between ${DNS_RECORD_TTL_MIN} and ${DNS_RECORD_TTL_MAX}`,
     );
   }
@@ -248,10 +246,10 @@ function parseTtl(raw: unknown): DnsRecordParseResult<number | undefined> {
 
 function parsePriority(raw: unknown): DnsRecordParseResult<number | undefined> {
   if (raw === undefined || raw === null) return { ok: true, value: undefined };
-  if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 0 || raw > MX_PRIORITY_MAX) {
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 0 || raw > MX_PRIORITY_MAX) {
     return fail(
-      "priority",
-      "priority_invalid",
+      'priority',
+      'priority_invalid',
       `priority must be an integer between 0 and ${MX_PRIORITY_MAX}`,
     );
   }
@@ -259,8 +257,8 @@ function parsePriority(raw: unknown): DnsRecordParseResult<number | undefined> {
 }
 
 function parseValueString(raw: unknown): DnsRecordParseResult<string> {
-  if (typeof raw !== "string" || raw.trim() === "") {
-    return fail("value", "value_required", "value is required");
+  if (typeof raw !== 'string' || raw.trim() === '') {
+    return fail('value', 'value_required', 'value is required');
   }
   return { ok: true, value: raw.trim() };
 }
@@ -287,28 +285,36 @@ function parseValue(
   priority: number | undefined,
 ): DnsRecordParseResult<string> {
   switch (type) {
-    case "A":
+    case 'A':
       return isValidIpv4(value)
         ? { ok: true, value }
-        : fail("value", "ipv4_invalid", "An A record needs an IPv4 address like 192.0.2.1");
-    case "AAAA":
+        : fail('value', 'ipv4_invalid', 'An A record needs an IPv4 address like 192.0.2.1');
+    case 'AAAA':
       return isValidIpv6(value)
         ? { ok: true, value: value.toLowerCase() }
-        : fail("value", "ipv6_invalid", "An AAAA record needs an IPv6 address like 2001:db8::1");
-    case "CNAME":
-    case "NS": {
+        : fail('value', 'ipv6_invalid', 'An AAAA record needs an IPv6 address like 2001:db8::1');
+    case 'CNAME':
+    case 'NS': {
       const host = normalizeHostname(value);
       return host
         ? { ok: true, value: host }
-        : fail("value", "hostname_invalid", `A ${type} record needs a hostname like host.example.ox`);
+        : fail(
+            'value',
+            'hostname_invalid',
+            `A ${type} record needs a hostname like host.example.ox`,
+          );
     }
-    case "MX": {
+    case 'MX': {
       let host = value;
       let effectivePriority = priority;
       if (effectivePriority === undefined) {
         const split = splitMxValue(value);
         if (!split) {
-          return fail("priority", "priority_invalid", "An MX record needs a priority between 0 and 65535");
+          return fail(
+            'priority',
+            'priority_invalid',
+            'An MX record needs a priority between 0 and 65535',
+          );
         }
         const parsedPriority = parsePriority(split.priority);
         if (!parsedPriority.ok) return parsedPriority;
@@ -317,16 +323,24 @@ function parseValue(
       }
       const normalized = normalizeHostname(host);
       if (!normalized) {
-        return fail("value", "hostname_invalid", "An MX record needs a mail host like mail.example.ox");
+        return fail(
+          'value',
+          'hostname_invalid',
+          'An MX record needs a mail host like mail.example.ox',
+        );
       }
       return { ok: true, value: `${effectivePriority} ${normalized}` };
     }
-    case "TXT":
+    case 'TXT':
       if (value.length > DNS_TXT_MAX_LENGTH) {
-        return fail("value", "txt_too_long", `A TXT value may be at most ${DNS_TXT_MAX_LENGTH} characters`);
+        return fail(
+          'value',
+          'txt_too_long',
+          `A TXT value may be at most ${DNS_TXT_MAX_LENGTH} characters`,
+        );
       }
       if (CONTROL_CHARS_RE.test(value)) {
-        return fail("value", "txt_invalid_chars", "A TXT value may not contain control characters");
+        return fail('value', 'txt_invalid_chars', 'A TXT value may not contain control characters');
       }
       return { ok: true, value };
   }
@@ -335,7 +349,7 @@ function parseValue(
 /** Validate and normalize a new record. */
 export function parseCreateDnsRecordRequest(body: unknown): DnsRecordParseResult<DnsRecordInput> {
   const record = asRecord(body);
-  if (!record) return fail("body", "body_invalid", "request body must be an object");
+  if (!record) return fail('body', 'body_invalid', 'request body must be an object');
 
   const type = parseType(record.type);
   if (!type.ok) return type;
@@ -373,7 +387,7 @@ export function parseUpdateDnsRecordRequest(
   body: unknown,
 ): DnsRecordParseResult<UpdateDnsRecordRequest> {
   const record = asRecord(body);
-  if (!record) return fail("body", "body_invalid", "request body must be an object");
+  if (!record) return fail('body', 'body_invalid', 'request body must be an object');
 
   const patch: UpdateDnsRecordRequest = {};
 
@@ -430,8 +444,8 @@ export function mergeDnsRecordUpdate(
     ttl: patch.ttl ?? existing.ttl,
   };
 
-  if (type === "MX") {
-    const stored = existing.type === "MX" ? splitMxValue(existing.value) : null;
+  if (type === 'MX') {
+    const stored = existing.type === 'MX' ? splitMxValue(existing.value) : null;
     if (patch.value !== undefined) {
       merged.value = patch.value;
       merged.priority =

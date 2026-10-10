@@ -7,12 +7,12 @@
  * `management_mode` stops those.
  */
 
-import { and, eq } from "drizzle-orm";
-import type { Database } from "../../db/postgres.js";
-import { providerAccounts } from "../../db/schema/index.js";
-import type { ProviderEnvironment } from "./contracts.js";
-import { ProviderError } from "./errors.js";
-import type { ProviderAccountConfig } from "./registry.js";
+import { and, eq } from 'drizzle-orm';
+import type { Database } from '../../db/postgres.js';
+import { providerAccounts } from '../../db/schema/index.js';
+import type { ProviderEnvironment } from './contracts.js';
+import { ProviderError } from './errors.js';
+import type { ProviderAccountConfig } from './registry.js';
 
 export type ProviderAccountRow = typeof providerAccounts.$inferSelect;
 
@@ -24,30 +24,34 @@ export function toAccountConfig(row: ProviderAccountRow): ProviderAccountConfig 
   };
 }
 
-export type AccountUse = "sell" | "read" | "write";
+export type AccountUse = 'sell' | 'read' | 'write';
 
 /** Throws unless the account may be used for `use`. */
 export function assertAccountUsable(row: ProviderAccountRow, use: AccountUse): void {
-  if (row.managementMode === "disabled") {
-    throw new ProviderError("credentials", `provider account ${row.id} is disabled`, {
-      safeMessage: "This provider account is not available.",
+  if (row.managementMode === 'disabled') {
+    throw new ProviderError('credentials', `provider account ${row.id} is disabled`, {
+      safeMessage: 'This provider account is not available.',
     });
   }
-  if (use !== "read" && row.managementMode === "read_only") {
-    throw new ProviderError("credentials", `provider account ${row.id} is read-only`, {
-      safeMessage: "Changes through this provider are paused.",
+  if (use !== 'read' && row.managementMode === 'read_only') {
+    throw new ProviderError('credentials', `provider account ${row.id} is read-only`, {
+      safeMessage: 'Changes through this provider are paused.',
     });
   }
-  if (use === "sell" && row.salesState !== "enabled") {
-    throw new ProviderError("not_available", `provider account ${row.id} is not selling`, {
-      safeMessage: "New purchases through this provider are paused.",
+  if (use === 'sell' && row.salesState !== 'enabled') {
+    throw new ProviderError('not_available', `provider account ${row.id} is not selling`, {
+      safeMessage: 'New purchases through this provider are paused.',
     });
   }
 }
 
 export async function loadProviderAccount(db: Database, id: string): Promise<ProviderAccountRow> {
-  const [row] = await db.select().from(providerAccounts).where(eq(providerAccounts.id, id)).limit(1);
-  if (!row) throw new ProviderError("credentials", `provider account ${id} does not exist`);
+  const [row] = await db
+    .select()
+    .from(providerAccounts)
+    .where(eq(providerAccounts.id, id))
+    .limit(1);
+  if (!row) throw new ProviderError('credentials', `provider account ${id} does not exist`);
   return row;
 }
 
@@ -68,14 +72,18 @@ export async function selectSellingAccount(
     .where(
       and(
         eq(providerAccounts.environment, environment),
-        eq(providerAccounts.salesState, "enabled"),
-        eq(providerAccounts.managementMode, "active"),
+        eq(providerAccounts.salesState, 'enabled'),
+        eq(providerAccounts.managementMode, 'active'),
       ),
     );
   if (rows.length > 1) {
-    throw new ProviderError("credentials", `${rows.length} selling accounts in ${environment}; no selection policy is approved`, {
-      safeMessage: "Purchases are temporarily unavailable.",
-    });
+    throw new ProviderError(
+      'credentials',
+      `${rows.length} selling accounts in ${environment}; no selection policy is approved`,
+      {
+        safeMessage: 'Purchases are temporarily unavailable.',
+      },
+    );
   }
   return rows[0] ?? null;
 }

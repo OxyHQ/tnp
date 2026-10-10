@@ -5,8 +5,8 @@
  * with `ProviderError("credentials")` — not on the first customer's purchase.
  */
 
-import { ProviderError } from "../errors.js";
-import type { ProviderAccountConfig } from "../registry.js";
+import { ProviderError } from '../errors.js';
+import type { ProviderAccountConfig } from '../registry.js';
 
 export interface NamecheapSettings {
   readonly apiUser: string;
@@ -50,7 +50,7 @@ function ip(a: number, b: number, c: number, d: number): number {
 
 /** Parse a strict dotted-quad IPv4 literal: no leading zeros, no shorthand. */
 export function parseIPv4(value: string): number | null {
-  const parts = value.split(".");
+  const parts = value.split('.');
   if (parts.length !== 4) return null;
   let out = 0;
   for (const part of parts) {
@@ -68,34 +68,42 @@ export function isPublicIPv4(value: string): boolean {
   if (addr === null) return false;
   return !NON_PUBLIC_V4.some(([base, bits]) => {
     const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
-    return ((addr & mask) >>> 0) === base;
+    return (addr & mask) >>> 0 === base;
   });
 }
 
-function requireUser(config: Readonly<Record<string, unknown>>, key: "apiUser" | "userName"): string {
+function requireUser(
+  config: Readonly<Record<string, unknown>>,
+  key: 'apiUser' | 'userName',
+): string {
   const value = config[key];
-  if (typeof value !== "string" || value.length === 0 || value.length > MAX_USER_LENGTH || !USER_RE.test(value)) {
-    throw new ProviderError("credentials", `namecheap account config.${key} is missing or invalid`);
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > MAX_USER_LENGTH ||
+    !USER_RE.test(value)
+  ) {
+    throw new ProviderError('credentials', `namecheap account config.${key} is missing or invalid`);
   }
   return value;
 }
 
 export function readNamecheapSettings(account: ProviderAccountConfig): NamecheapSettings {
-  if (account.ref.adapter !== "namecheap") {
-    throw new ProviderError("credentials", `account ${account.ref.id} is not a namecheap account`);
+  if (account.ref.adapter !== 'namecheap') {
+    throw new ProviderError('credentials', `account ${account.ref.id} is not a namecheap account`);
   }
-  if (account.ref.environment !== "sandbox" && account.ref.environment !== "production") {
-    throw new ProviderError("credentials", `account ${account.ref.id} has no valid environment`);
+  if (account.ref.environment !== 'sandbox' && account.ref.environment !== 'production') {
+    throw new ProviderError('credentials', `account ${account.ref.id} has no valid environment`);
   }
   if (account.secretRef === null || account.secretRef.length === 0) {
-    throw new ProviderError("credentials", `namecheap account ${account.ref.id} has no secretRef`);
+    throw new ProviderError('credentials', `namecheap account ${account.ref.id} has no secretRef`);
   }
-  const apiUser = requireUser(account.config, "apiUser");
-  const userName = requireUser(account.config, "userName");
+  const apiUser = requireUser(account.config, 'apiUser');
+  const userName = requireUser(account.config, 'userName');
   const clientIp = account.config.clientIp;
-  if (typeof clientIp !== "string" || !isPublicIPv4(clientIp)) {
+  if (typeof clientIp !== 'string' || !isPublicIPv4(clientIp)) {
     throw new ProviderError(
-      "credentials",
+      'credentials',
       `namecheap account ${account.ref.id} config.clientIp must be the public IPv4 egress address`,
     );
   }

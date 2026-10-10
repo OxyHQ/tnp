@@ -90,19 +90,13 @@
       "title": "macOS",
       "description": "客户端运行本地 DNS 代理，只拦截 TNP 域名。所有其他 DNS 查询通过你的常规解析器，不受影响。",
       "requirementsTitle": "要求：",
-      "requirements": [
-        "macOS 12 Monterey 或更高版本",
-        "管理员密码（安装程序会设置解析器配置）"
-      ]
+      "requirements": ["macOS 12 Monterey 或更高版本", "管理员密码（安装程序会设置解析器配置）"]
     },
     "linux": {
       "title": "Linux",
       "description": "支持 systemd-resolved、NetworkManager 和独立的 resolv.conf 配置。安装程序会自动检测你的 DNS 配置。",
       "requirementsTitle": "要求：",
-      "requirements": [
-        "任何现代 Linux 发行版",
-        "sudo 权限"
-      ]
+      "requirements": ["任何现代 Linux 发行版", "sudo 权限"]
     },
     "windows": {
       "title": "Windows",

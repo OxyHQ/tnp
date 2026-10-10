@@ -21,19 +21,16 @@ export type ParseResult<T> =
  * `["a"]` satisfy a contract by accident.
  */
 export function asRecord(body: unknown): Record<string, unknown> | null {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
     return null;
   }
   return body as Record<string, unknown>;
 }
 
 /** A required, non-empty string field, trimmed. */
-export function stringField(
-  record: Record<string, unknown>,
-  field: string,
-): ParseResult<string> {
+export function stringField(record: Record<string, unknown>, field: string): ParseResult<string> {
   const value = record[field];
-  if (typeof value !== "string" || value.trim() === "") {
+  if (typeof value !== 'string' || value.trim() === '') {
     return { ok: false, error: `${field} is required` };
   }
   return { ok: true, value: value.trim() };
@@ -53,7 +50,7 @@ export function integerField(
   max: number,
 ): ParseResult<number> {
   const value = record[field];
-  if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
     return { ok: false, error: `${field} must be an integer between ${min} and ${max}` };
   }
   return { ok: true, value };
@@ -66,9 +63,9 @@ export function optionalStringField(
 ): ParseResult<string> {
   const value = record[field];
   if (value === undefined || value === null) {
-    return { ok: true, value: "" };
+    return { ok: true, value: '' };
   }
-  if (typeof value !== "string") {
+  if (typeof value !== 'string') {
     return { ok: false, error: `${field} must be a string` };
   }
   return { ok: true, value: value.trim() };

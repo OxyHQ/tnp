@@ -174,13 +174,13 @@ export type ErrorScopeValue = (typeof ErrorScope)[keyof typeof ErrorScope];
  */
 export const Capability = {
   /** Per-direction monotonic counters inside the AEAD envelope. */
-  REPLAY_PROTECTION: "replay-protection",
+  REPLAY_PROTECTION: 'replay-protection',
   /** Credit-based flow control at stream and circuit level. */
-  FLOW_CONTROL: "flow-control",
+  FLOW_CONTROL: 'flow-control',
   /** Incremental multi-hop circuit construction (Phase 6). */
-  ONION_ROUTING: "onion-routing",
+  ONION_ROUTING: 'onion-routing',
   /** Circuit resumption across a reconnect. */
-  RESUMPTION: "resumption",
+  RESUMPTION: 'resumption',
 } as const;
 
 export type CapabilityValue = (typeof Capability)[keyof typeof Capability];

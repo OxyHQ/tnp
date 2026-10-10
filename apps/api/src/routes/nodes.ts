@@ -1,22 +1,22 @@
-import { Router } from "express";
-import { and, eq, sql } from "drizzle-orm";
-import { requireOxyAuth, getRequiredOxyUserId } from "@oxy.so/core/server";
-import { isReservedTld } from "@tnp/namespace";
+import { Router } from 'express';
+import { and, eq, sql } from 'drizzle-orm';
+import { requireOxyAuth, getRequiredOxyUserId } from '@oxy.so/core/server';
+import { isReservedTld } from '@tnp/namespace';
 import {
   parseRegisterServiceNodeRequest,
   parseServiceNodeHeartbeatRequest,
   type ServiceNodeHeartbeatResponse,
   type ServiceNodeLookup,
   type ServiceNodeRegistration,
-} from "@tnp/shared-types";
-import { getDb } from "../db/postgres.js";
-import { domains, serviceNodes, tlds } from "../db/schema/index.js";
-import { effectiveServiceNodeStatus } from "../registry/nodes.js";
+} from '@tnp/shared-types';
+import { getDb } from '../db/postgres.js';
+import { domains, serviceNodes, tlds } from '../db/schema/index.js';
+import { effectiveServiceNodeStatus } from '../registry/nodes.js';
 
 const router = Router();
 
 // POST /nodes/register -- register a service node for a domain (auth required)
-router.post("/register", requireOxyAuth, async (req, res) => {
+router.post('/register', requireOxyAuth, async (req, res) => {
   try {
     const userId = getRequiredOxyUserId(req);
 
@@ -36,11 +36,11 @@ router.post("/register", requireOxyAuth, async (req, res) => {
       .limit(1);
 
     if (!domain) {
-      res.status(404).json({ error: "Domain not found" });
+      res.status(404).json({ error: 'Domain not found' });
       return;
     }
     if (domain.oxyUserId !== userId) {
-      res.status(403).json({ error: "You do not own this domain" });
+      res.status(403).json({ error: 'You do not own this domain' });
       return;
     }
 
@@ -55,7 +55,7 @@ router.post("/register", requireOxyAuth, async (req, res) => {
       .returning();
 
     if (!node) {
-      res.status(500).json({ error: "Failed to register service node" });
+      res.status(500).json({ error: 'Failed to register service node' });
       return;
     }
 
@@ -69,17 +69,17 @@ router.post("/register", requireOxyAuth, async (req, res) => {
     };
     res.status(201).json(registration);
   } catch (err) {
-    console.error("Register service node error:", err);
-    res.status(500).json({ error: "Failed to register service node" });
+    console.error('Register service node error:', err);
+    res.status(500).json({ error: 'Failed to register service node' });
   }
 });
 
 // GET /nodes/:domain -- look up a service node by domain (e.g. example.ox)
-router.get("/:domain", async (req, res) => {
+router.get('/:domain', async (req, res) => {
   try {
-    const parts = req.params.domain.split(".");
+    const parts = req.params.domain.split('.');
     if (parts.length !== 2) {
-      res.status(400).json({ error: "Format must be name.tld (e.g., example.ox)" });
+      res.status(400).json({ error: 'Format must be name.tld (e.g., example.ox)' });
       return;
     }
 
@@ -88,7 +88,7 @@ router.get("/:domain", async (req, res) => {
     // TNP serves no reserved TLD, so it publishes no service node under one
     // either — otherwise this endpoint would be a way around the namespace rule.
     if (isReservedTld(tld)) {
-      res.status(404).json({ error: "TLD not found" });
+      res.status(404).json({ error: 'TLD not found' });
       return;
     }
 
@@ -97,11 +97,11 @@ router.get("/:domain", async (req, res) => {
     const [tldRow] = await db
       .select({ id: tlds.id })
       .from(tlds)
-      .where(and(eq(tlds.name, tld), eq(tlds.status, "active")))
+      .where(and(eq(tlds.name, tld), eq(tlds.status, 'active')))
       .limit(1);
 
     if (!tldRow) {
-      res.status(404).json({ error: "TLD not found" });
+      res.status(404).json({ error: 'TLD not found' });
       return;
     }
 
@@ -114,11 +114,11 @@ router.get("/:domain", async (req, res) => {
       })
       .from(serviceNodes)
       .innerJoin(domains, eq(serviceNodes.domainId, domains.id))
-      .where(and(eq(domains.name, name), eq(domains.tld, tld), eq(domains.status, "active")))
+      .where(and(eq(domains.name, name), eq(domains.tld, tld), eq(domains.status, 'active')))
       .limit(1);
 
     if (!node) {
-      res.status(404).json({ error: "No service node registered for this domain" });
+      res.status(404).json({ error: 'No service node registered for this domain' });
       return;
     }
 
@@ -139,13 +139,13 @@ router.get("/:domain", async (req, res) => {
     };
     res.json(lookup);
   } catch (err) {
-    console.error("Lookup service node error:", err);
-    res.status(500).json({ error: "Failed to look up service node" });
+    console.error('Lookup service node error:', err);
+    res.status(500).json({ error: 'Failed to look up service node' });
   }
 });
 
 // POST /nodes/heartbeat -- update service node status (auth required)
-router.post("/heartbeat", requireOxyAuth, async (req, res) => {
+router.post('/heartbeat', requireOxyAuth, async (req, res) => {
   try {
     const parsed = parseServiceNodeHeartbeatRequest(req.body);
     if (!parsed.ok) {
@@ -161,7 +161,7 @@ router.post("/heartbeat", requireOxyAuth, async (req, res) => {
       .set({
         lastSeen: sql`now()`,
         connectedRelay,
-        status: "online",
+        status: 'online',
         updatedAt: sql`now()`,
       })
       .where(
@@ -176,15 +176,15 @@ router.post("/heartbeat", requireOxyAuth, async (req, res) => {
       // Deliberately does not distinguish "no such node" from "not yours":
       // telling an unauthorized caller which domains have nodes is a disclosure
       // the previous 404/403 split made for free.
-      res.status(404).json({ error: "Service node not found" });
+      res.status(404).json({ error: 'Service node not found' });
       return;
     }
 
-    const response: ServiceNodeHeartbeatResponse = { status: "ok" };
+    const response: ServiceNodeHeartbeatResponse = { status: 'ok' };
     res.json(response);
   } catch (err) {
-    console.error("Service node heartbeat error:", err);
-    res.status(500).json({ error: "Failed to update heartbeat" });
+    console.error('Service node heartbeat error:', err);
+    res.status(500).json({ error: 'Failed to update heartbeat' });
   }
 });
 

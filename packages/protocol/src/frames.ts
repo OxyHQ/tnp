@@ -63,7 +63,7 @@ export function decodeFrame(data: Uint8Array): Frame {
     rawType !== FrameType.CLOSE &&
     rawType !== FrameType.ERROR
   ) {
-    throw new RangeError(`Unknown frame type: 0x${rawType.toString(16).padStart(2, "0")}`);
+    throw new RangeError(`Unknown frame type: 0x${rawType.toString(16).padStart(2, '0')}`);
   }
 
   const type: FrameType = rawType;

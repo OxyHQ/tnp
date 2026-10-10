@@ -8,7 +8,7 @@
  * is a configuration error, not a fallback to something else.
  */
 
-import { ProviderError } from "./errors.js";
+import { ProviderError } from './errors.js';
 
 export interface SecretResolver {
   /** The secret's value. Throws `ProviderError("credentials")` when absent. */
@@ -24,11 +24,14 @@ export function createEnvSecretResolver(
     resolve(ref) {
       const match = ENV_REF_RE.exec(ref);
       if (!match) {
-        throw new ProviderError("credentials", `unsupported secret reference scheme in ${JSON.stringify(ref.split(":")[0])}`);
+        throw new ProviderError(
+          'credentials',
+          `unsupported secret reference scheme in ${JSON.stringify(ref.split(':')[0])}`,
+        );
       }
       const value = env[match[1]];
       if (!value) {
-        throw new ProviderError("credentials", `secret ${match[1]} is not set`);
+        throw new ProviderError('credentials', `secret ${match[1]} is not set`);
       }
       return value;
     },
@@ -47,9 +50,9 @@ export function redact(text: string, secrets: readonly string[]): string {
   let out = text;
   for (const secret of secrets) {
     if (secret.length < 4) continue;
-    out = out.split(secret).join("[REDACTED]");
+    out = out.split(secret).join('[REDACTED]');
     const encoded = encodeURIComponent(secret);
-    if (encoded !== secret) out = out.split(encoded).join("[REDACTED]");
+    if (encoded !== secret) out = out.split(encoded).join('[REDACTED]');
   }
   return out;
 }

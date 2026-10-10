@@ -1,4 +1,4 @@
-import type { Casing } from "drizzle-orm/utils";
+import type { Casing } from 'drizzle-orm/utils';
 
 /**
  * Column-naming authority.
@@ -10,4 +10,4 @@ import type { Casing } from "drizzle-orm/utils";
  * (what the DDL creates). Both read this constant, so there is one setting
  * rather than two copies to keep in lockstep.
  */
-export const DATABASE_CASING: Casing = "snake_case";
+export const DATABASE_CASING: Casing = 'snake_case';

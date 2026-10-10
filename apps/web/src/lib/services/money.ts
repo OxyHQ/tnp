@@ -1,4 +1,4 @@
-import type { MoneyDto } from "@tnp/shared-types";
+import type { MoneyDto } from '@tnp/shared-types';
 
 /**
  * Money from `/services` arrives as a decimal string of minor units (see
@@ -18,7 +18,10 @@ const MINOR_RE = /^-?\d+$/;
 /** The currency's minor-unit exponent, or null for a code `Intl` rejects. */
 export function currencyDecimals(currency: string): number | null {
   try {
-    return new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? null;
+    return (
+      new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions()
+        .maximumFractionDigits ?? null
+    );
   } catch {
     return null;
   }
@@ -30,7 +33,11 @@ export function currencyDecimals(currency: string): number | null {
  * Returns null when the amount is not an integer string or the currency is not
  * a code `Intl` knows: a caller shows the raw value instead of a wrong price.
  */
-export function formatMinorUnits(amountMinor: string, currency: string, locale: string): string | null {
+export function formatMinorUnits(
+  amountMinor: string,
+  currency: string,
+  locale: string,
+): string | null {
   if (!MINOR_RE.test(amountMinor)) return null;
   const decimals = currencyDecimals(currency);
   if (decimals === null) return null;
@@ -38,7 +45,7 @@ export function formatMinorUnits(amountMinor: string, currency: string, locale: 
   let formatter: Intl.NumberFormat;
   try {
     formatter = new Intl.NumberFormat(locale, {
-      style: "currency",
+      style: 'currency',
       currency,
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
@@ -46,7 +53,7 @@ export function formatMinorUnits(amountMinor: string, currency: string, locale: 
   } catch {
     // An unknown locale tag: fall back to the default locale, not to no price.
     formatter = new Intl.NumberFormat(undefined, {
-      style: "currency",
+      style: 'currency',
       currency,
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
@@ -58,7 +65,7 @@ export function formatMinorUnits(amountMinor: string, currency: string, locale: 
   const magnitude = negative ? -value : value;
   const scale = 10n ** BigInt(decimals);
   const whole = magnitude / scale;
-  const fraction = (magnitude % scale).toString().padStart(decimals, "0");
+  const fraction = (magnitude % scale).toString().padStart(decimals, '0');
 
   // A bigint has no -0, so "-0.50" is laid out from -1 and its integer digits
   // replaced; any other amount is laid out from its own whole part.
@@ -69,15 +76,15 @@ export function formatMinorUnits(amountMinor: string, currency: string, locale: 
   let integerReplaced = false;
   return parts
     .map((part) => {
-      if (part.type === "fraction") return transliterate(fraction, digits);
-      if (negative && whole === 0n && part.type === "integer") {
-        if (integerReplaced) return "";
+      if (part.type === 'fraction') return transliterate(fraction, digits);
+      if (negative && whole === 0n && part.type === 'integer') {
+        if (integerReplaced) return '';
         integerReplaced = true;
         return digits[0];
       }
       return part.value;
     })
-    .join("");
+    .join('');
 }
 
 /** `formatMinorUnits` for a `MoneyDto`. */
@@ -93,5 +100,5 @@ function localDigits(formatter: Intl.NumberFormat): string[] {
 }
 
 function transliterate(asciiDigits: string, digits: string[]): string {
-  return Array.from(asciiDigits, (c) => digits[c.charCodeAt(0) - 48]).join("");
+  return Array.from(asciiDigits, (c) => digits[c.charCodeAt(0) - 48]).join('');
 }

@@ -1,23 +1,27 @@
-import { getEcosystemActivity, startEcosystemActivity, stopEcosystemActivity } from './ecosystemActivity.js';
-import express from "express";
-import cors from "cors";
-import { config } from "./config.js";
-import { oxyAuthOptional } from "./middleware/auth.js";
-import { runSeed } from "./seed.js";
+import {
+  getEcosystemActivity,
+  startEcosystemActivity,
+  stopEcosystemActivity,
+} from './ecosystemActivity.js';
+import express from 'express';
+import cors from 'cors';
+import { config } from './config.js';
+import { oxyAuthOptional } from './middleware/auth.js';
+import { runSeed } from './seed.js';
 
-import tldsRouter from "./routes/tlds.js";
-import domainsRouter from "./routes/domains.js";
-import clientRouter from "./routes/client.js";
-import dnsRouter from "./routes/dns.js";
-import nodesRouter from "./routes/nodes.js";
-import relaysRouter from "./routes/relays.js";
-import { closePostgres, connectPostgres, getDb } from "./db/postgres.js";
-import { runMigrations } from "./db/migrate.js";
-import { createHealthRouter } from "./health.js";
-import { decideParkingPage, loadNameFacts } from "./registry/resolve.js";
-import { escapeHtml, isValidHostname } from "./utils/hostname.js";
-import { readServicesConfig } from "./services/config.js";
-import { createProductionServicesRouter } from "./services/routes.js";
+import tldsRouter from './routes/tlds.js';
+import domainsRouter from './routes/domains.js';
+import clientRouter from './routes/client.js';
+import dnsRouter from './routes/dns.js';
+import nodesRouter from './routes/nodes.js';
+import relaysRouter from './routes/relays.js';
+import { closePostgres, connectPostgres, getDb } from './db/postgres.js';
+import { runMigrations } from './db/migrate.js';
+import { createHealthRouter } from './health.js';
+import { decideParkingPage, loadNameFacts } from './registry/resolve.js';
+import { escapeHtml, isValidHostname } from './utils/hostname.js';
+import { readServicesConfig } from './services/config.js';
+import { createProductionServicesRouter } from './services/routes.js';
 
 const app = express();
 app.use((req, res, next) => {
@@ -30,7 +34,7 @@ app.use(
   cors({
     origin: config.corsOrigins,
     credentials: true,
-  })
+  }),
 );
 app.use(express.json());
 
@@ -39,33 +43,33 @@ app.use(express.json());
 // irm https://get.tnp.network/ps | iex     →  serves install.ps1
 app.use((req, res, next) => {
   const host = req.hostname;
-  if (host !== "get.tnp.network") return next();
+  if (host !== 'get.tnp.network') return next();
 
-  if (req.path === "/" || req.path === "/install.sh") {
-    req.url = "/client/install.sh";
-  } else if (req.path === "/ps" || req.path === "/install.ps1") {
-    req.url = "/client/install.ps1";
+  if (req.path === '/' || req.path === '/install.sh') {
+    req.url = '/client/install.sh';
+  } else if (req.path === '/ps' || req.path === '/install.ps1') {
+    req.url = '/client/install.ps1';
   }
   next();
 });
 
 // Public routes -- no auth needed at all
-app.use("/dns", dnsRouter);
-app.use("/client", clientRouter);
-app.use("/health", createHealthRouter());
+app.use('/dns', dnsRouter);
+app.use('/client', clientRouter);
+app.use('/health', createHealthRouter());
 
 // Routes with mixed auth -- oxyAuthOptional resolves req.userId/req.user if a
 // token is present; individual write handlers enforce auth with requireOxyAuth
 // from @oxy.so/core/server. GET requests work without a token.
-app.use("/tlds", oxyAuthOptional, tldsRouter);
-app.use("/domains", oxyAuthOptional, domainsRouter);
-app.use("/nodes", oxyAuthOptional, nodesRouter);
-app.use("/relays", oxyAuthOptional, relaysRouter);
+app.use('/tlds', oxyAuthOptional, tldsRouter);
+app.use('/domains', oxyAuthOptional, domainsRouter);
+app.use('/nodes', oxyAuthOptional, nodesRouter);
+app.use('/relays', oxyAuthOptional, relaysRouter);
 
 // The optional services layer (docs/architecture/services.md). Every action is
 // off unless its flag is set, and no adapter is constructed until a flagged
 // route needs one — the network routes above never depend on it.
-app.use("/services", oxyAuthOptional, createProductionServicesRouter(readServicesConfig(), getDb));
+app.use('/services', oxyAuthOptional, createProductionServicesRouter(readServicesConfig(), getDb));
 
 // Serve parking page directly for TNP domain Host headers.
 // When a user visits "nate.ox" in their browser and the domain has no
@@ -73,10 +77,16 @@ app.use("/services", oxyAuthOptional, createProductionServicesRouter(readService
 // inline — no redirect, URL stays as "nate.ox".
 app.use(async (req, res, next) => {
   const host = req.hostname;
-  if (!host || host === "localhost" || host.endsWith("tnp.network") || host.endsWith("oxy.so") || host.endsWith("pages.dev")) {
+  if (
+    !host ||
+    host === 'localhost' ||
+    host.endsWith('tnp.network') ||
+    host.endsWith('oxy.so') ||
+    host.endsWith('pages.dev')
+  ) {
     return next();
   }
-  if (!host.includes(".")) return next();
+  if (!host.includes('.')) return next();
 
   // `req.hostname` is the raw Host header. Express does not validate it, so it
   // can carry anything the sender put there — verified against Express 5.2.1:
@@ -86,7 +96,7 @@ app.use(async (req, res, next) => {
   if (!isValidHostname(host)) return next();
 
   const facts = await loadNameFacts(getDb(), host).catch((err: unknown) => {
-    console.error("Parking lookup error:", err);
+    console.error('Parking lookup error:', err);
     return null;
   });
   if (!facts) return next();
@@ -106,13 +116,13 @@ app.use(async (req, res, next) => {
   const copy = {
     available: {
       title: `${safeHost} — Available on TNP`,
-      subtitle: "This domain is available. Register it on The Network Protocol.",
-      ctaText: "Register this domain",
+      subtitle: 'This domain is available. Register it on The Network Protocol.',
+      ctaText: 'Register this domain',
     },
     registered: {
       title: `${safeHost} — Registered on TNP`,
-      subtitle: "This domain is registered on The Network Protocol.",
-      ctaText: "View domain details",
+      subtitle: 'This domain is registered on The Network Protocol.',
+      ctaText: 'View domain details',
     },
     // Never the "available" page: an expired name is held for its owner, and
     // telling a visitor they can register it would be false.
@@ -120,7 +130,7 @@ app.use(async (req, res, next) => {
       title: `${safeHost} — Expired, held on TNP`,
       subtitle:
         "This domain's registration has expired. It is held for its owner and cannot be registered by anyone else.",
-      ctaText: "View domain details",
+      ctaText: 'View domain details',
     },
   }[page];
   const { title, subtitle, ctaText } = copy;
@@ -129,13 +139,13 @@ app.use(async (req, res, next) => {
   // double-quoted attribute and a breakout the moment someone changes the
   // quoting — so both steps run rather than relying on the quote style.
   // The detail page is per registered name, so a subdomain links to its parent.
-  const registrable = host.toLowerCase().split(".").slice(-2).join(".");
+  const registrable = host.toLowerCase().split('.').slice(-2).join('.');
   const ctaHref =
-    page === "available"
-      ? "https://tnp.network/register"
+    page === 'available'
+      ? 'https://tnp.network/register'
       : `https://tnp.network/d/${escapeHtml(encodeURIComponent(registrable))}`;
 
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -174,7 +184,7 @@ async function start() {
   // against a schema it has not migrated.
   await runMigrations();
   await connectPostgres();
-  console.log("Connected to PostgreSQL");
+  console.log('Connected to PostgreSQL');
 
   await runSeed();
 
@@ -188,17 +198,19 @@ async function start() {
     stopping = true;
     ready = false;
     server.close(() => {
-      void stopEcosystemActivity().finally(() => closePostgres()).catch(() => {
-        console.error('Failed to close activity publisher or database');
-        process.exitCode = 1;
-      });
+      void stopEcosystemActivity()
+        .finally(() => closePostgres())
+        .catch(() => {
+          console.error('Failed to close activity publisher or database');
+          process.exitCode = 1;
+        });
     });
   };
-  process.once("SIGTERM", stop);
-  process.once("SIGINT", stop);
+  process.once('SIGTERM', stop);
+  process.once('SIGINT', stop);
 }
 
 start().catch((err) => {
-  console.error("Failed to start TNP API:", err);
+  console.error('Failed to start TNP API:', err);
   process.exit(1);
 });

@@ -10,13 +10,7 @@
     "declaration": false,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "types": [
-      "bun-types"
-    ]
+    "types": ["bun-types"]
   },
-  "include": [
-    "src",
-    "test-db",
-    "test-sandbox"
-  ]
+  "include": ["src", "test-db", "test-sandbox"]
 }

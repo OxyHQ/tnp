@@ -1,8 +1,8 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
-import express from "express";
-import type { Server } from "node:http";
-import { getRequiredOxyUserId, requireOxyAuth } from "@oxy.so/core/server";
-import { oxyAuthOptional } from "./auth.js";
+import { afterAll, beforeAll, expect, test } from 'bun:test';
+import express from 'express';
+import type { Server } from 'node:http';
+import { getRequiredOxyUserId, requireOxyAuth } from '@oxy.so/core/server';
+import { oxyAuthOptional } from './auth.js';
 
 /**
  * Regression lock for the @oxy.so/core server auth bypass (fixed in core 20.x).
@@ -24,8 +24,8 @@ import { oxyAuthOptional } from "./auth.js";
 /** Build an unsigned JWT with a `userId` claim and, crucially, no `sessionId`. */
 function forgeSessionlessToken(userId: string): string {
   const encode = (value: unknown): string =>
-    Buffer.from(JSON.stringify(value)).toString("base64url");
-  const header = encode({ alg: "none", typ: "JWT" });
+    Buffer.from(JSON.stringify(value)).toString('base64url');
+  const header = encode({ alg: 'none', typ: 'JWT' });
   const payload = encode({ userId, id: userId });
   return `${header}.${payload}.unsigned`;
 }
@@ -38,17 +38,17 @@ beforeAll(async () => {
   app.use(express.json());
   // Mirror the production wiring in src/index.ts: optional resolver first, then
   // a per-route guard that enforces authentication.
-  app.post("/guarded", oxyAuthOptional, requireOxyAuth, (req, res) => {
+  app.post('/guarded', oxyAuthOptional, requireOxyAuth, (req, res) => {
     res.json({ userId: getRequiredOxyUserId(req) });
   });
 
   await new Promise<void>((resolve) => {
-    server = app.listen(0, "127.0.0.1", () => resolve());
+    server = app.listen(0, '127.0.0.1', () => resolve());
   });
 
   const address = server.address();
-  if (address === null || typeof address === "string") {
-    throw new Error("expected an AddressInfo from server.address()");
+  if (address === null || typeof address === 'string') {
+    throw new Error('expected an AddressInfo from server.address()');
   }
   baseUrl = `http://127.0.0.1:${address.port}`;
 });
@@ -59,24 +59,24 @@ afterAll(async () => {
   });
 });
 
-test("a forged, session-less bearer token is refused on a guarded route", async () => {
+test('a forged, session-less bearer token is refused on a guarded route', async () => {
   const response = await fetch(`${baseUrl}/guarded`, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${forgeSessionlessToken("victim-account-000")}`,
+      'content-type': 'application/json',
+      authorization: `Bearer ${forgeSessionlessToken('victim-account-000')}`,
     },
-    body: "{}",
+    body: '{}',
   });
 
   expect(response.status).toBe(401);
 });
 
-test("a request with no bearer token is refused on a guarded route", async () => {
+test('a request with no bearer token is refused on a guarded route', async () => {
   const response = await fetch(`${baseUrl}/guarded`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: "{}",
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
   });
 
   expect(response.status).toBe(401);

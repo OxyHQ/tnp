@@ -25,7 +25,7 @@ export interface DnsResolveOverlay {
  *   "no records of this type", and must not be cached as a missing name.
  * - `NXDOMAIN` — TNP knows no such name.
  */
-export type DnsResolveRcode = "NOERROR" | "NXDOMAIN";
+export type DnsResolveRcode = 'NOERROR' | 'NXDOMAIN';
 
 export interface DnsResolveResponse {
   name: string;

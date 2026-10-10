@@ -1,10 +1,15 @@
-import { startEcosystemActivity, recordTransport, stopEcosystemActivity, requestEdgeRegion } from './ecosystemActivity.js';
-import type { ServerWebSocket } from "bun";
-import { ConnectionManager, type ClientData, type ServiceNodeData } from "./connections.js";
-import { decodeFrame, encodeFrame, FrameType } from "@tnp/protocol";
+import {
+  startEcosystemActivity,
+  recordTransport,
+  stopEcosystemActivity,
+  requestEdgeRegion,
+} from './ecosystemActivity.js';
+import type { ServerWebSocket } from 'bun';
+import { ConnectionManager, type ClientData, type ServiceNodeData } from './connections.js';
+import { decodeFrame, encodeFrame, FrameType } from '@tnp/protocol';
 
 const RELAY_PORT = Number(process.env.RELAY_PORT) || 8080;
-const RELAY_HOST = process.env.RELAY_HOST ?? "0.0.0.0";
+const RELAY_HOST = process.env.RELAY_HOST ?? '0.0.0.0';
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -31,7 +36,10 @@ function sendError(ws: ServerWebSocket<ClientData>, circuitId: number, message: 
 }
 
 /** Count accepted sends without looking inside encrypted frames. */
-function sendFrame<T extends ClientData | ServiceNodeData>(ws: ServerWebSocket<T>, frame: Uint8Array): number {
+function sendFrame<T extends ClientData | ServiceNodeData>(
+  ws: ServerWebSocket<T>,
+  frame: Uint8Array,
+): number {
   const result = ws.sendBinary(frame);
   if (result !== 0) recordTransport('outbound', ws.data.edgeRegion);
   return result;
@@ -59,44 +67,46 @@ const server = Bun.serve<WsData>({
 
     // --- WebSocket upgrade paths ---
 
-    if (url.pathname === "/service") {
-      const domain = url.searchParams.get("domain")?.trim().toLowerCase();
+    if (url.pathname === '/service') {
+      const domain = url.searchParams.get('domain')?.trim().toLowerCase();
       if (!domain) {
-        return respond(new Response("Missing ?domain query parameter", { status: 400 }));
+        return respond(new Response('Missing ?domain query parameter', { status: 400 }));
       }
       const upgraded = server.upgrade(req, {
         data: { domain, edgeRegion } satisfies ServiceNodeData,
       });
       if (!upgraded) {
-        return respond(new Response("WebSocket upgrade failed", { status: 500 }));
+        return respond(new Response('WebSocket upgrade failed', { status: 500 }));
       }
       return undefined;
     }
 
-    if (url.pathname === "/tunnel") {
+    if (url.pathname === '/tunnel') {
       const upgraded = server.upgrade(req, {
-        data: { type: "client", edgeRegion } satisfies ClientData,
+        data: { type: 'client', edgeRegion } satisfies ClientData,
       });
       if (!upgraded) {
-        return respond(new Response("WebSocket upgrade failed", { status: 500 }));
+        return respond(new Response('WebSocket upgrade failed', { status: 500 }));
       }
       return undefined;
     }
 
     // --- HTTP endpoints ---
 
-    if (url.pathname === "/health") {
-      return respond(Response.json({ ok: true, service: "tnp-relay" }));
+    if (url.pathname === '/health') {
+      return respond(Response.json({ ok: true, service: 'tnp-relay' }));
     }
 
-    if (url.pathname === "/stats") {
-      return respond(Response.json({
-        serviceNodes: manager.serviceNodeCount,
-        activeCircuits: manager.circuitCount,
-      }));
+    if (url.pathname === '/stats') {
+      return respond(
+        Response.json({
+          serviceNodes: manager.serviceNodeCount,
+          activeCircuits: manager.circuitCount,
+        }),
+      );
     }
 
-    return respond(new Response("Not Found", { status: 404 }));
+    return respond(new Response('Not Found', { status: 404 }));
   },
 
   websocket: {
@@ -105,11 +115,11 @@ const server = Bun.serve<WsData>({
 
     open(ws: ServerWebSocket<WsData>) {
       const data = ws.data;
-      if ("domain" in data) {
+      if ('domain' in data) {
         // Service node connected
         manager.registerServiceNode(data.domain, ws as ServerWebSocket<ServiceNodeData>);
       } else {
-        console.log("[relay] client connected");
+        console.log('[relay] client connected');
       }
     },
 
@@ -121,7 +131,7 @@ const server = Bun.serve<WsData>({
       try {
         frame = decodeFrame(bytes);
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Malformed frame";
+        const message = err instanceof Error ? err.message : 'Malformed frame';
         console.log(`[relay] dropping malformed frame: ${message}`);
         return;
       }
@@ -129,7 +139,7 @@ const server = Bun.serve<WsData>({
       const data = ws.data;
 
       // ----- Service node messages -----
-      if ("domain" in data) {
+      if ('domain' in data) {
         handleServiceNodeMessage(ws as ServerWebSocket<ServiceNodeData>, frame);
         return;
       }
@@ -140,10 +150,10 @@ const server = Bun.serve<WsData>({
 
     close(ws: ServerWebSocket<WsData>) {
       const data = ws.data;
-      if ("domain" in data) {
+      if ('domain' in data) {
         manager.removeServiceNode(data.domain);
       } else {
-        console.log("[relay] client disconnected");
+        console.log('[relay] client disconnected');
         manager.removeAllCircuits(ws);
       }
     },
@@ -162,7 +172,7 @@ function handleClientMessage(
     case FrameType.OPEN: {
       const domain = textDecoder.decode(frame.payload).trim().toLowerCase();
       if (!domain) {
-        sendError(clientWs, frame.circuitId, "Empty domain in OPEN frame");
+        sendError(clientWs, frame.circuitId, 'Empty domain in OPEN frame');
         return;
       }
 
@@ -178,16 +188,12 @@ function handleClientMessage(
       }
 
       // Confirm to the client
-      sendFrame(clientWs,
-        encodeFrame(frame.circuitId, FrameType.OPENED, new Uint8Array(0)),
-      );
+      sendFrame(clientWs, encodeFrame(frame.circuitId, FrameType.OPENED, new Uint8Array(0)));
 
       // Notify the service node that a new circuit was opened
       const serviceWs = manager.getServiceNode(domain);
       if (serviceWs) {
-        sendFrame(serviceWs,
-          encodeFrame(frame.circuitId, FrameType.OPEN, frame.payload),
-        );
+        sendFrame(serviceWs, encodeFrame(frame.circuitId, FrameType.OPEN, frame.payload));
       }
       break;
     }
@@ -195,13 +201,11 @@ function handleClientMessage(
     case FrameType.DATA: {
       const circuit = manager.getCircuit(frame.circuitId);
       if (!circuit) {
-        sendError(clientWs, frame.circuitId, "Unknown circuit");
+        sendError(clientWs, frame.circuitId, 'Unknown circuit');
         return;
       }
       // Forward encrypted payload to the service node with the same circuitId
-      sendFrame(circuit.serviceWs,
-        encodeFrame(frame.circuitId, FrameType.DATA, frame.payload),
-      );
+      sendFrame(circuit.serviceWs, encodeFrame(frame.circuitId, FrameType.DATA, frame.payload));
       break;
     }
 
@@ -209,7 +213,8 @@ function handleClientMessage(
       const circuit = manager.getCircuit(frame.circuitId);
       if (circuit) {
         // Notify the service node
-        sendFrame(circuit.serviceWs,
+        sendFrame(
+          circuit.serviceWs,
           encodeFrame(frame.circuitId, FrameType.CLOSE, new Uint8Array(0)),
         );
       }
@@ -218,7 +223,7 @@ function handleClientMessage(
     }
 
     default: {
-      sendError(clientWs, frame.circuitId, "Unexpected frame type from client");
+      sendError(clientWs, frame.circuitId, 'Unexpected frame type from client');
     }
   }
 }
@@ -236,26 +241,20 @@ function handleServiceNodeMessage(
   switch (frame.type) {
     case FrameType.DATA: {
       // Forward encrypted payload back to the client
-      sendFrame(circuit.clientWs,
-        encodeFrame(frame.circuitId, FrameType.DATA, frame.payload),
-      );
+      sendFrame(circuit.clientWs, encodeFrame(frame.circuitId, FrameType.DATA, frame.payload));
       break;
     }
 
     case FrameType.CLOSE: {
       // Service node wants to close the circuit
-      sendFrame(circuit.clientWs,
-        encodeFrame(frame.circuitId, FrameType.CLOSE, new Uint8Array(0)),
-      );
+      sendFrame(circuit.clientWs, encodeFrame(frame.circuitId, FrameType.CLOSE, new Uint8Array(0)));
       manager.closeCircuit(frame.circuitId);
       break;
     }
 
     case FrameType.ERROR: {
       // Forward error to client
-      sendFrame(circuit.clientWs,
-        encodeFrame(frame.circuitId, FrameType.ERROR, frame.payload),
-      );
+      sendFrame(circuit.clientWs, encodeFrame(frame.circuitId, FrameType.ERROR, frame.payload));
       break;
     }
 
@@ -271,8 +270,12 @@ const shutdown = async () => {
   await server.stop(true);
   await stopEcosystemActivity();
 };
-process.once('SIGTERM', () => { void shutdown(); });
-process.once('SIGINT', () => { void shutdown(); });
+process.once('SIGTERM', () => {
+  void shutdown();
+});
+process.once('SIGINT', () => {
+  void shutdown();
+});
 
 console.log(`[relay] TNP Relay Server listening on ${RELAY_HOST}:${RELAY_PORT}`);
 

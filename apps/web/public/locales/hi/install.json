@@ -99,10 +99,7 @@
       "title": "Linux",
       "description": "systemd-resolved, NetworkManager और स्टैंडअलोन resolv.conf सेटअप के साथ काम करता है। इंस्टॉलर आपकी DNS कॉन्फ़िगरेशन को स्वचालित रूप से पहचानता है।",
       "requirementsTitle": "आवश्यकताएं:",
-      "requirements": [
-        "कोई भी आधुनिक Linux डिस्ट्रीब्यूशन",
-        "sudo एक्सेस"
-      ]
+      "requirements": ["कोई भी आधुनिक Linux डिस्ट्रीब्यूशन", "sudo एक्सेस"]
     },
     "windows": {
       "title": "Windows",

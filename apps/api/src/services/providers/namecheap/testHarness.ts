@@ -6,17 +6,17 @@
  * names and the client IP exist only here.
  */
 
-import { readFileSync } from "node:fs";
-import type { AdapterCallContext, ProviderEnvironment } from "../contracts.js";
-import { ProviderError } from "../errors.js";
-import type { AdapterDependencies, ProviderAccountConfig, QuotaPriority } from "../registry.js";
-import type { PublicDomainName } from "../../publicNames.js";
+import { readFileSync } from 'node:fs';
+import type { AdapterCallContext, ProviderEnvironment } from '../contracts.js';
+import { ProviderError } from '../errors.js';
+import type { AdapterDependencies, ProviderAccountConfig, QuotaPriority } from '../registry.js';
+import type { PublicDomainName } from '../../publicNames.js';
 
-export const FAKE_API_KEY = "FAKEapikey0000fixture1111notreal";
-export const FAKE_CLIENT_IP = "44.0.0.1";
+export const FAKE_API_KEY = 'FAKEapikey0000fixture1111notreal';
+export const FAKE_CLIENT_IP = '44.0.0.1';
 
 export function fixture(name: string): string {
-  return readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
+  return readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 }
 
 export function errorXml(number: string, description: string): string {
@@ -50,7 +50,11 @@ export interface Harness {
 }
 
 export function xmlResponse(body: string, init: ResponseInit = {}): Response {
-  return new Response(body, { status: 200, headers: { "content-type": "text/xml; charset=utf-8" }, ...init });
+  return new Response(body, {
+    status: 200,
+    headers: { 'content-type': 'text/xml; charset=utf-8' },
+    ...init,
+  });
 }
 
 export function createHarness(): Harness {
@@ -61,21 +65,21 @@ export function createHarness(): Harness {
   let refuse = false;
 
   const impl = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    const bodyText = typeof init?.body === "string" ? init.body : "";
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const bodyText = typeof init?.body === 'string' ? init.body : '';
     const headers = new Headers(init?.headers);
     const request: CapturedRequest = {
       url,
-      method: init?.method ?? "GET",
-      contentType: headers.get("content-type"),
+      method: init?.method ?? 'GET',
+      contentType: headers.get('content-type'),
       body: new URLSearchParams(bodyText),
       signal: init?.signal ?? null,
     };
     requests.push(request);
-    events.push(`fetch:${request.body.get("Command") ?? "?"}`);
+    events.push(`fetch:${request.body.get('Command') ?? '?'}`);
     const next = responders.length > 1 ? responders.shift() : responders[0];
-    if (next === undefined) throw new Error("harness: no response queued");
-    return typeof next === "string" ? xmlResponse(next) : next(request);
+    if (next === undefined) throw new Error('harness: no response queued');
+    return typeof next === 'string' ? xmlResponse(next) : next(request);
   };
   const fakeFetch: typeof fetch = Object.assign(impl, { preconnect: fetch.preconnect });
 
@@ -85,10 +89,11 @@ export function createHarness(): Harness {
     quotaCalls,
     deps: {
       fetch: fakeFetch,
-      now: () => new Date("2026-09-17T00:00:00Z"),
+      now: () => new Date('2026-09-17T00:00:00Z'),
       secrets: {
         resolve(ref) {
-          if (ref !== "env:NAMECHEAP_FIXTURE_KEY") throw new ProviderError("credentials", "secret not set");
+          if (ref !== 'env:NAMECHEAP_FIXTURE_KEY')
+            throw new ProviderError('credentials', 'secret not set');
           return FAKE_API_KEY;
         },
       },
@@ -96,7 +101,8 @@ export function createHarness(): Harness {
         async acquire(accountId, priority) {
           quotaCalls.push({ accountId, priority });
           events.push(`quota:${priority}`);
-          if (refuse) throw new ProviderError("rate_limited", "quota exhausted", { submitted: false });
+          if (refuse)
+            throw new ProviderError('rate_limited', 'quota exhausted', { submitted: false });
         },
       },
     },
@@ -108,9 +114,9 @@ export function createHarness(): Harness {
     },
     ctx(overrides = {}) {
       return {
-        correlationId: "corr-fixture",
+        correlationId: 'corr-fixture',
         beforeSubmit: async () => {
-          events.push("beforeSubmit");
+          events.push('beforeSubmit');
         },
         ...overrides,
       };
@@ -119,13 +125,18 @@ export function createHarness(): Harness {
 }
 
 export function fakeAccount(
-  environment: ProviderEnvironment = "sandbox",
+  environment: ProviderEnvironment = 'sandbox',
   config: Record<string, unknown> = {},
-  secretRef: string | null = "env:NAMECHEAP_FIXTURE_KEY",
+  secretRef: string | null = 'env:NAMECHEAP_FIXTURE_KEY',
 ): ProviderAccountConfig {
   return {
-    ref: { id: "acct-fixture", adapter: "namecheap", environment },
-    config: { apiUser: "fixtureuser", userName: "fixtureuser", clientIp: FAKE_CLIENT_IP, ...config },
+    ref: { id: 'acct-fixture', adapter: 'namecheap', environment },
+    config: {
+      apiUser: 'fixtureuser',
+      userName: 'fixtureuser',
+      clientIp: FAKE_CLIENT_IP,
+      ...config,
+    },
     secretRef,
   };
 }
@@ -143,23 +154,23 @@ export async function providerError(fn: () => Promise<unknown>): Promise<Provide
     if (err instanceof ProviderError) return err;
     throw new Error(`expected ProviderError, got ${String(err)}`);
   }
-  throw new Error("expected ProviderError, call resolved");
+  throw new Error('expected ProviderError, call resolved');
 }
 
 /** Every string an error exposes, including its cause chain. */
 export function errorStrings(err: ProviderError): string {
-  const parts = [err.message, err.safeMessage, String(err.providerCode ?? "")];
+  const parts = [err.message, err.safeMessage, String(err.providerCode ?? '')];
   let cause: unknown = err.cause;
   for (let depth = 0; cause !== undefined && depth < 5; depth++) {
     parts.push(String(cause));
     if (cause instanceof Error) {
-      parts.push(cause.message, cause.stack ?? "");
+      parts.push(cause.message, cause.stack ?? '');
       cause = cause.cause;
     } else {
       break;
     }
   }
-  return parts.join("\n");
+  return parts.join('\n');
 }
 
 /** A fetch responder that never answers until the request's signal aborts. */
@@ -169,11 +180,15 @@ export function hang(): Responder {
       const signal = request.signal;
       if (!signal) return;
       if (signal.aborted) {
-        reject(new DOMException("The operation was aborted.", "AbortError"));
+        reject(new DOMException('The operation was aborted.', 'AbortError'));
         return;
       }
-      signal.addEventListener("abort", () => reject(new DOMException("The operation was aborted.", "AbortError")), {
-        once: true,
-      });
+      signal.addEventListener(
+        'abort',
+        () => reject(new DOMException('The operation was aborted.', 'AbortError')),
+        {
+          once: true,
+        },
+      );
     });
 }
