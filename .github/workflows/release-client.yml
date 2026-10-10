@@ -1,14 +1,25 @@
 name: Build & Release TNP Client
 
+# A release happens only for a client version that has not been released yet.
+#
+# The version is `VERSION` in packages/client/src/cli.ts, the string the binary
+# prints for `tnp version`. When that version's tag (v<VERSION>) already exists,
+# the run stops after the check and builds nothing.
+#
+# This used to rebuild on every push under packages/client/** and pass a
+# hard-coded VERSION to softprops/action-gh-release, which updates an existing
+# release in place. So every client change silently replaced the published
+# v0.2.0 binaries (the last time was 2026-09-17), and the v0.2.0 tag never moved
+# off its original commit. To ship client changes, bump VERSION in cli.ts.
+# Re-publishing an existing version is deliberately impossible from here:
+# delete that release and its tag by hand first.
 on:
   push:
     branches: [main]
     paths:
       - 'packages/client/**'
+      - '.github/workflows/release-client.yml'
   workflow_dispatch:
-
-env:
-  VERSION: "0.2.0"
 
 # Releases run one at a time and are never cancelled, so two pushes cannot race
 # on the same release. A newer pending run may replace an older pending one.
@@ -16,11 +27,60 @@ concurrency:
   group: release-tnp-client
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
+  check:
+    name: Check for an unreleased version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve the client version and look for its tag
+        id: version
+        run: |
+          # Accepts either quote style, so reformatting cli.ts cannot hide the version.
+          matches=$(grep -cE "^const VERSION = ['\"][0-9]+\.[0-9]+\.[0-9]+['\"];$" packages/client/src/cli.ts || true)
+          if [ "$matches" != "1" ]; then
+            echo "::error::Expected exactly one 'const VERSION = \"x.y.z\";' line in packages/client/src/cli.ts, found $matches"
+            exit 1
+          fi
+          version=$(sed -nE "s/^const VERSION = ['\"]([0-9]+\.[0-9]+\.[0-9]+)['\"];$/\1/p" packages/client/src/cli.ts)
+          tag="v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # --exit-code: 0 = the tag exists, 2 = it does not, anything else = the query failed.
+          set +e
+          git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null
+          status=$?
+          set -e
+          case "$status" in
+            0)
+              echo "::notice::$tag is already released; nothing to build. Bump VERSION in packages/client/src/cli.ts to release."
+              echo "release=false" >> "$GITHUB_OUTPUT"
+              ;;
+            2)
+              echo "::notice::$tag has no tag yet; building and releasing it."
+              echo "release=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::Could not list tags on origin (git ls-remote exit $status)"
+              exit 1
+              ;;
+          esac
+
   build:
+    name: Build and release
+    needs: check
+    if: needs.check.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -65,38 +125,42 @@ jobs:
             exit 1
           fi
 
-      - name: Create or update release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ env.VERSION }}
-          name: TNP Client v${{ env.VERSION }}
-          body: |
-            TNP Client v${{ env.VERSION }} — overlay network with encrypted tunnels
-
-            **Install (one command):**
-            ```bash
-            # macOS / Linux
-            curl -fsSL https://get.tnp.network | sh
-
-            # Windows (PowerShell)
-            irm https://get.tnp.network/ps | iex
-            ```
-
-            **Platforms:** linux-x64, linux-arm64, darwin-x64, darwin-arm64, windows-x64
-
-            **What's new:**
-            - Interactive CLI menu (`tnp` with no args)
-            - Overlay network: SOCKS5 proxy + encrypted WebSocket tunnels
-            - Service node mode (`tnp serve`)
-            - Become a relay node from the menu
-            - Cross-platform installer scripts
-          files: |
-            packages/client/dist/tnp-linux-x64
-            packages/client/dist/tnp-linux-arm64
-            packages/client/dist/tnp-darwin-x64
-            packages/client/dist/tnp-darwin-arm64
-            packages/client/dist/tnp-windows-x64.exe
-          make_latest: true
-          prerelease: false
+      # `gh release create` refuses when a release for the tag already exists,
+      # so an existing release is never updated or overwritten. The explicit
+      # tag check covers a tag pushed after the check job ran.
+      - name: Create the release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v$VERSION"
+          set +e
+          git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null
+          status=$?
+          set -e
+          if [ "$status" -ne 2 ]; then
+            echo "::error::$tag appeared or could not be checked (git ls-remote exit $status); not releasing"
+            exit 1
+          fi
+          cat > "$RUNNER_TEMP/notes.md" <<'EOF'
+          **Install (one command):**
+          ```bash
+          # macOS / Linux
+          curl -fsSL https://get.tnp.network | sh
+
+          # Windows (PowerShell)
+          irm https://get.tnp.network/ps | iex
+          ```
+
+          **Platforms:** linux-x64, linux-arm64, darwin-x64, darwin-arm64, windows-x64
+          EOF
+          gh release create "$tag" \
+            --target "$GITHUB_SHA" \
+            --title "TNP Client $tag" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            --generate-notes \
+            --latest \
+            packages/client/dist/tnp-linux-x64 \
+            packages/client/dist/tnp-linux-arm64 \
+            packages/client/dist/tnp-darwin-x64 \
+            packages/client/dist/tnp-darwin-arm64 \
+            packages/client/dist/tnp-windows-x64.exe
