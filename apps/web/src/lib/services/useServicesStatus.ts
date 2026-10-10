@@ -15,6 +15,7 @@ export function useServicesStatus(): { availability: ServicesAvailability; reche
   const [availability, setAvailability] = useState<ServicesAvailability>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` is a retry counter; bumping it is what re-runs this effect
   useEffect(() => {
     const controller = new AbortController();
     setAvailability({ kind: 'loading' });

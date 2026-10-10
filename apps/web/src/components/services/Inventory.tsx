@@ -34,6 +34,7 @@ export default function Inventory() {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<InventoryState>({ kind: 'loading' });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` is a retry counter; bumping it is what re-runs this effect
   useEffect(() => {
     const controller = new AbortController();
     setState({ kind: 'loading' });
