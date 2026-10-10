@@ -1,5 +1,5 @@
-import { defineConfig } from "drizzle-kit";
-import { DATABASE_CASING } from "./src/db/casing";
+import { defineConfig } from 'drizzle-kit';
+import { DATABASE_CASING } from './src/db/casing';
 
 /**
  * drizzle-kit configuration.
@@ -19,11 +19,11 @@ import { DATABASE_CASING } from "./src/db/casing";
  * `src/db/casing.ts` so they cannot drift apart.
  */
 export default defineConfig({
-  dialect: "postgresql",
-  schema: "./src/db/schema/index.ts",
-  out: "./drizzle",
+  dialect: 'postgresql',
+  schema: './src/db/schema/index.ts',
+  out: './drizzle',
   casing: DATABASE_CASING,
   strict: true,
   verbose: true,
-  dbCredentials: { url: process.env.DATABASE_URL ?? "" },
+  dbCredentials: { url: process.env.DATABASE_URL ?? '' },
 });

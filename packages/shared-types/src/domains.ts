@@ -12,16 +12,16 @@
  * `JSON.stringify` of a `Date`, so the type describes the bytes on the wire.
  */
 
-import type { DnsRecordDto } from "./dns-records.js";
+import type { DnsRecordDto } from './dns-records.js';
 
-export type DomainStatus = "active" | "pending" | "suspended";
+export type DomainStatus = 'active' | 'pending' | 'suspended';
 
 /**
  * Lifecycle state of a native registration, as `@tnp/namespace` computes it.
  * Repeated here as a wire type; the API assigns the policy's value to it, so a
  * state added there without being added here fails to compile.
  */
-export type NativeExpiryStateDto = "active" | "renewable" | "grace" | "expired";
+export type NativeExpiryStateDto = 'active' | 'renewable' | 'grace' | 'expired';
 
 /** A native domain as anyone may see it. */
 export interface PublicDomain {
@@ -79,7 +79,7 @@ export interface OwnedDomainWithRecords extends OwnedDomain {
  * - `tld_not_available` — a syntactically fine TLD TNP does not operate.
  * - `invalid` — not a registrable `name.tld`, including subdomains.
  */
-export type NativeAvailabilityReason = "registered" | "reserved" | "tld_not_available" | "invalid";
+export type NativeAvailabilityReason = 'registered' | 'reserved' | 'tld_not_available' | 'invalid';
 
 /**
  * `GET /domains/check/:domain` and `GET /domains/check/:name/:tld`.
@@ -94,7 +94,7 @@ export interface NativeAvailability {
   reason?: NativeAvailabilityReason;
   /** Human-readable explanation for `invalid` and `reserved`. */
   detail?: string;
-  namespace: "tnp-native";
+  namespace: 'tnp-native';
 }
 
 /** `GET /tlds/proposals` entry. */
@@ -102,10 +102,10 @@ export interface TldProposalEntry {
   _id: string;
   tld: string;
   reason: string;
-  status: "open" | "approved" | "rejected";
+  status: 'open' | 'approved' | 'rejected';
   createdAt: string;
   score: number;
-  userVote: "up" | "down" | null;
+  userVote: 'up' | 'down' | null;
   /**
    * Whether the caller proposed it — computed by the server so the list never
    * has to publish who did.
@@ -117,7 +117,7 @@ export interface TldProposalEntry {
 export interface PublicTld {
   _id: string;
   name: string;
-  status: "active" | "proposed" | "pending";
+  status: 'active' | 'proposed' | 'pending';
   custom: boolean;
   createdAt: string;
 }

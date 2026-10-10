@@ -46,7 +46,9 @@ export function startEcosystemActivity(
   create: typeof createEcosystemTraffic = createEcosystemTraffic,
 ): void {
   if (!canAuthenticate()) {
-    console.warn('Ecosystem activity is disabled for tnp-relay: no attestable task role and no OXY_SERVICE_API_KEY/OXY_SERVICE_API_SECRET');
+    console.warn(
+      'Ecosystem activity is disabled for tnp-relay: no attestable task role and no OXY_SERVICE_API_KEY/OXY_SERVICE_API_SECRET',
+    );
     return;
   }
   if (activity) return;
@@ -54,13 +56,17 @@ export function startEcosystemActivity(
   activity.installFetch();
 }
 
-export function getEcosystemActivity() { return activity; }
+export function getEcosystemActivity() {
+  return activity;
+}
 
 /** Transport counters contain no address, domain, frame, or circuit identifier. */
 export function recordTransport(direction: 'inbound' | 'outbound', peerRegion?: string): void {
   const region = process.env.AWS_REGION;
   activity?.record({
-    scope: 'external', direction, activityType: 'platform',
+    scope: 'external',
+    direction,
+    activityType: 'platform',
     sourceRegion: direction === 'inbound' ? peerRegion : region,
     targetRegion: direction === 'inbound' ? region : peerRegion,
   });

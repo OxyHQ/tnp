@@ -10,12 +10,12 @@
  * which factories a running process may use.
  */
 
-import type { DnsAdapter, RegistrarAdapter } from "../contracts.js";
-import type { AdapterDependencies, AdapterFactory, ProviderAccountConfig } from "../registry.js";
-import { NamecheapClient, type NamecheapClientOptions } from "./client.js";
-import { readNamecheapSettings } from "./config.js";
-import { NamecheapDns } from "./dns.js";
-import { NamecheapRegistrar } from "./registrar.js";
+import type { DnsAdapter, RegistrarAdapter } from '../contracts.js';
+import type { AdapterDependencies, AdapterFactory, ProviderAccountConfig } from '../registry.js';
+import { NamecheapClient, type NamecheapClientOptions } from './client.js';
+import { readNamecheapSettings } from './config.js';
+import { NamecheapDns } from './dns.js';
+import { NamecheapRegistrar } from './registrar.js';
 
 function buildClient(
   account: ProviderAccountConfig,
@@ -24,8 +24,15 @@ function buildClient(
 ): NamecheapClient {
   const settings = readNamecheapSettings(account);
   // `readNamecheapSettings` has already refused a null secretRef.
-  const apiKey = deps.secrets.resolve(account.secretRef ?? "");
-  return new NamecheapClient(account.ref.id, account.ref.environment, settings, apiKey, deps, options);
+  const apiKey = deps.secrets.resolve(account.secretRef ?? '');
+  return new NamecheapClient(
+    account.ref.id,
+    account.ref.environment,
+    settings,
+    apiKey,
+    deps,
+    options,
+  );
 }
 
 /** Exported for tests, which pass shorter timeouts; production uses `namecheapFactory`. */
@@ -46,7 +53,7 @@ export function createNamecheapDns(
 }
 
 export const namecheapFactory: AdapterFactory = {
-  adapter: "namecheap",
+  adapter: 'namecheap',
   createRegistrar: (account, deps) => createNamecheapRegistrar(account, deps),
   createDns: (account, deps) => createNamecheapDns(account, deps),
 };

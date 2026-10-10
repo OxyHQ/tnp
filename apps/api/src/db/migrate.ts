@@ -7,16 +7,16 @@
  * cannot start serving against a schema it has not migrated.
  */
 
-import { drizzle } from "drizzle-orm/postgres-js";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
-import postgres from "postgres";
-import { join } from "path";
-import { config } from "../config.js";
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import postgres from 'postgres';
+import { join } from 'path';
+import { config } from '../config.js';
 
-const MIGRATIONS_FOLDER = join(import.meta.dir, "..", "..", "drizzle");
+const MIGRATIONS_FOLDER = join(import.meta.dir, '..', '..', 'drizzle');
 
 export async function runMigrations(url: string = config.databaseUrl): Promise<void> {
-  if (!url) throw new Error("DATABASE_URL is required to run migrations");
+  if (!url) throw new Error('DATABASE_URL is required to run migrations');
 
   // A dedicated single connection: the migrator takes an advisory lock, and
   // holding that on a pooled connection risks it being handed out mid-migration.
@@ -28,9 +28,9 @@ export async function runMigrations(url: string = config.databaseUrl): Promise<v
   }
 }
 
-const isMain = process.argv[1]?.endsWith("migrate.ts");
+const isMain = process.argv[1]?.endsWith('migrate.ts');
 if (isMain) {
   await runMigrations();
-  console.log("Migrations applied");
+  console.log('Migrations applied');
   process.exit(0);
 }

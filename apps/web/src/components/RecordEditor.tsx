@@ -1,5 +1,5 @@
-import { useId, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { useId, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   DNS_RECORD_TTL_MAX,
   DNS_RECORD_TTL_MIN,
@@ -7,7 +7,7 @@ import {
   parseCreateDnsRecordRequest,
   type DnsRecordField,
   type DnsRecordInput,
-} from "@tnp/shared-types";
+} from '@tnp/shared-types';
 
 /** A field-level failure: from the shared parser locally, or from the API's 400. */
 export interface RecordFieldError {
@@ -28,19 +28,19 @@ interface RecordEditorProps {
 }
 
 const INPUT_CLASS =
-  "block rounded-md border bg-surface px-3 py-2 font-mono text-sm text-foreground aria-[invalid=true]:border-destructive";
+  'block rounded-md border bg-surface px-3 py-2 font-mono text-sm text-foreground aria-[invalid=true]:border-destructive';
 
 export default function RecordEditor({ onSubmit, pending = false }: RecordEditorProps) {
-  const { t } = useTranslation("common");
+  const { t } = useTranslation('common');
   const id = useId();
-  const [type, setType] = useState<string>("A");
-  const [name, setName] = useState("@");
-  const [value, setValue] = useState("");
-  const [priority, setPriority] = useState("10");
-  const [ttl, setTtl] = useState("3600");
+  const [type, setType] = useState<string>('A');
+  const [name, setName] = useState('@');
+  const [value, setValue] = useState('');
+  const [priority, setPriority] = useState('10');
+  const [ttl, setTtl] = useState('3600');
   const [error, setError] = useState<RecordFieldError | null>(null);
 
-  const isMx = type === "MX";
+  const isMx = type === 'MX';
 
   // Translated by code, so the message reads in the page's language; the
   // parser's English text is the fallback for a code this build does not know.
@@ -62,8 +62,8 @@ export default function RecordEditor({ onSubmit, pending = false }: RecordEditor
       type,
       name,
       value,
-      ttl: ttl.trim() === "" ? undefined : Number(ttl),
-      priority: isMx && priority.trim() !== "" ? Number(priority) : undefined,
+      ttl: ttl.trim() === '' ? undefined : Number(ttl),
+      priority: isMx && priority.trim() !== '' ? Number(priority) : undefined,
     });
     if (!parsed.ok) {
       setError({ field: parsed.field, code: parsed.code, message: parsed.error });
@@ -76,8 +76,8 @@ export default function RecordEditor({ onSubmit, pending = false }: RecordEditor
       setError(rejected);
       return;
     }
-    setValue("");
-    setName("@");
+    setValue('');
+    setName('@');
   };
 
   const errorId = `${id}-error`;
@@ -89,41 +89,46 @@ export default function RecordEditor({ onSubmit, pending = false }: RecordEditor
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1">
           <label htmlFor={`${id}-type`} className="font-mono text-xs text-muted-foreground/70">
-            {t("form.type")}
+            {t('form.type')}
           </label>
           <select
             id={`${id}-type`}
             value={type}
             onChange={(e) => setType(e.target.value)}
-            aria-invalid={invalid("type")}
-            aria-describedby={describedBy("type")}
+            aria-invalid={invalid('type')}
+            aria-describedby={describedBy('type')}
             className={`${INPUT_CLASS} border-border`}
           >
             {DNS_RECORD_TYPES.map((rt) => (
-              <option key={rt} value={rt}>{rt}</option>
+              <option key={rt} value={rt}>
+                {rt}
+              </option>
             ))}
           </select>
         </div>
         <div className="space-y-1">
           <label htmlFor={`${id}-name`} className="font-mono text-xs text-muted-foreground/70">
-            {t("form.name")}
+            {t('form.name')}
           </label>
           <input
             id={`${id}-name`}
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            aria-invalid={invalid("name")}
-            aria-describedby={describedBy("name")}
+            aria-invalid={invalid('name')}
+            aria-describedby={describedBy('name')}
             className={`${INPUT_CLASS} border-border`}
-            placeholder={t("placeholder.recordName")}
+            placeholder={t('placeholder.recordName')}
             required
           />
         </div>
         {isMx && (
           <div className="space-y-1">
-            <label htmlFor={`${id}-priority`} className="font-mono text-xs text-muted-foreground/70">
-              {t("form.priority")}
+            <label
+              htmlFor={`${id}-priority`}
+              className="font-mono text-xs text-muted-foreground/70"
+            >
+              {t('form.priority')}
             </label>
             <input
               id={`${id}-priority`}
@@ -131,8 +136,8 @@ export default function RecordEditor({ onSubmit, pending = false }: RecordEditor
               inputMode="numeric"
               value={priority}
               onChange={(e) => setPriority(e.target.value)}
-              aria-invalid={invalid("priority")}
-              aria-describedby={describedBy("priority")}
+              aria-invalid={invalid('priority')}
+              aria-describedby={describedBy('priority')}
               className={`${INPUT_CLASS} w-24 border-border`}
               min={0}
               max={65535}
@@ -141,25 +146,25 @@ export default function RecordEditor({ onSubmit, pending = false }: RecordEditor
         )}
         <div className="flex-1 space-y-1">
           <label htmlFor={`${id}-value`} className="font-mono text-xs text-muted-foreground/70">
-            {isMx ? t("form.mailHost") : t("form.value")}
+            {isMx ? t('form.mailHost') : t('form.value')}
           </label>
           <input
             id={`${id}-value`}
             type="text"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            aria-invalid={invalid("value")}
-            aria-describedby={describedBy("value")}
+            aria-invalid={invalid('value')}
+            aria-describedby={describedBy('value')}
             className={`${INPUT_CLASS} w-full border-border`}
             placeholder={t(`placeholder.recordValueByType.${type}`, {
-              defaultValue: t("placeholder.recordValue"),
+              defaultValue: t('placeholder.recordValue'),
             })}
             required
           />
         </div>
         <div className="space-y-1">
           <label htmlFor={`${id}-ttl`} className="font-mono text-xs text-muted-foreground/70">
-            {t("form.ttl")}
+            {t('form.ttl')}
           </label>
           <input
             id={`${id}-ttl`}
@@ -167,8 +172,8 @@ export default function RecordEditor({ onSubmit, pending = false }: RecordEditor
             inputMode="numeric"
             value={ttl}
             onChange={(e) => setTtl(e.target.value)}
-            aria-invalid={invalid("ttl")}
-            aria-describedby={describedBy("ttl")}
+            aria-invalid={invalid('ttl')}
+            aria-describedby={describedBy('ttl')}
             className={`${INPUT_CLASS} w-24 border-border`}
             min={DNS_RECORD_TTL_MIN}
             max={DNS_RECORD_TTL_MAX}
@@ -180,7 +185,7 @@ export default function RecordEditor({ onSubmit, pending = false }: RecordEditor
           aria-busy={pending}
           className="cursor-pointer rounded-md border border-primary/30 bg-primary/10 px-3 py-2 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {pending ? t("saving") : t("addRecord")}
+          {pending ? t('saving') : t('addRecord')}
         </button>
       </div>
       {error && (

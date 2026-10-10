@@ -31,7 +31,7 @@ export function isValidHostname(host: string): boolean {
 
   // A trailing dot is legal in a fully-qualified name but never appears in a
   // Host header; treating it as valid would create two spellings of one name.
-  const labels = host.split(".");
+  const labels = host.split('.');
   if (labels.length < 2) return false;
 
   return labels.every(
@@ -40,11 +40,11 @@ export function isValidHostname(host: string): boolean {
 }
 
 const HTML_ESCAPES: Record<string, string> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
 };
 
 /** Escape a value for interpolation into HTML text or a quoted attribute. */

@@ -12,11 +12,11 @@
  * when the variable is missing: a skipped suite reads as a passing one.
  */
 
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import { runMigrations } from "../src/db/migrate.js";
-import { DATABASE_CASING } from "../src/db/casing.js";
-import * as schema from "../src/db/schema/index.js";
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { runMigrations } from '../src/db/migrate.js';
+import { DATABASE_CASING } from '../src/db/casing.js';
+import * as schema from '../src/db/schema/index.js';
 
 export type TestDb = ReturnType<typeof drizzleFor>;
 
@@ -37,8 +37,8 @@ function adminUrl(): string {
   const url = process.env.TEST_DATABASE_URL;
   if (!url) {
     throw new Error(
-      "TEST_DATABASE_URL is not set. `bun run test:db` needs a PostgreSQL server " +
-        "and a role that may CREATE DATABASE, e.g. postgres://tnp:tnp@127.0.0.1:5434/postgres",
+      'TEST_DATABASE_URL is not set. `bun run test:db` needs a PostgreSQL server ' +
+        'and a role that may CREATE DATABASE, e.g. postgres://tnp:tnp@127.0.0.1:5434/postgres',
     );
   }
   return url;
@@ -52,7 +52,7 @@ function withDatabase(url: string, database: string): string {
 
 export async function createTestDatabase(): Promise<TestDatabase> {
   const admin = adminUrl();
-  const name = `tnp_test_${crypto.randomUUID().replaceAll("-", "")}`;
+  const name = `tnp_test_${crypto.randomUUID().replaceAll('-', '')}`;
 
   const control = postgres(admin, { max: 1, onnotice: () => {} });
   try {

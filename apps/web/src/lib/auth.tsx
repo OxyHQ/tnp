@@ -1,10 +1,10 @@
-import { useEffect } from "react";
-import { useAuth as useOxyAuth } from "@oxy.so/services";
-import { setApiClient } from "./api";
+import { useEffect } from 'react';
+import { useAuth as useOxyAuth } from '@oxy.so/services';
+import { setApiClient } from './api';
 
 export { useOxyAuth as useAuth };
 
-const TNP_API_BASE = import.meta.env.VITE_API_URL || "/api";
+const TNP_API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 /**
  * Bridges the OxyServices session to the TNP API module.

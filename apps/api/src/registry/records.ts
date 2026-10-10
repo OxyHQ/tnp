@@ -11,7 +11,7 @@
  * concurrent inserts each miss the other's row.
  */
 
-import { and, eq } from "drizzle-orm";
+import { and, eq } from 'drizzle-orm';
 import {
   mergeDnsRecordUpdate,
   MAX_DNS_RECORDS_PER_DOMAIN,
@@ -19,17 +19,17 @@ import {
   type DnsRecordField,
   type DnsRecordInput,
   type UpdateDnsRecordRequest,
-} from "@tnp/shared-types";
-import type { Database } from "../db/postgres.js";
-import { dnsRecords, domains } from "../db/schema/index.js";
-import type { Executor } from "./db.js";
+} from '@tnp/shared-types';
+import type { Database } from '../db/postgres.js';
+import { dnsRecords, domains } from '../db/schema/index.js';
+import type { Executor } from './db.js';
 
 type DnsRecordRow = typeof dnsRecords.$inferSelect;
 
-export type RecordConflictCode = "cname_conflict" | "duplicate" | "record_limit";
+export type RecordConflictCode = 'cname_conflict' | 'duplicate' | 'record_limit';
 
 export type RecordMutationFailure =
-  | { ok: false; status: 404; code: "domain_not_found" | "record_not_found"; error: string }
+  | { ok: false; status: 404; code: 'domain_not_found' | 'record_not_found'; error: string }
   | { ok: false; status: 409; code: RecordConflictCode; error: string }
   | { ok: false; status: 400; code: DnsRecordErrorCode; field: DnsRecordField; error: string };
 
@@ -54,9 +54,9 @@ export interface ExistingRecord {
  */
 export function findRecordConflict(
   existing: readonly ExistingRecord[],
-  candidate: Pick<DnsRecordInput, "type" | "name" | "value">,
+  candidate: Pick<DnsRecordInput, 'type' | 'name' | 'value'>,
   ignoreId: string | null,
-): { code: "cname_conflict" | "duplicate"; error: string } | null {
+): { code: 'cname_conflict' | 'duplicate'; error: string } | null {
   const sameName = existing.filter(
     (record) => record.id !== ignoreId && record.name === candidate.name,
   );
@@ -65,19 +65,19 @@ export function findRecordConflict(
     sameName.some((record) => record.type === candidate.type && record.value === candidate.value)
   ) {
     return {
-      code: "duplicate",
+      code: 'duplicate',
       error: `An identical ${candidate.type} record already exists at ${candidate.name}`,
     };
   }
-  if (candidate.type === "CNAME" && sameName.length > 0) {
+  if (candidate.type === 'CNAME' && sameName.length > 0) {
     return {
-      code: "cname_conflict",
+      code: 'cname_conflict',
       error: `A CNAME cannot share its name with other records, and ${candidate.name} already has one`,
     };
   }
-  if (candidate.type !== "CNAME" && sameName.some((record) => record.type === "CNAME")) {
+  if (candidate.type !== 'CNAME' && sameName.some((record) => record.type === 'CNAME')) {
     return {
-      code: "cname_conflict",
+      code: 'cname_conflict',
       error: `${candidate.name} has a CNAME record, which cannot share its name with other records`,
     };
   }
@@ -92,7 +92,7 @@ export function findRecordConflict(
  * matches what the resolver looks up.
  */
 export function relativeRecordName(name: string, fqdn: string): string {
-  if (name === fqdn) return "@";
+  if (name === fqdn) return '@';
   const suffix = `.${fqdn}`;
   return name.endsWith(suffix) ? name.slice(0, -suffix.length) : name;
 }
@@ -112,22 +112,22 @@ async function lockDomain(tx: Executor, domainId: string) {
     .select({ id: domains.id, name: domains.name, tld: domains.tld })
     .from(domains)
     .where(eq(domains.id, domainId))
-    .for("update");
+    .for('update');
   return domain ?? null;
 }
 
 const DOMAIN_NOT_FOUND: RecordMutationFailure = {
   ok: false,
   status: 404,
-  code: "domain_not_found",
-  error: "Domain not found",
+  code: 'domain_not_found',
+  error: 'Domain not found',
 };
 
 const RECORD_NOT_FOUND: RecordMutationFailure = {
   ok: false,
   status: 404,
-  code: "record_not_found",
-  error: "Record not found",
+  code: 'record_not_found',
+  error: 'Record not found',
 };
 
 export async function createDnsRecord(
@@ -143,7 +143,12 @@ export async function createDnsRecord(
     const record = { ...input, name: relativeRecordName(input.name, fqdn) };
 
     const existing = await tx
-      .select({ id: dnsRecords.id, type: dnsRecords.type, name: dnsRecords.name, value: dnsRecords.value })
+      .select({
+        id: dnsRecords.id,
+        type: dnsRecords.type,
+        name: dnsRecords.name,
+        value: dnsRecords.value,
+      })
       .from(dnsRecords)
       .where(eq(dnsRecords.domainId, domain.id));
 
@@ -154,7 +159,7 @@ export async function createDnsRecord(
       return {
         ok: false,
         status: 409,
-        code: "record_limit",
+        code: 'record_limit',
         error: `A domain can hold at most ${MAX_DNS_RECORDS_PER_DOMAIN} records`,
       };
     }
@@ -178,10 +183,7 @@ export async function updateDnsRecord(
     const domain = await lockDomain(tx, domainId);
     if (!domain) return DOMAIN_NOT_FOUND;
 
-    const existing = await tx
-      .select()
-      .from(dnsRecords)
-      .where(eq(dnsRecords.domainId, domain.id));
+    const existing = await tx.select().from(dnsRecords).where(eq(dnsRecords.domainId, domain.id));
 
     // Looked up among this domain's records only: a record id belonging to
     // another domain is not found, not editable through an owned one.
@@ -191,7 +193,13 @@ export async function updateDnsRecord(
     // The record that would result is what gets validated, not the patch.
     const merged = mergeDnsRecordUpdate(current, patch);
     if (!merged.ok) {
-      return { ok: false, status: 400, code: merged.code, field: merged.field, error: merged.error };
+      return {
+        ok: false,
+        status: 400,
+        code: merged.code,
+        field: merged.field,
+        error: merged.error,
+      };
     }
     const fqdn = `${domain.name}.${domain.tld}`;
     const record = { ...merged.value, name: relativeRecordName(merged.value.name, fqdn) };

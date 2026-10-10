@@ -8,17 +8,17 @@
  */
 
 export type ProviderErrorCode =
-  | "validation"
-  | "not_available"
-  | "unsupported"
-  | "credentials"
-  | "rate_limited"
-  | "insufficient_funds"
-  | "conflict"
-  | "not_found"
-  | "permanent"
-  | "provider_unavailable"
-  | "unknown_outcome";
+  | 'validation'
+  | 'not_available'
+  | 'unsupported'
+  | 'credentials'
+  | 'rate_limited'
+  | 'insufficient_funds'
+  | 'conflict'
+  | 'not_found'
+  | 'permanent'
+  | 'provider_unavailable'
+  | 'unknown_outcome';
 
 export interface ProviderErrorOptions {
   /** Text safe to show a customer. Defaults to a generic message for the code. */
@@ -37,17 +37,17 @@ export interface ProviderErrorOptions {
 }
 
 const DEFAULT_MESSAGES: Readonly<Record<ProviderErrorCode, string>> = {
-  validation: "The request was rejected as invalid.",
-  not_available: "That is not available.",
-  unsupported: "This provider does not support that operation.",
-  credentials: "The provider account is not configured correctly.",
-  rate_limited: "The provider is temporarily limiting requests. Try again shortly.",
-  insufficient_funds: "The operation cannot be completed right now.",
-  conflict: "Something changed at the provider. Review before trying again.",
-  not_found: "The provider has no record of that resource.",
-  permanent: "The provider refused the operation.",
-  provider_unavailable: "The provider is temporarily unavailable.",
-  unknown_outcome: "The provider did not confirm the result. It is being checked.",
+  validation: 'The request was rejected as invalid.',
+  not_available: 'That is not available.',
+  unsupported: 'This provider does not support that operation.',
+  credentials: 'The provider account is not configured correctly.',
+  rate_limited: 'The provider is temporarily limiting requests. Try again shortly.',
+  insufficient_funds: 'The operation cannot be completed right now.',
+  conflict: 'Something changed at the provider. Review before trying again.',
+  not_found: 'The provider has no record of that resource.',
+  permanent: 'The provider refused the operation.',
+  provider_unavailable: 'The provider is temporarily unavailable.',
+  unknown_outcome: 'The provider did not confirm the result. It is being checked.',
 };
 
 export class ProviderError extends Error {
@@ -59,7 +59,7 @@ export class ProviderError extends Error {
 
   constructor(code: ProviderErrorCode, message: string, options: ProviderErrorOptions = {}) {
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
-    this.name = "ProviderError";
+    this.name = 'ProviderError';
     this.code = code;
     this.safeMessage = options.safeMessage ?? DEFAULT_MESSAGES[code];
     this.providerCode = options.providerCode;
@@ -81,17 +81,17 @@ export function isProviderError(err: unknown): err is ProviderError {
  * an unknown outcome.
  */
 export function provesNothingApplied(err: ProviderError): boolean {
-  if (err.code === "unknown_outcome") return false;
+  if (err.code === 'unknown_outcome') return false;
   if (!err.submitted) return true;
   // The provider answered, and its answer was a refusal of the request.
   return (
-    err.code === "validation" ||
-    err.code === "not_available" ||
-    err.code === "unsupported" ||
-    err.code === "credentials" ||
-    err.code === "insufficient_funds" ||
-    err.code === "rate_limited" ||
-    err.code === "conflict" ||
-    err.code === "permanent"
+    err.code === 'validation' ||
+    err.code === 'not_available' ||
+    err.code === 'unsupported' ||
+    err.code === 'credentials' ||
+    err.code === 'insufficient_funds' ||
+    err.code === 'rate_limited' ||
+    err.code === 'conflict' ||
+    err.code === 'permanent'
   );
 }

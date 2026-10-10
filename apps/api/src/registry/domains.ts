@@ -3,7 +3,7 @@
  * or a precise predicate: availability, renewal and the owner's inventory.
  */
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from 'drizzle-orm';
 import {
   isNativeRenewalAllowed,
   isReservedTld,
@@ -11,10 +11,10 @@ import {
   nextNativeExpiry,
   parseNativeDomainName,
   type NativeExpiryState,
-} from "@tnp/namespace";
-import type { NativeAvailability } from "@tnp/shared-types";
-import { domains, tlds } from "../db/schema/index.js";
-import type { Executor } from "./db.js";
+} from '@tnp/namespace';
+import type { NativeAvailability } from '@tnp/shared-types';
+import { domains, tlds } from '../db/schema/index.js';
+import type { Executor } from './db.js';
 
 type DomainRow = typeof domains.$inferSelect;
 
@@ -32,9 +32,9 @@ export function parseAvailabilityQuery(
     answer: {
       domain: input.trim().toLowerCase(),
       available: false,
-      reason: parsed.reason === "reserved" ? "reserved" : "invalid",
+      reason: parsed.reason === 'reserved' ? 'reserved' : 'invalid',
       detail: parsed.detail,
-      namespace: "tnp-native",
+      namespace: 'tnp-native',
     },
   };
 }
@@ -57,15 +57,15 @@ export async function checkNativeAvailability(
   const [tldRow] = await db
     .select({ id: tlds.id })
     .from(tlds)
-    .where(and(eq(tlds.name, parsed.tld), eq(tlds.status, "active")))
+    .where(and(eq(tlds.name, parsed.tld), eq(tlds.status, 'active')))
     .limit(1);
   if (!tldRow) {
     return {
       domain,
       available: false,
-      reason: "tld_not_available",
+      reason: 'tld_not_available',
       detail: `TLD .${parsed.tld} is not available`,
-      namespace: "tnp-native",
+      namespace: 'tnp-native',
     };
   }
 
@@ -76,8 +76,8 @@ export async function checkNativeAvailability(
     .limit(1);
 
   return existing
-    ? { domain, available: false, reason: "registered", namespace: "tnp-native" }
-    : { domain, available: true, namespace: "tnp-native" };
+    ? { domain, available: false, reason: 'registered', namespace: 'tnp-native' }
+    : { domain, available: true, namespace: 'tnp-native' };
 }
 
 export type RenewalOutcome =
@@ -85,7 +85,7 @@ export type RenewalOutcome =
   | {
       ok: false;
       status: 403 | 404 | 409;
-      code: "not_found" | "forbidden" | "not_native" | "no_expiry" | "not_renewable" | "conflict";
+      code: 'not_found' | 'forbidden' | 'not_native' | 'no_expiry' | 'not_renewable' | 'conflict';
       error: string;
       expiryState?: NativeExpiryState;
     };
@@ -116,9 +116,9 @@ export async function renewNativeDomain(
     .where(eq(domains.id, domainId))
     .limit(1);
 
-  if (!row) return { ok: false, status: 404, code: "not_found", error: "Domain not found" };
+  if (!row) return { ok: false, status: 404, code: 'not_found', error: 'Domain not found' };
   if (row.oxyUserId !== oxyUserId) {
-    return { ok: false, status: 403, code: "forbidden", error: "You do not own this domain" };
+    return { ok: false, status: 403, code: 'forbidden', error: 'You do not own this domain' };
   }
   // A registration under a reserved TLD predates the namespace policy. Its
   // path out is the migration in naming.md §6, not another year.
@@ -126,12 +126,12 @@ export async function renewNativeDomain(
     return {
       ok: false,
       status: 409,
-      code: "not_native",
+      code: 'not_native',
       error: `.${row.tld} is not a TNP-native TLD; this registration cannot be renewed`,
     };
   }
   if (row.expiresAt === null) {
-    return { ok: false, status: 409, code: "no_expiry", error: "This domain does not expire" };
+    return { ok: false, status: 409, code: 'no_expiry', error: 'This domain does not expire' };
   }
 
   const state = nativeExpiryState(row.expiresAt, now);
@@ -139,8 +139,8 @@ export async function renewNativeDomain(
     return {
       ok: false,
       status: 409,
-      code: "not_renewable",
-      error: "This domain can be renewed from 90 days before it expires",
+      code: 'not_renewable',
+      error: 'This domain can be renewed from 90 days before it expires',
       expiryState: state,
     };
   }
@@ -161,8 +161,8 @@ export async function renewNativeDomain(
     return {
       ok: false,
       status: 409,
-      code: "conflict",
-      error: "This domain was changed while renewing; reload and try again",
+      code: 'conflict',
+      error: 'This domain was changed while renewing; reload and try again',
     };
   }
   return { ok: true, domain: renewed };

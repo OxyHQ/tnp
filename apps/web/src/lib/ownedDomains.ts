@@ -2,7 +2,7 @@ import type {
   NativeExpiryStateDto,
   OwnedDomainPage,
   OwnedDomainWithRecords,
-} from "@tnp/shared-types";
+} from '@tnp/shared-types';
 
 /**
  * A domain in the owner's inventory, as the dashboard and the service-node
@@ -62,7 +62,7 @@ export async function loadInventoryPage(
     if (statusOf(err) !== 404) throw err;
   }
 
-  const legacy = await fetch<OwnedDomainWithRecords[]>("/domains/mine");
+  const legacy = await fetch<OwnedDomainWithRecords[]>('/domains/mine');
   return {
     domains: legacy.map(({ records, ...domain }) => ({ ...domain, recordCount: records.length })),
     page: 1,
@@ -74,8 +74,8 @@ export async function loadInventoryPage(
 /** Whether the owner can renew now. Unknown (legacy API) means no button. */
 export function canRenew(domain: InventoryDomain): boolean {
   return (
-    domain.expiryState === "renewable" ||
-    domain.expiryState === "grace" ||
-    domain.expiryState === "expired"
+    domain.expiryState === 'renewable' ||
+    domain.expiryState === 'grace' ||
+    domain.expiryState === 'expired'
   );
 }

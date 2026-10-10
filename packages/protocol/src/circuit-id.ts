@@ -20,7 +20,7 @@
  * `CircuitTable`'s job.
  */
 
-import { webcrypto } from "crypto";
+import { webcrypto } from 'crypto';
 
 /** Zero is reserved for connection-level control frames. */
 const RESERVED_CIRCUIT_ID = 0n;

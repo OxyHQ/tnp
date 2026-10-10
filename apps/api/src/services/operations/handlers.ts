@@ -8,36 +8,40 @@
  * tell" is `undetermined`, never `absent`.
  */
 
-import { and, eq, sql } from "drizzle-orm";
-import type { Database } from "../../db/postgres.js";
+import { and, eq, sql } from 'drizzle-orm';
+import type { Database } from '../../db/postgres.js';
 import {
   dnsZones,
   dnsZoneSnapshots,
   domainContacts,
   orderLines,
   publicDomains,
-} from "../../db/schema/index.js";
-import { hashZone, mergeZoneChanges, type ZoneChange } from "../dns/zone.js";
-import type { Money } from "../money.js";
-import type { PublicDomainName } from "../publicNames.js";
-import { assertAccountUsable, loadProviderAccount, toAccountConfig } from "../providers/accounts.js";
+} from '../../db/schema/index.js';
+import { hashZone, mergeZoneChanges, type ZoneChange } from '../dns/zone.js';
+import type { Money } from '../money.js';
+import type { PublicDomainName } from '../publicNames.js';
+import {
+  assertAccountUsable,
+  loadProviderAccount,
+  toAccountConfig,
+} from '../providers/accounts.js';
 import type {
   Contact,
   ContactSet,
   ProviderEnvironment,
   RemoteDomainInfo,
   Zone,
-} from "../providers/contracts.js";
-import { isProviderError, ProviderError } from "../providers/errors.js";
-import type { ProviderRegistry } from "../providers/registry.js";
-import type { HandlerContext, OperationHandler, ReconcileOutcome } from "./engine.js";
-import { enqueueOperation } from "./store.js";
+} from '../providers/contracts.js';
+import { isProviderError, ProviderError } from '../providers/errors.js';
+import type { ProviderRegistry } from '../providers/registry.js';
+import type { HandlerContext, OperationHandler, ReconcileOutcome } from './engine.js';
+import { enqueueOperation } from './store.js';
 
 export const OPERATION_KINDS = {
-  register: "domain.register",
-  renew: "domain.renew",
-  sync: "domain.sync",
-  dnsApply: "dns.apply",
+  register: 'domain.register',
+  renew: 'domain.renew',
+  sync: 'domain.sync',
+  dnsApply: 'dns.apply',
 } as const;
 
 type PublicDomainRow = typeof publicDomains.$inferSelect;
@@ -49,17 +53,18 @@ type PublicDomainRow = typeof publicDomains.$inferSelect;
 
 function field<T>(payload: Record<string, unknown>, key: string, guard: (v: unknown) => v is T): T {
   const value = payload[key];
-  if (!guard(value)) throw new ProviderError("validation", `operation payload field ${key} is malformed`);
+  if (!guard(value))
+    throw new ProviderError('validation', `operation payload field ${key} is malformed`);
   return value;
 }
-const isString = (v: unknown): v is string => typeof v === "string";
+const isString = (v: unknown): v is string => typeof v === 'string';
 const isInt = (v: unknown): v is number => Number.isInteger(v);
-const isEnv = (v: unknown): v is ProviderEnvironment => v === "sandbox" || v === "production";
-const isNullableString = (v: unknown): v is string | null => v === null || typeof v === "string";
+const isEnv = (v: unknown): v is ProviderEnvironment => v === 'sandbox' || v === 'production';
+const isNullableString = (v: unknown): v is string | null => v === null || typeof v === 'string';
 
 function maxCost(payload: Record<string, unknown>): Money | null {
-  const minor = field(payload, "maxCostMinor", isNullableString);
-  const currency = field(payload, "currency", isNullableString);
+  const minor = field(payload, 'maxCostMinor', isNullableString);
+  const currency = field(payload, 'currency', isNullableString);
   return minor === null || currency === null ? null : { currency, minor: BigInt(minor) };
 }
 
@@ -69,11 +74,13 @@ function maxCost(payload: Record<string, unknown>): Money | null {
 
 async function loadDomain(db: Database, id: string): Promise<PublicDomainRow> {
   const [row] = await db.select().from(publicDomains).where(eq(publicDomains.id, id)).limit(1);
-  if (!row) throw new ProviderError("validation", `public domain ${id} does not exist`);
+  if (!row) throw new ProviderError('validation', `public domain ${id} does not exist`);
   return row;
 }
 
-export function domainName(row: Pick<PublicDomainRow, "asciiName" | "unicodeName" | "suffix">): PublicDomainName {
+export function domainName(
+  row: Pick<PublicDomainRow, 'asciiName' | 'unicodeName' | 'suffix'>,
+): PublicDomainName {
   return {
     ascii: row.asciiName,
     unicode: row.unicodeName,
@@ -87,17 +94,17 @@ export function domainName(row: Pick<PublicDomainRow, "asciiName" | "unicodeName
  * guard: an operation written for sandbox never acts through a production
  * account, or the reverse, whatever the row now says.
  */
-async function boundAccount(
-  ctx: HandlerContext,
-  accountId: string,
-  use: "read" | "write",
-) {
-  const expected = field(ctx.operation.payload, "environment", isEnv);
+async function boundAccount(ctx: HandlerContext, accountId: string, use: 'read' | 'write') {
+  const expected = field(ctx.operation.payload, 'environment', isEnv);
   const row = await loadProviderAccount(ctx.db, accountId);
   if (row.environment !== expected) {
-    throw new ProviderError("credentials", `operation for ${expected} bound to a ${row.environment} account`, {
-      safeMessage: "This operation targets a different provider environment.",
-    });
+    throw new ProviderError(
+      'credentials',
+      `operation for ${expected} bound to a ${row.environment} account`,
+      {
+        safeMessage: 'This operation targets a different provider environment.',
+      },
+    );
   }
   assertAccountUsable(row, use);
   return toAccountConfig(row);
@@ -120,7 +127,7 @@ function applyRemoteInfo(info: RemoteDomainInfo): Partial<typeof publicDomains.$
 async function setLineState(
   db: Database,
   operationId: string,
-  state: (typeof orderLines.$inferSelect)["state"],
+  state: (typeof orderLines.$inferSelect)['state'],
 ): Promise<void> {
   const [line] = await db
     .update(orderLines)
@@ -153,26 +160,42 @@ export async function rollUpOrderState(db: Database, orderId: string): Promise<v
 }
 
 async function loadContacts(db: Database, publicDomainId: string): Promise<ContactSet> {
-  const rows = await db.select().from(domainContacts).where(eq(domainContacts.publicDomainId, publicDomainId));
+  const rows = await db
+    .select()
+    .from(domainContacts)
+    .where(eq(domainContacts.publicDomainId, publicDomainId));
   const byRole = new Map(rows.map((r) => [r.role, r.data]));
-  const pick = (role: "registrant" | "admin" | "tech" | "billing"): Contact => {
+  const pick = (role: 'registrant' | 'admin' | 'tech' | 'billing'): Contact => {
     const data = byRole.get(role);
-    if (!data) throw new ProviderError("validation", `domain ${publicDomainId} has no ${role} contact`);
+    if (!data)
+      throw new ProviderError('validation', `domain ${publicDomainId} has no ${role} contact`);
     return data as unknown as Contact;
   };
-  return { registrant: pick("registrant"), admin: pick("admin"), tech: pick("tech"), billing: pick("billing") };
+  return {
+    registrant: pick('registrant'),
+    admin: pick('admin'),
+    tech: pick('tech'),
+    billing: pick('billing'),
+  };
 }
 
-async function scheduleSync(ctx: HandlerContext, domain: PublicDomainRow, reason: string): Promise<void> {
+async function scheduleSync(
+  ctx: HandlerContext,
+  domain: PublicDomainRow,
+  reason: string,
+): Promise<void> {
   await enqueueOperation(ctx.db, {
     kind: OPERATION_KINDS.sync,
-    scope: "system",
+    scope: 'system',
     idempotencyKey: `sync:${reason}:${ctx.operation.id}`,
     ownerId: domain.ownerId,
-    resourceType: "public_domain",
+    resourceType: 'public_domain',
     resourceId: domain.id,
     providerAccountId: domain.providerAccountId,
-    payload: { publicDomainId: domain.id, environment: field(ctx.operation.payload, "environment", isEnv) },
+    payload: {
+      publicDomainId: domain.id,
+      environment: field(ctx.operation.payload, 'environment', isEnv),
+    },
   });
 }
 
@@ -186,14 +209,14 @@ export function createOperationHandlers(registry: ProviderRegistry): OperationHa
     mutating: true,
     async execute(ctx) {
       const payload = ctx.operation.payload;
-      const domain = await loadDomain(ctx.db, field(payload, "publicDomainId", isString));
-      const account = await boundAccount(ctx, domain.providerAccountId, "write");
+      const domain = await loadDomain(ctx.db, field(payload, 'publicDomainId', isString));
+      const account = await boundAccount(ctx, domain.providerAccountId, 'write');
       const registrar = registry.registrar(account);
 
-      await setLineState(ctx.db, ctx.operation.id, "fulfilling");
+      await setLineState(ctx.db, ctx.operation.id, 'fulfilling');
       const result = await registrar.register(ctx.call, {
         name: domainName(domain),
-        years: field(payload, "years", isInt),
+        years: field(payload, 'years', isInt),
         contacts: await loadContacts(ctx.db, domain.id),
         nameservers: [],
         privacy: payload.privacy === true,
@@ -205,12 +228,12 @@ export function createOperationHandlers(registry: ProviderRegistry): OperationHa
       // from `now + years` here.
       await ctx.db
         .update(publicDomains)
-        .set({ remoteId: result.remoteId, lifecycle: "active", updatedAt: sql`now()` })
+        .set({ remoteId: result.remoteId, lifecycle: 'active', updatedAt: sql`now()` })
         .where(eq(publicDomains.id, domain.id));
-      await setLineState(ctx.db, ctx.operation.id, "succeeded");
-      await scheduleSync(ctx, domain, "registered");
+      await setLineState(ctx.db, ctx.operation.id, 'succeeded');
+      await scheduleSync(ctx, domain, 'registered');
       return {
-        kind: "succeeded",
+        kind: 'succeeded',
         result: {
           remoteId: result.remoteId,
           remoteOrderId: result.remoteOrderId,
@@ -220,32 +243,45 @@ export function createOperationHandlers(registry: ProviderRegistry): OperationHa
       };
     },
     async reconcile(ctx): Promise<ReconcileOutcome> {
-      const domain = await loadDomain(ctx.db, field(ctx.operation.payload, "publicDomainId", isString));
-      const account = await boundAccount(ctx, domain.providerAccountId, "read");
+      const domain = await loadDomain(
+        ctx.db,
+        field(ctx.operation.payload, 'publicDomainId', isString),
+      );
+      const account = await boundAccount(ctx, domain.providerAccountId, 'read');
       try {
         const info = await registry.registrar(account).getInfo(ctx.call, domainName(domain));
-        await ctx.db.update(publicDomains).set(applyRemoteInfo(info)).where(eq(publicDomains.id, domain.id));
-        await setLineState(ctx.db, ctx.operation.id, "succeeded");
-        return { kind: "succeeded", result: { reconciled: true, remoteId: info.remoteId } };
+        await ctx.db
+          .update(publicDomains)
+          .set(applyRemoteInfo(info))
+          .where(eq(publicDomains.id, domain.id));
+        await setLineState(ctx.db, ctx.operation.id, 'succeeded');
+        return { kind: 'succeeded', result: { reconciled: true, remoteId: info.remoteId } };
       } catch (err) {
         // "Not in this account" is NOT proof the registration is absent: a
         // registry that confirms asynchronously (Namecheap's non-real-time
         // domains) does not show the name yet, and a second create could buy
         // it twice. Registration is therefore never resubmitted automatically;
         // it stays in doubt until it appears or a person reviews it.
-        if (isProviderError(err) && err.code === "not_found") {
-          return { kind: "undetermined", message: "The registration is not visible at the registrar yet." };
+        if (isProviderError(err) && err.code === 'not_found') {
+          return {
+            kind: 'undetermined',
+            message: 'The registration is not visible at the registrar yet.',
+          };
         }
         throw err;
       }
     },
     async onGiveUp(ctx, status) {
-      const id = field(ctx.operation.payload, "publicDomainId", isString);
+      const id = field(ctx.operation.payload, 'publicDomainId', isString);
       await ctx.db
         .update(publicDomains)
-        .set({ lifecycle: status === "failed" ? "failed" : "unknown", updatedAt: sql`now()` })
-        .where(and(eq(publicDomains.id, id), eq(publicDomains.lifecycle, "pending")));
-      await setLineState(ctx.db, ctx.operation.id, status === "failed" ? "failed" : "manual_review");
+        .set({ lifecycle: status === 'failed' ? 'failed' : 'unknown', updatedAt: sql`now()` })
+        .where(and(eq(publicDomains.id, id), eq(publicDomains.lifecycle, 'pending')));
+      await setLineState(
+        ctx.db,
+        ctx.operation.id,
+        status === 'failed' ? 'failed' : 'manual_review',
+      );
     },
   };
 
@@ -254,11 +290,11 @@ export function createOperationHandlers(registry: ProviderRegistry): OperationHa
     mutating: true,
     async execute(ctx) {
       const payload = ctx.operation.payload;
-      const domain = await loadDomain(ctx.db, field(payload, "publicDomainId", isString));
-      const account = await boundAccount(ctx, domain.providerAccountId, "write");
+      const domain = await loadDomain(ctx.db, field(payload, 'publicDomainId', isString));
+      const account = await boundAccount(ctx, domain.providerAccountId, 'write');
       const result = await registry.registrar(account).renew(ctx.call, {
         name: domainName(domain),
-        years: field(payload, "years", isInt),
+        years: field(payload, 'years', isInt),
         maxCost: maxCost(payload),
       });
       ctx.mutationReturned();
@@ -268,32 +304,46 @@ export function createOperationHandlers(registry: ProviderRegistry): OperationHa
           .set({ expiresAt: result.expiresAt, updatedAt: sql`now()` })
           .where(eq(publicDomains.id, domain.id));
       }
-      await setLineState(ctx.db, ctx.operation.id, "succeeded");
-      await scheduleSync(ctx, domain, "renewed");
-      return { kind: "succeeded", result: { expiresAt: result.expiresAt?.toISOString() ?? null } };
+      await setLineState(ctx.db, ctx.operation.id, 'succeeded');
+      await scheduleSync(ctx, domain, 'renewed');
+      return { kind: 'succeeded', result: { expiresAt: result.expiresAt?.toISOString() ?? null } };
     },
     async reconcile(ctx) {
       const payload = ctx.operation.payload;
-      const domain = await loadDomain(ctx.db, field(payload, "publicDomainId", isString));
-      const previous = field(payload, "previousExpiresAt", isNullableString);
+      const domain = await loadDomain(ctx.db, field(payload, 'publicDomainId', isString));
+      const previous = field(payload, 'previousExpiresAt', isNullableString);
       if (previous === null) {
-        return { kind: "undetermined", message: "No prior expiry to compare against." };
+        return { kind: 'undetermined', message: 'No prior expiry to compare against.' };
       }
-      const account = await boundAccount(ctx, domain.providerAccountId, "read");
+      const account = await boundAccount(ctx, domain.providerAccountId, 'read');
       const info = await registry.registrar(account).getInfo(ctx.call, domainName(domain));
-      await ctx.db.update(publicDomains).set(applyRemoteInfo(info)).where(eq(publicDomains.id, domain.id));
-      if (!info.expiresAt) return { kind: "undetermined", message: "The registrar reported no expiry." };
+      await ctx.db
+        .update(publicDomains)
+        .set(applyRemoteInfo(info))
+        .where(eq(publicDomains.id, domain.id));
+      if (!info.expiresAt)
+        return { kind: 'undetermined', message: 'The registrar reported no expiry.' };
       const before = new Date(previous).getTime();
       if (info.expiresAt.getTime() > before) {
-        await setLineState(ctx.db, ctx.operation.id, "succeeded");
-        return { kind: "succeeded", result: { reconciled: true, expiresAt: info.expiresAt.toISOString() } };
+        await setLineState(ctx.db, ctx.operation.id, 'succeeded');
+        return {
+          kind: 'succeeded',
+          result: { reconciled: true, expiresAt: info.expiresAt.toISOString() },
+        };
       }
       return info.expiresAt.getTime() === before
-        ? { kind: "absent" }
-        : { kind: "conflict", message: "The registrar reports an earlier expiry than before the renewal." };
+        ? { kind: 'absent' }
+        : {
+            kind: 'conflict',
+            message: 'The registrar reports an earlier expiry than before the renewal.',
+          };
     },
     async onGiveUp(ctx, status) {
-      await setLineState(ctx.db, ctx.operation.id, status === "failed" ? "failed" : "manual_review");
+      await setLineState(
+        ctx.db,
+        ctx.operation.id,
+        status === 'failed' ? 'failed' : 'manual_review',
+      );
     },
   };
 
@@ -301,21 +351,36 @@ export function createOperationHandlers(registry: ProviderRegistry): OperationHa
     kind: OPERATION_KINDS.sync,
     mutating: false,
     async execute(ctx) {
-      const domain = await loadDomain(ctx.db, field(ctx.operation.payload, "publicDomainId", isString));
-      const account = await boundAccount(ctx, domain.providerAccountId, "read");
+      const domain = await loadDomain(
+        ctx.db,
+        field(ctx.operation.payload, 'publicDomainId', isString),
+      );
+      const account = await boundAccount(ctx, domain.providerAccountId, 'read');
       try {
         const info = await registry.registrar(account).getInfo(ctx.call, domainName(domain));
-        await ctx.db.update(publicDomains).set(applyRemoteInfo(info)).where(eq(publicDomains.id, domain.id));
-        return { kind: "succeeded", result: { lifecycle: info.lifecycle } };
+        await ctx.db
+          .update(publicDomains)
+          .set(applyRemoteInfo(info))
+          .where(eq(publicDomains.id, domain.id));
+        return { kind: 'succeeded', result: { lifecycle: info.lifecycle } };
       } catch (err) {
-        if (!isProviderError(err) || err.code !== "not_found") throw err;
+        if (!isProviderError(err) || err.code !== 'not_found') throw err;
         // The account no longer holds it. That may be a transfer out or a
         // deletion; which one is not something to guess.
         await ctx.db
           .update(publicDomains)
-          .set({ lifecycle: "unknown", registrarStatus: "not_in_account", lastSyncedAt: sql`now()`, updatedAt: sql`now()` })
+          .set({
+            lifecycle: 'unknown',
+            registrarStatus: 'not_in_account',
+            lastSyncedAt: sql`now()`,
+            updatedAt: sql`now()`,
+          })
           .where(eq(publicDomains.id, domain.id));
-        return { kind: "manual_review", code: "not_in_account", message: "The provider account no longer holds this domain." };
+        return {
+          kind: 'manual_review',
+          code: 'not_in_account',
+          message: 'The provider account no longer holds this domain.',
+        };
       }
     },
   };
@@ -325,27 +390,45 @@ export function createOperationHandlers(registry: ProviderRegistry): OperationHa
     mutating: true,
     async execute(ctx) {
       const payload = ctx.operation.payload;
-      const { zone, domain, dns } = await loadZone(ctx, registry, field(payload, "zoneId", isString), "write");
-      const baseHash = field(payload, "baseHash", isString);
-      const changes = field(payload, "changes", Array.isArray) as ZoneChange[];
+      const { zone, domain, dns } = await loadZone(
+        ctx,
+        registry,
+        field(payload, 'zoneId', isString),
+        'write',
+      );
+      const baseHash = field(payload, 'baseHash', isString);
+      const changes = field(payload, 'changes', Array.isArray) as ZoneChange[];
       const name = domainName(domain);
 
       const remote = await dns.readZone(ctx.call, name);
       const remoteHash = hashZone(remote);
-      await recordSnapshot(ctx, zone.id, "observed", remote);
+      await recordSnapshot(ctx, zone.id, 'observed', remote);
       if (remoteHash !== baseHash) {
         await ctx.db
           .update(dnsZones)
-          .set({ state: "conflict", observedHash: remoteHash, observedAt: sql`now()`, updatedAt: sql`now()` })
+          .set({
+            state: 'conflict',
+            observedHash: remoteHash,
+            observedAt: sql`now()`,
+            updatedAt: sql`now()`,
+          })
           .where(eq(dnsZones.id, zone.id));
-        return { kind: "failed", code: "conflict", message: "The zone changed since it was previewed. Review it again." };
+        return {
+          kind: 'failed',
+          code: 'conflict',
+          message: 'The zone changed since it was previewed. Review it again.',
+        };
       }
       if (!remote.servedByProvider) {
-        return { kind: "failed", code: "unsupported", message: "This provider is not serving the zone, so changes would not be published." };
+        return {
+          kind: 'failed',
+          code: 'unsupported',
+          message: 'This provider is not serving the zone, so changes would not be published.',
+        };
       }
 
       const merged = mergeZoneChanges(remote, changes, dns.supportedRecordTypes);
-      if (!merged.ok) return { kind: "failed", code: "validation", message: merged.error };
+      if (!merged.ok) return { kind: 'failed', code: 'validation', message: merged.error };
 
       await dns.replaceZone(ctx.call, name, merged.zone);
       ctx.mutationReturned();
@@ -353,66 +436,113 @@ export function createOperationHandlers(registry: ProviderRegistry): OperationHa
       const after = await dns.readZone(ctx.call, name);
       const afterHash = hashZone(after);
       if (afterHash !== hashZone(merged.zone)) {
-        return { kind: "unknown", message: "The provider's zone does not match what was sent." };
+        return { kind: 'unknown', message: "The provider's zone does not match what was sent." };
       }
-      await markApplied(ctx, zone.id, after, afterHash, field(payload, "desiredVersion", isInt));
-      return { kind: "succeeded", result: { hash: afterHash } };
+      await markApplied(ctx, zone.id, after, afterHash, field(payload, 'desiredVersion', isInt));
+      return { kind: 'succeeded', result: { hash: afterHash } };
     },
     async reconcile(ctx) {
       const payload = ctx.operation.payload;
-      const { zone, domain, dns } = await loadZone(ctx, registry, field(payload, "zoneId", isString), "read");
+      const { zone, domain, dns } = await loadZone(
+        ctx,
+        registry,
+        field(payload, 'zoneId', isString),
+        'read',
+      );
       const remote = await dns.readZone(ctx.call, domainName(domain));
       const remoteHash = hashZone(remote);
-      const changes = field(payload, "changes", Array.isArray) as ZoneChange[];
+      const changes = field(payload, 'changes', Array.isArray) as ZoneChange[];
 
       // What the zone would be had our write applied on top of the base we
       // previewed. Recomputed from the base snapshot, not trusted from memory.
       const [base] = await ctx.db
         .select()
         .from(dnsZoneSnapshots)
-        .where(and(eq(dnsZoneSnapshots.zoneId, zone.id), eq(dnsZoneSnapshots.hash, field(payload, "baseHash", isString))))
+        .where(
+          and(
+            eq(dnsZoneSnapshots.zoneId, zone.id),
+            eq(dnsZoneSnapshots.hash, field(payload, 'baseHash', isString)),
+          ),
+        )
         .limit(1);
-      if (!base) return { kind: "undetermined", message: "The previewed zone snapshot is missing." };
-      const intended = mergeZoneChanges(base.zone as unknown as Zone, changes, dns.supportedRecordTypes);
-      if (!intended.ok) return { kind: "conflict", message: intended.error };
+      if (!base)
+        return { kind: 'undetermined', message: 'The previewed zone snapshot is missing.' };
+      const intended = mergeZoneChanges(
+        base.zone as unknown as Zone,
+        changes,
+        dns.supportedRecordTypes,
+      );
+      if (!intended.ok) return { kind: 'conflict', message: intended.error };
 
       if (remoteHash === hashZone(intended.zone)) {
-        await markApplied(ctx, zone.id, remote, remoteHash, field(payload, "desiredVersion", isInt));
-        return { kind: "succeeded", result: { hash: remoteHash, reconciled: true } };
+        await markApplied(
+          ctx,
+          zone.id,
+          remote,
+          remoteHash,
+          field(payload, 'desiredVersion', isInt),
+        );
+        return { kind: 'succeeded', result: { hash: remoteHash, reconciled: true } };
       }
-      if (remoteHash === base.hash) return { kind: "absent" };
+      if (remoteHash === base.hash) return { kind: 'absent' };
       await ctx.db
         .update(dnsZones)
-        .set({ state: "conflict", observedHash: remoteHash, observedAt: sql`now()`, updatedAt: sql`now()` })
+        .set({
+          state: 'conflict',
+          observedHash: remoteHash,
+          observedAt: sql`now()`,
+          updatedAt: sql`now()`,
+        })
         .where(eq(dnsZones.id, zone.id));
-      return { kind: "conflict", message: "The zone matches neither the previous nor the requested version." };
+      return {
+        kind: 'conflict',
+        message: 'The zone matches neither the previous nor the requested version.',
+      };
     },
     async onGiveUp(ctx, status, code) {
-      const zoneId = field(ctx.operation.payload, "zoneId", isString);
+      const zoneId = field(ctx.operation.payload, 'zoneId', isString);
       await ctx.db
         .update(dnsZones)
-        .set({ state: code === "conflict" ? "conflict" : status === "manual_review" ? "unknown" : "in_sync", updatedAt: sql`now()` })
-        .where(and(eq(dnsZones.id, zoneId), eq(dnsZones.state, "pending")));
+        .set({
+          state:
+            code === 'conflict' ? 'conflict' : status === 'manual_review' ? 'unknown' : 'in_sync',
+          updatedAt: sql`now()`,
+        })
+        .where(and(eq(dnsZones.id, zoneId), eq(dnsZones.state, 'pending')));
     },
   };
 
   return [register, renew, sync, dnsApply];
 }
 
-async function loadZone(ctx: HandlerContext, registry: ProviderRegistry, zoneId: string, use: "read" | "write") {
+async function loadZone(
+  ctx: HandlerContext,
+  registry: ProviderRegistry,
+  zoneId: string,
+  use: 'read' | 'write',
+) {
   const [zone] = await ctx.db.select().from(dnsZones).where(eq(dnsZones.id, zoneId)).limit(1);
-  if (!zone) throw new ProviderError("validation", `zone ${zoneId} does not exist`);
-  if (zone.authority !== "provider" || !zone.providerAccountId) {
-    throw new ProviderError("unsupported", `zone ${zoneId} is not hosted by an integrated provider`, {
-      safeMessage: "This zone is managed outside TNP.",
-    });
+  if (!zone) throw new ProviderError('validation', `zone ${zoneId} does not exist`);
+  if (zone.authority !== 'provider' || !zone.providerAccountId) {
+    throw new ProviderError(
+      'unsupported',
+      `zone ${zoneId} is not hosted by an integrated provider`,
+      {
+        safeMessage: 'This zone is managed outside TNP.',
+      },
+    );
   }
   const domain = await loadDomain(ctx.db, zone.publicDomainId);
   const account = await boundAccount(ctx, zone.providerAccountId, use);
   return { zone, domain, dns: registry.dns(account) };
 }
 
-async function recordSnapshot(ctx: HandlerContext, zoneId: string, source: "observed" | "applied", zone: Zone) {
+async function recordSnapshot(
+  ctx: HandlerContext,
+  zoneId: string,
+  source: 'observed' | 'applied',
+  zone: Zone,
+) {
   await ctx.db.insert(dnsZoneSnapshots).values({
     zoneId,
     source,
@@ -422,8 +552,14 @@ async function recordSnapshot(ctx: HandlerContext, zoneId: string, source: "obse
   });
 }
 
-async function markApplied(ctx: HandlerContext, zoneId: string, zone: Zone, hash: string, version: number) {
-  await recordSnapshot(ctx, zoneId, "applied", zone);
+async function markApplied(
+  ctx: HandlerContext,
+  zoneId: string,
+  zone: Zone,
+  hash: string,
+  version: number,
+) {
+  await recordSnapshot(ctx, zoneId, 'applied', zone);
   await ctx.db
     .update(dnsZones)
     .set({

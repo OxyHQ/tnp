@@ -20,27 +20,30 @@
  * that silently returned `undefined` would read as "absent", not "misspelt".
  */
 
-import { XMLParser, XMLValidator } from "fast-xml-parser";
+import { XMLParser, XMLValidator } from 'fast-xml-parser';
 
 export type XmlValue = string | XmlNode | readonly XmlValue[];
 export interface XmlNode {
   readonly [key: string]: XmlValue;
 }
 
-const ATTR_PREFIX = "@_";
-const TEXT_KEY = "#text";
+const ATTR_PREFIX = '@_';
+const TEXT_KEY = '#text';
 
 export class XmlRejected extends Error {
-  constructor(readonly reason: "doctype" | "malformed" | "shape", detail: string) {
+  constructor(
+    readonly reason: 'doctype' | 'malformed' | 'shape',
+    detail: string,
+  ) {
     super(detail);
-    this.name = "XmlRejected";
+    this.name = 'XmlRejected';
   }
 }
 
 const PREDEFINED: Readonly<Record<string, string>> = {
-  lt: "<",
-  gt: ">",
-  amp: "&",
+  lt: '<',
+  gt: '>',
+  amp: '&',
   quot: '"',
   apos: "'",
 };
@@ -48,10 +51,10 @@ const PREDEFINED: Readonly<Record<string, string>> = {
 /** Decode predefined entities and character references. Anything else stays literal. */
 export function decodeXmlText(value: string): string {
   return value.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);/g, (whole, ref: string) => {
-    if (ref.startsWith("#x") || ref.startsWith("#X")) {
+    if (ref.startsWith('#x') || ref.startsWith('#X')) {
       return codePointOrLiteral(Number.parseInt(ref.slice(2), 16), whole);
     }
-    if (ref.startsWith("#")) {
+    if (ref.startsWith('#')) {
       return codePointOrLiteral(Number.parseInt(ref.slice(1), 10), whole);
     }
     return PREDEFINED[ref] ?? whole;
@@ -82,19 +85,19 @@ const parser = new XMLParser({
 /** Parse a response body into a tree, or throw `XmlRejected`. */
 export function parseXml(body: string): XmlNode {
   if (/<!DOCTYPE/i.test(body) || /<!ENTITY/i.test(body)) {
-    throw new XmlRejected("doctype", "response declares a DTD or entity");
+    throw new XmlRejected('doctype', 'response declares a DTD or entity');
   }
   const valid = XMLValidator.validate(body);
   if (valid !== true) {
-    throw new XmlRejected("malformed", `response is not well-formed XML (line ${valid.err.line})`);
+    throw new XmlRejected('malformed', `response is not well-formed XML (line ${valid.err.line})`);
   }
   const tree: unknown = parser.parse(body);
-  if (!isNode(tree)) throw new XmlRejected("malformed", "response has no document element");
+  if (!isNode(tree)) throw new XmlRejected('malformed', 'response has no document element');
   return tree;
 }
 
 export function isNode(value: unknown): value is XmlNode {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function findKey(node: XmlNode, name: string): string | undefined {
@@ -110,11 +113,11 @@ export function children(node: XmlNode, name: string): XmlNode[] {
   const value = node[key];
   const list: readonly XmlValue[] = Array.isArray(value) ? value : [value];
   // `<Errors />` parses to "" — an empty element is a node with nothing in it.
-  return list.map((item) => (isNode(item) ? item : typeof item === "string" ? textNode(item) : {}));
+  return list.map((item) => (isNode(item) ? item : typeof item === 'string' ? textNode(item) : {}));
 }
 
 function textNode(text: string): XmlNode {
-  return text === "" ? {} : { [TEXT_KEY]: text };
+  return text === '' ? {} : { [TEXT_KEY]: text };
 }
 
 export function child(node: XmlNode, name: string): XmlNode | undefined {
@@ -123,7 +126,7 @@ export function child(node: XmlNode, name: string): XmlNode | undefined {
 
 export function requireChild(node: XmlNode, name: string): XmlNode {
   const found = child(node, name);
-  if (!found) throw new XmlRejected("shape", `missing element ${name}`);
+  if (!found) throw new XmlRejected('shape', `missing element ${name}`);
   return found;
 }
 
@@ -131,12 +134,12 @@ export function attr(node: XmlNode, name: string): string | undefined {
   const key = findKey(node, ATTR_PREFIX + name);
   if (key === undefined) return undefined;
   const value = node[key];
-  return typeof value === "string" ? decodeXmlText(value) : undefined;
+  return typeof value === 'string' ? decodeXmlText(value) : undefined;
 }
 
 export function requireAttr(node: XmlNode, name: string): string {
   const value = attr(node, name);
-  if (value === undefined) throw new XmlRejected("shape", `missing attribute ${name}`);
+  if (value === undefined) throw new XmlRejected('shape', `missing attribute ${name}`);
   return value;
 }
 
@@ -144,7 +147,7 @@ export function requireAttr(node: XmlNode, name: string): string {
 export function text(node: XmlNode | undefined): string | undefined {
   if (!node) return undefined;
   const value = node[TEXT_KEY];
-  if (typeof value !== "string" || value === "") return undefined;
+  if (typeof value !== 'string' || value === '') return undefined;
   return decodeXmlText(value);
 }
 
@@ -159,9 +162,9 @@ export function childText(node: XmlNode, name: string): string | undefined {
  */
 export function parseBool(value: string, field: string): boolean {
   const lower = value.trim().toLowerCase();
-  if (lower === "true") return true;
-  if (lower === "false") return false;
-  throw new XmlRejected("shape", `${field} is not a boolean`);
+  if (lower === 'true') return true;
+  if (lower === 'false') return false;
+  throw new XmlRejected('shape', `${field} is not a boolean`);
 }
 
 export function requireBool(node: XmlNode, name: string): boolean {
@@ -170,15 +173,15 @@ export function requireBool(node: XmlNode, name: string): boolean {
 
 export function optionalBool(node: XmlNode, name: string): boolean | null {
   const value = attr(node, name);
-  if (value === undefined || value === "") return null;
+  if (value === undefined || value === '') return null;
   return parseBool(value, name);
 }
 
 export function parseIntStrict(value: string, field: string): number {
   const trimmed = value.trim();
-  if (!/^-?\d+$/.test(trimmed)) throw new XmlRejected("shape", `${field} is not an integer`);
+  if (!/^-?\d+$/.test(trimmed)) throw new XmlRejected('shape', `${field} is not an integer`);
   const parsed = Number(trimmed);
-  if (!Number.isSafeInteger(parsed)) throw new XmlRejected("shape", `${field} is out of range`);
+  if (!Number.isSafeInteger(parsed)) throw new XmlRejected('shape', `${field} is out of range`);
   return parsed;
 }
 
@@ -195,8 +198,11 @@ export function requireInt(node: XmlNode, name: string): number {
  * at most a day, and expiry decisions keep a margin far larger than that.
  */
 export function parseNamecheapDate(value: string, field: string): Date {
-  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2})\s*([AaPp][Mm]))?$/.exec(value.trim());
-  if (!match) throw new XmlRejected("shape", `${field} is not a recognised date`);
+  const match =
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2})\s*([AaPp][Mm]))?$/.exec(
+      value.trim(),
+    );
+  if (!match) throw new XmlRejected('shape', `${field} is not a recognised date`);
   const [, mm, dd, yyyy, hh, mi, ss, meridiem] = match;
   const month = Number(mm);
   const day = Number(dd);
@@ -205,8 +211,8 @@ export function parseNamecheapDate(value: string, field: string): Date {
   const minute = mi === undefined ? 0 : Number(mi);
   const second = ss === undefined ? 0 : Number(ss);
   if (meridiem !== undefined) {
-    if (hour < 1 || hour > 12) throw new XmlRejected("shape", `${field} has an invalid hour`);
-    const pm = meridiem.toLowerCase() === "pm";
+    if (hour < 1 || hour > 12) throw new XmlRejected('shape', `${field} has an invalid hour`);
+    const pm = meridiem.toLowerCase() === 'pm';
     hour = (hour % 12) + (pm ? 12 : 0);
   }
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
@@ -218,12 +224,12 @@ export function parseNamecheapDate(value: string, field: string): Date {
     minute > 59 ||
     second > 59
   ) {
-    throw new XmlRejected("shape", `${field} is not a valid calendar date`);
+    throw new XmlRejected('shape', `${field} is not a valid calendar date`);
   }
   return date;
 }
 
 export function optionalDate(value: string | undefined, field: string): Date | null {
-  if (value === undefined || value.trim() === "") return null;
+  if (value === undefined || value.trim() === '') return null;
   return parseNamecheapDate(value, field);
 }

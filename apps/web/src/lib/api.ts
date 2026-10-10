@@ -1,7 +1,7 @@
-import type { LinkedHttpClient } from "@oxy.so/core";
-import { isHttpRequestError } from "@oxy.so/core";
+import type { LinkedHttpClient } from '@oxy.so/core';
+import { isHttpRequestError } from '@oxy.so/core';
 
-type TnpApiClient = LinkedHttpClient["client"];
+type TnpApiClient = LinkedHttpClient['client'];
 
 // The TNP backend client, registered by AuthBridge from the linked client that
 // @oxy.so/core mints off the OxyServices session. It targets TNP's own API
@@ -14,26 +14,22 @@ export function setApiClient(next: TnpApiClient | null) {
   client = next;
 }
 
-export async function apiFetch<T>(
-  path: string,
-  options?: RequestInit
-): Promise<T> {
+export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   if (!client) {
-    throw new Error("TNP API client is not ready");
+    throw new Error('TNP API client is not ready');
   }
 
-  const method = (options?.method ?? "GET").toUpperCase();
-  const data =
-    typeof options?.body === "string" ? JSON.parse(options.body) : options?.body;
+  const method = (options?.method ?? 'GET').toUpperCase();
+  const data = typeof options?.body === 'string' ? JSON.parse(options.body) : options?.body;
 
   switch (method) {
-    case "POST":
+    case 'POST':
       return client.post<T>(path, data);
-    case "PUT":
+    case 'PUT':
       return client.put<T>(path, data);
-    case "PATCH":
+    case 'PATCH':
       return client.patch<T>(path, data);
-    case "DELETE":
+    case 'DELETE':
       return client.delete<T>(path);
     default:
       return client.get<T>(path);
@@ -54,10 +50,10 @@ export function errorStatus(err: unknown): number | undefined {
 export function errorBody(err: unknown): { error?: string; code?: string; field?: string } {
   if (!isHttpRequestError(err)) return {};
   const data = err.response?.data;
-  if (typeof data !== "object" || data === null) return {};
+  if (typeof data !== 'object' || data === null) return {};
   const body = data as Record<string, unknown>;
-  const text = (key: string) => (typeof body[key] === "string" ? (body[key] as string) : undefined);
-  return { error: text("error"), code: text("code"), field: text("field") };
+  const text = (key: string) => (typeof body[key] === 'string' ? (body[key] as string) : undefined);
+  return { error: text('error'), code: text('code'), field: text('field') };
 }
 
 /** Something to show a person: the API's message, else the error's, else the fallback. */
@@ -68,7 +64,7 @@ export function errorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface ApiRequestOptions {
   /** A value, not a pre-serialized string: the SDK serializes it. */
@@ -94,7 +90,7 @@ export async function apiRequest<T>(
   options: ApiRequestOptions = {},
 ): Promise<T> {
   if (!client) {
-    throw new Error("TNP API client is not ready");
+    throw new Error('TNP API client is not ready');
   }
   const config = {
     signal: options.signal,
@@ -103,13 +99,13 @@ export async function apiRequest<T>(
     retry: false,
   };
   switch (method) {
-    case "POST":
+    case 'POST':
       return client.post<T>(path, options.body, config);
-    case "PUT":
+    case 'PUT':
       return client.put<T>(path, options.body, config);
-    case "PATCH":
+    case 'PATCH':
       return client.patch<T>(path, options.body, config);
-    case "DELETE":
+    case 'DELETE':
       return client.delete<T>(path, config);
     default:
       return client.get<T>(path, config);

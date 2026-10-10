@@ -7,7 +7,7 @@
  * different hash is a conflict.
  */
 
-import { createHash } from "node:crypto";
+import { createHash } from 'node:crypto';
 
 /** JSON with object keys sorted at every depth, so key order never changes the hash. */
 export function canonicalJson(value: unknown): string {
@@ -15,10 +15,10 @@ export function canonicalJson(value: unknown): string {
 }
 
 function sortKeys(value: unknown): unknown {
-  if (typeof value === "bigint") return value.toString();
+  if (typeof value === 'bigint') return value.toString();
   if (Array.isArray(value)) return value.map(sortKeys);
   if (value instanceof Date) return value.toISOString();
-  if (value !== null && typeof value === "object") {
+  if (value !== null && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
         .filter(([, v]) => v !== undefined)
@@ -30,18 +30,18 @@ function sortKeys(value: unknown): unknown {
 }
 
 export function hashIntent(intent: unknown): string {
-  return createHash("sha256").update(canonicalJson(intent)).digest("hex");
+  return createHash('sha256').update(canonicalJson(intent)).digest('hex');
 }
 
 export class IdempotencyConflictError extends Error {
   constructor(readonly key: string) {
     super(`idempotency key ${JSON.stringify(key)} was already used for a different request`);
-    this.name = "IdempotencyConflictError";
+    this.name = 'IdempotencyConflictError';
   }
 }
 
 const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9._:-]{8,128}$/;
 
 export function isValidIdempotencyKey(key: unknown): key is string {
-  return typeof key === "string" && IDEMPOTENCY_KEY_RE.test(key);
+  return typeof key === 'string' && IDEMPOTENCY_KEY_RE.test(key);
 }

@@ -1,13 +1,13 @@
-import { dirname, resolve } from "path";
-import { fileURLToPath } from "url";
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
-import reactNativeWeb from "vite-plugin-react-native-web";
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import reactNativeWeb from 'vite-plugin-react-native-web';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const emptyModule = resolve(__dirname, "./src/empty-module.js");
+const emptyModule = resolve(__dirname, './src/empty-module.js');
 
 // TNP web runs on rolldown-vite (`"vite": "npm:rolldown-vite@^7"`) so the
 // `@oxy.so/services` React Native graph bundles through the maintained
@@ -28,52 +28,52 @@ export default defineConfig(({ mode }) => ({
       // Native-only navigation primitives; `sonner-native` named-imports
       // FullWindowOverlay, which on web renders straight through (see shim).
       {
-        find: "react-native-screens",
-        replacement: resolve(__dirname, "./src/shims/react-native-screens.js"),
+        find: 'react-native-screens',
+        replacement: resolve(__dirname, './src/shims/react-native-screens.js'),
       },
       // react-native-svg asset resolution reaches for RN's Flow-typed CJS asset
       // registry; on web the one true registry is react-native-web's.
       {
-        find: "@react-native/assets-registry/registry",
-        replacement: "react-native-web/dist/modules/AssetRegistry",
+        find: '@react-native/assets-registry/registry',
+        replacement: 'react-native-web/dist/modules/AssetRegistry',
       },
       // Native-only key/value store: the SDK persists via localStorage on web,
       // so the RN async-storage module (only reached behind a Platform guard)
       // resolves to an empty module.
       {
-        find: "@react-native-async-storage/async-storage",
+        find: '@react-native-async-storage/async-storage',
         replacement: emptyModule,
       },
       // Optional native-only modules the SDK reaches only via `await import(...)`
       // behind a graceful fallback (haptics/pickers) or a native-only code path
       // (in-app auth browser). On web the fallback runs or the path is never
       // taken, so they resolve to an empty module.
-      { find: "expo-web-browser", replacement: emptyModule },
-      { find: "expo-document-picker", replacement: emptyModule },
-      { find: "expo-haptics", replacement: emptyModule },
-      { find: "expo-image-manipulator", replacement: emptyModule },
+      { find: 'expo-web-browser', replacement: emptyModule },
+      { find: 'expo-document-picker', replacement: emptyModule },
+      { find: 'expo-haptics', replacement: emptyModule },
+      { find: 'expo-image-manipulator', replacement: emptyModule },
     ],
   },
   define: {
     // vite-plugin-react-native-web pins __DEV__=false and NODE_ENV=production
     // unconditionally; re-assert the mode-aware values (user config wins over
     // plugin config in Vite's merge).
-    __DEV__: JSON.stringify(mode !== "production"),
-    "process.env.NODE_ENV": JSON.stringify(mode),
+    __DEV__: JSON.stringify(mode !== 'production'),
+    'process.env.NODE_ENV': JSON.stringify(mode),
   },
   server: {
     // 8170 is TNP's slot in the per-app local dev port map, so several Oxy web
     // dev servers can run side by side on one machine.
     port: 8170,
     proxy: {
-      "/api": {
-        target: "http://localhost:4170",
+      '/api': {
+        target: 'http://localhost:4170',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
+        rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
   },
   build: {
-    outDir: "dist",
+    outDir: 'dist',
   },
 }));

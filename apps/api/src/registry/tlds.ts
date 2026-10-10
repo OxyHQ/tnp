@@ -2,10 +2,10 @@
  * The public TLD proposals list.
  */
 
-import { desc, eq, sql } from "drizzle-orm";
-import type { TldProposalEntry } from "@tnp/shared-types";
-import { tldProposals, users } from "../db/schema/index.js";
-import type { Executor } from "./db.js";
+import { desc, eq, sql } from 'drizzle-orm';
+import type { TldProposalEntry } from '@tnp/shared-types';
+import { tldProposals, users } from '../db/schema/index.js';
+import type { Executor } from './db.js';
 
 /**
  * Proposals with scores, highest score then newest first.
@@ -73,7 +73,7 @@ export async function listTldProposals(
   return rows.map(({ proposedById, createdAt, userVote: vote, ...row }) => ({
     ...row,
     createdAt: createdAt.toISOString(),
-    userVote: vote === "up" || vote === "down" ? vote : null,
+    userVote: vote === 'up' || vote === 'down' ? vote : null,
     proposedByMe: userId !== null && proposedById === userId,
   }));
 }

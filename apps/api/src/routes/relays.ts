@@ -1,24 +1,24 @@
-import { Router } from "express";
-import { and, asc, eq, ne, sql } from "drizzle-orm";
-import { requireOxyAuth, getRequiredOxyUserId } from "@oxy.so/core/server";
+import { Router } from 'express';
+import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import { requireOxyAuth, getRequiredOxyUserId } from '@oxy.so/core/server';
 import {
   parseRegisterRelayRequest,
   parseRelayHeartbeatRequest,
   type RelayDirectoryEntry,
   type RelayHeartbeatResponse,
   type RelayRegistration,
-} from "@tnp/shared-types";
-import { getDb } from "../db/postgres.js";
-import { relays } from "../db/schema/index.js";
+} from '@tnp/shared-types';
+import { getDb } from '../db/postgres.js';
+import { relays } from '../db/schema/index.js';
 
 const router = Router();
 
 // GET /relays -- list active relays (public)
-router.get("/", async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const operatorFilter = req.query.operator;
     const operator =
-      operatorFilter === "oxy" || operatorFilter === "community" ? operatorFilter : null;
+      operatorFilter === 'oxy' || operatorFilter === 'community' ? operatorFilter : null;
 
     const rows = await getDb()
       .select({
@@ -31,8 +31,8 @@ router.get("/", async (req, res) => {
       .from(relays)
       .where(
         operator
-          ? and(ne(relays.status, "offline"), eq(relays.operator, operator))
-          : ne(relays.status, "offline"),
+          ? and(ne(relays.status, 'offline'), eq(relays.operator, operator))
+          : ne(relays.status, 'offline'),
       )
       .orderBy(asc(relays.status), asc(relays.endpoint));
 
@@ -43,13 +43,13 @@ router.get("/", async (req, res) => {
     const directory: RelayDirectoryEntry[] = rows;
     res.json(directory);
   } catch (err) {
-    console.error("List relays error:", err);
-    res.status(500).json({ error: "Failed to list relays" });
+    console.error('List relays error:', err);
+    res.status(500).json({ error: 'Failed to list relays' });
   }
 });
 
 // POST /relays/register -- register a relay node (auth required)
-router.post("/register", requireOxyAuth, async (req, res) => {
+router.post('/register', requireOxyAuth, async (req, res) => {
   try {
     // The one definition of what this endpoint accepts lives in
     // @tnp/shared-types, and the relay builds its request from that same
@@ -96,7 +96,7 @@ router.post("/register", requireOxyAuth, async (req, res) => {
       .returning();
 
     if (!relay) {
-      res.status(403).json({ error: "This endpoint is registered to another operator" });
+      res.status(403).json({ error: 'This endpoint is registered to another operator' });
       return;
     }
 
@@ -112,13 +112,13 @@ router.post("/register", requireOxyAuth, async (req, res) => {
     };
     res.status(201).json(registration);
   } catch (err) {
-    console.error("Register relay error:", err);
-    res.status(500).json({ error: "Failed to register relay" });
+    console.error('Register relay error:', err);
+    res.status(500).json({ error: 'Failed to register relay' });
   }
 });
 
 // POST /relays/heartbeat -- update relay status (auth required)
-router.post("/heartbeat", requireOxyAuth, async (req, res) => {
+router.post('/heartbeat', requireOxyAuth, async (req, res) => {
   try {
     const parsed = parseRelayHeartbeatRequest(req.body);
     if (!parsed.ok) {
@@ -128,7 +128,7 @@ router.post("/heartbeat", requireOxyAuth, async (req, res) => {
 
     const updated = await getDb()
       .update(relays)
-      .set({ lastSeen: sql`now()`, status: "active", updatedAt: sql`now()` })
+      .set({ lastSeen: sql`now()`, status: 'active', updatedAt: sql`now()` })
       .where(
         and(
           eq(relays.endpoint, parsed.value.endpoint),
@@ -138,15 +138,15 @@ router.post("/heartbeat", requireOxyAuth, async (req, res) => {
       .returning({ id: relays.id });
 
     if (updated.length === 0) {
-      res.status(404).json({ error: "Relay not found" });
+      res.status(404).json({ error: 'Relay not found' });
       return;
     }
 
-    const response: RelayHeartbeatResponse = { status: "ok" };
+    const response: RelayHeartbeatResponse = { status: 'ok' };
     res.json(response);
   } catch (err) {
-    console.error("Relay heartbeat error:", err);
-    res.status(500).json({ error: "Failed to update heartbeat" });
+    console.error('Relay heartbeat error:', err);
+    res.status(500).json({ error: 'Failed to update heartbeat' });
   }
 });
 

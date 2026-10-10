@@ -9,7 +9,7 @@
  * variable fails closed.
  */
 
-import type { ProviderEnvironment } from "./providers/contracts.js";
+import type { ProviderEnvironment } from './providers/contracts.js';
 
 export interface ServicesConfig {
   /** Public-domain search and quotes. */
@@ -31,15 +31,17 @@ export interface ServicesConfig {
 }
 
 function flag(value: string | undefined): boolean {
-  return value === "1" || value === "true";
+  return value === '1' || value === 'true';
 }
 
 function positiveInt(value: string | undefined, fallback: number, max: number): number {
-  const parsed = Number.parseInt(value ?? "", 10);
+  const parsed = Number.parseInt(value ?? '', 10);
   return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback;
 }
 
-export function readServicesConfig(env: Readonly<Record<string, string | undefined>> = process.env): ServicesConfig {
+export function readServicesConfig(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): ServicesConfig {
   return {
     catalog: flag(env.TNP_SERVICES_CATALOG),
     sales: flag(env.TNP_SERVICES_SALES),
@@ -47,7 +49,7 @@ export function readServicesConfig(env: Readonly<Record<string, string | undefin
     worker: flag(env.TNP_SERVICES_WORKER),
     // Production must be chosen explicitly; a missing value never points
     // customer traffic at a production registrar account.
-    environment: env.TNP_SERVICES_ENVIRONMENT === "production" ? "production" : "sandbox",
+    environment: env.TNP_SERVICES_ENVIRONMENT === 'production' ? 'production' : 'sandbox',
     workerConcurrency: positiveInt(env.TNP_SERVICES_WORKER_CONCURRENCY, 2, 16),
     workerPoolSize: positiveInt(env.TNP_SERVICES_WORKER_POOL_SIZE, 4, 20),
   };

@@ -99,10 +99,7 @@
       "title": "Linux",
       "description": "Works with systemd-resolved, NetworkManager, and standalone resolv.conf setups. The installer detects your DNS configuration automatically.",
       "requirementsTitle": "Requirements:",
-      "requirements": [
-        "Any modern Linux distribution",
-        "sudo access"
-      ]
+      "requirements": ["Any modern Linux distribution", "sudo access"]
     },
     "windows": {
       "title": "Windows",

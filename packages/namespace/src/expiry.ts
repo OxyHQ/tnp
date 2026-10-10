@@ -21,7 +21,7 @@
  * - `expired`   — past the grace period. Held for its owner, never re-issued
  *                 to someone else by this policy.
  */
-export type NativeExpiryState = "active" | "renewable" | "grace" | "expired";
+export type NativeExpiryState = 'active' | 'renewable' | 'grace' | 'expired';
 
 /** How long before expiry an owner may renew. */
 export const NATIVE_RENEWAL_WINDOW_DAYS = 90;
@@ -47,13 +47,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * {@link NATIVE_GRACE_DAYS} later, inclusive.
  */
 export function nativeExpiryState(expiresAt: Date | null, now: Date): NativeExpiryState {
-  if (expiresAt === null) return "active";
+  if (expiresAt === null) return 'active';
 
   const remaining = expiresAt.getTime() - now.getTime();
-  if (remaining > NATIVE_RENEWAL_WINDOW_DAYS * DAY_MS) return "active";
-  if (remaining > 0) return "renewable";
-  if (-remaining <= NATIVE_GRACE_DAYS * DAY_MS) return "grace";
-  return "expired";
+  if (remaining > NATIVE_RENEWAL_WINDOW_DAYS * DAY_MS) return 'active';
+  if (remaining > 0) return 'renewable';
+  if (-remaining <= NATIVE_GRACE_DAYS * DAY_MS) return 'grace';
+  return 'expired';
 }
 
 /**
@@ -65,7 +65,7 @@ export function nativeExpiryState(expiresAt: Date | null, now: Date): NativeExpi
  * and still names them.
  */
 export function isNativeRenewalAllowed(state: NativeExpiryState): boolean {
-  return state !== "active";
+  return state !== 'active';
 }
 
 /**
@@ -75,7 +75,7 @@ export function isNativeRenewalAllowed(state: NativeExpiryState): boolean {
  * `grace` is served deliberately: it is the owner's window to notice.
  */
 export function isNativeNameServed(state: NativeExpiryState): boolean {
-  return state !== "expired";
+  return state !== 'expired';
 }
 
 /**

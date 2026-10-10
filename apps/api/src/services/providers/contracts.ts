@@ -12,12 +12,12 @@
  * returns an empty success.
  */
 
-import type { Money } from "../money.js";
-import type { PublicDomainName } from "../publicNames.js";
+import type { Money } from '../money.js';
+import type { PublicDomainName } from '../publicNames.js';
 
-export type ProviderEnvironment = "sandbox" | "production";
+export type ProviderEnvironment = 'sandbox' | 'production';
 
-export type CapabilitySupport = "automated" | "manual" | "unsupported";
+export type CapabilitySupport = 'automated' | 'manual' | 'unsupported';
 
 export interface CapabilityDeclaration {
   readonly support: CapabilitySupport;
@@ -61,23 +61,23 @@ export interface AdapterCallContext {
 // ---------------------------------------------------------------------------
 
 export type RegistrarOperation =
-  | "suffixes"
-  | "availability"
-  | "pricing"
-  | "register"
-  | "renew"
-  | "info"
-  | "list"
-  | "contacts.read"
-  | "contacts.update"
-  | "lock.read"
-  | "lock.update"
-  | "transfer_in"
-  | "transfer_status"
-  | "transfer_out"
-  | "balance";
+  | 'suffixes'
+  | 'availability'
+  | 'pricing'
+  | 'register'
+  | 'renew'
+  | 'info'
+  | 'list'
+  | 'contacts.read'
+  | 'contacts.update'
+  | 'lock.read'
+  | 'lock.update'
+  | 'transfer_in'
+  | 'transfer_status'
+  | 'transfer_out'
+  | 'balance';
 
-export type PricedOperation = "register" | "renew" | "transfer_in";
+export type PricedOperation = 'register' | 'renew' | 'transfer_in';
 
 export interface SuffixOffer {
   /** ASCII suffix without a leading dot: `com`, `co.uk`. */
@@ -92,7 +92,7 @@ export interface SuffixOffer {
   readonly requiresExtendedAttributes: boolean;
 }
 
-export type AvailabilityStatus = "available" | "unavailable" | "unknown" | "unsupported";
+export type AvailabilityStatus = 'available' | 'unavailable' | 'unknown' | 'unsupported';
 
 export interface AvailabilityResult {
   readonly name: PublicDomainName;
@@ -168,14 +168,14 @@ export interface RenewDomainResult {
 
 /** Provider-neutral lifecycle. The provider's raw status is kept alongside it. */
 export type PublicDomainLifecycle =
-  | "active"
-  | "expired"
-  | "redemption"
-  | "pending"
-  | "transferring_in"
-  | "transferred_out"
-  | "locked_by_registry"
-  | "unknown";
+  | 'active'
+  | 'expired'
+  | 'redemption'
+  | 'pending'
+  | 'transferring_in'
+  | 'transferred_out'
+  | 'locked_by_registry'
+  | 'unknown';
 
 export interface RemoteDomainInfo {
   readonly ascii: string;
@@ -208,7 +208,7 @@ export interface RemoteDomainPage {
   readonly total: number;
 }
 
-export type TransferState = "pending" | "completed" | "failed" | "cancelled" | "unknown";
+export type TransferState = 'pending' | 'completed' | 'failed' | 'cancelled' | 'unknown';
 
 export interface TransferStatus {
   readonly remoteTransferId: string;
@@ -260,7 +260,7 @@ export interface RegistrarAdapter {
 // DNS
 // ---------------------------------------------------------------------------
 
-export type DnsOperation = "zone.read" | "zone.replace";
+export type DnsOperation = 'zone.read' | 'zone.replace';
 
 export interface ZoneRecord {
   /** Relative host: `@` for the apex, `www`, `_dmarc`. */
@@ -305,21 +305,21 @@ export interface DnsAdapter {
 // ---------------------------------------------------------------------------
 
 export type HostingOperation =
-  | "plans"
-  | "provision"
-  | "status"
-  | "change_plan"
-  | "suspend"
-  | "resume"
-  | "cancel"
-  | "access"
-  | "backup_export";
+  | 'plans'
+  | 'provision'
+  | 'status'
+  | 'change_plan'
+  | 'suspend'
+  | 'resume'
+  | 'cancel'
+  | 'access'
+  | 'backup_export';
 
-export type SiteState = "provisioning" | "active" | "suspended" | "cancelled" | "unknown";
+export type SiteState = 'provisioning' | 'active' | 'suspended' | 'cancelled' | 'unknown';
 
 export interface HostingPlan {
   readonly id: string;
-  readonly family: "managed_web" | "static" | "vps";
+  readonly family: 'managed_web' | 'static' | 'vps';
   readonly region: string;
   /** Hard limits. There is no "unlimited". */
   readonly limits: Readonly<Record<string, number>>;
@@ -340,13 +340,22 @@ export interface HostingAdapter {
   readonly capabilities: CapabilityMatrix<HostingOperation>;
 
   listPlans(ctx: AdapterCallContext): Promise<readonly HostingPlan[]>;
-  provision(ctx: AdapterCallContext, request: { readonly planId: string; readonly label: string }): Promise<SiteStatus>;
+  provision(
+    ctx: AdapterCallContext,
+    request: { readonly planId: string; readonly label: string },
+  ): Promise<SiteStatus>;
   getStatus(ctx: AdapterCallContext, remoteId: string): Promise<SiteStatus>;
   changePlan(ctx: AdapterCallContext, remoteId: string, planId: string): Promise<SiteStatus>;
   suspend(ctx: AdapterCallContext, remoteId: string): Promise<SiteStatus>;
   resume(ctx: AdapterCallContext, remoteId: string): Promise<SiteStatus>;
   cancel(ctx: AdapterCallContext, remoteId: string): Promise<SiteStatus>;
   /** A short-lived, least-privilege access grant. Never wholesale credentials. */
-  createAccess(ctx: AdapterCallContext, remoteId: string): Promise<{ readonly url: string; readonly expiresAt: Date }>;
-  exportBackup(ctx: AdapterCallContext, remoteId: string): Promise<{ readonly url: string; readonly expiresAt: Date }>;
+  createAccess(
+    ctx: AdapterCallContext,
+    remoteId: string,
+  ): Promise<{ readonly url: string; readonly expiresAt: Date }>;
+  exportBackup(
+    ctx: AdapterCallContext,
+    remoteId: string,
+  ): Promise<{ readonly url: string; readonly expiresAt: Date }>;
 }

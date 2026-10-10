@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { useTranslation } from "react-i18next";
-import { toast } from "@oxy.so/bloom/toast";
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import { toast } from '@oxy.so/bloom/toast';
 import {
   MAX_ZONE_CHANGES,
   type OperationDto,
@@ -10,11 +10,11 @@ import {
   type ZonePreviewRequest,
   type ZonePreviewResponse,
   type ZoneRecordDto,
-} from "@tnp/shared-types";
-import { apiRequest } from "../../lib/api";
-import { errorMessage, errorStatus, isAbort } from "../../lib/services/errors";
-import { newIdempotencyKey } from "../../lib/services/search";
-import { isTerminalOperation } from "../../lib/services/status";
+} from '@tnp/shared-types';
+import { apiRequest } from '../../lib/api';
+import { errorMessage, errorStatus, isAbort } from '../../lib/services/errors';
+import { newIdempotencyKey } from '../../lib/services/search';
+import { isTerminalOperation } from '../../lib/services/status';
 import {
   draftToChanges,
   EDITABLE_RECORD_TYPES,
@@ -24,9 +24,9 @@ import {
   sameIntent,
   type ZoneAction,
   type ZoneDraftRow,
-} from "../../lib/services/zone";
-import { OperationRow } from "./OperationLog";
-import { BUTTON_CLASSES, ErrorPanel, INPUT_CLASSES, LINK_BUTTON_CLASSES } from "./ui";
+} from '../../lib/services/zone';
+import { OperationRow } from './OperationLog';
+import { BUTTON_CLASSES, ErrorPanel, INPUT_CLASSES, LINK_BUTTON_CLASSES } from './ui';
 
 const POLL_INTERVAL_MS = 3_000;
 /** After this long the page stops asking; reconciliation keeps working server-side. */
@@ -53,8 +53,14 @@ interface Intent {
  * it, so a request that did reach the server is not applied twice; anything
  * that changes the intent (an edit, a new preview) gets a new key.
  */
-export default function ZoneEditor({ domainId, onOperation }: { domainId: string; onOperation: (op: OperationDto) => void }) {
-  const { t } = useTranslation("services");
+export default function ZoneEditor({
+  domainId,
+  onOperation,
+}: {
+  domainId: string;
+  onOperation: (op: OperationDto) => void;
+}) {
+  const { t } = useTranslation('services');
   const baseId = useId();
   const [rows, setRows] = useState<ZoneDraftRow[]>(() => [emptyRow()]);
   const [focusKey, setFocusKey] = useState<string | null>(null);
@@ -111,9 +117,13 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
         return;
       }
       try {
-        const ops = await apiRequest<OperationDto[]>("GET", `/services/domains/${domainId}/operations`, {
-          signal: controller.signal,
-        });
+        const ops = await apiRequest<OperationDto[]>(
+          'GET',
+          `/services/domains/${domainId}/operations`,
+          {
+            signal: controller.signal,
+          },
+        );
         const latest = ops.find((op) => op.id === operationId);
         if (latest) {
           setOperation(latest);
@@ -154,18 +164,24 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
   const runPreview = async () => {
     const parsed = draftToChanges(rows);
     if (!parsed.ok) {
-      setPreviewError(t("zone.invalidDraft", { detail: parsed.error }));
+      setPreviewError(t('zone.invalidDraft', { detail: parsed.error }));
       return;
     }
     setPreviewPending(true);
     setPreviewError(null);
     const body: ZonePreviewRequest = { changes: parsed.value };
     try {
-      const response = await apiRequest<ZonePreviewResponse>("POST", `/services/domains/${domainId}/zone/preview`, { body });
+      const response = await apiRequest<ZonePreviewResponse>(
+        'POST',
+        `/services/domains/${domainId}/zone/preview`,
+        { body },
+      );
       setPreview({ changes: parsed.value, response });
       setApplyError(null);
     } catch (err) {
-      const message = errorMessage(err) ?? (errorStatus(err) === null ? t("errors.network") : t("zone.previewFailed"));
+      const message =
+        errorMessage(err) ??
+        (errorStatus(err) === null ? t('errors.network') : t('zone.previewFailed'));
       setPreviewError(message);
       toast.error(message);
     } finally {
@@ -182,10 +198,14 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
     setApplyError(null);
     const body: ZoneApplyRequest = current;
     try {
-      const response = await apiRequest<ZoneApplyResponse>("POST", `/services/domains/${domainId}/zone/changes`, {
-        body,
-        headers: { "Idempotency-Key": key },
-      });
+      const response = await apiRequest<ZoneApplyResponse>(
+        'POST',
+        `/services/domains/${domainId}/zone/changes`,
+        {
+          body,
+          headers: { 'Idempotency-Key': key },
+        },
+      );
       setOperation(response.operation);
       setPollingStopped(false);
       onOperationRef.current(response.operation);
@@ -193,7 +213,7 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
       setPreview(null);
       setIntent(null);
       setRows([emptyRow()]);
-      toast.success(t("zone.applied"));
+      toast.success(t('zone.applied'));
     } catch (err) {
       if (errorStatus(err) === 409) {
         // The zone moved under the preview, or the key met a different request:
@@ -201,13 +221,15 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
         setPreview(null);
         setIntent(null);
         setDialogOpen(false);
-        const message = t("zone.conflict");
+        const message = t('zone.conflict');
         setPreviewError(message);
         toast.error(message);
         return;
       }
       const message =
-        errorStatus(err) === null ? t("zone.applyNetwork") : (errorMessage(err) ?? t("zone.applyFailed"));
+        errorStatus(err) === null
+          ? t('zone.applyNetwork')
+          : (errorMessage(err) ?? t('zone.applyFailed'));
       setApplyError(message);
       toast.error(message);
     } finally {
@@ -223,17 +245,17 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
         {rows.map((row, index) => (
           <fieldset key={row.key} className="rounded-md border border-border bg-surface p-3">
             <legend className="px-1 font-mono text-xs text-muted-foreground/70">
-              {t("zone.rowLegend", { n: index + 1 })}
+              {t('zone.rowLegend', { n: index + 1 })}
             </legend>
             <div className="flex flex-wrap items-end gap-3">
-              <Field id={fieldId(row, "action")} label={t("zone.field.action")}>
+              <Field id={fieldId(row, 'action')} label={t('zone.field.action')}>
                 <select
-                  id={fieldId(row, "action")}
+                  id={fieldId(row, 'action')}
                   value={row.action}
                   onChange={(e) => updateRow(row.key, { action: e.target.value as ZoneAction })}
                   className={INPUT_CLASSES}
                 >
-                  {(["add", "update", "delete"] as const).map((action) => (
+                  {(['add', 'update', 'delete'] as const).map((action) => (
                     <option key={action} value={action}>
                       {actionLabel(action)}
                     </option>
@@ -244,28 +266,30 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
                 type="button"
                 onClick={() => removeRow(row.key)}
                 className="cursor-pointer pb-2 font-mono text-xs text-destructive transition-colors hover:text-destructive/80"
-                aria-label={t("zone.removeRowLabel", { n: index + 1 })}
+                aria-label={t('zone.removeRowLabel', { n: index + 1 })}
               >
-                [{t("zone.removeRow")}]
+                [{t('zone.removeRow')}]
               </button>
             </div>
 
-            {row.action !== "add" && (
+            {row.action !== 'add' && (
               <div className="mt-3">
-                <p className="mb-2 font-mono text-xs text-muted-foreground/70">{t("zone.matchHeading")}</p>
+                <p className="mb-2 font-mono text-xs text-muted-foreground/70">
+                  {t('zone.matchHeading')}
+                </p>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-[8rem_7rem_1fr]">
-                  <Field id={fieldId(row, "matchHost")} label={t("zone.field.host")}>
+                  <Field id={fieldId(row, 'matchHost')} label={t('zone.field.host')}>
                     <input
-                      id={fieldId(row, "matchHost")}
+                      id={fieldId(row, 'matchHost')}
                       value={row.matchHost}
                       onChange={(e) => updateRow(row.key, { matchHost: e.target.value })}
                       className={`w-full ${INPUT_CLASSES}`}
                       spellCheck={false}
                     />
                   </Field>
-                  <Field id={fieldId(row, "matchType")} label={t("zone.field.type")}>
+                  <Field id={fieldId(row, 'matchType')} label={t('zone.field.type')}>
                     <select
-                      id={fieldId(row, "matchType")}
+                      id={fieldId(row, 'matchType')}
                       value={row.matchType}
                       onChange={(e) => updateRow(row.key, { matchType: e.target.value })}
                       className={`w-full ${INPUT_CLASSES}`}
@@ -273,9 +297,9 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
                       <TypeOptions current={row.matchType} />
                     </select>
                   </Field>
-                  <Field id={fieldId(row, "matchValue")} label={t("zone.field.value")}>
+                  <Field id={fieldId(row, 'matchValue')} label={t('zone.field.value')}>
                     <input
-                      id={fieldId(row, "matchValue")}
+                      id={fieldId(row, 'matchValue')}
                       value={row.matchValue}
                       onChange={(e) => updateRow(row.key, { matchValue: e.target.value })}
                       className={`w-full ${INPUT_CLASSES}`}
@@ -286,24 +310,26 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
               </div>
             )}
 
-            {row.action !== "delete" && (
+            {row.action !== 'delete' && (
               <div className="mt-3">
-                {row.action === "update" && (
-                  <p className="mb-2 font-mono text-xs text-muted-foreground/70">{t("zone.newRecordHeading")}</p>
+                {row.action === 'update' && (
+                  <p className="mb-2 font-mono text-xs text-muted-foreground/70">
+                    {t('zone.newRecordHeading')}
+                  </p>
                 )}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-[8rem_7rem_1fr_6rem_6rem]">
-                  <Field id={fieldId(row, "host")} label={t("zone.field.host")}>
+                  <Field id={fieldId(row, 'host')} label={t('zone.field.host')}>
                     <input
-                      id={fieldId(row, "host")}
+                      id={fieldId(row, 'host')}
                       value={row.host}
                       onChange={(e) => updateRow(row.key, { host: e.target.value })}
                       className={`w-full ${INPUT_CLASSES}`}
                       spellCheck={false}
                     />
                   </Field>
-                  <Field id={fieldId(row, "type")} label={t("zone.field.type")}>
+                  <Field id={fieldId(row, 'type')} label={t('zone.field.type')}>
                     <select
-                      id={fieldId(row, "type")}
+                      id={fieldId(row, 'type')}
                       value={row.type}
                       onChange={(e) => updateRow(row.key, { type: e.target.value })}
                       className={`w-full ${INPUT_CLASSES}`}
@@ -311,32 +337,32 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
                       <TypeOptions current={row.type} />
                     </select>
                   </Field>
-                  <Field id={fieldId(row, "value")} label={t("zone.field.value")}>
+                  <Field id={fieldId(row, 'value')} label={t('zone.field.value')}>
                     <input
-                      id={fieldId(row, "value")}
+                      id={fieldId(row, 'value')}
                       value={row.value}
                       onChange={(e) => updateRow(row.key, { value: e.target.value })}
                       className={`w-full ${INPUT_CLASSES}`}
                       spellCheck={false}
                     />
                   </Field>
-                  <Field id={fieldId(row, "ttl")} label={t("zone.field.ttl")}>
+                  <Field id={fieldId(row, 'ttl')} label={t('zone.field.ttl')}>
                     <input
-                      id={fieldId(row, "ttl")}
+                      id={fieldId(row, 'ttl')}
                       inputMode="numeric"
                       value={row.ttl}
                       onChange={(e) => updateRow(row.key, { ttl: e.target.value })}
                       className={`w-full ${INPUT_CLASSES}`}
                     />
                   </Field>
-                  <Field id={fieldId(row, "priority")} label={t("zone.field.priority")}>
+                  <Field id={fieldId(row, 'priority')} label={t('zone.field.priority')}>
                     <input
-                      id={fieldId(row, "priority")}
+                      id={fieldId(row, 'priority')}
                       inputMode="numeric"
                       value={row.priority}
                       onChange={(e) => updateRow(row.key, { priority: e.target.value })}
                       className={`w-full ${INPUT_CLASSES}`}
-                      placeholder={row.type === "MX" ? "10" : ""}
+                      placeholder={row.type === 'MX' ? '10' : ''}
                     />
                   </Field>
                 </div>
@@ -353,7 +379,7 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
           disabled={rows.length >= MAX_ZONE_CHANGES}
           className={LINK_BUTTON_CLASSES}
         >
-          [{t("zone.addRow")}]
+          [{t('zone.addRow')}]
         </button>
         <button
           ref={previewButtonRef}
@@ -362,46 +388,73 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
           disabled={previewPending || rows.length === 0}
           className={BUTTON_CLASSES}
         >
-          {previewPending ? t("zone.previewing") : t("zone.preview")}
+          {previewPending ? t('zone.previewing') : t('zone.preview')}
         </button>
       </div>
 
       {previewError && <ErrorPanel message={previewError} />}
 
       {preview && (
-        <section aria-labelledby={`${baseId}-preview-heading`} className="space-y-4 rounded-lg border border-border bg-card p-4">
+        <section
+          aria-labelledby={`${baseId}-preview-heading`}
+          className="space-y-4 rounded-lg border border-border bg-card p-4"
+        >
           <h3 id={`${baseId}-preview-heading`} className="font-mono text-sm text-foreground">
-            {t("zone.previewHeading")}
+            {t('zone.previewHeading')}
           </h3>
-          <DiffList title={t("zone.added", { count: preview.response.added.length })} marker="+" records={preview.response.added} tone="text-success-text" />
-          <DiffList title={t("zone.removed", { count: preview.response.removed.length })} marker="−" records={preview.response.removed} tone="text-error-text" />
+          <DiffList
+            title={t('zone.added', { count: preview.response.added.length })}
+            marker="+"
+            records={preview.response.added}
+            tone="text-success-text"
+          />
+          <DiffList
+            title={t('zone.removed', { count: preview.response.removed.length })}
+            marker="−"
+            records={preview.response.removed}
+            tone="text-error-text"
+          />
           {preview.response.added.length === 0 && preview.response.removed.length === 0 && (
-            <p className="font-mono text-xs text-muted-foreground/70">{t("zone.noDifference")}</p>
+            <p className="font-mono text-xs text-muted-foreground/70">{t('zone.noDifference')}</p>
           )}
-          <p className="font-mono text-xs text-warning-text">{t("zone.raceNotice")}</p>
+          <p className="font-mono text-xs text-warning-text">{t('zone.raceNotice')}</p>
           <button
             ref={applyTriggerRef}
             type="button"
             onClick={() => setDialogOpen(true)}
-            disabled={applyPending || (preview.response.added.length === 0 && preview.response.removed.length === 0)}
+            disabled={
+              applyPending ||
+              (preview.response.added.length === 0 && preview.response.removed.length === 0)
+            }
             className={BUTTON_CLASSES}
           >
-            {t("zone.reviewApply")}
+            {t('zone.reviewApply')}
           </button>
 
           <details className="font-mono text-xs">
             <summary className="cursor-pointer text-muted-foreground">
-              {t("zone.currentRecords", { count: preview.response.current.length })}
+              {t('zone.currentRecords', { count: preview.response.current.length })}
             </summary>
             <ul className="mt-2 space-y-1">
               {preview.response.current.map((record) => (
-                <li key={recordKey(record)} className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                <li
+                  key={recordKey(record)}
+                  className="flex flex-wrap items-center gap-2 text-muted-foreground"
+                >
                   <code className="break-all">{formatRecord(record)}</code>
-                  <button type="button" onClick={() => addRow(rowFor("update", record))} className="cursor-pointer text-muted-foreground/70 hover:text-muted-foreground">
-                    [{t("zone.action.update")}]
+                  <button
+                    type="button"
+                    onClick={() => addRow(rowFor('update', record))}
+                    className="cursor-pointer text-muted-foreground/70 hover:text-muted-foreground"
+                  >
+                    [{t('zone.action.update')}]
                   </button>
-                  <button type="button" onClick={() => addRow(rowFor("delete", record))} className="cursor-pointer text-destructive hover:text-destructive/80">
-                    [{t("zone.action.delete")}]
+                  <button
+                    type="button"
+                    onClick={() => addRow(rowFor('delete', record))}
+                    className="cursor-pointer text-destructive hover:text-destructive/80"
+                  >
+                    [{t('zone.action.delete')}]
                   </button>
                 </li>
               ))}
@@ -411,14 +464,19 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
       )}
 
       {operation && (
-        <section aria-labelledby={`${baseId}-op-heading`} className="rounded-lg border border-border bg-card p-4">
+        <section
+          aria-labelledby={`${baseId}-op-heading`}
+          className="rounded-lg border border-border bg-card p-4"
+        >
           <h3 id={`${baseId}-op-heading`} className="mb-2 font-mono text-sm text-foreground">
-            {t("zone.operationHeading")}
+            {t('zone.operationHeading')}
           </h3>
           <div aria-live="polite">
             <OperationRow operation={operation} />
             {pollingStopped && !isTerminalOperation(operation.status) && (
-              <p className="mt-2 font-mono text-xs text-muted-foreground">{t("zone.pollingStopped")}</p>
+              <p className="mt-2 font-mono text-xs text-muted-foreground">
+                {t('zone.pollingStopped')}
+              </p>
             )}
           </div>
         </section>
@@ -437,17 +495,20 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
         {preview && (
           <div className="space-y-4">
             <h3 id={`${baseId}-dialog-title`} className="font-pixel text-lg text-primary-text">
-              {t("zone.confirmTitle")}
+              {t('zone.confirmTitle')}
             </h3>
-            <div id={`${baseId}-dialog-desc`} className="space-y-2 font-mono text-sm text-muted-foreground">
+            <div
+              id={`${baseId}-dialog-desc`}
+              className="space-y-2 font-mono text-sm text-muted-foreground"
+            >
               <p>
-                {t("zone.confirmSummary", {
+                {t('zone.confirmSummary', {
                   added: preview.response.added.length,
                   removed: preview.response.removed.length,
                 })}
               </p>
-              <p className="text-xs">{t("zone.confirmConsequence")}</p>
-              <p className="text-xs text-warning-text">{t("zone.raceNotice")}</p>
+              <p className="text-xs">{t('zone.confirmConsequence')}</p>
+              <p className="text-xs text-warning-text">{t('zone.raceNotice')}</p>
             </div>
             {applyError && (
               <p role="alert" className="font-mono text-xs text-error-text">
@@ -462,10 +523,19 @@ export default function ZoneEditor({ domainId, onOperation }: { domainId: string
                 disabled={applyPending}
                 className={LINK_BUTTON_CLASSES}
               >
-                [{t("common.cancel")}]
+                [{t('common.cancel')}]
               </button>
-              <button type="button" onClick={apply} disabled={applyPending} className={BUTTON_CLASSES}>
-                {applyPending ? t("zone.applying") : applyError ? t("zone.retryApply") : t("zone.apply")}
+              <button
+                type="button"
+                onClick={apply}
+                disabled={applyPending}
+                className={BUTTON_CLASSES}
+              >
+                {applyPending
+                  ? t('zone.applying')
+                  : applyError
+                    ? t('zone.retryApply')
+                    : t('zone.apply')}
               </button>
             </div>
           </div>
@@ -503,11 +573,21 @@ function TypeOptions({ current }: { current: string }) {
 }
 
 function formatRecord(record: ZoneRecordDto): string {
-  const priority = record.priority === null ? "" : ` ${record.priority}`;
+  const priority = record.priority === null ? '' : ` ${record.priority}`;
   return `${record.host} ${record.ttl} ${record.type}${priority} ${record.value}`;
 }
 
-function DiffList({ title, marker, records, tone }: { title: string; marker: string; records: ZoneRecordDto[]; tone: string }) {
+function DiffList({
+  title,
+  marker,
+  records,
+  tone,
+}: {
+  title: string;
+  marker: string;
+  records: ZoneRecordDto[];
+  tone: string;
+}) {
   if (records.length === 0) return null;
   return (
     <div>

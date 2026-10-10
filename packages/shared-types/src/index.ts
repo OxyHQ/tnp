@@ -1,4 +1,4 @@
-export { type ParseResult } from "./parse.js";
+export { type ParseResult } from './parse.js';
 
 export {
   normalizeRelayEndpoint,
@@ -14,7 +14,7 @@ export {
   type RelayOperator,
   type RelayRegistration,
   type RelayStatus,
-} from "./relays.js";
+} from './relays.js';
 
 export {
   parseRegisterServiceNodeRequest,
@@ -25,7 +25,7 @@ export {
   type ServiceNodeLookup,
   type ServiceNodeRegistration,
   type ServiceNodeStatus,
-} from "./service-nodes.js";
+} from './service-nodes.js';
 
 export {
   MAX_AVAILABILITY_NAMES,
@@ -56,7 +56,7 @@ export {
   type ZonePreviewRequest,
   type ZonePreviewResponse,
   type ZoneRecordDto,
-} from "./services.js";
+} from './services.js';
 
 export {
   isDnsRecordType,
@@ -82,7 +82,7 @@ export {
   type DnsRecordParseResult,
   type DnsRecordType,
   type UpdateDnsRecordRequest,
-} from "./dns-records.js";
+} from './dns-records.js';
 
 export {
   type DomainStatus,
@@ -99,11 +99,11 @@ export {
   type PublicTld,
   type RenewDomainResponse,
   type TldProposalEntry,
-} from "./domains.js";
+} from './domains.js';
 
 export {
   type DnsResolveAnswer,
   type DnsResolveOverlay,
   type DnsResolveRcode,
   type DnsResolveResponse,
-} from "./dns-resolve.js";
+} from './dns-resolve.js';

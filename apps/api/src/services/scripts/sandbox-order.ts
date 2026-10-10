@@ -12,32 +12,32 @@
  * account that is not `sandbox`, so this cannot buy a real domain.
  */
 
-import { readFileSync } from "node:fs";
-import { parseArgs } from "node:util";
-import { sql } from "drizzle-orm";
-import { parseContact } from "@tnp/shared-types";
-import { closePostgres, connectPostgres } from "../../db/postgres.js";
-import { users } from "../../db/schema/index.js";
-import { Catalog, readOnlyCall } from "../catalog.js";
-import { placeOrder, sandboxNoCharge } from "../orders.js";
-import { loadProviderAccount } from "../providers/accounts.js";
-import { createProductionRegistry } from "../providers/production.js";
+import { readFileSync } from 'node:fs';
+import { parseArgs } from 'node:util';
+import { sql } from 'drizzle-orm';
+import { parseContact } from '@tnp/shared-types';
+import { closePostgres, connectPostgres } from '../../db/postgres.js';
+import { users } from '../../db/schema/index.js';
+import { Catalog, readOnlyCall } from '../catalog.js';
+import { placeOrder, sandboxNoCharge } from '../orders.js';
+import { loadProviderAccount } from '../providers/accounts.js';
+import { createProductionRegistry } from '../providers/production.js';
 
 const { values } = parseArgs({
   options: {
-    account: { type: "string" },
-    owner: { type: "string" },
-    name: { type: "string" },
-    contact: { type: "string" },
-    years: { type: "string", default: "1" },
+    account: { type: 'string' },
+    owner: { type: 'string' },
+    name: { type: 'string' },
+    contact: { type: 'string' },
+    years: { type: 'string', default: '1' },
   },
 });
 
 if (!values.account || !values.owner || !values.name || !values.contact) {
-  console.error("--account, --owner, --name and --contact are required");
+  console.error('--account, --owner, --name and --contact are required');
   process.exit(2);
 }
-const contact = parseContact(JSON.parse(readFileSync(values.contact, "utf8")));
+const contact = parseContact(JSON.parse(readFileSync(values.contact, 'utf8')));
 if (!contact.ok) {
   console.error(contact.error);
   process.exit(2);
@@ -46,7 +46,8 @@ if (!contact.ok) {
 const db = await connectPostgres();
 try {
   const account = await loadProviderAccount(db, values.account);
-  if (account.environment !== "sandbox") throw new Error("this script only runs against sandbox accounts");
+  if (account.environment !== 'sandbox')
+    throw new Error('this script only runs against sandbox accounts');
 
   const [owner] = await db
     .insert(users)
@@ -55,7 +56,13 @@ try {
     .returning({ id: users.id });
 
   const catalog = new Catalog(db, createProductionRegistry(db));
-  const quote = await catalog.quoteRegistration(account, owner.id, values.name, Number(values.years), readOnlyCall(crypto.randomUUID()));
+  const quote = await catalog.quoteRegistration(
+    account,
+    owner.id,
+    values.name,
+    Number(values.years),
+    readOnlyCall(crypto.randomUUID()),
+  );
   const c = contact.value;
   const placed = await placeOrder(db, sandboxNoCharge, {
     ownerId: owner.id,
@@ -63,9 +70,11 @@ try {
     idempotencyKey: `sandbox-order:${quote.id}`,
     contacts: { registrant: c, admin: c, tech: c, billing: c },
     privacy: false,
-    actor: { kind: "system" },
+    actor: { kind: 'system' },
   });
-  console.log(JSON.stringify({ quote: quote.id, order: placed.order.id, state: placed.order.state }));
+  console.log(
+    JSON.stringify({ quote: quote.id, order: placed.order.id, state: placed.order.state }),
+  );
 } finally {
   await closePostgres();
 }

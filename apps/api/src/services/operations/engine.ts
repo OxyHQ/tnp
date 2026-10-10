@@ -18,10 +18,14 @@
  * that proved the first attempt absent, and it never does so twice.
  */
 
-import type { Database } from "../../db/postgres.js";
-import { recordAudit } from "../audit.js";
-import type { AdapterCallContext } from "../providers/contracts.js";
-import { isProviderError, provesNothingApplied, type ProviderErrorCode } from "../providers/errors.js";
+import type { Database } from '../../db/postgres.js';
+import { recordAudit } from '../audit.js';
+import type { AdapterCallContext } from '../providers/contracts.js';
+import {
+  isProviderError,
+  provesNothingApplied,
+  type ProviderErrorCode,
+} from '../providers/errors.js';
 import {
   claimNextOperation,
   finishOperation,
@@ -29,22 +33,22 @@ import {
   markSubmitted,
   type FinishUpdate,
   type Operation,
-} from "./store.js";
+} from './store.js';
 
 export type ExecuteOutcome =
-  | { readonly kind: "succeeded"; readonly result?: Record<string, unknown> }
-  | { readonly kind: "failed"; readonly code: string; readonly message: string }
-  | { readonly kind: "manual_review"; readonly code: string; readonly message: string }
+  | { readonly kind: 'succeeded'; readonly result?: Record<string, unknown> }
+  | { readonly kind: 'failed'; readonly code: string; readonly message: string }
+  | { readonly kind: 'manual_review'; readonly code: string; readonly message: string }
   /** The request was sent and the effect could not be confirmed. */
-  | { readonly kind: "unknown"; readonly message: string };
+  | { readonly kind: 'unknown'; readonly message: string };
 
 export type ReconcileOutcome =
-  | { readonly kind: "succeeded"; readonly result?: Record<string, unknown> }
+  | { readonly kind: 'succeeded'; readonly result?: Record<string, unknown> }
   /** Positive evidence the submitted request had no effect. */
-  | { readonly kind: "absent" }
-  | { readonly kind: "undetermined"; readonly message: string }
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'undetermined'; readonly message: string }
   /** The remote state matches neither the intent nor the prior state. */
-  | { readonly kind: "conflict"; readonly message: string };
+  | { readonly kind: 'conflict'; readonly message: string };
 
 export interface HandlerContext {
   readonly db: Database;
@@ -69,7 +73,7 @@ export interface OperationHandler {
   /** Required for mutating handlers; never called for read-only ones. */
   reconcile?(ctx: HandlerContext): Promise<ReconcileOutcome>;
   /** Mirror a terminal failure onto the resource (lifecycle, order line). */
-  onGiveUp?(ctx: HandlerContext, status: "failed" | "manual_review", code: string): Promise<void>;
+  onGiveUp?(ctx: HandlerContext, status: 'failed' | 'manual_review', code: string): Promise<void>;
 }
 
 export interface EngineOptions {
@@ -84,8 +88,11 @@ export interface EngineOptions {
   readonly log?: (event: Record<string, unknown>) => void;
 }
 
-const RETRYABLE: ReadonlySet<ProviderErrorCode> = new Set(["rate_limited", "provider_unavailable"]);
-const OPERATOR_PROBLEMS: ReadonlySet<ProviderErrorCode> = new Set(["credentials", "insufficient_funds"]);
+const RETRYABLE: ReadonlySet<ProviderErrorCode> = new Set(['rate_limited', 'provider_unavailable']);
+const OPERATOR_PROBLEMS: ReadonlySet<ProviderErrorCode> = new Set([
+  'credentials',
+  'insufficient_funds',
+]);
 
 export function backoffMs(attempt: number, baseMs = 30_000, capMs = 3_600_000): number {
   return Math.min(capMs, baseMs * 2 ** Math.max(0, attempt - 1));
@@ -137,7 +144,11 @@ export class OperationEngine {
   async run(operation: Operation): Promise<void> {
     const handler = this.#handlers.get(operation.kind);
     if (!handler) {
-      await this.#finish(operation, { status: "manual_review", errorCode: "no_handler", errorMessage: "No handler for this operation." });
+      await this.#finish(operation, {
+        status: 'manual_review',
+        errorCode: 'no_handler',
+        errorMessage: 'No handler for this operation.',
+      });
       return;
     }
 
@@ -180,17 +191,17 @@ export class OperationEngine {
   ): Promise<void> {
     const op = ctx.operation;
     switch (outcome.kind) {
-      case "succeeded":
-        await this.#finish(op, { status: "succeeded", result: outcome.result ?? {} });
+      case 'succeeded':
+        await this.#finish(op, { status: 'succeeded', result: outcome.result ?? {} });
         return;
-      case "unknown":
-        await this.#toUnknown(op, "unknown_outcome", outcome.message);
+      case 'unknown':
+        await this.#toUnknown(op, 'unknown_outcome', outcome.message);
         return;
-      case "failed":
-      case "manual_review": {
+      case 'failed':
+      case 'manual_review': {
         // A handler that reports failure after submitting has no proof of
         // absence to offer; only an error that proves it may say so.
-        if (handler.mutating && submitted && outcome.kind === "failed") {
+        if (handler.mutating && submitted && outcome.kind === 'failed') {
           await this.#toUnknown(op, outcome.code, outcome.message);
           return;
         }
@@ -209,17 +220,22 @@ export class OperationEngine {
   ): Promise<void> {
     const op = ctx.operation;
     if (err instanceof LeaseLostError) {
-      this.#log({ event: "operation.lease_lost", operationId: op.id });
+      this.#log({ event: 'operation.lease_lost', operationId: op.id });
       return;
     }
 
     if (!isProviderError(err)) {
-      this.#log({ event: "operation.error", operationId: op.id, kind: op.kind, error: String(err) });
+      this.#log({
+        event: 'operation.error',
+        operationId: op.id,
+        kind: op.kind,
+        error: String(err),
+      });
       if (handler.mutating && submitted) {
-        await this.#toUnknown(op, "internal", "The result is being checked.");
+        await this.#toUnknown(op, 'internal', 'The result is being checked.');
         return;
       }
-      await this.#retryOrGiveUp(handler, ctx, "internal", "An internal error occurred.");
+      await this.#retryOrGiveUp(handler, ctx, 'internal', 'An internal error occurred.');
       return;
     }
 
@@ -227,7 +243,11 @@ export class OperationEngine {
     // operation. Only a refusal returned BY the submitting call itself proves
     // nothing applied; an error after the mutation returned, or a pre-send
     // failure once `submitted_at` is written, is reconciled instead.
-    if (handler.mutating && submitted && (mutationReturned || !err.submitted || !provesNothingApplied(err))) {
+    if (
+      handler.mutating &&
+      submitted &&
+      (mutationReturned || !err.submitted || !provesNothingApplied(err))
+    ) {
       await this.#toUnknown(op, err.code, err.safeMessage);
       return;
     }
@@ -237,7 +257,7 @@ export class OperationEngine {
       await this.#retryOrGiveUp(handler, ctx, err.code, err.safeMessage, err.retryAfterMs);
       return;
     }
-    const status = OPERATOR_PROBLEMS.has(err.code) ? "manual_review" : "failed";
+    const status = OPERATOR_PROBLEMS.has(err.code) ? 'manual_review' : 'failed';
     await this.#giveUp(handler, ctx, status, err.code, err.safeMessage);
   }
 
@@ -251,30 +271,36 @@ export class OperationEngine {
       outcome = await reconcile(ctx);
     } catch (err) {
       outcome = {
-        kind: "undetermined",
-        message: isProviderError(err) ? err.safeMessage : "The result could not be checked yet.",
+        kind: 'undetermined',
+        message: isProviderError(err) ? err.safeMessage : 'The result could not be checked yet.',
       };
     }
 
     const submittedAt = op.submittedAt ?? this.#now();
     const settled = this.#now().getTime() - submittedAt.getTime() >= this.#settleMs;
 
-    if (outcome.kind === "succeeded") {
-      await this.#finish(op, { status: "succeeded", result: outcome.result ?? {} });
+    if (outcome.kind === 'succeeded') {
+      await this.#finish(op, { status: 'succeeded', result: outcome.result ?? {} });
       return;
     }
-    if (outcome.kind === "conflict") {
-      await this.#giveUp(handler, ctx, "manual_review", "conflict", outcome.message);
+    if (outcome.kind === 'conflict') {
+      await this.#giveUp(handler, ctx, 'manual_review', 'conflict', outcome.message);
       return;
     }
-    if (outcome.kind === "absent" && settled) {
+    if (outcome.kind === 'absent' && settled) {
       if (op.resubmissions >= 1) {
-        await this.#giveUp(handler, ctx, "manual_review", "absent_after_resubmission", "The provider shows no effect after a second attempt.");
+        await this.#giveUp(
+          handler,
+          ctx,
+          'manual_review',
+          'absent_after_resubmission',
+          'The provider shows no effect after a second attempt.',
+        );
         return;
       }
-      this.#log({ event: "operation.resubmit", operationId: op.id, kind: op.kind });
+      this.#log({ event: 'operation.resubmit', operationId: op.id, kind: op.kind });
       await this.#finish(op, {
-        status: "queued",
+        status: 'queued',
         submittedAt: null,
         incrementResubmissions: true,
         nextRunAt: this.#now(),
@@ -283,13 +309,20 @@ export class OperationEngine {
     }
 
     if (op.reconcileAttempts + 1 >= this.#maxReconcileAttempts) {
-      await this.#giveUp(handler, ctx, "manual_review", "unreconciled", "The result could not be confirmed and needs review.");
+      await this.#giveUp(
+        handler,
+        ctx,
+        'manual_review',
+        'unreconciled',
+        'The result could not be confirmed and needs review.',
+      );
       return;
     }
     await this.#finish(op, {
-      status: "unknown",
-      errorCode: "unknown_outcome",
-      errorMessage: outcome.kind === "undetermined" ? outcome.message : "Waiting for the provider to settle.",
+      status: 'unknown',
+      errorCode: 'unknown_outcome',
+      errorMessage:
+        outcome.kind === 'undetermined' ? outcome.message : 'Waiting for the provider to settle.',
       incrementReconcileAttempts: true,
       nextRunAt: new Date(this.#now().getTime() + backoffMs(op.reconcileAttempts + 1, 60_000)),
     });
@@ -297,8 +330,8 @@ export class OperationEngine {
 
   async #toUnknown(op: Operation, code: string, message: string): Promise<void> {
     await this.#finish(op, {
-      status: "unknown",
-      errorCode: code === "unknown_outcome" ? code : `unknown_outcome:${code}`,
+      status: 'unknown',
+      errorCode: code === 'unknown_outcome' ? code : `unknown_outcome:${code}`,
       errorMessage: message,
       nextRunAt: new Date(this.#now().getTime() + 60_000),
     });
@@ -313,41 +346,57 @@ export class OperationEngine {
   ): Promise<void> {
     const op = ctx.operation;
     if (op.attempts >= op.maxAttempts) {
-      await this.#giveUp(handler, ctx, handler.mutating ? "manual_review" : "failed", code, message);
+      await this.#giveUp(
+        handler,
+        ctx,
+        handler.mutating ? 'manual_review' : 'failed',
+        code,
+        message,
+      );
       return;
     }
     await this.#finish(op, {
-      status: "queued",
+      status: 'queued',
       errorCode: code,
       errorMessage: message,
       submittedAt: null,
-      nextRunAt: new Date(this.#now().getTime() + Math.max(retryAfterMs ?? 0, backoffMs(op.attempts))),
+      nextRunAt: new Date(
+        this.#now().getTime() + Math.max(retryAfterMs ?? 0, backoffMs(op.attempts)),
+      ),
     });
   }
 
   async #giveUp(
     handler: OperationHandler,
     ctx: HandlerContext,
-    status: "failed" | "manual_review",
+    status: 'failed' | 'manual_review',
     code: string,
     message: string,
   ): Promise<void> {
-    const finished = await this.#finish(ctx.operation, { status, errorCode: code, errorMessage: message });
+    const finished = await this.#finish(ctx.operation, {
+      status,
+      errorCode: code,
+      errorMessage: message,
+    });
     if (finished && handler.onGiveUp) {
       try {
         await handler.onGiveUp(ctx, status, code);
       } catch (err) {
-        this.#log({ event: "operation.on_give_up_failed", operationId: ctx.operation.id, error: String(err) });
+        this.#log({
+          event: 'operation.on_give_up_failed',
+          operationId: ctx.operation.id,
+          error: String(err),
+        });
       }
     }
   }
 
   async #finish(op: Operation, update: FinishUpdate): Promise<boolean> {
     const finished = await finishOperation(this.#db, op.id, this.#workerId, update);
-    if (finished && update.status !== "queued") {
+    if (finished && update.status !== 'queued') {
       try {
         await recordAudit(this.#db, {
-          actor: { kind: "system" },
+          actor: { kind: 'system' },
           action: `operation.${op.kind}`,
           resourceType: op.resourceType,
           resourceId: op.resourceId,
@@ -358,11 +407,11 @@ export class OperationEngine {
       } catch (err) {
         // The transition is committed; a missing audit row is logged loudly
         // rather than turned into a second, contradictory state change.
-        this.#log({ event: "operation.audit_failed", operationId: op.id, error: String(err) });
+        this.#log({ event: 'operation.audit_failed', operationId: op.id, error: String(err) });
       }
     }
     this.#log({
-      event: finished ? "operation.transition" : "operation.lease_lost",
+      event: finished ? 'operation.transition' : 'operation.lease_lost',
       operationId: op.id,
       kind: op.kind,
       status: update.status,

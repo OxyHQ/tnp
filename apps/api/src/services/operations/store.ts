@@ -6,14 +6,14 @@
  * superseded cannot overwrite the result of the worker that took over.
  */
 
-import { and, eq, inArray, sql } from "drizzle-orm";
-import type { Database } from "../../db/postgres.js";
-import { operationResourceLeases, operations } from "../../db/schema/index.js";
-import { hashIntent, IdempotencyConflictError } from "./intent.js";
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import type { Database } from '../../db/postgres.js';
+import { operationResourceLeases, operations } from '../../db/schema/index.js';
+import { hashIntent, IdempotencyConflictError } from './intent.js';
 
 export type Operation = typeof operations.$inferSelect;
-export type OperationStatus = Operation["status"];
-export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+export type OperationStatus = Operation['status'];
+export type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 export type DbOrTx = Database | Tx;
 
 export interface EnqueueInput {
@@ -79,7 +79,9 @@ export async function enqueueOperation(
     )
     .limit(1);
   if (!existing) {
-    throw new Error(`operation for idempotency key ${input.idempotencyKey} conflicted and then vanished`);
+    throw new Error(
+      `operation for idempotency key ${input.idempotencyKey} conflicted and then vanished`,
+    );
   }
   if (existing.intentHash !== intentHash) throw new IdempotencyConflictError(input.idempotencyKey);
   return { operation: existing, created: false };
@@ -93,7 +95,7 @@ export interface ClaimOptions {
   readonly scan?: number;
 }
 
-function resourceKey(op: Pick<Operation, "resourceType" | "resourceId">): string {
+function resourceKey(op: Pick<Operation, 'resourceType' | 'resourceId'>): string {
   return `${op.resourceType}:${op.resourceId}`;
 }
 
@@ -107,13 +109,20 @@ function resourceKey(op: Pick<Operation, "resourceType" | "resourceId">): string
  * operations on the same domain or zone never run at once, even when two
  * workers claim them in the same instant.
  */
-export async function claimNextOperation(db: Database, options: ClaimOptions): Promise<Operation | null> {
+export async function claimNextOperation(
+  db: Database,
+  options: ClaimOptions,
+): Promise<Operation | null> {
   if (options.kinds.length === 0) return null;
   const leaseSeconds = Math.max(1, Math.ceil(options.leaseMs / 1000));
 
   return db.transaction(async (tx) => {
     const candidates = await tx
-      .select({ id: operations.id, resourceType: operations.resourceType, resourceId: operations.resourceId })
+      .select({
+        id: operations.id,
+        resourceType: operations.resourceType,
+        resourceId: operations.resourceId,
+      })
       .from(operations)
       .where(
         and(
@@ -135,7 +144,7 @@ export async function claimNextOperation(db: Database, options: ClaimOptions): P
       )
       .orderBy(operations.nextRunAt)
       .limit(options.scan ?? 10)
-      .for("update", { skipLocked: true });
+      .for('update', { skipLocked: true });
 
     for (const candidate of candidates) {
       const key = resourceKey(candidate);
@@ -162,7 +171,7 @@ export async function claimNextOperation(db: Database, options: ClaimOptions): P
       const [claimed] = await tx
         .update(operations)
         .set({
-          status: "running",
+          status: 'running',
           leaseOwner: options.workerId,
           leaseExpiresAt: sql`now() + make_interval(secs => ${leaseSeconds})`,
           // A reconciliation pass is not an execution attempt.
@@ -180,7 +189,7 @@ export async function claimNextOperation(db: Database, options: ClaimOptions): P
 export class LeaseLostError extends Error {
   constructor(operationId: string) {
     super(`lease on operation ${operationId} was lost`);
-    this.name = "LeaseLostError";
+    this.name = 'LeaseLostError';
   }
 }
 
@@ -189,14 +198,18 @@ export class LeaseLostError extends Error {
  * before the request, so a crash after sending is recovered by reconciliation.
  * Refuses when the lease has been lost: another worker may be reconciling.
  */
-export async function markSubmitted(db: Database, operationId: string, workerId: string): Promise<void> {
+export async function markSubmitted(
+  db: Database,
+  operationId: string,
+  workerId: string,
+): Promise<void> {
   const [row] = await db
     .update(operations)
     .set({ submittedAt: sql`coalesce(${operations.submittedAt}, now())`, updatedAt: sql`now()` })
     .where(
       and(
         eq(operations.id, operationId),
-        eq(operations.status, "running"),
+        eq(operations.status, 'running'),
         eq(operations.leaseOwner, workerId),
         sql`${operations.leaseExpiresAt} > now()`,
       ),
@@ -206,7 +219,7 @@ export async function markSubmitted(db: Database, operationId: string, workerId:
 }
 
 export interface FinishUpdate {
-  readonly status: Exclude<OperationStatus, "running">;
+  readonly status: Exclude<OperationStatus, 'running'>;
   readonly result?: Record<string, unknown> | null;
   readonly errorCode?: string | null;
   readonly errorMessage?: string | null;
@@ -217,7 +230,7 @@ export interface FinishUpdate {
   readonly incrementReconcileAttempts?: boolean;
 }
 
-const TERMINAL: ReadonlySet<OperationStatus> = new Set(["succeeded", "failed", "manual_review"]);
+const TERMINAL: ReadonlySet<OperationStatus> = new Set(['succeeded', 'failed', 'manual_review']);
 
 /**
  * Leave the `running` state and release the resource lease, in one
@@ -242,7 +255,9 @@ export async function finishOperation(
         errorMessage: update.errorMessage ?? null,
         ...(update.nextRunAt ? { nextRunAt: update.nextRunAt } : {}),
         ...(update.submittedAt === null ? { submittedAt: null } : {}),
-        ...(update.incrementResubmissions ? { resubmissions: sql`${operations.resubmissions} + 1` } : {}),
+        ...(update.incrementResubmissions
+          ? { resubmissions: sql`${operations.resubmissions} + 1` }
+          : {}),
         ...(update.incrementReconcileAttempts
           ? { reconcileAttempts: sql`${operations.reconcileAttempts} + 1` }
           : {}),
@@ -252,7 +267,7 @@ export async function finishOperation(
       .where(
         and(
           eq(operations.id, operationId),
-          eq(operations.status, "running"),
+          eq(operations.status, 'running'),
           eq(operations.leaseOwner, workerId),
         ),
       )
@@ -272,9 +287,14 @@ export async function finishOperation(
     // to the same zone or domain must not run while an earlier write may still
     // land. The lease never expires on its own; reconciliation or a person
     // resolving the review releases it.
-    const inDoubt = update.status === "unknown" || (update.status === "manual_review" && row.submittedAt !== null);
+    const inDoubt =
+      update.status === 'unknown' ||
+      (update.status === 'manual_review' && row.submittedAt !== null);
     if (inDoubt) {
-      await tx.update(operationResourceLeases).set({ expiresAt: sql`'infinity'::timestamptz` }).where(leaseOnThis);
+      await tx
+        .update(operationResourceLeases)
+        .set({ expiresAt: sql`'infinity'::timestamptz` })
+        .where(leaseOnThis);
     } else {
       await tx.delete(operationResourceLeases).where(leaseOnThis);
     }

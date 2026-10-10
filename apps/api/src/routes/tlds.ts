@@ -1,12 +1,12 @@
-import { Router } from "express";
-import type { Request } from "express";
-import { and, asc, eq, sql } from "drizzle-orm";
-import { requireOxyAuth, getOxyUserId, getRequiredOxyUserId } from "@oxy.so/core/server";
-import { isReservedTld, validateNativeTld } from "@tnp/namespace";
-import type { PublicTld, TldProposalEntry } from "@tnp/shared-types";
-import { listTldProposals } from "../registry/tlds.js";
-import { getDb } from "../db/postgres.js";
-import { tldProposals, tlds, users, votes } from "../db/schema/index.js";
+import { Router } from 'express';
+import type { Request } from 'express';
+import { and, asc, eq, sql } from 'drizzle-orm';
+import { requireOxyAuth, getOxyUserId, getRequiredOxyUserId } from '@oxy.so/core/server';
+import { isReservedTld, validateNativeTld } from '@tnp/namespace';
+import type { PublicTld, TldProposalEntry } from '@tnp/shared-types';
+import { listTldProposals } from '../registry/tlds.js';
+import { getDb } from '../db/postgres.js';
+import { tldProposals, tlds, users, votes } from '../db/schema/index.js';
 
 const router = Router();
 
@@ -26,7 +26,7 @@ async function findOrCreateUser(oxyUserId: string): Promise<string> {
 // Reserved TLDs are filtered at read time, not only at write time: a database
 // populated before the namespace policy landed still holds `.com` and `.app`
 // rows, and publishing those is what made clients shadow public names.
-router.get("/", async (_req, res) => {
+router.get('/', async (_req, res) => {
   try {
     // Projected rather than `select()`: the row also carries `proposedById`, a
     // user key a public list has no reason to publish.
@@ -39,7 +39,7 @@ router.get("/", async (_req, res) => {
         createdAt: tlds.createdAt,
       })
       .from(tlds)
-      .where(eq(tlds.status, "active"))
+      .where(eq(tlds.status, 'active'))
       .orderBy(asc(tlds.name));
 
     const body: PublicTld[] = rows
@@ -47,34 +47,34 @@ router.get("/", async (_req, res) => {
       .map((t) => ({ ...t, createdAt: t.createdAt.toISOString() }));
     res.json(body);
   } catch (err) {
-    console.error("List TLDs error:", err);
-    res.status(500).json({ error: "Failed to list TLDs" });
+    console.error('List TLDs error:', err);
+    res.status(500).json({ error: 'Failed to list TLDs' });
   }
 });
 
 // POST /tlds/propose -- propose a new TLD (auth required)
-router.post("/propose", requireOxyAuth, async (req, res) => {
+router.post('/propose', requireOxyAuth, async (req, res) => {
   try {
     const { tld, reason } = req.body;
 
-    if (!tld || typeof tld !== "string") {
-      res.status(400).json({ error: "tld is required" });
+    if (!tld || typeof tld !== 'string') {
+      res.status(400).json({ error: 'tld is required' });
       return;
     }
-    if (!reason || typeof reason !== "string") {
-      res.status(400).json({ error: "reason is required" });
+    if (!reason || typeof reason !== 'string') {
+      res.status(400).json({ error: 'reason is required' });
       return;
     }
 
-    const name = tld.toLowerCase().replace(/^\./, "");
+    const name = tld.toLowerCase().replace(/^\./, '');
 
     // Rule N3: a native TLD passes the reserved check at proposal time as well
     // as at approval time. Proposing `.com` fails here rather than surviving to
     // a vote and depending on whoever approves it to catch it.
     const policy = validateNativeTld(name);
     if (!policy.ok) {
-      res.status(policy.reason === "reserved" ? 403 : 400).json({
-        error: policy.reason === "reserved" ? "TLD_RESERVED" : "TLD_INVALID",
+      res.status(policy.reason === 'reserved' ? 403 : 400).json({
+        error: policy.reason === 'reserved' ? 'TLD_RESERVED' : 'TLD_INVALID',
         detail: policy.detail,
       });
       return;
@@ -87,7 +87,7 @@ router.post("/propose", requireOxyAuth, async (req, res) => {
     // cannot both succeed.
     const claimed = await db
       .insert(tlds)
-      .values({ name, status: "proposed", proposedById })
+      .values({ name, status: 'proposed', proposedById })
       .onConflictDoNothing({ target: tlds.name })
       .returning({ id: tlds.id });
 
@@ -103,19 +103,19 @@ router.post("/propose", requireOxyAuth, async (req, res) => {
 
     res.status(201).json(proposal);
   } catch (err) {
-    console.error("Propose TLD error:", err);
-    res.status(500).json({ error: "Failed to propose TLD" });
+    console.error('Propose TLD error:', err);
+    res.status(500).json({ error: 'Failed to propose TLD' });
   }
 });
 
 // GET /tlds/proposals -- proposals with scores, newest-highest first
-router.get("/proposals", async (req, res) => {
+router.get('/proposals', async (req, res) => {
   try {
     const body: TldProposalEntry[] = await listTldProposals(getDb(), getOxyUserId(req) ?? null);
     res.json(body);
   } catch (err) {
-    console.error("List proposals error:", err);
-    res.status(500).json({ error: "Failed to list proposals" });
+    console.error('List proposals error:', err);
+    res.status(500).json({ error: 'Failed to list proposals' });
   }
 });
 
@@ -133,42 +133,43 @@ async function proposalScore(proposalId: string): Promise<number> {
 }
 
 // POST /tlds/proposals/:id/vote (auth required)
-router.post(
-  "/proposals/:id/vote",
-  requireOxyAuth,
-  async (req: Request<{ id: string }>, res) => {
+router.post('/proposals/:id/vote', requireOxyAuth, async (req: Request<{ id: string }>, res) => {
   try {
     const { direction } = req.body;
-    if (direction !== "up" && direction !== "down") {
+    if (direction !== 'up' && direction !== 'down') {
       res.status(400).json({ error: "direction must be 'up' or 'down'" });
       return;
     }
     if (!UUID_RE.test(req.params.id)) {
-      res.status(404).json({ error: "Proposal not found" });
+      res.status(404).json({ error: 'Proposal not found' });
       return;
     }
 
     const db = getDb();
 
     const [proposal] = await db
-      .select({ id: tldProposals.id, status: tldProposals.status, proposedById: tldProposals.proposedById })
+      .select({
+        id: tldProposals.id,
+        status: tldProposals.status,
+        proposedById: tldProposals.proposedById,
+      })
       .from(tldProposals)
       .where(eq(tldProposals.id, req.params.id))
       .limit(1);
 
     if (!proposal) {
-      res.status(404).json({ error: "Proposal not found" });
+      res.status(404).json({ error: 'Proposal not found' });
       return;
     }
-    if (proposal.status !== "open") {
-      res.status(400).json({ error: "Can only vote on open proposals" });
+    if (proposal.status !== 'open') {
+      res.status(400).json({ error: 'Can only vote on open proposals' });
       return;
     }
 
     const userId = await findOrCreateUser(getRequiredOxyUserId(req));
 
     if (proposal.proposedById === userId) {
-      res.status(403).json({ error: "Cannot vote on your own proposal" });
+      res.status(403).json({ error: 'Cannot vote on your own proposal' });
       return;
     }
 
@@ -183,22 +184,18 @@ router.post(
         set: { direction },
       });
 
-      res.json({ score: await proposalScore(proposal.id), userVote: direction });
-    } catch (err) {
-      console.error("Vote error:", err);
-      res.status(500).json({ error: "Failed to vote" });
-    }
-  },
-);
+    res.json({ score: await proposalScore(proposal.id), userVote: direction });
+  } catch (err) {
+    console.error('Vote error:', err);
+    res.status(500).json({ error: 'Failed to vote' });
+  }
+});
 
 // DELETE /tlds/proposals/:id/vote (auth required)
-router.delete(
-  "/proposals/:id/vote",
-  requireOxyAuth,
-  async (req: Request<{ id: string }>, res) => {
+router.delete('/proposals/:id/vote', requireOxyAuth, async (req: Request<{ id: string }>, res) => {
   try {
     if (!UUID_RE.test(req.params.id)) {
-      res.status(404).json({ error: "Proposal not found" });
+      res.status(404).json({ error: 'Proposal not found' });
       return;
     }
 
@@ -211,22 +208,19 @@ router.delete(
       .limit(1);
 
     if (!proposal) {
-      res.status(404).json({ error: "Proposal not found" });
+      res.status(404).json({ error: 'Proposal not found' });
       return;
     }
 
     const userId = await findOrCreateUser(getRequiredOxyUserId(req));
 
-    await db
-      .delete(votes)
-      .where(and(eq(votes.proposalId, proposal.id), eq(votes.userId, userId)));
+    await db.delete(votes).where(and(eq(votes.proposalId, proposal.id), eq(votes.userId, userId)));
 
-      res.json({ score: await proposalScore(proposal.id), userVote: null });
-    } catch (err) {
-      console.error("Remove vote error:", err);
-      res.status(500).json({ error: "Failed to remove vote" });
-    }
-  },
-);
+    res.json({ score: await proposalScore(proposal.id), userVote: null });
+  } catch (err) {
+    console.error('Remove vote error:', err);
+    res.status(500).json({ error: 'Failed to remove vote' });
+  }
+});
 
 export default router;

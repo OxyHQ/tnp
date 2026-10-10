@@ -14,7 +14,7 @@ export {
   type NativeDomainParse,
   type TldRejection,
   type TldValidation,
-} from "./policy.js";
+} from './policy.js';
 
 export {
   isNativeNameServed,
@@ -25,4 +25,4 @@ export {
   NATIVE_RENEWAL_WINDOW_DAYS,
   NATIVE_TERM_YEARS,
   type NativeExpiryState,
-} from "./expiry.js";
+} from './expiry.js';

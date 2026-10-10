@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
-import type { ServicesStatus } from "@tnp/shared-types";
-import { apiRequest } from "../api";
-import { errorStatus, isAbort } from "./errors";
-import { servicesAvailability, type ServicesAvailability } from "./status";
+import { useCallback, useEffect, useState } from 'react';
+import type { ServicesStatus } from '@tnp/shared-types';
+import { apiRequest } from '../api';
+import { errorStatus, isAbort } from './errors';
+import { servicesAvailability, type ServicesAvailability } from './status';
 
 /**
  * `GET /services/status`, which drives the whole services area.
@@ -12,16 +12,16 @@ import { servicesAvailability, type ServicesAvailability } from "./status";
  * is not available yet. Nothing about services is shown on a guess.
  */
 export function useServicesStatus(): { availability: ServicesAvailability; recheck: () => void } {
-  const [availability, setAvailability] = useState<ServicesAvailability>({ kind: "loading" });
+  const [availability, setAvailability] = useState<ServicesAvailability>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
-    setAvailability({ kind: "loading" });
-    apiRequest<ServicesStatus>("GET", "/services/status", { signal: controller.signal })
+    setAvailability({ kind: 'loading' });
+    apiRequest<ServicesStatus>('GET', '/services/status', { signal: controller.signal })
       .then((status) => {
         // A 200 that is not the contract (an SPA fallback page, say) is not a status.
-        if (status === null || typeof status !== "object" || typeof status.catalog !== "boolean") {
+        if (status === null || typeof status !== 'object' || typeof status.catalog !== 'boolean') {
           setAvailability(servicesAvailability({ httpStatus: 404 }));
           return;
         }

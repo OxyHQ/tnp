@@ -7,14 +7,14 @@
  * dropped in by accident.
  */
 
-import type { Database } from "../db/postgres.js";
-import { auditEvents } from "../db/schema/index.js";
-import type { DbOrTx } from "./operations/store.js";
+import type { Database } from '../db/postgres.js';
+import { auditEvents } from '../db/schema/index.js';
+import type { DbOrTx } from './operations/store.js';
 
 export type AuditActor =
-  | { readonly kind: "user"; readonly oxyUserId: string }
-  | { readonly kind: "support"; readonly oxyUserId: string }
-  | { readonly kind: "system" };
+  | { readonly kind: 'user'; readonly oxyUserId: string }
+  | { readonly kind: 'support'; readonly oxyUserId: string }
+  | { readonly kind: 'system' };
 
 export interface AuditEvent {
   readonly actor: AuditActor;
@@ -29,7 +29,7 @@ export interface AuditEvent {
 export async function recordAudit(db: DbOrTx | Database, event: AuditEvent): Promise<void> {
   await db.insert(auditEvents).values({
     actorKind: event.actor.kind,
-    actorOxyUserId: event.actor.kind === "system" ? null : event.actor.oxyUserId,
+    actorOxyUserId: event.actor.kind === 'system' ? null : event.actor.oxyUserId,
     action: event.action,
     resourceType: event.resourceType,
     resourceId: event.resourceId,

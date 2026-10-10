@@ -6,11 +6,11 @@
  * way round. The test-only memory adapter is never registered here.
  */
 
-import type { Database } from "../../db/postgres.js";
-import { namecheapFactory } from "./namecheap/factory.js";
-import { createPostgresQuotaGate } from "./rateLimit.js";
-import { ProviderRegistry, type AdapterFactory } from "./registry.js";
-import { createEnvSecretResolver } from "./secrets.js";
+import type { Database } from '../../db/postgres.js';
+import { namecheapFactory } from './namecheap/factory.js';
+import { createPostgresQuotaGate } from './rateLimit.js';
+import { ProviderRegistry, type AdapterFactory } from './registry.js';
+import { createEnvSecretResolver } from './secrets.js';
 
 export const PRODUCTION_ADAPTERS: readonly AdapterFactory[] = [namecheapFactory];
 

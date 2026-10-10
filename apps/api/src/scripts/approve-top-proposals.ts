@@ -6,16 +6,16 @@
  * namespace policy landed could still be sitting in the table.
  */
 
-import { desc, eq, sql } from "drizzle-orm";
-import { validateNativeTld } from "@tnp/namespace";
-import { connectPostgres, closePostgres, getDb } from "../db/postgres.js";
-import { tldProposals, tlds, votes } from "../db/schema/index.js";
+import { desc, eq, sql } from 'drizzle-orm';
+import { validateNativeTld } from '@tnp/namespace';
+import { connectPostgres, closePostgres, getDb } from '../db/postgres.js';
+import { tldProposals, tlds, votes } from '../db/schema/index.js';
 
 const DEFAULT_LIMIT = 5;
 const MIN_SCORE = 1;
 
 async function main(): Promise<void> {
-  const limit = parseInt(process.argv[2] ?? "", 10) || DEFAULT_LIMIT;
+  const limit = parseInt(process.argv[2] ?? '', 10) || DEFAULT_LIMIT;
 
   await connectPostgres();
   const db = getDb();
@@ -31,7 +31,7 @@ async function main(): Promise<void> {
   const candidates = await db
     .select({ id: tldProposals.id, tld: tldProposals.tld, score })
     .from(tldProposals)
-    .where(eq(tldProposals.status, "open"))
+    .where(eq(tldProposals.status, 'open'))
     .orderBy(desc(score))
     .limit(limit);
 
@@ -48,18 +48,18 @@ async function main(): Promise<void> {
       console.log(`  REFUSED .${candidate.tld} — ${policy.detail}`);
       await db
         .update(tldProposals)
-        .set({ status: "rejected", updatedAt: sql`now()` })
+        .set({ status: 'rejected', updatedAt: sql`now()` })
         .where(eq(tldProposals.id, candidate.id));
       continue;
     }
 
     await db
       .update(tlds)
-      .set({ status: "active", updatedAt: sql`now()` })
+      .set({ status: 'active', updatedAt: sql`now()` })
       .where(eq(tlds.name, candidate.tld));
     await db
       .update(tldProposals)
-      .set({ status: "approved", updatedAt: sql`now()` })
+      .set({ status: 'approved', updatedAt: sql`now()` })
       .where(eq(tldProposals.id, candidate.id));
 
     console.log(`  approved .${candidate.tld} (score ${candidate.score})`);

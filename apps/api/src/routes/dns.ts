@@ -1,10 +1,10 @@
-import { Router } from "express";
-import { eq } from "drizzle-orm";
-import { config } from "../config.js";
-import { getDb } from "../db/postgres.js";
-import { tlds } from "../db/schema/index.js";
-import { isReservedTld } from "@tnp/namespace";
-import { decideResolution, loadNameFacts } from "../registry/resolve.js";
+import { Router } from 'express';
+import { eq } from 'drizzle-orm';
+import { config } from '../config.js';
+import { getDb } from '../db/postgres.js';
+import { tlds } from '../db/schema/index.js';
+import { isReservedTld } from '@tnp/namespace';
+import { decideResolution, loadNameFacts } from '../registry/resolve.js';
 
 const router = Router();
 
@@ -18,13 +18,16 @@ const router = Router();
  * addition, and resolvers that predate it still read empty `answers` the way
  * they always have.
  */
-router.get("/resolve", async (req, res) => {
+router.get('/resolve', async (req, res) => {
   try {
-    const fqdn = String(req.query.name || "").toLowerCase().trim().replace(/\.$/, "");
-    const qtype = String(req.query.type || "A").toUpperCase();
+    const fqdn = String(req.query.name || '')
+      .toLowerCase()
+      .trim()
+      .replace(/\.$/, '');
+    const qtype = String(req.query.type || 'A').toUpperCase();
 
     if (!fqdn) {
-      res.status(400).json({ error: "name query parameter is required" });
+      res.status(400).json({ error: 'name query parameter is required' });
       return;
     }
 
@@ -37,8 +40,8 @@ router.get("/resolve", async (req, res) => {
       }),
     );
   } catch (err) {
-    console.error("DNS resolve error:", err);
-    res.status(500).json({ error: "Failed to resolve" });
+    console.error('DNS resolve error:', err);
+    res.status(500).json({ error: 'Failed to resolve' });
   }
 });
 
@@ -51,17 +54,17 @@ router.get("/resolve", async (req, res) => {
  * re-check the reserved set locally too — they do not have to trust the server
  * to have got its own policy right — but the server must not publish it either.
  */
-router.get("/tlds", async (_req, res) => {
+router.get('/tlds', async (_req, res) => {
   try {
     const rows = await getDb()
       .select({ name: tlds.name, custom: tlds.custom })
       .from(tlds)
-      .where(eq(tlds.status, "active"));
+      .where(eq(tlds.status, 'active'));
 
     res.json(rows.filter((t) => !isReservedTld(t.name)));
   } catch (err) {
-    console.error("DNS TLDs error:", err);
-    res.status(500).json({ error: "Failed to list TLDs" });
+    console.error('DNS TLDs error:', err);
+    res.status(500).json({ error: 'Failed to list TLDs' });
   }
 });
 

@@ -1,27 +1,27 @@
-import { useTranslation } from "react-i18next";
-import { Link, Outlet, useLocation } from "react-router-dom";
-import { useAuth } from "../lib/auth";
+import { useTranslation } from 'react-i18next';
+import { Link, Outlet, useLocation } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
 
 const NAV_LINKS = [
-  { key: "nav.explore", href: "/explore" },
-  { key: "nav.domains", href: "/domains" },
-  { key: "nav.network", href: "/network" },
-  { key: "nav.propose", href: "/propose" },
-  { key: "nav.install", href: "/install" },
+  { key: 'nav.explore', href: '/explore' },
+  { key: 'nav.domains', href: '/domains' },
+  { key: 'nav.network', href: '/network' },
+  { key: 'nav.propose', href: '/propose' },
+  { key: 'nav.install', href: '/install' },
   // The optional services area comes after every TNP Network entry.
-  { key: "nav.services", href: "/services" },
+  { key: 'nav.services', href: '/services' },
 ] as const;
 
 const LANGUAGES = [
-  { code: "en", label: "EN" },
-  { code: "zh", label: "中文" },
-  { code: "es", label: "ES" },
-  { code: "hi", label: "हि" },
-  { code: "fr", label: "FR" },
+  { code: 'en', label: 'EN' },
+  { code: 'zh', label: '中文' },
+  { code: 'es', label: 'ES' },
+  { code: 'hi', label: 'हि' },
+  { code: 'fr', label: 'FR' },
 ] as const;
 
 export default function Layout() {
-  const { t, i18n } = useTranslation("common");
+  const { t, i18n } = useTranslation('common');
   const { isAuthenticated, signIn, signOut } = useAuth();
   const location = useLocation();
 
@@ -29,7 +29,10 @@ export default function Layout() {
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="mx-auto w-full max-w-[1200px] px-4 lg:px-6">
-          <nav aria-label="Main navigation" className="flex items-center justify-between py-3 lg:py-4">
+          <nav
+            aria-label="Main navigation"
+            className="flex items-center justify-between py-3 lg:py-4"
+          >
             <div className="flex items-center gap-6">
               <Link
                 to="/"
@@ -43,9 +46,10 @@ export default function Layout() {
                     <Link
                       to={link.href}
                       className={`font-mono text-sm transition-colors ${
-                        location.pathname === link.href || location.pathname.startsWith(`${link.href}/`)
-                          ?"text-primary-text"
-                          : "text-muted-foreground/70 hover:text-muted-foreground"
+                        location.pathname === link.href ||
+                        location.pathname.startsWith(`${link.href}/`)
+                          ? 'text-primary-text'
+                          : 'text-muted-foreground/70 hover:text-muted-foreground'
                       }`}
                     >
                       [{t(link.key)}]
@@ -73,13 +77,13 @@ export default function Layout() {
                     to="/dashboard"
                     className="font-mono text-sm text-muted-foreground transition-colors hover:text-foreground"
                   >
-                    [{t("nav.dashboard")}]
+                    [{t('nav.dashboard')}]
                   </Link>
                   <button
                     onClick={signOut}
                     className="cursor-pointer font-mono text-sm text-muted-foreground/70 transition-colors hover:text-muted-foreground"
                   >
-                    [{t("auth.signOut")}]
+                    [{t('auth.signOut')}]
                   </button>
                 </>
               ) : (
@@ -88,13 +92,13 @@ export default function Layout() {
                     onClick={() => signIn()}
                     className="cursor-pointer font-mono text-sm text-muted-foreground transition-colors hover:text-foreground"
                   >
-                    [{t("auth.signIn")}]
+                    [{t('auth.signIn')}]
                   </button>
                   <button
                     onClick={() => signIn()}
                     className="inline-flex h-8 cursor-pointer items-center justify-center rounded-md border border-primary/30 bg-primary/10 px-3 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20"
                   >
-                    {t("auth.startForFree")}
+                    {t('auth.startForFree')}
                   </button>
                 </>
               )}
@@ -111,40 +115,114 @@ export default function Layout() {
         <div className="mx-auto w-full max-w-[1200px] px-4 py-12 lg:px-6">
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
             <div>
-              <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">{t("footer.tnp")}</p>
+              <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">
+                {t('footer.tnp')}
+              </p>
               <div className="space-y-2.5 font-mono text-sm">
-                <Link to="/" className="block text-muted-foreground transition-colors hover:text-foreground">{t("footer.home")}</Link>
-                <Link to="/explore" className="block text-muted-foreground transition-colors hover:text-foreground">{t("footer.explore")}</Link>
-                <Link to="/domains" className="block text-muted-foreground transition-colors hover:text-foreground">{t("footer.domains")}</Link>
-                <a href="https://oxy.so/tnp" className="block text-muted-foreground transition-colors hover:text-foreground">{t("footer.aboutTnp")}</a>
+                <Link
+                  to="/"
+                  className="block text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {t('footer.home')}
+                </Link>
+                <Link
+                  to="/explore"
+                  className="block text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {t('footer.explore')}
+                </Link>
+                <Link
+                  to="/domains"
+                  className="block text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {t('footer.domains')}
+                </Link>
+                <a
+                  href="https://oxy.so/tnp"
+                  className="block text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {t('footer.aboutTnp')}
+                </a>
               </div>
             </div>
             <div>
-              <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">{t("footer.resources")}</p>
+              <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">
+                {t('footer.resources')}
+              </p>
               <div className="space-y-2.5 font-mono text-sm">
-                <Link to="/install" className="block text-muted-foreground transition-colors hover:text-foreground">{t("footer.install")}</Link>
-                <Link to="/propose" className="block text-muted-foreground transition-colors hover:text-foreground">{t("footer.proposeTld")}</Link>
-                <a href="https://github.com/OxyHQ/tnp" target="_blank" rel="noopener noreferrer" className="block text-muted-foreground transition-colors hover:text-foreground">{t("footer.github")}</a>
+                <Link
+                  to="/install"
+                  className="block text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {t('footer.install')}
+                </Link>
+                <Link
+                  to="/propose"
+                  className="block text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {t('footer.proposeTld')}
+                </Link>
+                <a
+                  href="https://github.com/OxyHQ/tnp"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {t('footer.github')}
+                </a>
               </div>
             </div>
             <div>
-              <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">{t("footer.oxy")}</p>
+              <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">
+                {t('footer.oxy')}
+              </p>
               <div className="space-y-2.5 font-mono text-sm">
-                <a href="https://oxy.so" target="_blank" rel="noopener noreferrer" className="block text-muted-foreground transition-colors hover:text-foreground">{t("footer.oxySo")}</a>
-                <a href="https://accounts.oxy.so" target="_blank" rel="noopener noreferrer" className="block text-muted-foreground transition-colors hover:text-foreground">{t("footer.accounts")}</a>
-                <a href="https://oxy.so/tnp" className="block text-muted-foreground transition-colors hover:text-foreground">{t("footer.tnpOnOxy")}</a>
+                <a
+                  href="https://oxy.so"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {t('footer.oxySo')}
+                </a>
+                <a
+                  href="https://accounts.oxy.so"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {t('footer.accounts')}
+                </a>
+                <a
+                  href="https://oxy.so/tnp"
+                  className="block text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {t('footer.tnpOnOxy')}
+                </a>
               </div>
             </div>
             <div>
-              <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">{t("footer.legal")}</p>
+              <p className="mb-4 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">
+                {t('footer.legal')}
+              </p>
               <div className="space-y-2.5 font-mono text-sm">
-                <a href="https://oxy.so/privacy" className="block text-muted-foreground transition-colors hover:text-foreground">{t("footer.privacy")}</a>
-                <a href="https://oxy.so/terms" className="block text-muted-foreground transition-colors hover:text-foreground">{t("footer.terms")}</a>
+                <a
+                  href="https://oxy.so/privacy"
+                  className="block text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {t('footer.privacy')}
+                </a>
+                <a
+                  href="https://oxy.so/terms"
+                  className="block text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {t('footer.terms')}
+                </a>
               </div>
             </div>
           </div>
           <div className="mt-12 text-center font-mono text-xs text-muted-foreground/70">
-            {t("footer.madeWithLove")}
+            {t('footer.madeWithLove')}
           </div>
         </div>
       </footer>

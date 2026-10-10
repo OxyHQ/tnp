@@ -6,6 +6,8 @@ test('relay uses the canonical activity region prefix for Cloudflare PoPs', () =
 });
 
 test('a visitor country or address cannot become an activity location', () => {
-  expect(requestEdgeRegion(new Headers({ 'cf-ipcountry': 'US', 'cf-connecting-ip': '192.0.2.1' }))).toBeUndefined();
+  expect(
+    requestEdgeRegion(new Headers({ 'cf-ipcountry': 'US', 'cf-connecting-ip': '192.0.2.1' })),
+  ).toBeUndefined();
   expect(requestEdgeRegion(new Headers({ 'cf-ray': 'invalid' }))).toBeUndefined();
 });

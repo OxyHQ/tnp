@@ -1,8 +1,8 @@
-import { eq } from "drizzle-orm";
-import { isReservedTld } from "@tnp/namespace";
-import { connectPostgres, closePostgres, getDb } from "./db/postgres.js";
-import { runMigrations } from "./db/migrate.js";
-import { tlds } from "./db/schema/index.js";
+import { eq } from 'drizzle-orm';
+import { isReservedTld } from '@tnp/namespace';
+import { connectPostgres, closePostgres, getDb } from './db/postgres.js';
+import { runMigrations } from './db/migrate.js';
+import { tlds } from './db/schema/index.js';
 
 /**
  * Only TNP-native TLDs.
@@ -12,7 +12,7 @@ import { tlds } from "./db/schema/index.js";
  * They are refused by the registry now; the migration for names already
  * registered under them is docs/architecture/naming.md §6.
  */
-export const initialTLDs = [{ name: "ox", status: "active" as const, custom: true }];
+export const initialTLDs = [{ name: 'ox', status: 'active' as const, custom: true }];
 
 /**
  * Idempotent. As an upsert it can run on every boot without depending on the
@@ -39,12 +39,12 @@ export async function runSeed(): Promise<void> {
   }
 }
 
-const isMain = process.argv[1]?.endsWith("seed.ts");
+const isMain = process.argv[1]?.endsWith('seed.ts');
 if (isMain) {
   await runMigrations();
   await connectPostgres();
   await runSeed();
-  console.log("Seed complete");
+  console.log('Seed complete');
   await closePostgres();
   process.exit(0);
 }

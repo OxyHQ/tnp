@@ -11,11 +11,11 @@
  * reserve is kept for renewals and reconciliation (services.md §7).
  */
 
-import { and, eq, sql } from "drizzle-orm";
-import type { Database } from "../../db/postgres.js";
-import { providerAccounts, providerRateWindows } from "../../db/schema/index.js";
-import { ProviderError } from "./errors.js";
-import type { QuotaGate, QuotaPriority } from "./registry.js";
+import { and, eq, sql } from 'drizzle-orm';
+import type { Database } from '../../db/postgres.js';
+import { providerAccounts, providerRateWindows } from '../../db/schema/index.js';
+import { ProviderError } from './errors.js';
+import type { QuotaGate, QuotaPriority } from './registry.js';
 
 export interface QuotaLimits {
   readonly perMinute: number;
@@ -33,16 +33,21 @@ export interface QuotaLimits {
 export const DEFAULT_LIMITS: Readonly<Record<string, QuotaLimits>> = {
   namecheap: { perMinute: 50, perHour: 700, perDay: 8000, criticalReserve: 0.2 },
 };
-const FALLBACK_LIMITS: QuotaLimits = { perMinute: 10, perHour: 100, perDay: 1000, criticalReserve: 0.2 };
+const FALLBACK_LIMITS: QuotaLimits = {
+  perMinute: 10,
+  perHour: 100,
+  perDay: 1000,
+  criticalReserve: 0.2,
+};
 
 const WINDOWS = [
-  { kind: "minute", limit: (l: QuotaLimits) => l.perMinute, ms: 60_000 },
-  { kind: "hour", limit: (l: QuotaLimits) => l.perHour, ms: 3_600_000 },
-  { kind: "day", limit: (l: QuotaLimits) => l.perDay, ms: 86_400_000 },
+  { kind: 'minute', limit: (l: QuotaLimits) => l.perMinute, ms: 60_000 },
+  { kind: 'hour', limit: (l: QuotaLimits) => l.perHour, ms: 3_600_000 },
+  { kind: 'day', limit: (l: QuotaLimits) => l.perDay, ms: 86_400_000 },
 ] as const;
 
 export function capacityFor(limit: number, priority: QuotaPriority, reserve: number): number {
-  return priority === "critical" ? limit : Math.floor(limit * (1 - reserve));
+  return priority === 'critical' ? limit : Math.floor(limit * (1 - reserve));
 }
 
 export function createPostgresQuotaGate(
@@ -57,7 +62,8 @@ export function createPostgresQuotaGate(
           .from(providerAccounts)
           .where(eq(providerAccounts.id, accountId))
           .limit(1);
-        if (!account) throw new ProviderError("credentials", `provider account ${accountId} does not exist`);
+        if (!account)
+          throw new ProviderError('credentials', `provider account ${accountId} does not exist`);
         const limits = limitsByAdapter[account.adapter] ?? FALLBACK_LIMITS;
 
         // `now()` is fixed for the transaction, so all three windows are
@@ -84,16 +90,20 @@ export function createPostgresQuotaGate(
             ),
           )
           .orderBy(providerRateWindows.window)
-          .for("update");
+          .for('update');
 
         for (const w of WINDOWS) {
           const row = rows.find((r) => r.window === w.kind);
           const capacity = capacityFor(w.limit(limits), priority, limits.criticalReserve);
           if (!row || row.count >= capacity) {
-            throw new ProviderError("rate_limited", `${priority} quota for ${w.kind} exhausted on ${accountId}`, {
-              submitted: false,
-              retryAfterMs: w.ms - (Date.now() % w.ms),
-            });
+            throw new ProviderError(
+              'rate_limited',
+              `${priority} quota for ${w.kind} exhausted on ${accountId}`,
+              {
+                submitted: false,
+                retryAfterMs: w.ms - (Date.now() % w.ms),
+              },
+            );
           }
         }
 

@@ -1,13 +1,13 @@
 interface TLDBadgeProps {
   name: string;
-  status?: "active" | "proposed" | "pending";
+  status?: 'active' | 'proposed' | 'pending';
 }
 
-export default function TLDBadge({ name, status = "active" }: TLDBadgeProps) {
+export default function TLDBadge({ name, status = 'active' }: TLDBadgeProps) {
   const statusColors = {
-    active: "border-primary/30 text-primary-text",
-    proposed: "border-warning-subtle text-warning-text",
-    pending: "border-muted/30 text-muted-foreground/70",
+    active: 'border-primary/30 text-primary-text',
+    proposed: 'border-warning-subtle text-warning-text',
+    pending: 'border-muted/30 text-muted-foreground/70',
   };
 
   return (

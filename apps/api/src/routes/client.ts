@@ -1,12 +1,12 @@
-import { Router } from "express";
-import { config } from "../config.js";
+import { Router } from 'express';
+import { config } from '../config.js';
 
 const router = Router();
 
-const VERSION = "0.2.0";
-const REPO = "OxyHQ/tnp";
+const VERSION = '0.2.0';
+const REPO = 'OxyHQ/tnp';
 const BASE = `https://github.com/${REPO}/releases/download/v${VERSION}`;
-const DNS_HOST = "dns.tnp.network";
+const DNS_HOST = 'dns.tnp.network';
 
 // Installer scripts embedded as builders so the API container is self-contained
 // and does not depend on files from packages/client/ at runtime. The public DNS
@@ -823,7 +823,7 @@ Main
 }
 
 // GET /client/latest -- returns latest daemon version + download URLs per platform
-router.get("/latest", (_req, res) => {
+router.get('/latest', (_req, res) => {
   res.json({
     version: VERSION,
     dns: {
@@ -831,27 +831,27 @@ router.get("/latest", (_req, res) => {
       host: DNS_HOST,
     },
     platforms: {
-      "darwin-arm64": `${BASE}/tnp-darwin-arm64`,
-      "darwin-x64": `${BASE}/tnp-darwin-x64`,
-      "linux-x64": `${BASE}/tnp-linux-x64`,
-      "linux-arm64": `${BASE}/tnp-linux-arm64`,
-      "windows-x64": `${BASE}/tnp-windows-x64.exe`,
+      'darwin-arm64': `${BASE}/tnp-darwin-arm64`,
+      'darwin-x64': `${BASE}/tnp-darwin-x64`,
+      'linux-x64': `${BASE}/tnp-linux-x64`,
+      'linux-arm64': `${BASE}/tnp-linux-arm64`,
+      'windows-x64': `${BASE}/tnp-windows-x64.exe`,
     },
     install: {
-      unix: "curl -fsSL https://get.tnp.network | sh",
-      windows: "irm https://get.tnp.network/ps | iex",
+      unix: 'curl -fsSL https://get.tnp.network | sh',
+      windows: 'irm https://get.tnp.network/ps | iex',
     },
   });
 });
 
 // GET /client/install.sh -- serves the Unix installer script
-router.get("/install.sh", (_req, res) => {
-  res.type("text/plain").send(buildInstallSh(config.parkingIp));
+router.get('/install.sh', (_req, res) => {
+  res.type('text/plain').send(buildInstallSh(config.parkingIp));
 });
 
 // GET /client/install.ps1 -- serves the Windows installer script
-router.get("/install.ps1", (_req, res) => {
-  res.type("text/plain").send(buildInstallPs1(config.parkingIp));
+router.get('/install.ps1', (_req, res) => {
+  res.type('text/plain').send(buildInstallPs1(config.parkingIp));
 });
 
 export default router;

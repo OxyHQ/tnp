@@ -8,7 +8,7 @@
  * recent enough to have been one of the last three.
  */
 
-import type { ServiceNodeStatus } from "@tnp/shared-types";
+import type { ServiceNodeStatus } from '@tnp/shared-types';
 
 /** Three missed 30-second heartbeats. */
 export const SERVICE_NODE_STALE_AFTER_MS = 90_000;
@@ -19,11 +19,11 @@ export interface NodeLiveness {
 }
 
 export function isServiceNodeOnline(node: NodeLiveness | null, now: Date): boolean {
-  if (!node || node.status !== "online") return false;
+  if (!node || node.status !== 'online') return false;
   return now.getTime() - node.lastSeen.getTime() <= SERVICE_NODE_STALE_AFTER_MS;
 }
 
 /** The status to publish: `online` only while the heartbeat is fresh. */
 export function effectiveServiceNodeStatus(node: NodeLiveness, now: Date): ServiceNodeStatus {
-  return isServiceNodeOnline(node, now) ? "online" : "offline";
+  return isServiceNodeOnline(node, now) ? 'online' : 'offline';
 }

@@ -5,11 +5,11 @@
  * every other Oxy backend.
  */
 
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import { config } from "../config.js";
-import { DATABASE_CASING } from "./casing.js";
-import * as schema from "./schema/index.js";
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { config } from '../config.js';
+import { DATABASE_CASING } from './casing.js';
+import * as schema from './schema/index.js';
 
 export type Database = ReturnType<typeof createDb>;
 
@@ -30,9 +30,9 @@ export async function connectPostgres(): Promise<Database> {
 
   if (!config.databaseUrl) {
     throw new Error(
-      "DATABASE_URL is not set. Start a local Postgres with:\n" +
-        "  docker run -d --name tnp-postgres -p 5434:5432 -e POSTGRES_PASSWORD=tnp -e POSTGRES_DB=tnp postgres:17\n" +
-        "then set DATABASE_URL in apps/api/.env.",
+      'DATABASE_URL is not set. Start a local Postgres with:\n' +
+        '  docker run -d --name tnp-postgres -p 5434:5432 -e POSTGRES_PASSWORD=tnp -e POSTGRES_DB=tnp postgres:17\n' +
+        'then set DATABASE_URL in apps/api/.env.',
     );
   }
 
@@ -66,7 +66,7 @@ export async function connectPostgres(): Promise<Database> {
  */
 export function getDb(): Database {
   if (!db) {
-    throw new Error("getDb() called before connectPostgres() resolved");
+    throw new Error('getDb() called before connectPostgres() resolved');
   }
   return db;
 }

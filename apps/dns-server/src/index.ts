@@ -1,18 +1,22 @@
-import { startEcosystemActivity, recordTransport, stopEcosystemActivity } from './ecosystemActivity.js';
-import { DnsProxy } from "../../../packages/client/src/proxy";
-import type { DnsProxyConfig } from "../../../packages/client/src/config";
+import {
+  startEcosystemActivity,
+  recordTransport,
+  stopEcosystemActivity,
+} from './ecosystemActivity.js';
+import { DnsProxy } from '../../../packages/client/src/proxy';
+import type { DnsProxyConfig } from '../../../packages/client/src/config';
 
 const config: DnsProxyConfig = {
-  listenAddr: process.env.TNP_LISTEN_ADDR || "0.0.0.0",
+  listenAddr: process.env.TNP_LISTEN_ADDR || '0.0.0.0',
   listenPort: Number(process.env.TNP_LISTEN_PORT) || 5353,
-  apiBaseUrl: process.env.TNP_API_URL || "https://api.tnp.network",
+  apiBaseUrl: process.env.TNP_API_URL || 'https://api.tnp.network',
   cacheMaxEntries: Number(process.env.TNP_CACHE_MAX_ENTRIES) || 10_000,
-  upstreamDns: process.env.TNP_UPSTREAM_DNS || "1.1.1.1,8.8.8.8",
+  upstreamDns: process.env.TNP_UPSTREAM_DNS || '1.1.1.1,8.8.8.8',
 };
 
 const proxy = new DnsProxy(config, recordTransport);
 
-console.log("[tnp-dns] starting public DNS server...");
+console.log('[tnp-dns] starting public DNS server...');
 console.log(`[tnp-dns] listen: ${config.listenAddr}:${config.listenPort}`);
 console.log(`[tnp-dns] API: ${config.apiBaseUrl}`);
 console.log(`[tnp-dns] upstream: ${config.upstreamDns}`);
@@ -23,11 +27,11 @@ await proxy.syncTlds();
 await proxy.start();
 
 const shutdown = async () => {
-  console.log("\n[tnp-dns] shutting down...");
+  console.log('\n[tnp-dns] shutting down...');
   proxy.stop();
   await stopEcosystemActivity();
   process.exit(0);
 };
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
