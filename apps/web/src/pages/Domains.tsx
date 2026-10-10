@@ -91,6 +91,7 @@ export default function Domains() {
       {!query && totalPages > 1 && (
         <div className="mt-8 flex items-center justify-center gap-3">
           <button
+            type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
             className="cursor-pointer font-mono text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
@@ -101,6 +102,7 @@ export default function Domains() {
             {t('common:pagination', { page, totalPages })}
           </span>
           <button
+            type="button"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page >= totalPages}
             className="cursor-pointer font-mono text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"

@@ -159,6 +159,7 @@ export default function Propose() {
             {t('propose:signInPrompt')}
           </p>
           <button
+            type="button"
             onClick={() => signIn()}
             className="cursor-pointer rounded-md border border-primary/30 bg-primary/10 px-4 py-2.5 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20"
           >
@@ -199,6 +200,7 @@ export default function Propose() {
                   >
                     {canVote && (
                       <button
+                        type="button"
                         onClick={() => handleVote(p._id, 'up')}
                         className={`cursor-pointer rounded p-1.5 transition-all duration-150 ${
                           p.userVote === 'up'
@@ -225,6 +227,7 @@ export default function Propose() {
                     </span>
                     {canVote && (
                       <button
+                        type="button"
                         onClick={() => handleVote(p._id, 'down')}
                         className={`cursor-pointer rounded p-1.5 transition-all duration-150 ${
                           p.userVote === 'down'

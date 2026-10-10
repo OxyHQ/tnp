@@ -80,6 +80,7 @@ export default function Network() {
           <div className="mb-6 flex gap-2">
             {(['all', 'oxy', 'community'] as const).map((f) => (
               <button
+                type="button"
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`cursor-pointer rounded-md px-3 py-1.5 font-mono text-sm transition-colors ${

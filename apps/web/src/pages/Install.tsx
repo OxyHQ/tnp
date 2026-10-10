@@ -84,6 +84,7 @@ export default function Install() {
       <div className="mb-8 flex gap-3">
         {methodKeys.map((key) => (
           <button
+            type="button"
             key={key}
             onClick={() => setMethod(key)}
             className={`cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors ${
@@ -106,6 +107,7 @@ export default function Install() {
           <div className="mb-6 flex flex-wrap gap-2">
             {dnsPlatforms.map((p) => (
               <button
+                type="button"
                 key={p.id}
                 onClick={() => setDnsPlatform(p.id)}
                 className={`cursor-pointer rounded-md px-3 py-1.5 font-mono text-sm transition-colors ${
@@ -358,6 +360,7 @@ export default function Install() {
               <div className="flex items-center justify-between">
                 <code className="font-mono text-sm text-primary-text">{INSTALL_CMD_UNIX}</code>
                 <button
+                  type="button"
                   onClick={() => copyCommand(INSTALL_CMD_UNIX, 'unix')}
                   className="ml-3 shrink-0 cursor-pointer font-mono text-xs text-muted-foreground/70 transition-colors hover:text-muted-foreground"
                 >
@@ -373,6 +376,7 @@ export default function Install() {
               <div className="flex items-center justify-between">
                 <code className="font-mono text-sm text-primary-text">{INSTALL_CMD_WINDOWS}</code>
                 <button
+                  type="button"
                   onClick={() => copyCommand(INSTALL_CMD_WINDOWS, 'windows')}
                   className="ml-3 shrink-0 cursor-pointer font-mono text-xs text-muted-foreground/70 transition-colors hover:text-muted-foreground"
                 >
@@ -385,6 +389,7 @@ export default function Install() {
           <div className="mb-6 flex gap-2">
             {clientPlatforms.map((p) => (
               <button
+                type="button"
                 key={p.id}
                 onClick={() => setClientPlatform(p.id)}
                 className={`cursor-pointer rounded-md px-3 py-1.5 font-mono text-sm transition-colors ${

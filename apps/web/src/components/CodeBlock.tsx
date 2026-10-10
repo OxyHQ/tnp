@@ -22,6 +22,7 @@ export default function CodeBlock({ code, className = '' }: CodeBlockProps) {
     >
       <code className="font-mono text-sm text-foreground">{code}</code>
       <button
+        type="button"
         onClick={copy}
         className="ml-3 cursor-pointer rounded-[10px] border border-border px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       >
