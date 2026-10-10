@@ -134,8 +134,8 @@ export default function Install() {
                       dnsHost: DNS_HOST,
                       dnsIp: DNS_IP,
                     }) as string[]
-                  ).map((_, i) => (
-                    <li key={i}>
+                  ).map((step, i) => (
+                    <li key={step}>
                       <Trans
                         i18nKey={`install:dns.android.steps.${i}`}
                         t={t}
@@ -172,8 +172,8 @@ export default function Install() {
                 <ol className="list-decimal pl-5 space-y-2 font-mono text-xs text-muted-foreground/70">
                   {(
                     t('install:dns.ios.steps', { returnObjects: true, dnsIp: DNS_IP }) as string[]
-                  ).map((_, i) => (
-                    <li key={i}>
+                  ).map((step, i) => (
+                    <li key={step}>
                       <Trans
                         i18nKey={`install:dns.ios.steps.${i}`}
                         t={t}
@@ -204,8 +204,8 @@ export default function Install() {
                       returnObjects: true,
                       dnsIp: DNS_IP,
                     }) as string[]
-                  ).map((_, i) => (
-                    <li key={i}>
+                  ).map((step, i) => (
+                    <li key={step}>
                       <Trans
                         i18nKey={`install:dns.windows.steps.${i}`}
                         t={t}
@@ -230,8 +230,8 @@ export default function Install() {
                 <ol className="list-decimal pl-5 space-y-2 font-mono text-xs text-muted-foreground/70">
                   {(
                     t('install:dns.macos.steps', { returnObjects: true, dnsIp: DNS_IP }) as string[]
-                  ).map((_, i) => (
-                    <li key={i}>
+                  ).map((step, i) => (
+                    <li key={step}>
                       <Trans
                         i18nKey={`install:dns.macos.steps.${i}`}
                         t={t}
@@ -313,8 +313,8 @@ export default function Install() {
                       returnObjects: true,
                       dnsIp: DNS_IP,
                     }) as string[]
-                  ).map((_, i) => (
-                    <li key={i}>
+                  ).map((step, i) => (
+                    <li key={step}>
                       <Trans
                         i18nKey={`install:dns.router.steps.${i}`}
                         t={t}
@@ -419,8 +419,8 @@ export default function Install() {
                   <ul className="list-disc pl-5 space-y-1">
                     {(
                       t('install:client.macos.requirements', { returnObjects: true }) as string[]
-                    ).map((req, i) => (
-                      <li key={i}>{req}</li>
+                    ).map((req) => (
+                      <li key={req}>{req}</li>
                     ))}
                   </ul>
                 </div>
@@ -441,8 +441,8 @@ export default function Install() {
                   <ul className="list-disc pl-5 space-y-1">
                     {(
                       t('install:client.linux.requirements', { returnObjects: true }) as string[]
-                    ).map((req, i) => (
-                      <li key={i}>{req}</li>
+                    ).map((req) => (
+                      <li key={req}>{req}</li>
                     ))}
                   </ul>
                 </div>
@@ -529,8 +529,8 @@ export default function Install() {
               </p>
               <ul className="mt-2 list-disc pl-5 space-y-1.5 font-mono text-xs text-muted-foreground/70">
                 {(t('install:serve.howItWorksList', { returnObjects: true }) as string[]).map(
-                  (item, i) => (
-                    <li key={i}>{item}</li>
+                  (item) => (
+                    <li key={item}>{item}</li>
                   ),
                 )}
               </ul>
@@ -551,8 +551,8 @@ export default function Install() {
             </h3>
             <ul className="list-disc pl-5 space-y-1.5 font-mono text-xs text-muted-foreground/70">
               {(t('install:relay.whatRelaysDoList', { returnObjects: true }) as string[]).map(
-                (item, i) => (
-                  <li key={i}>{item}</li>
+                (item) => (
+                  <li key={item}>{item}</li>
                 ),
               )}
             </ul>
