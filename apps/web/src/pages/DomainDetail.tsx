@@ -48,6 +48,9 @@ export default function DomainDetail() {
       .finally(() => {
         if (!ignore) setLoading(false);
       });
+    return () => {
+      ignore = true;
+    };
   }, [domainParam, t]);
 
   if (loading) {
