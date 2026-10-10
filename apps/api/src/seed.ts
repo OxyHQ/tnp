@@ -15,9 +15,9 @@ import { tlds } from "./db/schema/index.js";
 export const initialTLDs = [{ name: "ox", status: "active" as const, custom: true }];
 
 /**
- * Idempotent. Under Mongoose this was a startup side effect guarded by "is the
- * collection empty"; as an upsert it can run on every boot without depending on
- * that, and without silently skipping a new TLD because some other row exists.
+ * Idempotent. As an upsert it can run on every boot without depending on the
+ * table being empty, and without silently skipping a new TLD because some
+ * other row exists.
  */
 export async function runSeed(): Promise<void> {
   const db = getDb();

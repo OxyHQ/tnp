@@ -41,7 +41,6 @@ In `apps/api/src/config.ts`, add the parking IP to the config object:
 ```typescript
 export const config = {
   port: parseInt(process.env.PORT || "3000", 10),
-  mongoUri: process.env.MONGODB_URI || "mongodb://localhost:27017",
   dbName: `${APP_NAME}-${env}`,
   oxyApiUrl: process.env.OXY_API_URL || "https://api.oxy.so",
   parkingIp: process.env.TNP_PARKING_IP || "",

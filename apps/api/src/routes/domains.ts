@@ -412,8 +412,8 @@ router.delete("/:id", requireOxyAuth, async (req: Request<{ id: string }>, res) 
       return;
     }
 
-    // Records and any service node go with it, by ON DELETE CASCADE — the
-    // Mongoose version left orphaned service_nodes behind.
+    // Records and any service node go with it, by ON DELETE CASCADE, so no
+    // orphaned service_nodes are left behind.
     await getDb().delete(domains).where(eq(domains.id, owned.domainId));
 
     res.json({ message: "Domain released" });

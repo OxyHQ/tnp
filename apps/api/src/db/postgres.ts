@@ -1,9 +1,8 @@
 /**
  * PostgreSQL connection.
  *
- * One pool per process, opened at startup. TNP ran on MongoDB via Mongoose;
- * every other Oxy backend that has migrated uses drizzle over postgres.js, and
- * TNP is not special enough to be the exception.
+ * One pool per process, opened at startup. Drizzle over postgres.js, like
+ * every other Oxy backend.
  */
 
 import { drizzle } from "drizzle-orm/postgres-js";
