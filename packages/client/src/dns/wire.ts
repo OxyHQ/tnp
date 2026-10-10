@@ -69,7 +69,7 @@ export function rcodeOf(packet: DecodedPacket): number {
  */
 export function ednsUdpSize(query: DecodedPacket): number | null {
   const opt = query.additionals?.find((record) => record.type === 'OPT');
-  if (!opt || opt.type !== 'OPT') return null;
+  if (opt?.type !== 'OPT') return null;
   return Math.min(Math.max(opt.udpPayloadSize, DNS_UDP_SIZE_LIMIT), EDNS_MAX_UDP_SIZE);
 }
 

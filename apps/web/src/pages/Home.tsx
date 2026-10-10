@@ -107,6 +107,7 @@ export default function Home() {
               </Link>
             ) : (
               <button
+                type="button"
                 onClick={() => signIn()}
                 className="cursor-pointer font-mono text-sm text-muted-foreground transition-colors hover:text-foreground"
               >

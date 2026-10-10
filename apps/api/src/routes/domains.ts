@@ -45,8 +45,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** `?page=&limit=`, clamped. Garbage falls back to the defaults rather than failing. */
 function pagination(req: Request, defaultLimit: number): { page: number; limit: number } {
-  const page = Math.max(1, parseInt(String(req.query.page)) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit)) || defaultLimit));
+  const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit), 10) || defaultLimit));
   return { page, limit };
 }
 

@@ -17,7 +17,7 @@ import {
   fromBase64,
   toBase64,
 } from './crypto';
-import { encodeFrame, decodeFrame, FrameType } from '@tnp/protocol';
+import { encodeFrame, decodeFrame, type Frame, FrameType } from '@tnp/protocol';
 
 const OPEN_TIMEOUT_MS = 10_000;
 const RELAY_CONNECT_TIMEOUT_MS = 8_000;
@@ -41,6 +41,11 @@ export class TunnelCircuit {
     this.circuitId = circuitId;
     this.relayWs = relayWs;
     this.sharedKey = sharedKey;
+  }
+
+  /** Whether this circuit runs over the given relay connection. */
+  isOn(relayWs: WebSocket): boolean {
+    return this.relayWs === relayWs;
   }
 
   /**
@@ -215,7 +220,7 @@ export class TunnelManager {
       this.relayConnections.delete(endpoint);
     }
 
-    const tunnelUrl = endpoint.replace(/\/$/, '') + '/tunnel';
+    const tunnelUrl = `${endpoint.replace(/\/$/, '')}/tunnel`;
     const ws = new WebSocket(tunnelUrl);
     ws.binaryType = 'arraybuffer';
 
@@ -239,7 +244,7 @@ export class TunnelManager {
           this.relayConnections.delete(endpoint);
           // Close all circuits on this relay
           for (const [id, circuit] of this.circuits) {
-            if (circuit['relayWs'] === ws) {
+            if (circuit.isOn(ws)) {
               circuit._deliverClose();
               this.circuits.delete(id);
             }
@@ -261,7 +266,7 @@ export class TunnelManager {
     const bytes = toUint8Array(data);
     if (bytes.byteLength === 0) return;
 
-    let frame;
+    let frame: Frame;
     try {
       frame = decodeFrame(bytes);
     } catch {

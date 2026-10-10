@@ -10,7 +10,7 @@
  * (circuitId + type) to route traffic.
  */
 
-import { decodeFrame, encodeFrame, FrameType } from '@tnp/protocol';
+import { decodeFrame, encodeFrame, type Frame, FrameType } from '@tnp/protocol';
 import {
   normalizeRelayEndpoint,
   parseRegisterRelayRequest,
@@ -316,7 +316,7 @@ export class RelayNode {
           const bytes = toUint8Array(raw);
           trackBytes(bytes.byteLength);
 
-          let frame;
+          let frame: Frame;
           try {
             frame = decodeFrame(bytes);
           } catch {

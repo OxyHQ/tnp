@@ -1,4 +1,4 @@
-export { type ParseResult } from './parse.js';
+export type { ParseResult } from './parse.js';
 
 export {
   normalizeRelayEndpoint,
@@ -84,26 +84,26 @@ export {
   type UpdateDnsRecordRequest,
 } from './dns-records.js';
 
-export {
-  type DomainStatus,
-  type NativeAvailability,
-  type NativeAvailabilityReason,
-  type NativeExpiryStateDto,
-  type OwnedDomain,
-  type OwnedDomainPage,
-  type OwnedDomainSummary,
-  type OwnedDomainWithRecords,
-  type PublicDomain,
-  type PublicDomainPage,
-  type PublicDomainWithRecords,
-  type PublicTld,
-  type RenewDomainResponse,
-  type TldProposalEntry,
+export type {
+  DomainStatus,
+  NativeAvailability,
+  NativeAvailabilityReason,
+  NativeExpiryStateDto,
+  OwnedDomain,
+  OwnedDomainPage,
+  OwnedDomainSummary,
+  OwnedDomainWithRecords,
+  PublicDomain,
+  PublicDomainPage,
+  PublicDomainWithRecords,
+  PublicTld,
+  RenewDomainResponse,
+  TldProposalEntry,
 } from './domains.js';
 
-export {
-  type DnsResolveAnswer,
-  type DnsResolveOverlay,
-  type DnsResolveRcode,
-  type DnsResolveResponse,
+export type {
+  DnsResolveAnswer,
+  DnsResolveOverlay,
+  DnsResolveRcode,
+  DnsResolveResponse,
 } from './dns-resolve.js';

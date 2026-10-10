@@ -52,6 +52,7 @@ export default function ServicesDomain() {
 
   const enabled = availability.kind === 'available';
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `domainAttempt` is a retry counter; bumping it is what re-runs this effect
   useEffect(() => {
     if (!enabled) return;
     const controller = new AbortController();
@@ -73,6 +74,7 @@ export default function ServicesDomain() {
     return () => controller.abort();
   }, [id, enabled, domainAttempt, failure, t]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `opsAttempt` is a retry counter; bumping it is what re-runs this effect
   useEffect(() => {
     if (!enabled) return;
     const controller = new AbortController();

@@ -12,7 +12,7 @@
  * 3. Data:     bidirectional pipe through tunnel
  */
 
-import net from 'net';
+import net from 'node:net';
 import type { TunnelManager } from './tunnel';
 import type { TnpApiClient } from './api';
 
@@ -181,7 +181,7 @@ export class SocksProxy {
       // If not cached, query the API directly
       if (!overlayInfo) {
         const nodeInfo = await this.apiClient.getServiceNode(domain);
-        if (nodeInfo && nodeInfo.connectedRelay) {
+        if (nodeInfo?.connectedRelay) {
           overlayInfo = {
             pubKey: nodeInfo.publicKey,
             relay: nodeInfo.connectedRelay,

@@ -1,9 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-const APP_NAME = 'tnp';
-const env = process.env.NODE_ENV || 'development';
-
 // Public DNS / parking IP for TNP domains. MUST be provided via TNP_PARKING_IP.
 // This is the address clients are pointed at and the A record we hand out for
 // parked/custom TLDs — i.e. a security-critical value for a DNS product. There

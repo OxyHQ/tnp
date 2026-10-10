@@ -57,6 +57,7 @@ export default function DomainSearch({ status }: { status: ServicesStatus }) {
   // Debounced search. A new keystroke clears the timer and aborts the request
   // already in flight, so a slow answer to an old query can never overwrite
   // the answer to the current one.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` is a retry counter; bumping it is what re-runs this effect
   useEffect(() => {
     if (!namesKey) {
       setState({ kind: 'idle' });

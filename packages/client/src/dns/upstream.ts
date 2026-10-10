@@ -11,8 +11,8 @@
  * NXDOMAIN arrives as NXDOMAIN and nothing has to be reconstructed.
  */
 
-import dgram from 'dgram';
-import net from 'net';
+import dgram from 'node:dgram';
+import net from 'node:net';
 
 /** Per-attempt timeout. Kept short because a failover attempt follows. */
 const QUERY_TIMEOUT_MS = 4_000;

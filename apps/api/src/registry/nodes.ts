@@ -19,7 +19,7 @@ export interface NodeLiveness {
 }
 
 export function isServiceNodeOnline(node: NodeLiveness | null, now: Date): boolean {
-  if (!node || node.status !== 'online') return false;
+  if (node?.status !== 'online') return false;
   return now.getTime() - node.lastSeen.getTime() <= SERVICE_NODE_STALE_AFTER_MS;
 }
 

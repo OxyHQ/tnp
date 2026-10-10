@@ -33,7 +33,9 @@ export default function ServiceNodes() {
   const [inventory, setInventory] = useState<Inventory>({ status: 'loading' });
   const [copied, setCopied] = useState<string | null>(null);
 
-  const setNode = (domainId: string, node: NodeState) => {
+  // Stable, because `load` depends on it and the page effect depends on `load`:
+  // a new function each render would refetch the inventory on every render.
+  const setNode = useCallback((domainId: string, node: NodeState) => {
     setInventory((prev) =>
       prev.status !== 'ready'
         ? prev
@@ -42,7 +44,7 @@ export default function ServiceNodes() {
             entries: prev.entries.map((e) => (e.domain._id === domainId ? { ...e, node } : e)),
           },
     );
-  };
+  }, []);
 
   const load = useCallback(
     async (target: number) => {
@@ -75,7 +77,7 @@ export default function ServiceNodes() {
           );
       }
     },
-    [t],
+    [t, setNode],
   );
 
   useEffect(() => {

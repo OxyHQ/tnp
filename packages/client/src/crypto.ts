@@ -8,8 +8,8 @@
  */
 
 import nacl from 'tweetnacl';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname } from 'path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 // ---------------------------------------------------------------------------
 // Base64 helpers
@@ -59,14 +59,14 @@ export function loadOrCreateIdentity(keyPath: string): IdentityKeypair {
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     keyPath,
-    JSON.stringify(
+    `${JSON.stringify(
       {
         publicKey: toBase64(identity.publicKey),
         secretKey: toBase64(identity.secretKey),
       },
       null,
       2,
-    ) + '\n',
+    )}\n`,
     { mode: 0o600 },
   );
 

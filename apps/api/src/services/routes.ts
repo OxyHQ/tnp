@@ -454,7 +454,7 @@ export function createServicesRouter(options: ServicesRouterOptions): Router {
   async function zoneContext(req: Request<{ id: string }>, res: Response) {
     const owned = await ownedDomain(req, res);
     if (!owned) return null;
-    if (!owned.zone || owned.zone.authority !== 'provider' || !owned.zone.providerAccountId) {
+    if (owned.zone?.authority !== 'provider' || !owned.zone.providerAccountId) {
       res.status(422).json({
         error: 'unsupported',
         message: 'This zone is managed outside TNP. Edit it where it is hosted.',

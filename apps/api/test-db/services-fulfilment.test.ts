@@ -91,7 +91,7 @@ async function orderDomain(name: string) {
 }
 
 async function registerCalls(name: string) {
-  return state.calls.filter((c) => c.method === 'register').length;
+  return state.calls.filter((c) => c.method === 'register' && c.name === name).length;
 }
 
 describe('catalog', () => {

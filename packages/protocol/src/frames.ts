@@ -9,7 +9,7 @@
 
 const HEADER_SIZE = 5;
 
-export const enum FrameType {
+export enum FrameType {
   DATA = 0x01,
   OPEN = 0x02,
   OPENED = 0x03,

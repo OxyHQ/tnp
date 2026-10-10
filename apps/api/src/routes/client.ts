@@ -655,9 +655,9 @@ function Install-Binary {
         }
         catch {
             # If still locked, try renaming the old file aside and clean up later
-            $oldTarget = "\$target.old"
+            $oldTarget = "$target.old"
             Rename-Item $target $oldTarget -Force -ErrorAction SilentlyContinue
-            Write-Warn "Moved old binary to \$oldTarget (will be cleaned up)"
+            Write-Warn "Moved old binary to $oldTarget (will be cleaned up)"
         }
     }
 

@@ -100,6 +100,7 @@ export default function Register() {
           {t('register:signInPrompt')}
         </p>
         <button
+          type="button"
           onClick={() => signIn()}
           className="cursor-pointer rounded-md border border-primary/30 bg-primary/10 px-4 py-2.5 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20"
         >

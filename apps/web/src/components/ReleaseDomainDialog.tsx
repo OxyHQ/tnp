@@ -69,6 +69,7 @@ export default function ReleaseDomainDialog({
   };
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: backdrop click is a pointer shortcut for Cancel; keyboard users have Escape and the Cancel button
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 px-4 backdrop-blur-sm"
       onMouseDown={(e) => {

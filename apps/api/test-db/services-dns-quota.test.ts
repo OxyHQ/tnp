@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type { Database } from '../src/db/postgres.js';
 import {
   dnsZones,
   dnsZoneSnapshots,
   operations,
-  providerAccounts,
+  type providerAccounts,
   publicDomains,
 } from '../src/db/schema/index.js';
 import { hashZone, type ZoneChange } from '../src/services/dns/zone.js';

@@ -1,6 +1,13 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
-import { execSync } from 'child_process';
-import { join } from 'path';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+} from 'node:fs';
+import { execSync } from 'node:child_process';
+import { join } from 'node:path';
 import type { TnpConfig } from './config';
 import { logPath, getDefaultInterface } from './config';
 import { isReservedTld } from '@tnp/namespace';
@@ -217,7 +224,9 @@ function statusLinux(): boolean {
 
 // ── Windows (Scheduled Task + DNS config) ──
 
-function installWindows(binaryPath: string, cfg: TnpConfig): void {
+// Windows adapter DNS has no port setting, so the resolver address is fixed at
+// 127.0.0.1:53 and the listen settings in the config do not apply here.
+function installWindows(binaryPath: string, _cfg: TnpConfig): void {
   // Create a scheduled task that runs at startup (as SYSTEM)
   const taskXml = `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -303,11 +312,14 @@ function statusWindows(): boolean {
 export function installService(binaryPath: string, cfg: TnpConfig): void {
   switch (platform) {
     case 'darwin':
-      return installDarwin(binaryPath, cfg);
+      installDarwin(binaryPath, cfg);
+      return;
     case 'linux':
-      return installLinux(binaryPath, cfg);
+      installLinux(binaryPath, cfg);
+      return;
     case 'win32':
-      return installWindows(binaryPath, cfg);
+      installWindows(binaryPath, cfg);
+      return;
     default:
       throw new Error(`Unsupported platform: ${platform}`);
   }
@@ -316,11 +328,14 @@ export function installService(binaryPath: string, cfg: TnpConfig): void {
 export function uninstallService(): void {
   switch (platform) {
     case 'darwin':
-      return uninstallDarwin();
+      uninstallDarwin();
+      return;
     case 'linux':
-      return uninstallLinux();
+      uninstallLinux();
+      return;
     case 'win32':
-      return uninstallWindows();
+      uninstallWindows();
+      return;
     default:
       throw new Error(`Unsupported platform: ${platform}`);
   }

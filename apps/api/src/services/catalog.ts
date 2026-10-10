@@ -154,7 +154,7 @@ export class Catalog {
 
     const registrar = this.registrarFor(account);
     const [availability] = await registrar.checkAvailability(call, [split.name]);
-    if (!availability || availability.status !== 'available') {
+    if (availability?.status !== 'available') {
       throw new ProviderError(
         availability?.status === 'unknown' ? 'provider_unavailable' : 'not_available',
         `${split.name.ascii} is ${availability?.status ?? 'unknown'}`,

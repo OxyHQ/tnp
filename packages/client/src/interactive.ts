@@ -14,6 +14,7 @@ import {
 import type { KeyEvent } from '@opentui/core';
 import { normalizeRelayEndpoint } from '@tnp/shared-types';
 import { loadConfig, saveConfig, parsePrivacyLevel, type TnpConfig } from './config';
+import { parseDecimalInt, parsePort } from './parse-input';
 import { serviceStatus } from './service';
 
 const VERSION = '0.2.0';
@@ -28,7 +29,6 @@ const RED = '#CC0000';
 const YELLOW = '#CCCC00';
 const DIM = '#888888';
 const WHITE = '#FFFFFF';
-const BLACK = '#000000';
 const SELECTED_BG = '#006666';
 
 // ---------------------------------------------------------------------------
@@ -123,11 +123,10 @@ const SETTING_FIELDS: SettingField[] = [
     key: 'listenPort',
     label: 'DNS listen port',
     validate: (v) => {
-      const n = parseInt(v, 10);
-      if (isNaN(n) || n < 1 || n > 65535) return 'Port must be 1-65535';
-      return null;
+      return parsePort(v) === null ? 'Port must be 1-65535' : null;
     },
-    transform: (v) => parseInt(v, 10),
+    // validate has already accepted only digits, so Number() is exact here.
+    transform: (v) => Number(v.trim()),
   },
   {
     key: 'privacyLevel',
@@ -141,11 +140,10 @@ const SETTING_FIELDS: SettingField[] = [
     key: 'socksPort',
     label: 'SOCKS port',
     validate: (v) => {
-      const n = parseInt(v, 10);
-      if (isNaN(n) || n < 1 || n > 65535) return 'Port must be 1-65535';
-      return null;
+      return parsePort(v) === null ? 'Port must be 1-65535' : null;
     },
-    transform: (v) => parseInt(v, 10),
+    // validate has already accepted only digits, so Number() is exact here.
+    transform: (v) => Number(v.trim()),
   },
   {
     key: 'relayPreference',
@@ -713,8 +711,8 @@ async function actionStartRelay(): Promise<void> {
   }
 
   const portInput = await promptInput('Port', String(config.relayPort));
-  const port = portInput ? parseInt(portInput, 10) : config.relayPort;
-  if (isNaN(port) || port < 1 || port > 65535) {
+  const port = parsePort(portInput || String(config.relayPort));
+  if (port === null) {
     addLine('Invalid port number', RED);
     renderer.root.add(Text({ content: '\n  Press any key to continue...', fg: DIM }));
     await waitForKeypress();
@@ -828,8 +826,8 @@ async function actionConfigureRelay(): Promise<void> {
 
   const portInput = await promptInput('Relay port', String(config.relayPort));
   if (portInput) {
-    const n = parseInt(portInput, 10);
-    if (isNaN(n) || n < 1 || n > 65535) {
+    const n = parsePort(portInput);
+    if (n === null) {
       addLine('Invalid port number', RED);
       renderer.root.add(Text({ content: '\n  Press any key to continue...', fg: DIM }));
       await waitForKeypress();
@@ -861,8 +859,8 @@ async function actionConfigureRelay(): Promise<void> {
 
   const maxInput = await promptInput('Max connections', String(config.relayMaxConnections));
   if (maxInput) {
-    const n = parseInt(maxInput, 10);
-    if (isNaN(n) || n < 1 || n > 10000) {
+    const n = parseDecimalInt(maxInput);
+    if (n === null || n < 1 || n > 10000) {
       addLine('Must be 1-10000', RED);
       renderer.root.add(Text({ content: '\n  Press any key to continue...', fg: DIM }));
       await waitForKeypress();
@@ -877,8 +875,8 @@ async function actionConfigureRelay(): Promise<void> {
     String(config.relayBandwidth),
   );
   if (bandwidthInput) {
-    const n = parseInt(bandwidthInput, 10);
-    if (isNaN(n) || n < 0) {
+    const n = parseDecimalInt(bandwidthInput);
+    if (n === null) {
       addLine('Must be 0 or greater', RED);
       renderer.root.add(Text({ content: '\n  Press any key to continue...', fg: DIM }));
       await waitForKeypress();

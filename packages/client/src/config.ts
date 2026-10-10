@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { homedir, tmpdir } from 'os';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir, tmpdir } from 'node:os';
 
 /**
  * Default TNP public DNS resolver IP. Sourced from the TNP_PUBLIC_DNS env var at
@@ -213,7 +213,7 @@ export function loadConfig(): TnpConfig {
 export function saveConfig(cfg: TnpConfig): void {
   const dir = configDir();
   mkdirSync(dir, { recursive: true });
-  writeFileSync(configPath(), JSON.stringify(cfg, null, 2) + '\n', { mode: 0o600 });
+  writeFileSync(configPath(), `${JSON.stringify(cfg, null, 2)}\n`, { mode: 0o600 });
 }
 
 /** Regex to validate network interface names, preventing command injection. */
@@ -225,7 +225,7 @@ export const VALID_IFACE_RE = /^[a-zA-Z0-9_.-]+$/;
  */
 export function getDefaultInterface(): string | null {
   try {
-    const { execSync } = require('child_process');
+    const { execSync } = require('node:child_process');
     const route = execSync('ip route show default', {
       encoding: 'utf-8',
       stdio: 'pipe',

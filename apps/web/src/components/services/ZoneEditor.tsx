@@ -518,6 +518,7 @@ export default function ZoneEditor({
             <div className="flex flex-wrap justify-end gap-3">
               <button
                 type="button"
+                // biome-ignore lint/a11y/noAutofocus: initial focus inside a modal <dialog>; Cancel is the safe default before DNS changes go live
                 autoFocus
                 onClick={() => setDialogOpen(false)}
                 disabled={applyPending}

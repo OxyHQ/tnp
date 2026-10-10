@@ -80,6 +80,7 @@ export default function Layout() {
                     [{t('nav.dashboard')}]
                   </Link>
                   <button
+                    type="button"
                     onClick={signOut}
                     className="cursor-pointer font-mono text-sm text-muted-foreground/70 transition-colors hover:text-muted-foreground"
                   >
@@ -89,12 +90,14 @@ export default function Layout() {
               ) : (
                 <>
                   <button
+                    type="button"
                     onClick={() => signIn()}
                     className="cursor-pointer font-mono text-sm text-muted-foreground transition-colors hover:text-foreground"
                   >
                     [{t('auth.signIn')}]
                   </button>
                   <button
+                    type="button"
                     onClick={() => signIn()}
                     className="inline-flex h-8 cursor-pointer items-center justify-center rounded-md border border-primary/30 bg-primary/10 px-3 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20"
                   >

@@ -159,6 +159,7 @@ export default function Propose() {
             {t('propose:signInPrompt')}
           </p>
           <button
+            type="button"
             onClick={() => signIn()}
             className="cursor-pointer rounded-md border border-primary/30 bg-primary/10 px-4 py-2.5 font-mono text-sm text-primary-text transition-colors hover:bg-primary/20"
           >
@@ -199,6 +200,7 @@ export default function Propose() {
                   >
                     {canVote && (
                       <button
+                        type="button"
                         onClick={() => handleVote(p._id, 'up')}
                         className={`cursor-pointer rounded p-1.5 transition-all duration-150 ${
                           p.userVote === 'up'
@@ -207,7 +209,13 @@ export default function Propose() {
                         }`}
                         aria-label={t('propose:upvote')}
                       >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
                           <path d="M12 4l-8 8h5v8h6v-8h5z" />
                         </svg>
                       </button>
@@ -225,6 +233,7 @@ export default function Propose() {
                     </span>
                     {canVote && (
                       <button
+                        type="button"
                         onClick={() => handleVote(p._id, 'down')}
                         className={`cursor-pointer rounded p-1.5 transition-all duration-150 ${
                           p.userVote === 'down'
@@ -233,7 +242,13 @@ export default function Propose() {
                         }`}
                         aria-label={t('propose:downvote')}
                       >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
                           <path d="M12 20l8-8h-5V4H9v8H4z" />
                         </svg>
                       </button>

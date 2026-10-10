@@ -55,8 +55,8 @@ describe('formatMinorUnits', () => {
 
   test("follows the locale's separators", () => {
     const fr = formatMinorUnits('123456789', 'EUR', 'fr');
-    expect(fr).not.toBeNull();
-    expect(fr!.replace(/\s/g, ' ')).toBe('1 234 567,89 €');
+    if (fr === null) throw new Error('expected a formatted amount, got null');
+    expect(fr.replace(/\s/g, ' ')).toBe('1 234 567,89 €');
     expect(formatMinorUnits('123456789', 'EUR', 'fr')).toBe(
       new Intl.NumberFormat('fr', { style: 'currency', currency: 'EUR' }).format(1234567.89),
     );
