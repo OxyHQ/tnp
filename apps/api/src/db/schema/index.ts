@@ -1,9 +1,8 @@
 /**
  * TNP's relational schema.
  *
- * Ported from seven Mongoose models. The data was never document-shaped: every
- * relationship here was already a foreign key wearing an ObjectId, and the one
- * genuine document — a domain's DNS records — was the worst fit of the lot.
+ * The data is relational: every relationship is a foreign key, and a domain's
+ * DNS records are their own table rather than a nested document.
  *
  * Naming: columns are declared camelCase and drizzle derives snake_case from
  * `DATABASE_CASING`. See `../casing.ts`.
@@ -23,7 +22,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
-// Enums — values the Mongoose schemas enforced in application code
+// Enums
 // ---------------------------------------------------------------------------
 
 export const domainStatus = pgEnum("domain_status", ["active", "pending", "suspended"]);
@@ -109,7 +108,7 @@ export const domains = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }),
   },
   (table) => [
-    // A real constraint, where Mongoose had an application-level unique index.
+    // A real constraint, not an application-level check.
     uniqueIndex("domains_name_tld_key").on(table.name, table.tld),
     index("domains_oxy_user_id_idx").on(table.oxyUserId),
     index("domains_owner_id_idx").on(table.ownerId),
@@ -119,11 +118,10 @@ export const domains = pgTable(
 /**
  * DNS records.
  *
- * This is the change that matters most in the port. Records were a Mongoose
- * subdocument array on the domain, so answering `GET /dns/resolve` meant
- * loading the whole domain and scanning its records in application code — on
- * the hot path of every TNP name lookup. As a table with a composite index,
- * the same question is an index lookup.
+ * Records are a table, not an array nested in the domain, because
+ * `GET /dns/resolve` sits on the hot path of every TNP name lookup: with a
+ * composite index, answering it is an index lookup rather than loading the
+ * whole domain and scanning its records in application code.
  *
  * `value` is deliberately untyped text: it holds an IPv4 literal, an IPv6
  * literal, a hostname or a TXT string depending on `type`, and the resolver
@@ -155,8 +153,8 @@ export const dnsRecords = pgTable(
 // ---------------------------------------------------------------------------
 
 /**
- * One service node per domain, so the foreign key is unique rather than the
- * 1:1-by-convention the Mongoose model relied on.
+ * One service node per domain, so the foreign key is unique: the 1:1 is a
+ * constraint, not a convention.
  */
 export const serviceNodes = pgTable(
   "service_nodes",
