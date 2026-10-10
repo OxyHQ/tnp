@@ -593,6 +593,7 @@ export default function Install() {
                     t={t}
                     components={{
                       link: (
+                        // biome-ignore lint/a11y/useAnchorContent: <Trans> fills this anchor with the translated link text
                         <a
                           href="/network"
                           className="text-primary-text transition-colors hover:text-foreground"
@@ -610,6 +611,7 @@ export default function Install() {
                 t={t}
                 components={{
                   link: (
+                    // biome-ignore lint/a11y/useAnchorContent: <Trans> fills this anchor with the translated link text
                     <a
                       href="https://github.com/OxyHQ/tnp"
                       target="_blank"

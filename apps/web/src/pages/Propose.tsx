@@ -209,7 +209,13 @@ export default function Propose() {
                         }`}
                         aria-label={t('propose:upvote')}
                       >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
                           <path d="M12 4l-8 8h5v8h6v-8h5z" />
                         </svg>
                       </button>
@@ -236,7 +242,13 @@ export default function Propose() {
                         }`}
                         aria-label={t('propose:downvote')}
                       >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
                           <path d="M12 20l8-8h-5V4H9v8H4z" />
                         </svg>
                       </button>
