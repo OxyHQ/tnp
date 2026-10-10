@@ -12,12 +12,7 @@
  * out — see `RCODE` below.
  */
 
-import dnsPacket, {
-  type Answer,
-  type DecodedPacket,
-  type Packet,
-  type Question,
-} from "dns-packet";
+import dnsPacket, { type Answer, type DecodedPacket, type Packet, type Question } from 'dns-packet';
 
 /**
  * Response codes, as the low four bits of the header flags.
@@ -73,16 +68,16 @@ export function rcodeOf(packet: DecodedPacket): number {
  * Returns null when the query carries no OPT record, meaning plain 512 applies.
  */
 export function ednsUdpSize(query: DecodedPacket): number | null {
-  const opt = query.additionals?.find((record) => record.type === "OPT");
-  if (!opt || opt.type !== "OPT") return null;
+  const opt = query.additionals?.find((record) => record.type === 'OPT');
+  if (!opt || opt.type !== 'OPT') return null;
   return Math.min(Math.max(opt.udpPayloadSize, DNS_UDP_SIZE_LIMIT), EDNS_MAX_UDP_SIZE);
 }
 
 export interface ResponseInit {
   rcode: RcodeName;
-  answers?: Packet["answers"];
-  authorities?: Packet["authorities"];
-  additionals?: Packet["additionals"];
+  answers?: Packet['answers'];
+  authorities?: Packet['authorities'];
+  additionals?: Packet['additionals'];
   /** Set when TNP is the authority for the name, i.e. TNP-native answers. */
   authoritative?: boolean;
 }
@@ -102,10 +97,10 @@ export function buildResponse(query: DecodedPacket, init: ResponseInit): Packet 
 
   const additionals = [...(init.additionals ?? [])];
   const advertised = ednsUdpSize(query);
-  if (advertised !== null && !additionals.some((record) => record.type === "OPT")) {
+  if (advertised !== null && !additionals.some((record) => record.type === 'OPT')) {
     additionals.push({
-      type: "OPT",
-      name: ".",
+      type: 'OPT',
+      name: '.',
       udpPayloadSize: advertised,
       // EDNS(0) only. The extended rcode stays zero because every code this
       // resolver produces fits the four header bits; DO is off because DNSSEC
@@ -120,7 +115,7 @@ export function buildResponse(query: DecodedPacket, init: ResponseInit): Packet 
   }
 
   return {
-    type: "response",
+    type: 'response',
     id: query.id,
     flags,
     questions: query.questions ?? [],
@@ -169,7 +164,7 @@ export function encodeRawError(queryBuf: Buffer, rcode: RcodeName): Buffer | nul
   const rd = (queryBuf.readUInt16BE(2) >> 8) & 0x1;
 
   return dnsPacket.encode({
-    type: "response",
+    type: 'response',
     id,
     flags: RECURSION_AVAILABLE | (rd ? RECURSION_DESIRED : 0) | RCODE[rcode],
     questions: [],

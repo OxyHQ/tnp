@@ -16,8 +16,8 @@ import {
   decrypt,
   fromBase64,
   toBase64,
-} from "./crypto";
-import { encodeFrame, decodeFrame, FrameType } from "@tnp/protocol";
+} from './crypto';
+import { encodeFrame, decodeFrame, FrameType } from '@tnp/protocol';
 
 const OPEN_TIMEOUT_MS = 10_000;
 const RELAY_CONNECT_TIMEOUT_MS = 8_000;
@@ -153,9 +153,7 @@ export class TunnelManager {
     const sharedKey = computeSharedKey(ephemeral.secretKey, serviceNodePubKey);
 
     // Build OPEN payload: domain\0base64(ephemeralPublicKey)
-    const openPayload = textEncoder.encode(
-      `${domain}\0${toBase64(ephemeral.publicKey)}`,
-    );
+    const openPayload = textEncoder.encode(`${domain}\0${toBase64(ephemeral.publicKey)}`);
 
     const circuit = new TunnelCircuit(circuitId, ws, sharedKey);
     this.circuits.set(circuitId, circuit);
@@ -194,7 +192,7 @@ export class TunnelManager {
     }
     for (const pending of this.pendingOpens.values()) {
       clearTimeout(pending.timer);
-      pending.reject(new Error("TunnelManager shutting down"));
+      pending.reject(new Error('TunnelManager shutting down'));
     }
     this.pendingOpens.clear();
     for (const [endpoint, ws] of this.relayConnections) {
@@ -217,9 +215,9 @@ export class TunnelManager {
       this.relayConnections.delete(endpoint);
     }
 
-    const tunnelUrl = endpoint.replace(/\/$/, "") + "/tunnel";
+    const tunnelUrl = endpoint.replace(/\/$/, '') + '/tunnel';
     const ws = new WebSocket(tunnelUrl);
-    ws.binaryType = "arraybuffer";
+    ws.binaryType = 'arraybuffer';
 
     return new Promise<WebSocket>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -228,20 +226,20 @@ export class TunnelManager {
         reject(new Error(`Relay connection timed out: ${endpoint}`));
       }, RELAY_CONNECT_TIMEOUT_MS);
 
-      ws.addEventListener("open", () => {
+      ws.addEventListener('open', () => {
         clearTimeout(timer);
         this.relayConnections.set(endpoint, ws);
 
         // Install global message handler for circuit dispatch
-        ws.addEventListener("message", (event: MessageEvent) => {
+        ws.addEventListener('message', (event: MessageEvent) => {
           this.dispatchFrame(event.data);
         });
 
-        ws.addEventListener("close", () => {
+        ws.addEventListener('close', () => {
           this.relayConnections.delete(endpoint);
           // Close all circuits on this relay
           for (const [id, circuit] of this.circuits) {
-            if (circuit["relayWs"] === ws) {
+            if (circuit['relayWs'] === ws) {
               circuit._deliverClose();
               this.circuits.delete(id);
             }
@@ -251,7 +249,7 @@ export class TunnelManager {
         resolve(ws);
       });
 
-      ws.addEventListener("error", () => {
+      ws.addEventListener('error', () => {
         clearTimeout(timer);
         this.relayConnections.delete(endpoint);
         reject(new Error(`Failed to connect to relay ${endpoint}`));

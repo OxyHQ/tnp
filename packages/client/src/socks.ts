@@ -12,9 +12,9 @@
  * 3. Data:     bidirectional pipe through tunnel
  */
 
-import net from "net";
-import type { TunnelManager } from "./tunnel";
-import type { TnpApiClient } from "./api";
+import net from 'net';
+import type { TunnelManager } from './tunnel';
+import type { TnpApiClient } from './api';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,7 +49,9 @@ export class SocksProxy {
   private server: net.Server;
   private tunnelManager: TunnelManager;
   private apiClient: TnpApiClient;
-  private getOverlayInfo: ((domain: string) => { pubKey: string; relay: string } | undefined) | null;
+  private getOverlayInfo:
+    | ((domain: string) => { pubKey: string; relay: string } | undefined)
+    | null;
 
   constructor(config: SocksProxyConfig) {
     this.tunnelManager = config.tunnelManager;
@@ -60,7 +62,7 @@ export class SocksProxy {
       this.handleConnection(socket);
     });
 
-    this.server.on("error", (err: Error) => {
+    this.server.on('error', (err: Error) => {
       console.error(`[socks] server error: ${err.message}`);
     });
 
@@ -76,38 +78,38 @@ export class SocksProxy {
   // ---------- Connection handling ----------
 
   private handleConnection(socket: net.Socket): void {
-    socket.once("error", (err: Error) => {
-      if ((err as NodeJS.ErrnoException).code !== "ECONNRESET") {
+    socket.once('error', (err: Error) => {
+      if ((err as NodeJS.ErrnoException).code !== 'ECONNRESET') {
         console.error(`[socks] socket error: ${err.message}`);
       }
     });
 
     // State machine: greeting -> request -> pipe
-    let state: "greeting" | "request" | "piping" = "greeting";
+    let state: 'greeting' | 'request' | 'piping' = 'greeting';
     let buffer = Buffer.alloc(0);
 
     const onData = (chunk: Buffer) => {
       buffer = Buffer.concat([buffer, chunk]);
 
-      if (state === "greeting") {
+      if (state === 'greeting') {
         if (!this.handleGreeting(socket, buffer)) return;
         buffer = Buffer.alloc(0);
-        state = "request";
+        state = 'request';
         return;
       }
 
-      if (state === "request") {
+      if (state === 'request') {
         const result = this.parseRequest(buffer);
         if (!result) return; // need more data
 
-        state = "piping";
-        socket.removeListener("data", onData);
+        state = 'piping';
+        socket.removeListener('data', onData);
 
         this.handleConnect(socket, result.domain, result.port);
       }
     };
 
-    socket.on("data", onData);
+    socket.on('data', onData);
   }
 
   /**
@@ -153,7 +155,7 @@ export class SocksProxy {
     if (atyp === ATYP_DOMAIN) {
       const domainLen = buf[4];
       if (buf.length < 5 + domainLen + 2) return null;
-      domain = buf.subarray(5, 5 + domainLen).toString("utf-8");
+      domain = buf.subarray(5, 5 + domainLen).toString('utf-8');
       portOffset = 5 + domainLen;
     } else if (atyp === ATYP_IPV4) {
       if (buf.length < 10) return null;
@@ -171,11 +173,7 @@ export class SocksProxy {
   /**
    * Handle a SOCKS5 CONNECT command by opening a tunnel to the domain.
    */
-  private async handleConnect(
-    socket: net.Socket,
-    domain: string,
-    port: number,
-  ): Promise<void> {
+  private async handleConnect(socket: net.Socket, domain: string, port: number): Promise<void> {
     try {
       // Check overlay cache first (populated by DnsProxy)
       let overlayInfo = this.getOverlayInfo?.(domain);
@@ -209,7 +207,7 @@ export class SocksProxy {
       this.sendReply(socket, REP_SUCCESS);
 
       // Pipe: socket -> tunnel (encrypt & send)
-      socket.on("data", (chunk: Buffer) => {
+      socket.on('data', (chunk: Buffer) => {
         circuit.send(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
       });
 
@@ -221,7 +219,7 @@ export class SocksProxy {
       });
 
       // Clean up on close from either side
-      socket.on("close", () => {
+      socket.on('close', () => {
         circuit.close();
       });
 
@@ -246,10 +244,14 @@ export class SocksProxy {
     const reply = Buffer.from([
       SOCKS_VERSION,
       rep,
-      0x00,         // reserved
-      ATYP_IPV4,    // address type: IPv4
-      0, 0, 0, 0,   // bound address: 0.0.0.0
-      0, 0,          // bound port: 0
+      0x00, // reserved
+      ATYP_IPV4, // address type: IPv4
+      0,
+      0,
+      0,
+      0, // bound address: 0.0.0.0
+      0,
+      0, // bound port: 0
     ]);
     socket.write(reply);
   }

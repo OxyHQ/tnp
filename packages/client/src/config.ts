@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { join } from "path";
-import { homedir, tmpdir } from "os";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
+import { homedir, tmpdir } from 'os';
 
 /**
  * Default TNP public DNS resolver IP. Sourced from the TNP_PUBLIC_DNS env var at
@@ -14,10 +14,10 @@ import { homedir, tmpdir } from "os";
  * release binaries, once the dns-server NLB is provisioned (oxy-infra
  * app-tnp.tf is pending).
  */
-export const TNP_PUBLIC_DNS = process.env.TNP_PUBLIC_DNS?.trim() ?? "";
+export const TNP_PUBLIC_DNS = process.env.TNP_PUBLIC_DNS?.trim() ?? '';
 
 /** Path to the kill switch marker file. Presence means firewall rules are active. */
-export const KILLSWITCH_MARKER_PATH = join(tmpdir(), "tnp-killswitch-active");
+export const KILLSWITCH_MARKER_PATH = join(tmpdir(), 'tnp-killswitch-active');
 
 /**
  * The subset of configuration the DNS resolver actually consumes.
@@ -57,16 +57,14 @@ export interface DnsProxyConfig {
  * statement of what exists; `parsePrivacyLevel` rejects the rest by name so the
  * failure is explicit rather than silent.
  */
-export type PrivacyLevel = "access";
+export type PrivacyLevel = 'access';
 
 /** Levels that are specified but not implemented, with the issue that lands each. */
 const PLANNED_PRIVACY_LEVELS: Record<string, string> = {
-  private: "multi-hop onion routing is not implemented yet (see #22)",
+  private: 'multi-hop onion routing is not implemented yet (see #22)',
 };
 
-export type PrivacyLevelResult =
-  | { ok: true; level: PrivacyLevel }
-  | { ok: false; error: string };
+export type PrivacyLevelResult = { ok: true; level: PrivacyLevel } | { ok: false; error: string };
 
 /**
  * Resolve a user-supplied privacy level.
@@ -76,7 +74,7 @@ export type PrivacyLevelResult =
  * command line, interactive settings editor, or a stored config file.
  */
 export function parsePrivacyLevel(value: string): PrivacyLevelResult {
-  if (value === "access") return { ok: true, level: "access" };
+  if (value === 'access') return { ok: true, level: 'access' };
 
   // `Object.hasOwn`, not a plain index: a bare lookup resolves inherited keys,
   // so "constructor" and "toString" would each report as a planned level.
@@ -94,7 +92,7 @@ export function parsePrivacyLevel(value: string): PrivacyLevelResult {
 export interface TnpConfig extends DnsProxyConfig {
   privacyLevel: PrivacyLevel;
   socksPort: number;
-  relayPreference: "oxy" | "community" | "any";
+  relayPreference: 'oxy' | 'community' | 'any';
   identityKeyPath: string;
   relayPort: number;
   /**
@@ -116,55 +114,55 @@ export interface TnpConfig extends DnsProxyConfig {
 
 export function configDir(): string {
   switch (process.platform) {
-    case "darwin":
-      return "/usr/local/etc/tnp";
-    case "win32":
-      return join(process.env.PROGRAMDATA || "C:\\ProgramData", "tnp");
+    case 'darwin':
+      return '/usr/local/etc/tnp';
+    case 'win32':
+      return join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'tnp');
     default:
-      return "/etc/tnp";
+      return '/etc/tnp';
   }
 }
 
 export function configPath(): string {
-  return join(configDir(), "config.json");
+  return join(configDir(), 'config.json');
 }
 
 export function dataDir(): string {
   switch (process.platform) {
-    case "darwin":
-      return join(homedir(), "Library", "Application Support", "tnp");
-    case "win32":
-      return join(process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local"), "tnp");
+    case 'darwin':
+      return join(homedir(), 'Library', 'Application Support', 'tnp');
+    case 'win32':
+      return join(process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'), 'tnp');
     default:
-      return "/var/lib/tnp";
+      return '/var/lib/tnp';
   }
 }
 
 export function logPath(): string {
   switch (process.platform) {
-    case "win32":
-      return join(dataDir(), "tnp-resolver.log");
+    case 'win32':
+      return join(dataDir(), 'tnp-resolver.log');
     default:
-      return "/var/log/tnp-resolver.log";
+      return '/var/log/tnp-resolver.log';
   }
 }
 
 const DEFAULT_CONFIG: TnpConfig = {
-  listenAddr: "127.0.0.1",
+  listenAddr: '127.0.0.1',
   listenPort: 5354,
-  apiBaseUrl: "https://api.tnp.network",
-  upstreamDns: "1.1.1.1",
+  apiBaseUrl: 'https://api.tnp.network',
+  upstreamDns: '1.1.1.1',
   cacheMaxEntries: 10_000,
-  privacyLevel: "access",
+  privacyLevel: 'access',
   socksPort: 1080,
-  relayPreference: "oxy",
-  identityKeyPath: join(dataDir(), "identity.key"),
+  relayPreference: 'oxy',
+  identityKeyPath: join(dataDir(), 'identity.key'),
   relayPort: 8080,
-  relayEndpoint: "",
-  relayLocation: "",
+  relayEndpoint: '',
+  relayLocation: '',
   relayMaxConnections: 100,
   relayBandwidth: 0,
-  relayAuthToken: "",
+  relayAuthToken: '',
   autoConnect: false,
   killSwitch: false,
   publicDnsIp: TNP_PUBLIC_DNS,
@@ -186,9 +184,7 @@ export function applyStoredConfig(saved: Partial<TnpConfig>): TnpConfig {
 
   const privacy = parsePrivacyLevel(String(merged.privacyLevel));
   if (!privacy.ok) {
-    console.warn(
-      `[tnp] stored ${privacy.error} Falling back to "${DEFAULT_CONFIG.privacyLevel}".`,
-    );
+    console.warn(`[tnp] stored ${privacy.error} Falling back to "${DEFAULT_CONFIG.privacyLevel}".`);
     merged.privacyLevel = DEFAULT_CONFIG.privacyLevel;
   }
 
@@ -201,7 +197,7 @@ export function loadConfig(): TnpConfig {
     return { ...DEFAULT_CONFIG };
   }
 
-  const raw = readFileSync(path, "utf-8");
+  const raw = readFileSync(path, 'utf-8');
   let saved: Partial<TnpConfig>;
   try {
     saved = JSON.parse(raw) as Partial<TnpConfig>;
@@ -217,7 +213,7 @@ export function loadConfig(): TnpConfig {
 export function saveConfig(cfg: TnpConfig): void {
   const dir = configDir();
   mkdirSync(dir, { recursive: true });
-  writeFileSync(configPath(), JSON.stringify(cfg, null, 2) + "\n", { mode: 0o600 });
+  writeFileSync(configPath(), JSON.stringify(cfg, null, 2) + '\n', { mode: 0o600 });
 }
 
 /** Regex to validate network interface names, preventing command injection. */
@@ -229,10 +225,10 @@ export const VALID_IFACE_RE = /^[a-zA-Z0-9_.-]+$/;
  */
 export function getDefaultInterface(): string | null {
   try {
-    const { execSync } = require("child_process");
-    const route = execSync("ip route show default", {
-      encoding: "utf-8",
-      stdio: "pipe",
+    const { execSync } = require('child_process');
+    const route = execSync('ip route show default', {
+      encoding: 'utf-8',
+      stdio: 'pipe',
     }).trim();
     const iface = route.split(/\s+/)[4];
     if (!iface || !VALID_IFACE_RE.test(iface)) {
@@ -240,7 +236,9 @@ export function getDefaultInterface(): string | null {
     }
     return iface;
   } catch (err) {
-    console.warn(`[tnp] failed to detect default network interface: ${err instanceof Error ? err.message : String(err)}`);
+    console.warn(
+      `[tnp] failed to detect default network interface: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return null;
   }
 }
