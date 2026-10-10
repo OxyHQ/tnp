@@ -151,8 +151,13 @@ function timeout(method: string): ProviderError {
 
 export function createMemoryAdapters(account: ProviderAccountRef, state: MemoryProviderState) {
   /** Run a mutating call with fault injection around the submission point. */
-  async function mutate<T>(method: string, ctx: AdapterCallContext, apply: () => T): Promise<T> {
-    state.calls.push({ method });
+  async function mutate<T>(
+    method: string,
+    ctx: AdapterCallContext,
+    apply: () => T,
+    name?: string,
+  ): Promise<T> {
+    state.calls.push({ method, name });
     await pause(state.latencyMs);
     const taken = state.takeFault(method);
     const fault = taken?.mode === 'none' ? undefined : taken;
@@ -228,27 +233,32 @@ export function createMemoryAdapters(account: ProviderAccountRef, state: MemoryP
         ),
       ),
     register: (ctx, request: RegisterDomainRequest) =>
-      mutate('register', ctx, () => {
-        if (state.taken.has(request.name.ascii) || state.domains.has(request.name.ascii)) {
-          throw new ProviderError('not_available', 'taken', { submitted: true });
-        }
-        const cost = { currency: 'USD', minor: state.registerCost.minor * BigInt(request.years) };
-        capCost(cost, request.maxCost);
-        const now = new Date();
-        const expiresAt = new Date(now);
-        expiresAt.setUTCFullYear(expiresAt.getUTCFullYear() + request.years);
-        const remoteId = `mem-${state.domains.size + 1}`;
-        state.domains.set(request.name.ascii, {
-          remoteId,
-          createdAt: now,
-          expiresAt,
-          locked: true,
-          contacts: request.contacts,
-          zone: { records: [], settings: { EmailType: 'NONE' }, servedByProvider: true },
-        });
-        state.balance = { ...state.balance, minor: state.balance.minor - cost.minor };
-        return { remoteId, charged: cost, remoteOrderId: `order-${remoteId}` };
-      }),
+      mutate(
+        'register',
+        ctx,
+        () => {
+          if (state.taken.has(request.name.ascii) || state.domains.has(request.name.ascii)) {
+            throw new ProviderError('not_available', 'taken', { submitted: true });
+          }
+          const cost = { currency: 'USD', minor: state.registerCost.minor * BigInt(request.years) };
+          capCost(cost, request.maxCost);
+          const now = new Date();
+          const expiresAt = new Date(now);
+          expiresAt.setUTCFullYear(expiresAt.getUTCFullYear() + request.years);
+          const remoteId = `mem-${state.domains.size + 1}`;
+          state.domains.set(request.name.ascii, {
+            remoteId,
+            createdAt: now,
+            expiresAt,
+            locked: true,
+            contacts: request.contacts,
+            zone: { records: [], settings: { EmailType: 'NONE' }, servedByProvider: true },
+          });
+          state.balance = { ...state.balance, minor: state.balance.minor - cost.minor };
+          return { remoteId, charged: cost, remoteOrderId: `order-${remoteId}` };
+        },
+        request.name.ascii,
+      ),
     renew: (ctx, request: RenewDomainRequest) =>
       mutate('renew', ctx, () => {
         const domain = held(request.name);

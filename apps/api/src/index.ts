@@ -41,7 +41,7 @@ app.use(express.json());
 // Serve installer scripts when accessed via get.tnp.network
 // curl -fsSL https://get.tnp.network | sh  →  serves install.sh
 // irm https://get.tnp.network/ps | iex     →  serves install.ps1
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   const host = req.hostname;
   if (host !== 'get.tnp.network') return next();
 

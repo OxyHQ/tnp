@@ -1,4 +1,3 @@
-import { eq } from 'drizzle-orm';
 import { isReservedTld } from '@tnp/namespace';
 import { connectPostgres, closePostgres, getDb } from './db/postgres.js';
 import { runMigrations } from './db/migrate.js';

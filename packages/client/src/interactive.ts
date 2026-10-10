@@ -29,7 +29,6 @@ const RED = '#CC0000';
 const YELLOW = '#CCCC00';
 const DIM = '#888888';
 const WHITE = '#FFFFFF';
-const BLACK = '#000000';
 const SELECTED_BG = '#006666';
 
 // ---------------------------------------------------------------------------

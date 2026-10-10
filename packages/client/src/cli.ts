@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { resolve } from 'node:path';
 import {
   loadConfig,
   saveConfig,
@@ -239,7 +239,6 @@ function configureDns(config: TnpConfig): boolean {
       return true;
     } else if (process.platform === 'darwin') {
       // macOS: create resolver files for TNP TLDs
-      const { execSync } = require('node:child_process');
       const { mkdirSync: mkdirSyncFs, writeFileSync: writeFileSyncFs } = require('node:fs');
       removeReservedResolverFiles();
       mkdirSyncFs('/etc/resolver', { recursive: true });

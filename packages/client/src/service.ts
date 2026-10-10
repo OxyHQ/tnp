@@ -224,7 +224,9 @@ function statusLinux(): boolean {
 
 // ── Windows (Scheduled Task + DNS config) ──
 
-function installWindows(binaryPath: string, cfg: TnpConfig): void {
+// Windows adapter DNS has no port setting, so the resolver address is fixed at
+// 127.0.0.1:53 and the listen settings in the config do not apply here.
+function installWindows(binaryPath: string, _cfg: TnpConfig): void {
   // Create a scheduled task that runs at startup (as SYSTEM)
   const taskXml = `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
