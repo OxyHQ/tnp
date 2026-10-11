@@ -1,10 +1,8 @@
-import { observeEdgeRequest } from '@oxy.so/telemetry/edge';
-
 // Cloudflare Pages Worker
 // 1. Serves install scripts when requests come from get.tnp.network
 //    Autodetects platform: curl/wget gets .sh, PowerShell gets .ps1
 // 2. For tnp.network, serves static assets with SPA fallback
-const assetWorker = {
+export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
@@ -37,17 +35,5 @@ const assetWorker = {
     }
 
     return response;
-  },
-};
-
-export default {
-  fetch(request, env, ctx) {
-    return observeEdgeRequest({
-      service: 'tnp',
-      request,
-      env,
-      ctx,
-      next: () => assetWorker.fetch(request, env, ctx),
-    });
   },
 };
