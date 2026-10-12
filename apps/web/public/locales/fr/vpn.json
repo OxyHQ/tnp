@@ -16,6 +16,10 @@
     "heading": "Pas encore disponible",
     "body": "TNP n'a pas encore mis en service sa première sortie : aucun appareil ne peut donc être ajouté. Cette page vous le permettra dès que ce sera fait. Rien n'a été enregistré pour votre compte."
   },
+  "notAllowed": {
+    "heading": "Non disponible pour votre compte",
+    "body": "Pour l'instant, le VPN est ouvert à un groupe limité de comptes, le temps que TNP garde fixes la capacité et le coût des sorties, et le vôtre n'en fait pas encore partie. Rien n'a été enregistré pour votre compte. Aucune sortie n'accepte les appareils ajoutés auparavant tant que votre compte n'en fait pas partie."
+  },
   "honesty": {
     "heading": "Ce que ce VPN protège, et ce qu'il ne protège pas",
     "protectsHeading": "Il protège",
@@ -46,7 +50,11 @@
     "once": "C'est la seule fois que la clé privée est affichée. TNP ne l'a jamais reçue et ne peut pas la montrer à nouveau. Téléchargez la configuration ou scannez le code maintenant ; si vous la perdez, révoquez l'appareil et ajoutez-en un nouveau.",
     "clipboard": "Copier place la clé privée dans votre presse-papiers, où l'historique ou la synchronisation du presse-papiers peut la conserver. Préférez le téléchargement ou le code QR. Si vous copiez quand même, cette page écrase le presse-papiers après 60 secondes lorsque le navigateur le permet.",
     "exit": "Sortie",
-    "exitOption": "{{id}} ({{region}})",
+    "exitOption": "{{place}} ({{region}})",
+    "exitHelp": "Choisissez la sortie la plus proche : elle est plus rapide, et les sites vous répondent depuis des serveurs proches d'elle. Cet appareil est accepté sur toutes les sorties, mais chaque configuration n'en désigne qu’une ; pour changer de sortie, choisissez-en une autre ici et téléchargez ou scannez aussi sa configuration.",
+    "exitSingle": "Sortie : {{exit}}",
+    "dnsOnExit": "DNS : <code>{{dns}}</code>, le résolveur TNP de la sortie elle-même, joint par le tunnel. Il répond depuis la sortie et ne garde aucune trace des noms que vous consultez.",
+    "dnsVia": "DNS : <code>{{dns}}</code>, le résolveur TNP, joint par le tunnel. Il ne garde aucune trace des noms que vous consultez.",
     "file": "Configuration WireGuard ({{file}})",
     "download": "Télécharger {{file}}",
     "qr": "Scanner avec l'application WireGuard",
@@ -119,5 +127,15 @@
     "revokeConfirm": "Révoquer {{name}} ? Les sorties cessent de l'accepter à leur prochaine synchronisation (normalement en moins d'une minute, au plus une dizaine de minutes) et sa configuration ne pourra plus être utilisée.",
     "revokeButton": "Révoquer l'appareil",
     "revoked": "{{name}} a été révoqué."
+  },
+  "regions": {
+    "us-east-1": "Virginie du Nord",
+    "us-west-2": "Oregon",
+    "eu-central-1": "Francfort",
+    "eu-west-1": "Irlande",
+    "eu-west-2": "Londres",
+    "ap-northeast-1": "Tokyo",
+    "ap-southeast-1": "Singapour",
+    "sa-east-1": "São Paulo"
   }
 }

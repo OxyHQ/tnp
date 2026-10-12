@@ -21,17 +21,20 @@ import {
   type RenameVpnDeviceRequest,
   renderWireGuardConfig,
   splitVpnEndpoint,
+  suggestVpnExit,
   tunnelFileName,
   VPN_PERSISTENT_KEEPALIVE_SECONDS,
   type VpnDevice,
   type VpnDeviceList,
   type VpnDeviceResponse,
+  type VpnErrorCode,
   type VpnExit,
+  vpnExitDns,
   vpnIpv6ForIpv4,
 } from '@tnp/shared-types';
 
 export type { WireGuardKeyPair };
-export { tunnelFileName };
+export { suggestVpnExit, tunnelFileName };
 
 export interface VpnApi {
   list(): Promise<VpnDeviceList>;
@@ -56,6 +59,21 @@ export function httpVpnApi(request: Request): VpnApi {
       await request<void>('DELETE', `/me/vpn/devices/${encodeURIComponent(id)}`);
     },
   };
+}
+
+/**
+ * What the page shows when `GET /me/vpn/devices` fails: the VPN is off
+ * (503 `vpn_not_configured`), it is not open to this account (403
+ * `vpn_not_available`, `TNP_VPN_ALLOWED_USERS`), or something went wrong.
+ */
+export function classifyLoadFailure(
+  status: number | undefined,
+  code: string | undefined,
+): 'unavailable' | 'notAllowed' | 'error' {
+  const expected: VpnErrorCode | undefined =
+    status === 503 ? 'vpn_not_configured' : status === 403 ? 'vpn_not_available' : undefined;
+  if (expected === undefined || code !== expected) return 'error';
+  return expected === 'vpn_not_configured' ? 'unavailable' : 'notAllowed';
 }
 
 export interface NewDevice {
@@ -86,8 +104,34 @@ export interface DeviceConfigInput {
   privateKey: string;
   device: Pick<VpnDevice, 'ipv4' | 'ipv6'>;
   exit: VpnExit;
+  /** The network-wide resolvers; the exit's own `dns` takes precedence (`configDns`). */
   dns: readonly string[];
   allowedIPs: readonly string[];
+}
+
+/** The resolvers a config for this exit names: the exit's own, else the network's. */
+export function configDns(input: Pick<DeviceConfigInput, 'exit' | 'dns'>): readonly string[] {
+  return vpnExitDns(input.exit, input.dns);
+}
+
+/**
+ * AWS region codes whose city the page can name (`vpn:regions.<code>`, in
+ * every locale). Any other `region` is shown as it is configured.
+ */
+export const KNOWN_EXIT_REGIONS: readonly string[] = [
+  'us-east-1',
+  'us-west-2',
+  'eu-central-1',
+  'eu-west-1',
+  'eu-west-2',
+  'ap-northeast-1',
+  'ap-southeast-1',
+  'sa-east-1',
+];
+
+/** Whether the page has a city name for this exit's region. */
+export function isKnownExitRegion(region: string): boolean {
+  return KNOWN_EXIT_REGIONS.includes(region);
 }
 
 /** The `.conf` text the WireGuard apps import (and the QR code encodes). */
@@ -161,7 +205,8 @@ export function openWrtCommands(input: DeviceConfigInput, options: OpenWrtOption
   const killSwitch = options.killSwitch ?? true;
   // Validate everything the same way the .conf renderer does (it throws).
   renderWireGuardConfig({ ...input, useEndpointIp: true });
-  const { privateKey, device, exit, dns, allowedIPs } = input;
+  const { privateKey, device, exit, allowedIPs } = input;
+  const dns = configDns(input);
   const endpoint = splitVpnEndpoint(exit.endpoint);
   if (!endpoint) throw new RangeError('invalid exit endpoint');
   if (!isValidIpv4(exit.endpointIp) && !isValidIpv6(exit.endpointIp)) {

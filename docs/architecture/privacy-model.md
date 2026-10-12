@@ -207,8 +207,11 @@ the one any other surface must not go beyond.
 - From TNP. Oxy operates the exit and can technically see every destination
   address and port, and the content of anything not encrypted by the site
   itself (HTTPS hides content, not which site). Oxy also runs the resolver the
-  config names. Exits keep aggregates only (§4, exit-nodes.md §9.3) — a promise
-  about operation, not a property the user can verify.
+  config names — on the exit itself (exit-nodes.md §9.7), so the same operator
+  that sees the destinations sees the DNS lookups too, tied to the device's
+  tunnel address. That resolver keeps aggregate counters and an in-memory
+  cache, and no query log. Exits keep aggregates only (§4, exit-nodes.md §9.3)
+  — a promise about operation, not a property the user can verify.
 - Identity. It is not anonymity: one operator runs the exit and holds the
   account each device belongs to, and an observer of both the user's link and
   the exit can correlate them by timing.

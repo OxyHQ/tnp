@@ -23,6 +23,13 @@ table inet tnp_exit {
     elements = { ::/128, ::1/128, ::ffff:0:0/96, 64:ff9b::/96, 64:ff9b:1::/48, 100::/64, 2001:db8::/32, 2002::/16, fc00::/7, fe80::/10, ff00::/8 }
   }
 
+  set local_dns_rate {
+    type ipv4_addr
+    size 65536
+    flags dynamic,timeout
+    timeout 1m
+  }
+
   set dns_v4 {
     type ipv4_addr
     elements = { 198.51.100.53 }
@@ -45,7 +52,9 @@ table inet tnp_exit {
     type filter hook input priority filter; policy drop;
     iif "lo" accept
     ct state invalid drop
+    iifname "wg0" ip daddr 10.77.0.1 meta l4proto { tcp, udp } th dport 53 add @local_dns_rate { ip saddr limit rate over 50/second burst 200 packets } counter name refused_dns_rate drop
     ct state established,related accept
+    iifname "wg0" ip saddr 10.77.0.0/16 ip daddr 10.77.0.1 meta l4proto { tcp, udp } th dport 53 accept
     iifname "ens5" udp dport 51820 accept
     iifname "ens5" udp sport 67 udp dport 68 accept
     iifname "ens5" udp sport 547 udp dport 546 accept
@@ -57,6 +66,7 @@ table inet tnp_exit {
     type filter hook forward priority filter; policy drop;
     tcp flags syn tcp option maxseg size set rt mtu
     ct state invalid drop
+    iifname "wg0" ip daddr @dns_v4 udp dport 53 add @dns_rate { ip saddr limit rate over 50/second burst 200 packets } counter name refused_dns_rate drop
     ct state established,related accept
     iifname != "wg0" drop
     ip saddr != 10.77.0.0/16 drop
@@ -66,7 +76,6 @@ table inet tnp_exit {
     ip daddr @blocked_v4 counter name refused_private reject with icmpx type admin-prohibited
     tcp dport { 25, 137, 139, 445 } counter name refused_port reject with tcp reset
     udp dport { 137, 138 } counter name refused_port reject with icmpx type admin-prohibited
-    ip daddr @dns_v4 udp dport 53 add @dns_rate { ip saddr limit rate over 50/second burst 200 packets } counter name refused_dns_rate drop
     oifname "ens5" counter name forwarded accept
   }
 

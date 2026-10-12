@@ -14,7 +14,40 @@ describe('readAgentConfig', () => {
       wgBin: '/usr/bin/wg',
       conntrackBin: '/usr/sbin/conntrack',
       maxStaleMs: 600_000,
+      cap: null,
     });
+  });
+
+  test('a monthly cap needs the uplink and a state directory', () => {
+    const base = { TNP_EXIT_TOKEN: TOKEN, TNP_EXIT_MONTHLY_CAP_GB: '3600' };
+    expect(
+      readAgentConfig({ ...base, TNP_EXIT_UPLINK: 'ens5', STATE_DIRECTORY: '/var/lib/tnp-exit' })
+        .cap,
+    ).toEqual({
+      capBytes: 3_600_000_000_000,
+      throttleMbit: 2,
+      uplink: 'ens5',
+      stateDir: '/var/lib/tnp-exit',
+      nftBin: '/usr/sbin/nft',
+    });
+    expect(
+      readAgentConfig({
+        ...base,
+        TNP_EXIT_THROTTLE_MBIT: '5',
+        TNP_EXIT_UPLINK: 'eth0',
+        STATE_DIRECTORY: '/var/lib/tnp-exit',
+      }).cap?.throttleMbit,
+    ).toBe(5);
+    expect(readAgentConfig({ ...base, TNP_EXIT_MONTHLY_CAP_GB: '0' }).cap).toBeNull();
+    for (const over of [
+      { STATE_DIRECTORY: '/var/lib/tnp-exit' },
+      { TNP_EXIT_UPLINK: 'ens5' },
+      { TNP_EXIT_UPLINK: 'ens5', STATE_DIRECTORY: '/x', TNP_EXIT_THROTTLE_MBIT: '0' },
+      { TNP_EXIT_UPLINK: 'ens5', STATE_DIRECTORY: '/x', TNP_EXIT_MONTHLY_CAP_GB: '1.5' },
+      { TNP_EXIT_UPLINK: 'ens5; rm', STATE_DIRECTORY: '/x' },
+    ]) {
+      expect(() => readAgentConfig({ ...base, ...over })).toThrow(AgentConfigError);
+    }
   });
 
   test('reads the token from the systemd credential when the env has none', () => {

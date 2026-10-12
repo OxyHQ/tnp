@@ -18,7 +18,8 @@ export interface ExitRouterOptions {
  * Oxy session: an exit is a machine, not an account. The answer is the peer
  * set and nothing else — keys and tunnel addresses, no account ids, no names —
  * so an exit (or anyone who steals its token) learns how many devices exist
- * and their public keys, not whose they are.
+ * and their public keys, not whose they are. Devices of accounts outside
+ * `TNP_VPN_ALLOWED_USERS` are left out.
  */
 export function createExitRouter({ db = getDb, vpn }: ExitRouterOptions): Router {
   const router = Router();
@@ -41,7 +42,8 @@ export function createExitRouter({ db = getDb, vpn }: ExitRouterOptions): Router
       return;
     }
     try {
-      const body: ExitPeersResponse = { peers: await listExitPeers(db()) };
+      // Only allowlisted accounts' devices: no exit carries anyone else's traffic.
+      const body: ExitPeersResponse = { peers: await listExitPeers(db(), config.allowedUsers) };
       res.json(body);
     } catch (err) {
       logError('List exit peers error:', err);

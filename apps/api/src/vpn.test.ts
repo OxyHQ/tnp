@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { timingSafeEqual } from 'node:crypto';
 import { generateWireGuardKeyPair } from '@tnp/crypto/wireguard';
-import { digestToken, exitTokenMatches, readVpnConfig, vpnNetwork } from './vpn';
+import { digestToken, exitTokenMatches, readVpnConfig, vpnAllowsUser, vpnNetwork } from './vpn';
 
 const EXIT = {
   id: 'usw2-1',
@@ -39,6 +39,53 @@ describe('readVpnConfig', () => {
       allowedIPs: ['0.0.0.0/0', '::/0'],
       maxDevices: 10,
     });
+  });
+
+  test("an exit's own dns is served with it; the network list stays the fallback", () => {
+    const euc1 = {
+      ...EXIT,
+      id: 'euc1-1',
+      region: 'eu-central-1',
+      endpoint: 'euc1-1.exit.example:51820',
+      endpointIp: '203.0.113.20',
+      publicKey: generateWireGuardKeyPair().publicKey,
+      dns: '10.77.0.1',
+    };
+    const { config, warnings } = readVpnConfig(
+      env({ TNP_VPN_EXITS: JSON.stringify([EXIT, euc1]) }),
+    );
+    expect(warnings).toEqual([]);
+    const network = config && vpnNetwork(config);
+    expect(network?.exits).toEqual([EXIT, { ...euc1, dns: ['10.77.0.1'] }]);
+    expect(network?.dns).toEqual(['198.51.100.53']);
+    expect(network?.exits[0]).not.toHaveProperty('dns');
+    const bad = readVpnConfig(
+      env({ TNP_VPN_EXITS: JSON.stringify([{ ...euc1, dns: 'resolver.example' }]) }),
+    );
+    expect(bad.config).toBeNull();
+    expect(bad.warnings[0]).toContain('TNP_VPN_EXITS[0].dns');
+  });
+
+  test('TNP_VPN_ALLOWED_USERS: who may use it; unset in production means off for everyone', () => {
+    expect(readVpnConfig(env()).config?.allowedUsers).toBeNull();
+    expect(
+      readVpnConfig(env({ TNP_VPN_ALLOWED_USERS: 'u1, 65f0c0ffee0123456789abcd,u1' })).config
+        ?.allowedUsers,
+    ).toEqual(['u1', '65f0c0ffee0123456789abcd']);
+    const prod = readVpnConfig(env({ NODE_ENV: 'production' }));
+    expect(prod.config).toBeNull();
+    expect(prod.warnings[0]).toContain('TNP_VPN_ALLOWED_USERS is not set');
+    expect(
+      readVpnConfig(env({ NODE_ENV: 'production', TNP_VPN_ALLOWED_USERS: 'u1' })).config
+        ?.allowedUsers,
+    ).toEqual(['u1']);
+    const bad = readVpnConfig(env({ TNP_VPN_ALLOWED_USERS: 'u1,not an id;' }));
+    expect(bad.config).toBeNull();
+    const config = readVpnConfig(env({ TNP_VPN_ALLOWED_USERS: 'u1' })).config;
+    if (!config) throw new Error('off');
+    expect(vpnAllowsUser(config, 'u1')).toBe(true);
+    expect(vpnAllowsUser(config, 'u2')).toBe(false);
+    expect(vpnAllowsUser({ allowedUsers: null }, 'anyone')).toBe(true);
   });
 
   test('the resolver defaults to TNP_PARKING_IP, and without one the VPN stays off', () => {

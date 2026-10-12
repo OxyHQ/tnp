@@ -16,6 +16,10 @@
     "heading": "Todavía no disponible",
     "body": "TNP aún no ha activado su primera salida, así que no se pueden añadir dispositivos. Esta página te permitirá hacerlo en cuanto esté lista. No se ha guardado nada para tu cuenta."
   },
+  "notAllowed": {
+    "heading": "No disponible para tu cuenta",
+    "body": "Por ahora la VPN está abierta a un grupo limitado de cuentas, mientras TNP mantiene fijos la capacidad y el coste de las salidas, y la tuya aún no está incluida. No se ha guardado nada para tu cuenta. Ninguna salida acepta los dispositivos añadidos antes mientras tu cuenta no esté en el grupo."
+  },
   "honesty": {
     "heading": "Qué protege esta VPN y qué no",
     "protectsHeading": "Protege",
@@ -46,7 +50,11 @@
     "once": "Esta es la única vez que se muestra la clave privada. TNP nunca la recibió y no puede volver a mostrarla. Descarga la configuración o escanea el código ahora; si la pierdes, revoca el dispositivo y añade uno nuevo.",
     "clipboard": "Copiar pone la clave privada en tu portapapeles, donde el historial o la sincronización del portapapeles pueden conservarla. Es mejor la descarga o el código QR. Si copias de todos modos, esta página sobrescribe el portapapeles a los 60 segundos cuando el navegador lo permite.",
     "exit": "Salida",
-    "exitOption": "{{id}} ({{region}})",
+    "exitOption": "{{place}} ({{region}})",
+    "exitHelp": "Elige la salida más cercana: es más rápida y los sitios web responden desde servidores cercanos a ella. Este dispositivo se acepta en todas las salidas, pero cada configuración apunta a una sola; para cambiar de salida, elige otra aquí y descarga o escanea también su configuración.",
+    "exitSingle": "Salida: {{exit}}",
+    "dnsOnExit": "DNS: <code>{{dns}}</code>, el resolvedor de TNP en la propia salida, al que se llega por el túnel. Responde desde cerca de la salida y no guarda registro de los nombres que consultas.",
+    "dnsVia": "DNS: <code>{{dns}}</code>, el resolvedor de TNP, al que se llega por el túnel. No guarda registro de los nombres que consultas.",
     "file": "Configuración de WireGuard ({{file}})",
     "download": "Descargar {{file}}",
     "qr": "Escanear con la aplicación WireGuard",
@@ -119,5 +127,15 @@
     "revokeConfirm": "¿Revocar {{name}}? Las salidas dejan de aceptarlo en su siguiente sincronización (normalmente en menos de un minuto, como mucho unos 10 minutos) y su configuración no podrá volver a usarse.",
     "revokeButton": "Revocar dispositivo",
     "revoked": "{{name}} ha sido revocado."
+  },
+  "regions": {
+    "us-east-1": "Virginia del Norte",
+    "us-west-2": "Oregón",
+    "eu-central-1": "Fráncfort",
+    "eu-west-1": "Irlanda",
+    "eu-west-2": "Londres",
+    "ap-northeast-1": "Tokio",
+    "ap-southeast-1": "Singapur",
+    "sa-east-1": "São Paulo"
   }
 }

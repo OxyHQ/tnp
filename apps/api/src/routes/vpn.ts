@@ -18,7 +18,7 @@ import {
   renameVpnDevice,
 } from '../registry/vpnDevices.js';
 import { logError } from '../utils/logError.js';
-import { type VpnConfig, vpnNetwork } from '../vpn.js';
+import { type VpnConfig, vpnAllowsUser, vpnNetwork } from '../vpn.js';
 
 export interface VpnRouterOptions {
   db?: () => Executor;
@@ -32,6 +32,26 @@ function fail(res: Response, status: number, error: string, code?: VpnErrorCode)
 }
 
 const NOT_CONFIGURED = 'The VPN is not available yet: no exit is configured.';
+const NOT_AVAILABLE =
+  'The VPN is not available for your account yet. It is open to a limited set of accounts while capacity is fixed.';
+
+/** The config, or null after answering 503/403 for a feature that is off or not for this account. */
+function usable(
+  vpn: () => VpnConfig | null,
+  req: Parameters<typeof getRequiredOxyUserId>[0],
+  res: Response,
+): VpnConfig | null {
+  const config = vpn();
+  if (!config) {
+    fail(res, 503, NOT_CONFIGURED, 'vpn_not_configured');
+    return null;
+  }
+  if (!vpnAllowsUser(config, getRequiredOxyUserId(req))) {
+    fail(res, 403, NOT_AVAILABLE, 'vpn_not_available');
+    return null;
+  }
+  return config;
+}
 
 /**
  * `/me/vpn` — the caller's WireGuard devices (docs/architecture/vpn.md §10).
@@ -42,14 +62,16 @@ const NOT_CONFIGURED = 'The VPN is not available yet: no exit is configured.';
  * is refused, never stored or logged.
  *
  * While the feature is off, every route answers 503 `vpn_not_configured`
- * except DELETE: removing your own data is never switched off.
+ * except DELETE: removing your own data is never switched off. For an account
+ * outside `TNP_VPN_ALLOWED_USERS` they answer 403 `vpn_not_available` — again
+ * except DELETE.
  */
 export function createVpnRouter({ db = getDb, vpn }: VpnRouterOptions): Router {
   const router = Router();
 
   router.get('/devices', requireOxyAuth, async (req, res) => {
-    const config = vpn();
-    if (!config) return fail(res, 503, NOT_CONFIGURED, 'vpn_not_configured');
+    const config = usable(vpn, req, res);
+    if (!config) return;
     try {
       const body: VpnDeviceList = {
         devices: await listVpnDevices(db(), getRequiredOxyUserId(req)),
@@ -63,8 +85,8 @@ export function createVpnRouter({ db = getDb, vpn }: VpnRouterOptions): Router {
   });
 
   router.post('/devices', requireOxyAuth, async (req, res) => {
-    const config = vpn();
-    if (!config) return fail(res, 503, NOT_CONFIGURED, 'vpn_not_configured');
+    const config = usable(vpn, req, res);
+    if (!config) return;
     const parsed = parseCreateVpnDeviceRequest(req.body);
     if (!parsed.ok) return fail(res, 400, parsed.error);
     try {
@@ -100,8 +122,8 @@ export function createVpnRouter({ db = getDb, vpn }: VpnRouterOptions): Router {
   });
 
   router.patch('/devices/:id', requireOxyAuth, async (req, res) => {
-    const config = vpn();
-    if (!config) return fail(res, 503, NOT_CONFIGURED, 'vpn_not_configured');
+    const config = usable(vpn, req, res);
+    if (!config) return;
     const parsed = parseRenameVpnDeviceRequest(req.body);
     if (!parsed.ok) return fail(res, 400, parsed.error);
     const id = req.params.id;
