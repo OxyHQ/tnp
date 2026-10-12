@@ -496,7 +496,46 @@ test('the Ed25519 vectors handed to pwsh are what node:crypto says they are', ()
   }
 });
 
-describe.skipIf(!pwsh)('install.ps1 verification under pwsh', () => {
+/**
+ * Windows PowerShell 5.1 (`powershell.exe`): what every Windows 10/11 machine
+ * has, and what `irm https://get.tnp.network/ps | iex` usually runs in. Its
+ * BigInteger and .NET Framework are not pwsh's, so the verifier is run under
+ * both wherever both exist (Windows; client-platforms.yml runs this there).
+ */
+const windowsPowerShell = (() => {
+  if (process.platform !== 'win32') return null;
+  const path = join(
+    process.env.SystemRoot ?? 'C:\\Windows',
+    'System32',
+    'WindowsPowerShell',
+    'v1.0',
+    'powershell.exe',
+  );
+  return existsSync(path) ? path : null;
+})();
+
+const POWERSHELLS = [
+  { label: 'pwsh', path: pwsh, timeout: 120_000 },
+  { label: 'Windows PowerShell 5.1', path: windowsPowerShell, timeout: 300_000 },
+];
+
+/**
+ * The environment for a PowerShell child on Windows. Windows PowerShell must
+ * not inherit pwsh's PSModulePath (bun test is started from pwsh on GitHub's
+ * runners), or it cannot load its own modules: `Get-FileHash` "is not
+ * recognized".
+ */
+function windowsChildEnv(home: string, shell: string): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = { HOME: home };
+  for (const [key, value] of Object.entries(process.env)) {
+    if (shell === windowsPowerShell && key.toLowerCase() === 'psmodulepath') continue;
+    env[key] = value;
+  }
+  env.HOME = home;
+  return env;
+}
+
+describe.skipIf(!pwsh && !windowsPowerShell)('install.ps1 verification', () => {
   let dir: string;
 
   beforeAll(() => {
@@ -542,23 +581,43 @@ describe.skipIf(!pwsh)('install.ps1 verification under pwsh', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test('verifies a good release and refuses a tampered or forged one', () => {
-    const result = Bun.spawnSync(
-      [
-        pwsh as string,
-        '-NoProfile',
-        '-NonInteractive',
-        '-File',
-        join(import.meta.dir, 'fixtures/install-ps1-harness.ps1'),
-        '-Dir',
-        dir,
-      ],
-      { env: { PATH: process.env.PATH ?? '', HOME: dir } },
+  for (const shell of POWERSHELLS) {
+    test.skipIf(!shell.path)(
+      `verifies a good release and refuses a tampered or forged one (${shell.label})`,
+      () => {
+        const result = Bun.spawnSync(
+          [
+            shell.path as string,
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            join(import.meta.dir, 'fixtures/install-ps1-harness.ps1'),
+            '-Dir',
+            dir,
+          ],
+          {
+            // Windows processes need SystemRoot and friends to start at all.
+            env:
+              process.platform === 'win32'
+                ? windowsChildEnv(dir, shell.path as string)
+                : { PATH: process.env.PATH ?? '', HOME: dir },
+          },
+        );
+        const output = result.stdout.toString() + result.stderr.toString();
+        console.log(
+          output
+            .split('\n')
+            .filter((l) => l.startsWith('INFO'))
+            .join('\n'),
+        );
+        expect(output).toContain('ALL PASS');
+        expect(output).not.toContain('FAIL');
+        expect(result.exitCode).toBe(0);
+      },
+      // pwsh takes several seconds to start on a cold runner.
+      shell.timeout,
     );
-    const output = result.stdout.toString() + result.stderr.toString();
-    expect(output).toContain('ALL PASS');
-    expect(output).not.toContain('FAIL');
-    expect(result.exitCode).toBe(0);
-    // pwsh takes several seconds to start on a cold runner.
-  }, 120_000);
+  }
 });

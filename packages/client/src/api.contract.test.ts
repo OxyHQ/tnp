@@ -19,6 +19,7 @@
  */
 
 import { describe, expect, test } from 'bun:test';
+import { resolve } from 'node:path';
 import { createRulesEnvelope } from '@tnp/crypto/dns-rules';
 import {
   parseCreateVpnDeviceRequest,
@@ -455,7 +456,7 @@ describe('VPN devices', () => {
       publicKey: keys.publicKey,
     });
     expect(JSON.stringify(sent.body)).not.toContain(keys.privateKey);
-    expect(file).toBe('/tmp/tnp-contract/tnp-My-laptop.conf');
+    expect(file).toBe(resolve('/tmp/tnp-contract', 'tnp-My-laptop.conf'));
     expect(written).toContain(`PrivateKey = ${keys.privateKey}\n`);
     expect(written).toContain('AllowedIPs = 0.0.0.0/0, ::/0\n');
   });

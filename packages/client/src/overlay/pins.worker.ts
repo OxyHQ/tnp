@@ -7,9 +7,9 @@ import { encodeBase64, generateSigningKeyPair } from '@tnp/crypto';
 import { PinStore } from './pins';
 import { OverlayStore } from './store';
 
-const [root, worker] = process.argv.slice(2);
+const [root, worker, count = '15'] = process.argv.slice(2);
 const pins = new PinStore(new OverlayStore(root, null));
-for (let i = 0; i < 15; i++) {
+for (let i = 0; i < Number(count); i++) {
   pins.record(`w${worker}n${i}.ox`, encodeBase64(generateSigningKeyPair().publicKey), [
     { key: 'k', serial: i },
   ]);

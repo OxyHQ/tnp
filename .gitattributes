@@ -1,0 +1,5 @@
+# The installers are served byte for byte by the API, and install.sh only runs
+# under sh with LF line endings; a Windows checkout (core.autocrlf) must not
+# turn them into CRLF. Shell scripts likewise.
+apps/api/src/installers/* text eol=lf
+*.sh text eol=lf

@@ -1,10 +1,14 @@
 import { describe, expect, test } from 'bun:test';
+import { join } from 'node:path';
 import {
   applyStoredConfig,
+  dataDir,
   DEFAULT_UPSTREAM_DNS,
   isIpLiteral,
   parsePrivacyLevel,
+  processTldCachePath,
   resolverSubset,
+  routingStateDirs,
   systemStateDir,
   type TnpConfig,
 } from './config';
@@ -190,5 +194,23 @@ describe('systemStateDir', () => {
       if (saved === undefined) delete process.env.PROGRAMDATA;
       else process.env.PROGRAMDATA = saved;
     }
+  });
+});
+
+describe('where privileged state lives', () => {
+  test('routing records are kept in the root/Administrators-only state directory', () => {
+    const dirs = routingStateDirs();
+    expect(dirs.current).toBe(systemStateDir());
+    // Linux always kept them there; elsewhere the user-writable data directory
+    // of 0.5.1 is only read, as untrusted, to tear down an older install.
+    if (process.platform === 'linux') expect(dirs.legacy).toBeNull();
+    else expect(dirs.legacy).toBe(dataDir());
+  });
+
+  test("a resolver's TLD cache is its own process's, never a path from the config", () => {
+    const root = process.platform === 'darwin' && process.geteuid?.() === 0;
+    expect(processTldCachePath()).toBe(
+      root ? join(systemStateDir(), 'tlds.json') : join(dataDir(), 'tlds.json'),
+    );
   });
 });

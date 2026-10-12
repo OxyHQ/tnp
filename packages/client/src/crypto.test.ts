@@ -13,6 +13,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import nacl from 'tweetnacl';
 import { fromBase64, generateIdentity, loadOrCreateIdentity, toBase64 } from './crypto';
+import { probeWindowsAcl, WIN_SID, windowsAclProblems } from './secure-fs';
+import { findSystemBinary, runChecked, runCmd } from './system-cmd';
+
+/** On Windows the ACL is the permission: what the real probe reads for `path`. */
+function windowsKeyProblems(path: string): string[] {
+  const powershell = findSystemBinary('powershell', 'win32') as string;
+  return windowsAclProblems(
+    probeWindowsAcl({ run: runCmd, powershell }, [path], false),
+    'private-file',
+  );
+}
 
 describe('base64 helpers', () => {
   test('round-trips arbitrary bytes', () => {
@@ -94,8 +105,12 @@ describe('loadOrCreateIdentity', () => {
     try {
       const keyPath = join(dir, 'state', 'identity.key');
       loadOrCreateIdentity(keyPath);
-      expect(statSync(keyPath).mode & 0o777).toBe(0o600);
-      expect(statSync(join(dir, 'state')).mode & 0o777).toBe(0o700);
+      if (process.platform === 'win32') {
+        expect(windowsKeyProblems(keyPath)).toEqual([]);
+      } else {
+        expect(statSync(keyPath).mode & 0o777).toBe(0o600);
+        expect(statSync(join(dir, 'state')).mode & 0o777).toBe(0o700);
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -106,10 +121,18 @@ describe('loadOrCreateIdentity', () => {
     try {
       const keyPath = join(dir, 'identity.key');
       const created = loadOrCreateIdentity(keyPath);
-      chmodSync(keyPath, 0o644);
+      if (process.platform === 'win32') {
+        // What an older build left: an explicit read grant for Users.
+        const icacls = findSystemBinary('icacls', 'win32') as string;
+        runChecked({ file: icacls, args: [keyPath, '/grant', `*${WIN_SID.users}:R`] });
+        expect(windowsKeyProblems(keyPath).join(' ')).toContain(WIN_SID.users);
+      } else {
+        chmodSync(keyPath, 0o644);
+      }
       const reloaded = loadOrCreateIdentity(keyPath);
       expect(toBase64(reloaded.publicKey)).toBe(toBase64(created.publicKey));
-      expect(statSync(keyPath).mode & 0o777).toBe(0o600);
+      if (process.platform === 'win32') expect(windowsKeyProblems(keyPath)).toEqual([]);
+      else expect(statSync(keyPath).mode & 0o777).toBe(0o600);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

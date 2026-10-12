@@ -1,19 +1,20 @@
 #!/usr/bin/env bun
-import { mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
 import { installAutoConnect, removeAutoConnect } from './autoconnect';
 import {
-  dataDir,
   loadConfig,
   loadResolverConfig,
   personalRulesPath,
+  processTldCachePath,
+  routingStateDirs,
   saveConfig,
   parsePrivacyLevel,
   type TnpConfig,
+  writeSystemStateFile,
 } from './config';
 import {
   applyNativeRouting,
-  readRoutingState,
+  readRecordedRouting,
   removeNativeRouting,
   routingStatePath,
   type RoutingState,
@@ -266,7 +267,12 @@ async function cmdConnect() {
   );
 
   // Start DNS proxy with overlay enabled, applying this device's personal rules.
-  const proxy = new DnsProxy({ ...config, personalRulesPath: personalRulesPath() });
+  // The TLD cache is this process's own, never the path in the config.
+  const proxy = new DnsProxy({
+    ...config,
+    tldCachePath: processTldCachePath(),
+    personalRulesPath: personalRulesPath(),
+  });
   proxy.enableOverlay();
 
   proxy.startTldSync(5 * 60 * 1000);
@@ -328,7 +334,7 @@ async function cmdConnect() {
   process.on('SIGTERM', shutdown);
 }
 
-const connectStatePath = () => routingStatePath(dataDir(), 'connect');
+const connectStatePath = () => routingStatePath(routingStateDirs().current, 'connect');
 
 /** What this session added to the OS DNS configuration, for teardown. */
 let connectRouting: RoutingState | null = null;
@@ -374,11 +380,10 @@ function configureDns(config: TnpConfig): boolean {
     const { state } = applyNativeRouting({ owner: 'connect', target });
     if (state.mechanism === 'none') return false;
     connectRouting = state;
-    // Also on disk, so the next session can clean up after a crash.
+    // Also on disk (root/Administrators only), so the next session can clean
+    // up after a crash.
     try {
-      const path = connectStatePath();
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+      writeSystemStateFile(connectStatePath(), `${JSON.stringify(state, null, 2)}\n`);
     } catch (err) {
       console.warn(
         `[tnp] could not record DNS routing state: ${err instanceof Error ? err.message : String(err)}`,
@@ -398,19 +403,21 @@ function configureDns(config: TnpConfig): boolean {
 
 /** Undo exactly the routing `configureDns` recorded, plus legacy leftovers. */
 function restoreDns(): void {
-  const path = connectStatePath();
+  const recorded = readRecordedRouting('connect', routingStateDirs());
   try {
-    removeNativeRouting(connectRouting ?? readRoutingState(path));
+    removeNativeRouting(connectRouting ?? recorded.state);
     connectRouting = null;
   } catch (err) {
     console.warn(
       `[tnp] could not remove DNS routing automatically: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
-  try {
-    unlinkSync(path);
-  } catch {
-    // No recorded session -- nothing to remove.
+  for (const path of recorded.paths) {
+    try {
+      unlinkSync(path);
+    } catch {
+      // Not ours to remove (not root) or already gone.
+    }
   }
 
   // Earlier releases prepended the TNP public resolver to /etc/resolv.conf.

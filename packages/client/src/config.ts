@@ -1,8 +1,9 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { isIP } from 'node:net';
-import { join, win32 } from 'node:path';
+import { dirname, join, win32 } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
-import { restrictWindowsAcl, writeFileAtomic } from './secure-fs';
+import type { RoutingStateDirs } from './dns-routing';
+import { ensurePrivateDir, restrictWindowsAcl, writeFileAtomic } from './secure-fs';
 import { windowsProgramData } from './windows-paths';
 
 import { parseSourceList } from './dns/rate-limit';
@@ -291,6 +292,42 @@ export function systemStateDir(
   }
 }
 
+/**
+ * Where the DNS routing records live (dns-routing.ts `RoutingStateDirs`):
+ * `systemStateDir()`, root/Administrators only, because install, uninstall,
+ * connect and rules act on them as root/SYSTEM. 0.5.1 and earlier wrote them
+ * to `dataDir()`, which on macOS under sudo and on Windows is a directory the
+ * user controls; that location is still read, as untrusted, to tear down an
+ * older install.
+ */
+export function routingStateDirs(): RoutingStateDirs {
+  const current = systemStateDir();
+  const legacy = dataDir();
+  return { current, legacy: legacy === current ? null : legacy };
+}
+
+/** Write a root/Administrators-only state file: 0600 in a private directory. */
+export function writeSystemStateFile(path: string, body: string): void {
+  ensurePrivateDir(dirname(path));
+  writeFileAtomic(path, body, { mode: 0o600 });
+}
+
+/**
+ * Where a resolver run by THIS process keeps its TLD cache. Computed here,
+ * never taken from the config file: the config is written by whoever ran
+ * `tnp install` and named THEIR data directory, so the SYSTEM task (Windows)
+ * and the root LaunchDaemon (macOS) wrote the cache into a directory that
+ * user controls, through a predictable temporary name and following symlinks:
+ * a file written as SYSTEM/root wherever the user pointed it. Found when the
+ * client ran on real Windows and macOS runners (client-platforms.yml).
+ */
+export function processTldCachePath(): string {
+  if (process.platform === 'darwin' && process.geteuid?.() === 0) {
+    return join(systemStateDir(), 'tlds.json');
+  }
+  return join(dataDir(), 'tlds.json');
+}
+
 export function logPath(): string {
   switch (process.platform) {
     case 'win32':
@@ -450,7 +487,7 @@ export const RESOLVER_TLD_CACHE = join(RESOLVER_STATE_DIR, 'tlds.json');
  */
 export function loadResolverConfig(): DnsProxyConfig {
   try {
-    return loadConfig();
+    return { ...loadConfig(), tldCachePath: processTldCachePath() };
   } catch (err) {
     if (!existsSync(resolverConfigPath())) throw err;
     try {

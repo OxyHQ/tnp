@@ -33,6 +33,31 @@ export interface CmdResult {
 
 export type CmdRunner = (cmd: Cmd) => CmdResult;
 
+/**
+ * The environment a child process gets: this one, except that on Windows
+ * `PSModulePath` is left out.
+ *
+ * Every PowerShell command here runs in Windows PowerShell 5.1
+ * (`powershell.exe`). A tnp started from PowerShell 7 inherits pwsh's module
+ * path, and powershell.exe then tries to load pwsh's copies of its own
+ * modules and fails: "Get-Acl: The 'Get-Acl' command was found in the module
+ * 'Microsoft.PowerShell.Security', but the module could not be loaded". So
+ * from an elevated pwsh prompt every ACL check failed, and with it
+ * `tnp install`. Without the variable powershell.exe builds its default.
+ * Found by running the unit tests on a Windows runner, whose shell is pwsh.
+ */
+export function childEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): NodeJS.ProcessEnv {
+  if (platform !== 'win32') return env;
+  const out: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (key.toLowerCase() !== 'psmodulepath') out[key] = value;
+  }
+  return out;
+}
+
 export const runCmd: CmdRunner = (cmd) => {
   const res = spawnSync(cmd.file, cmd.args, {
     input: cmd.input,
@@ -40,6 +65,7 @@ export const runCmd: CmdRunner = (cmd) => {
     stdio: 'pipe',
     shell: false,
     windowsHide: true,
+    env: childEnv(),
   });
   if (res.error) {
     return { status: -1, stdout: '', stderr: res.error.message };
@@ -47,12 +73,44 @@ export const runCmd: CmdRunner = (cmd) => {
   return { status: res.status ?? -1, stdout: res.stdout ?? '', stderr: res.stderr ?? '' };
 };
 
+/**
+ * The text of a PowerShell error stream.
+ *
+ * Windows PowerShell started with `-NonInteractive`/`-EncodedCommand` and a
+ * redirected stderr writes its error (and progress) records there as CLIXML:
+ * a `#< CLIXML` line, then XML. Read raw, the first line of every PowerShell
+ * failure was just `#< CLIXML`, so a failed ACL check on Windows reported
+ * nothing about why. The `<S S="Error">` strings are the error text, with
+ * characters outside XML escaped as `_xHHHH_`.
+ */
+export function readableStderr(stderr: string): string {
+  if (!stderr.startsWith('#< CLIXML')) return stderr;
+  const text = [...stderr.matchAll(/<S S="Error">([^<]*)<\/S>/g)]
+    .map((m) =>
+      m[1]
+        .replace(/_x([0-9A-Fa-f]{4})_/g, (_, hex: string) =>
+          String.fromCharCode(Number.parseInt(hex, 16)),
+        )
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&amp;/g, '&'),
+    )
+    .join('');
+  return text.trim() ? text : stderr;
+}
+
 export class CommandError extends Error {
   constructor(
     readonly cmd: Cmd,
     readonly result: CmdResult,
   ) {
-    const detail = (result.stderr || result.stdout).trim().split('\n')[0] ?? '';
+    const detail =
+      (readableStderr(result.stderr).trim() || result.stdout.trim())
+        .split(/\r?\n/)
+        .find((line) => line.trim() !== '')
+        ?.trim() ?? '';
     super(`${formatCmd(cmd)} failed (exit ${result.status})${detail ? `: ${detail}` : ''}`);
     this.name = 'CommandError';
   }

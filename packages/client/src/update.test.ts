@@ -272,7 +272,8 @@ describe('installBinaryAtomically', () => {
     writeFileSync(target, 'old');
     installBinaryAtomically(target, binary, 'linux');
     expect(readFileSync(target)).toEqual(Buffer.from(binary));
-    expect(statSync(target).mode & 0o777).toBe(0o755);
+    // No executable bit to check on Windows, where Node reports 0o666.
+    if (process.platform !== 'win32') expect(statSync(target).mode & 0o777).toBe(0o755);
     expect(readdirSync(dir)).toEqual(['tnp']);
   });
 

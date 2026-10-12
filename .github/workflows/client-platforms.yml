@@ -1,0 +1,156 @@
+# Run the client's Windows and macOS code on real Windows and macOS.
+#
+# Everything platform-specific in packages/client (the SYSTEM scheduled task
+# and the LaunchDaemon, NRPT rules and /etc/resolver, Windows Firewall and pf,
+# icacls/Get-Acl and POSIX modes, uninstall) was until now only unit-tested by
+# reading the commands it would generate. Nothing executed them. Here the unit
+# tests run natively on each OS, and then the compiled binary is installed,
+# exercised and removed with administrator rights on a throwaway runner:
+#
+#   1. `tnp install` against a local fake TNP API: the service runs from the
+#      admin-only path, only `.ox` is routed, a test `.ox` name resolves
+#      through the system resolver to the fake API's answer while a public name
+#      still resolves normally, and the config is not readable by other users.
+#   2. The DNS kill switch: refused (and nothing left behind) when it cannot be
+#      enforced; while on, plain DNS to a public resolver is blocked and
+#      loopback is not; a crash keeps it on (fail closed); it comes off again.
+#   3. `tnp uninstall --purge`: service, routing, firewall/pf rules and files
+#      gone, and the adapter/resolver DNS settings exactly as before install.
+#   4. The real installers against the real signed release: install.ps1 under
+#      Windows PowerShell 5.1 (its own Ed25519 verifier), install.sh with the
+#      system LibreSSL (checksum only, refused with TNP_REQUIRE_SIGNATURE=1)
+#      and with Homebrew's OpenSSL 3 (signature verified).
+#
+# The scripts are in .github/scripts/client-platforms/. Every step after the
+# dependency install runs even when an earlier test step failed, so one red
+# step does not hide the others; the job still fails. Logs are uploaded when a
+# job fails.
+
+name: Client platforms
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Same policy as ci.yml: a newer push to a pull request cancels the run testing
+# the old head; runs on main are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('{0}-{1}', github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows (real install, kill switch, uninstall)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      E2E_LOG_DIR: ${{ github.workspace }}\e2e-logs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        id: deps
+        run: bun install --frozen-lockfile --cpu='*' --os='*'
+
+      # Each private write on Windows also sets and verifies an ACL, which
+      # starts icacls and Windows PowerShell (about a second), so the tests
+      # that write many files need more than bun's 5 s default.
+      - name: Client unit tests (native Windows)
+        working-directory: packages/client
+        run: bun test --timeout 60000
+
+      # The installer tests include the PowerShell verifier harness, here under
+      # both pwsh and Windows PowerShell 5.1 (powershell.exe).
+      - name: Installer tests (pwsh and Windows PowerShell 5.1)
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        working-directory: apps/api
+        run: bun test src/routes/client.test.ts
+
+      - name: Compile the client for Windows
+        id: compile
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: bun build packages/client/src/cli.ts --compile --outfile "${{ runner.temp }}\tnp-e2e\tnp.exe"
+
+      - name: End-to-end on Windows
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        shell: pwsh
+        run: ./.github/scripts/client-platforms/e2e-windows.ps1 -Tnp "${{ runner.temp }}\tnp-e2e\tnp.exe"
+
+      - name: Real install.ps1 against the signed release (Windows PowerShell 5.1)
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        shell: pwsh
+        run: ./.github/scripts/client-platforms/installer-windows.ps1
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: client-platforms-windows-logs
+          path: e2e-logs
+          if-no-files-found: ignore
+          retention-days: 7
+
+  macos:
+    name: macOS (real install, kill switch, uninstall)
+    runs-on: macos-latest
+    timeout-minutes: 25
+    env:
+      E2E_LOG_DIR: ${{ github.workspace }}/e2e-logs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        id: deps
+        run: bun install --frozen-lockfile --cpu='*' --os='*'
+
+      - name: Client unit tests (native macOS)
+        run: bun run --filter @tnp/client test
+
+      - name: Installer tests (install.sh under macOS sh, pwsh harness)
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        working-directory: apps/api
+        run: bun test src/routes/client.test.ts
+
+      - name: Compile the client for macOS
+        id: compile
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: bun build packages/client/src/cli.ts --compile --outfile "$RUNNER_TEMP/tnp-e2e/tnp"
+
+      - name: End-to-end on macOS
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        run: |
+          mkdir -p "$E2E_LOG_DIR"
+          sudo env \
+            TNP_BIN="$RUNNER_TEMP/tnp-e2e/tnp" \
+            BUN="$(command -v bun)" \
+            E2E_LOG_DIR="$E2E_LOG_DIR" \
+            bash .github/scripts/client-platforms/e2e-macos.sh
+
+      - name: Real install.sh against the signed release (LibreSSL and OpenSSL 3)
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: bash .github/scripts/client-platforms/installer-macos.sh
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: client-platforms-macos-logs
+          path: e2e-logs
+          if-no-files-found: ignore
+          retention-days: 7

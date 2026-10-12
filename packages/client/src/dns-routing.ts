@@ -55,8 +55,9 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
-import { dirname, join } from 'node:path';
+import { dirname, join, win32 } from 'node:path';
 import { BUILTIN_NATIVE_TLDS, isReservedTld } from '@tnp/namespace';
+import { childEnv, windowsSystem32 } from './system-cmd';
 
 /** The TLDs the OS routes to TNP. One source of truth: `@tnp/namespace`. */
 export const ROUTED_TLDS: readonly string[] = BUILTIN_NATIVE_TLDS;
@@ -257,10 +258,17 @@ export function windowsLegacyAdapterRepairScript(address: string): string {
   ].join('\n');
 }
 
-/** `powershell -EncodedCommand`: no cmd.exe quoting of `$`, `'` or `"` to get wrong. */
-export function powershellCommand(script: string): string {
+/**
+ * `powershell -EncodedCommand`: no cmd.exe quoting of `$`, `'` or `"` to get
+ * wrong. Windows PowerShell by its System32 path, never whatever `powershell`
+ * the elevated caller's PATH finds first (system-cmd.ts).
+ */
+export function powershellCommand(
+  script: string,
+  powershell: string = win32.join(windowsSystem32(), 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+): string {
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
-  return `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encoded}`;
+  return `"${powershell}" -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encoded}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -311,7 +319,7 @@ export interface RoutingDeps {
 
 export const systemDeps: RoutingDeps = {
   platform: process.platform,
-  run: (cmd) => execSync(cmd, { encoding: 'utf-8', stdio: 'pipe' }),
+  run: (cmd) => execSync(cmd, { encoding: 'utf-8', stdio: 'pipe', env: childEnv() }),
   exists: (path) => existsSync(path),
   read: (path) => readFileSync(path, 'utf-8'),
   write: (path, content) => {
@@ -333,17 +341,176 @@ export function routingStatePath(dataDirectory: string, owner: RoutingOwner): st
   return join(dataDirectory, `dns-routing-${owner}.json`);
 }
 
+/**
+ * Where routing records are kept: `current`, a root/Administrators-only
+ * directory, and `legacy`, where 0.5.1 and earlier kept them (null when it is
+ * the same place).
+ */
+export interface RoutingStateDirs {
+  current: string;
+  legacy: string | null;
+}
+
+const ROUTING_OWNERS: readonly RoutingOwner[] = ['install', 'connect', 'rules'];
+const ROUTING_MECHANISMS: readonly RoutingMechanism[] = [
+  'dns-delegate',
+  'resolved-link',
+  'macos-resolver',
+  'windows-nrpt',
+  'none',
+];
+
+function isLoopback(address: string): boolean {
+  return address === '::1' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(address);
+}
+
+/** A file this owner's routing can have written on this platform, and nothing else. */
+function routingFileAllowed(owner: RoutingOwner, path: string, platform: NodeJS.Platform): boolean {
+  if (platform === 'darwin') {
+    const name = /^\/etc\/resolver\/([a-z0-9.-]{1,253})$/.exec(path)?.[1];
+    if (!name) return false;
+    return owner === 'rules' ? RULE_NAME_RE.test(name) : ROUTED_TLDS.includes(name);
+  }
+  if (platform === 'linux') return path === ownerNames(owner).delegate;
+  return false;
+}
+
+/** A teardown command this owner's routing can have recorded, and nothing else. */
+function downCommandAllowed(owner: RoutingOwner, cmd: string, platform: NodeJS.Platform): boolean {
+  if (platform !== 'linux') return false;
+  const { link } = ownerNames(owner);
+  return cmd === `resolvectl revert ${link}` || cmd === `ip link delete ${link}`;
+}
+
+/**
+ * A routing record read from disk, reduced to what TNP itself could have
+ * written there, or null when it is not a routing record at all.
+ *
+ * Teardown acts on a record as root/SYSTEM: it deletes or rewrites the files
+ * it lists and RUNS its `down` commands through a shell. Until 0.5.1 records
+ * lived in the invoking user's data directory on macOS and Windows, which that
+ * user (or anything running as them) controls, so a planted record could make
+ * the next `sudo tnp install` or `tnp uninstall` run any command as root, or
+ * delete any file. Records are now kept root-only (`RoutingStateDirs`), and
+ * every record is also checked here: files only where this owner's routing
+ * writes, `down` only this owner's own link teardown, and a record from the
+ * legacy location loses its backups (their content is not trusted) and must
+ * point at loopback.
+ */
+export function sanitizeRoutingState(
+  value: unknown,
+  platform: NodeJS.Platform,
+  opts: { legacy?: boolean; warn?: (message: string) => void } = {},
+): RoutingState | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const raw = value as Partial<RoutingState>;
+  if (raw.version !== 1) return null;
+  if (!ROUTING_OWNERS.includes(raw.owner as RoutingOwner)) return null;
+  const owner = raw.owner as RoutingOwner;
+  const mechanism = ROUTING_MECHANISMS.includes(raw.mechanism as RoutingMechanism)
+    ? (raw.mechanism as RoutingMechanism)
+    : 'none';
+  const dropped: string[] = [];
+  const strings = (list: unknown): string[] =>
+    Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : [];
+
+  const files = strings(raw.files).filter((path) => {
+    const ok = routingFileAllowed(owner, path, platform);
+    if (!ok) dropped.push(`file ${JSON.stringify(path)}`);
+    return ok;
+  });
+  const down = strings(raw.down).filter((cmd) => {
+    const ok = downCommandAllowed(owner, cmd, platform);
+    if (!ok) dropped.push(`command ${JSON.stringify(cmd)}`);
+    return ok;
+  });
+  const keep = (record: unknown): Record<string, string> => {
+    const out: Record<string, string> = {};
+    if (typeof record !== 'object' || record === null) return out;
+    for (const [path, content] of Object.entries(record)) {
+      if (files.includes(path) && typeof content === 'string') out[path] = content;
+    }
+    return out;
+  };
+
+  const t = raw.target as Partial<RoutingTarget> | null | undefined;
+  let target: RoutingTarget | null =
+    t &&
+    typeof t.address === 'string' &&
+    net.isIP(t.address) !== 0 &&
+    Number.isInteger(t.port) &&
+    (t.port as number) > 0 &&
+    (t.port as number) < 65536
+      ? { address: t.address, port: t.port as number }
+      : null;
+  if (opts.legacy && target && !isLoopback(target.address)) {
+    dropped.push(`target ${target.address}`);
+    target = null;
+  }
+  if (dropped.length > 0) {
+    opts.warn?.(
+      `[tnp] ignored what TNP never records in a ${owner} routing record: ${dropped.join(', ')}`,
+    );
+  }
+
+  return {
+    version: 1,
+    owner,
+    mechanism,
+    target,
+    tlds: strings(raw.tlds),
+    files,
+    backups: opts.legacy ? {} : keep(raw.backups),
+    written: keep(raw.written),
+    down,
+    ...(typeof raw.adapterSnapshot === 'string' ? { adapterSnapshot: raw.adapterSnapshot } : {}),
+    ...(Array.isArray(raw.routes)
+      ? {
+          routes: raw.routes.filter(
+            (r): r is RuleRoute =>
+              typeof r === 'object' &&
+              r !== null &&
+              typeof r.name === 'string' &&
+              typeof r.subtree === 'boolean',
+          ),
+        }
+      : {}),
+  };
+}
+
 export function readRoutingState(
   path: string,
   deps: RoutingDeps = systemDeps,
+  opts: { legacy?: boolean } = {},
 ): RoutingState | null {
   try {
     if (!deps.exists(path)) return null;
-    const parsed = JSON.parse(deps.read(path)) as RoutingState;
-    return parsed && parsed.version === 1 ? parsed : null;
+    return sanitizeRoutingState(JSON.parse(deps.read(path)), deps.platform, {
+      legacy: opts.legacy,
+      warn: deps.warn,
+    });
   } catch {
     return null;
   }
+}
+
+/**
+ * The routing `owner` recorded, from the root-only directory or, for an
+ * install made by 0.5.1 or earlier, the legacy one (checked as untrusted).
+ * `paths` are the record files to delete once that routing is removed.
+ */
+export function readRecordedRouting(
+  owner: RoutingOwner,
+  dirs: RoutingStateDirs,
+  deps: RoutingDeps = systemDeps,
+): { state: RoutingState | null; paths: string[] } {
+  const current = routingStatePath(dirs.current, owner);
+  const legacy = dirs.legacy ? routingStatePath(dirs.legacy, owner) : null;
+  const paths = [current, ...(legacy ? [legacy] : [])].filter((p) => deps.exists(p));
+  const state =
+    readRoutingState(current, deps) ??
+    (legacy ? readRoutingState(legacy, deps, { legacy: true }) : null);
+  return { state, paths };
 }
 
 function tryRun(deps: RoutingDeps, cmd: string): boolean {
