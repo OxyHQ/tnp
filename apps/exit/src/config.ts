@@ -12,7 +12,7 @@
  * - `TNP_EXIT_INTERFACE`     default `wg0`.
  * - `TNP_EXIT_POLL_SECONDS`  default 20, clamped to 5-300.
  * - `TNP_EXIT_HEALTH_PORT`   default 9817 on 127.0.0.1; 0 turns it off.
- * - `TNP_EXIT_WG_BIN`        default `wg` (found on PATH).
+ * - `TNP_EXIT_WG_BIN`        default `/usr/bin/wg` (a system path, not a PATH lookup).
  */
 
 import { readFileSync } from 'node:fs';
@@ -91,7 +91,7 @@ export function readAgentConfig(
     throw new AgentConfigError('TNP_EXIT_HEALTH_PORT must be a port number or 0');
   }
 
-  const wgBin = env.TNP_EXIT_WG_BIN?.trim() || 'wg';
+  const wgBin = env.TNP_EXIT_WG_BIN?.trim() || '/usr/bin/wg';
   if (!/^[A-Za-z0-9_./-]+$/.test(wgBin) || wgBin.startsWith('-')) {
     throw new AgentConfigError('TNP_EXIT_WG_BIN is not a program path');
   }

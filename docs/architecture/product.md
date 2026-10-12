@@ -15,7 +15,7 @@ one network:
 |---|---|---|
 | **Namespace** — TNP's own TLDs, registration, DNS records | ICANN + a registrar | Works |
 | **Edge** — publish a service, TNP fronts it, origin IP never exposed | Cloudflare (Tunnel, reverse proxy, CDN) | Prototype |
-| **Secure connection** — device-wide tunnel, user-selectable privacy level | A consumer VPN | Not implemented |
+| **Secure connection** — device-wide tunnel, user-selectable privacy level | A consumer VPN | Standard tier implemented over WireGuard, off until the first exit is deployed ([`vpn.md`](./vpn.md) §10). Private tier: not implemented |
 
 The three are not alternatives. A domain registered in the namespace is served
 through the edge, and a device on the secure connection reaches it over the same
@@ -153,6 +153,14 @@ being optional for anyone who selects the private tier.
 
 The one reordering against the original roadmap: exits before onion, because the
 VPN product needs exits and the standard tier is honest about what an exit sees.
+
+**Rows 4 and 5, for the standard tier, are now WireGuard** (2026-10): the
+device runs the official WireGuard client to a TNP-operated exit, so the
+standard tier needed neither a TUN core nor overlay exits — it is the fast path
+in its plainest form, one encrypted hop. What the exit (Oxy) sees is stated
+where a device is added ([`privacy-model.md`](./privacy-model.md) §8). The TUN
+core and overlay exits remain rows 4–6 for the private tier, which is exactly
+the case a single operator's single hop cannot serve.
 
 ---
 

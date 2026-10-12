@@ -99,7 +99,7 @@ never *what to do* with what it captured.
 | Onion routing | **Not implemented.** `--privacy private` is parsed and ignored. | 6 |
 | Security | Grant chains from owner-held domain keys, clients pin each name's domain key (first contact trusts the registry), replay/reflection/truncation detected, certificates rotate. No device hierarchy, no directory revocation, no key transparency. | 5, 6 |
 | Proxy | SOCKS5 CONNECT to TNP names only. No IPv6, no auth, no public destinations, ignores the requested port. | 4 |
-| VPN | **Not implemented.** | 8, 9, 10 |
+| VPN | Standard tier: WireGuard to TNP-operated exits (official clients; registry, exit agent and bootstrap in `apps/api`, `apps/exit`), off until an exit is deployed — [vpn.md §10](./vpn.md). Private tier (TUN core over TNP circuits): **not implemented.** | 8, 9, 10 for the private tier |
 | Platforms | Linux/macOS/Windows install + service management exist. Mobile does not. | 9, 10 |
 | Control plane | API and dashboard work. `/health` is a static liveness answer. No metrics, no device management. | 1–11 incrementally |
 

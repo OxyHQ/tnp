@@ -295,6 +295,16 @@ registration key.
 | Android | Android Keystore, hardware-backed where available |
 | iOS | Secure Enclave / Keychain with the strictest usable accessibility class |
 
+**WireGuard VPN keys** (standard tier, [`vpn.md`](./vpn.md) §10) sit outside
+this hierarchy: a plain X25519 pair per device, made where the tunnel runs —
+in the browser (`@tnp/crypto/wireguard`, held in page memory only while the
+config is on screen) or by `tnp vpn add` (written once to a `0600` file, never
+overwritten). The registry holds the public key; a request carrying a private
+key is refused. An exit's private key lives in SSM Parameter Store (SecureString)
+and, at runtime, only in kernel memory: `wg-up.sh` reads it into `/run`, hands it
+to the kernel and deletes the file. The exit agent authenticates to the API with
+a per-exit bearer token, compared as SHA-256 digests with `timingSafeEqual`.
+
 Requirements: keys are never logged, never included in diagnostics, never
 serialized into telemetry, and never written to a temporary directory. On mobile,
 tunnel-side secrets live where the tunnel extension can reach them without the

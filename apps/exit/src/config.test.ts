@@ -11,7 +11,7 @@ describe('readAgentConfig', () => {
       iface: 'wg0',
       intervalMs: 20_000,
       healthPort: 9817,
-      wgBin: 'wg',
+      wgBin: '/usr/bin/wg',
     });
   });
 

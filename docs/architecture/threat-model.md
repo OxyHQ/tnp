@@ -68,6 +68,20 @@ first-contact caveat attached.
 | Exit / service relay | Destination; not the client IP. |
 | Anyone watching both ends | Can correlate by timing and volume. See [`privacy-model.md`](./privacy-model.md). |
 
+### VPN, standard tier (WireGuard to a TNP exit; implemented, not deployed)
+
+| Party | Sees |
+|---|---|
+| Local network observer, ISP | One WireGuard flow (UDP) to the exit's address, its timing and volume. Not destinations, DNS or contents. |
+| TNP exit (operated by Oxy) | The device's IP (WireGuard endpoint) and tunnel address, every destination address and port, the content of anything not end-to-end encrypted, timing and volume. Kept in kernel memory only; no log ([exit-nodes.md §9.3](./exit-nodes.md)). |
+| TNP API | Which account owns which public key and tunnel address. No connection data. Together with the exit, Oxy can tie traffic to an account. |
+| TNP public resolver | Every name the device looks up, from the exit's address (not the device's). |
+| Hosting provider (AWS) | What any network operator of the exit sees: the device's IP on one side, destinations on the other. |
+| Destination | The exit's address. Whatever the user tells it. |
+
+The exit operator seeing destinations is inherent (exit-nodes.md §1). This tier
+is confidentiality from the local network and ISP, not anonymity.
+
 ### Full tunnel mode (Phase 8+, not implemented)
 
 | Party | Sees |
@@ -86,7 +100,7 @@ in the exit picker and in the operator consent flow.
 | 1 | Malicious client | Flood a relay, exhaust memory, abuse an exit | Authenticated circuits, quotas, frame limits, exit policy | **Partial** — relay frame, circuit, connection, rate and buffer limits (relays.md §3); clients are unauthenticated by design; no exits exist |
 | 2 | Malicious service node | Serve hostile content under its own domain | Out of scope — it owns the name. Users trust names, not TNP. | By design |
 | 3 | Malicious relay | Drop, delay, reorder, count, correlate; hijack a domain; inject into another client's circuit | Authenticated registration, per-connection circuit scoping, E2E crypto, multi-hop | **Partial** — circuit scoping and service-node authentication (S1, S2 closed in code); replay, reorder, reflection, tampering, truncation and impersonation are detected end to end (transport.md §11). It can still drop, delay, count and correlate; it is not authenticated to clients; no multi-hop |
-| 4 | Malicious exit | Read and modify unencrypted traffic; log destinations | Published policy, TLS end to end, reputation, user selection | Not implemented |
+| 4 | Malicious exit | Read and modify unencrypted traffic; log destinations | Published policy, TLS end to end, reputation, user selection | **By design for the WireGuard tier:** the exit is Oxy's, it can do all of this, and users are told so (privacy-model.md §8). Defences there are operational (no log rule, in-memory journal) and TLS end to end. Community overlay exits: not implemented |
 | 5 | Compromised directory | Steer every client onto attacker relays | Signed directory, pinned key, diversity constraints, stale-rejection | **None today** — directory is unsigned |
 | 6 | Compromised API | Substitute keys → transparent MITM; rewrite records | Owner-held domain keys pinned by clients (security.md §1); signed record sets (naming.md §5); key transparency | **Partial** — key substitution refused for names a client has pinned; first contact still trusts the API; DNS records are not signed (S8) |
 | 7 | Compromised Oxy account | Take over the user's domains and devices | Oxy 2FA; device revocation; per-domain key custody | Partial. The account cannot replace a name's domain key while registered (rotation must be signed by the key). Releasing and re-registering the name forces a rotation from the released key, or a 30-day hold after which the new key is published as a `keyReset`; pinned clients refuse it ([security.md](./security.md) §1). The account can still deny service (release the name, stop nodes). |
@@ -101,16 +115,17 @@ in the exit picker and in the operator consent flow.
 | 16 | Malformed input | Crash or corrupt a parser | Bounds, fuzzing, structured errors | Partial — the resolver vets raw DNS packets before decoding; v1 frames have exact length checks and a 65 535-byte payload cap, every overlay codec is exact-length, and malformed input costs a circuit or a connection, never the process (tested); no fuzzing |
 | 17 | Memory exhaustion | Unbounded frames, queues, caches | Hard limits everywhere | Partial — resolver cache, rate-limit table, TCP buffers and in-flight work are bounded; relay frames, tables and buffers are bounded and end-to-end windows bound each circuit (relays.md §3) |
 | 18 | Connection exhaustion | Open connections until the relay dies | Per-IP and per-identity limits | Partial — resolver caps TCP connections with an absolute deadline; the relay caps connections per IP and overall and rate-limits new ones per IP; no per-identity limits (clients have none), and behind a load balancer per-IP limits need `RELAY_TRUST_FORWARDED_FOR` |
-| 19 | Exit abuse | Use TNP to attack third parties; expose the operator legally | Port policy, rate limits, private-range blocking, abuse handling | Not implemented |
+| 19 | Exit abuse | Use TNP to attack third parties; expose the operator legally | Port policy, rate limits, private-range blocking, abuse handling | **Partial** (WireGuard exits) — every exit-nodes.md §3 range and the VPC refused per packet, TCP 25 and SMB refused, per-peer DNS limit, accounts capped at 10 devices; no general per-peer rate limit; abuse answerable from aggregates only |
 | 20 | Update compromise | Ship malicious code to every device | Signed artefacts, channel separation, downgrade protection | **Partial** — releases are Ed25519-signed; `tnp update` verifies and refuses downgrades; installers verify (the signature only where OpenSSL 3 exists); the key is an online CI secret; no channels or signed metadata ([security.md §7](./security.md#7-update-security)) |
 | 21 | Local privilege attack | Unprivileged local process reconfigures the daemon | Authenticated owner-only IPC; `0600` config | Partial |
-| 22 | DNS leak | Names resolved outside the tunnel | Remote resolution, port-53 capture, encrypted-DNS capture | Partial — native names are never forwarded upstream and the OS routes only native TLDs to TNP; tunnel-mode capture not implemented |
-| 23 | IPv6 leak | v6 escapes a v4-only tunnel | Full dual-stack capture or explicit v6 block | Not implemented |
+| 22 | DNS leak | Names resolved outside the tunnel | Remote resolution, port-53 capture, encrypted-DNS capture | Partial — native names are never forwarded upstream and the OS routes only native TLDs to TNP. WireGuard tier: the config sets the resolver and routes everything through the tunnel; whether the OS honours it is the WireGuard client's job (vpn.md §10.5), not yet measured. TUN capture not implemented |
+| 23 | IPv6 leak | v6 escapes a v4-only tunnel | Full dual-stack capture or explicit v6 block | **Implemented** for the WireGuard tier — every config captures `::/0`; the exit refuses forwarded IPv6 with an ICMP error. Not yet measured on devices |
 | 24 | WebRTC leak | Browser reveals the local IP | Documented; browser-side guidance; cannot be fixed by the tunnel alone | Documented only |
 | 25 | Accidental logging | Domains, IPs, tokens in logs | Redaction at generation; explicit logging policy | Partial — the resolver and SOCKS proxy do not log queried names |
 | 26 | Reflection / amplification | Spoof a victim's address at the public resolver | Per-source response rate limiting with slip, 1232-byte UDP cap, DO never forwarded, QR=1 never answered | Implemented in the resolver; not yet load-tested |
 | 27 | Browsing disclosure to the registry | Learn public browsing from client lookups | Classify locally; never query the API for a non-native name (DNS and SOCKS) | Implemented |
 | 28 | Compelled or compromised API vs. personal DNS rules | Read a user's block/redirect lists; push a rule that re-points a public name; serve an older rule set | End-to-end encryption under a passphrase-wrapped key the API never holds; user id and version authenticated; device refuses lower versions and same-version forks; redirects need per-device approval pinned to the target; the public resolver never applies personal rules | Implemented. Residual: the API sees that an account has rules, their size bucket and save times; it can withhold or delete them (blocks stop applying only after `tnp rules forget`); the web dashboard's code is served by the operator, so a hostile deploy could capture a passphrase typed afterwards — the signed CLI is not exposed to this, and a captured passphrase still cannot redirect a public name on a device without local approval |
+| 29 | Stolen exit token, or a compromised exit host | Token: list every device's public key and tunnel address. Host: observe and alter all of its peers' traffic; accept peers the registry never listed | Per-exit bearer token compared in constant time, revocable alone (`TNP_EXIT_TOKENS`); the listing carries no account or name; agent unprivileged (`CAP_NET_ADMIN` only); private key only in kernel memory, read from SSM at boot; no inbound port but UDP 51820 | Implemented. Residual: whoever holds the host holds everything the exit operator sees (row 4); a hostile web deploy could change the page that generates private keys — the signed CLI (`tnp vpn add`) is not exposed to this |
 
 ## 4. Trust boundaries
 

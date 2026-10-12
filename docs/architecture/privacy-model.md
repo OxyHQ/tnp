@@ -51,6 +51,9 @@ deployed while the relay is parked, [`relays.md`](./relays.md) §8.)
 - Multi-hop routing does not exist. `--privacy private` is rejected rather than
   silently downgraded to single-hop, which is what it used to do (audit B5).
 
+The standard-tier VPN (WireGuard to a TNP-operated exit) is implemented but not
+deployed; what it does and does not protect is §8.
+
 **TNP does not provide anonymity today.** It provides confidentiality against the
 relay and against a passive network observer — for names the client has
 pinned, also against a misbehaving API; for a first contact, conditional on the
@@ -86,7 +89,7 @@ Target policy. Relays and exits must be able to prove they meet it.
 | Party | May retain | Must not retain | Window |
 |---|---|---|---|
 | Relay | Aggregate counters: circuits, bytes, errors, uptime, version | Per-circuit records, client IPs, destinations, payloads | Aggregates only, no per-flow rows |
-| Exit | Aggregate counters, aggregate refusals by policy class | Destination lists, per-connection logs, payloads | As above |
+| Exit | Aggregate counters, aggregate refusals by policy class | Destination lists, per-connection logs, payloads | As above. TNP's WireGuard exits, as implemented: no log rule, journal in memory only, conntrack and WireGuard peer state in kernel memory only ([`exit-nodes.md`](./exit-nodes.md) §9.3) |
 | API | Registry data, directory data, account data | Query logs tied to identity beyond operational need | Operational logs: 7 days, then deleted |
 | Client | Local diagnostics the user can read and clear | Nothing transmitted without an explicit action | User-controlled |
 
@@ -113,6 +116,7 @@ hand over everything in the "stores" column.
 | Domains | Name, TLD, owner's Oxy user id, status, created/updated/expiry times, `unlisted` | Listed names only (`GET /domains`, search): name, TLD, status, expiry. No owner, no created/updated time, ordered by name rather than by registration. `unlisted` names are left out of both but still resolve and still answer a lookup by exact name. |
 | DNS records | Every record and its created/updated time | The records, to anyone who resolves or looks up the name — that is what DNS is. |
 | Domain keys | Each name's domain key (public) and its signed rotation history (at most 32 statements) | Both (`GET /domain-keys/:name`, and the resolve overlay). The registry never holds a domain, node or session secret. |
+| VPN devices | Per device: owner's Oxy user id, the name the owner gave it, its WireGuard public key, its tunnel address, creation time. No private key (generated on the device, refused if sent), no handshake or connection time, no endpoint IP, no traffic figures, no update time. | Nothing to the public. `GET /exit/peers` gives TNP's own exits, behind a per-exit token, every public key and tunnel address — no user id, no name. |
 | Personal DNS rules | Per Oxy user id, one end-to-end encrypted envelope: `ciphertext` (padded to a power-of-two bucket, so its length does not count the rules), the rules key `wrappedKey` under the user's passphrase, Argon2id `kdfParams` and `salt`, `nonce`, a `version` counter and `updatedAt`. Overwritten on each save; no history. No rule, no name, no count, no passphrase, no key. | Nothing. `GET /me/dns-rules` returns the caller's own envelope only, `Cache-Control: no-store`. |
 | Service nodes | Owner's Oxy user id, node key, grant chain and current key-agreement certificate (public), current relay, time of the **last** heartbeat (overwritten, not a history) | Node key and `online: true/false`; the relay only while online. While online, `/dns/resolve` also publishes the chain, certificate and domain key. No timestamp. |
 | Relays | Endpoint, key, registering account, capacity, location label, last heartbeat | Endpoint, key, `operator`, location label, status — for relays that heartbeated in the last 90 s. No account, no timestamp. |
@@ -178,8 +182,45 @@ what it does and does not do at the point of selection.
 | Access | The destination | Content only | Nothing | Which domain you resolved |
 | Proxy | The destination, for proxied apps | Content only | Nothing | As above |
 | Private (Phase 6) | The destination | Client↔destination linkage | Nothing | Should be nothing — pending §7 of the threat model |
-| Full tunnel (Phase 8+) | All destinations | Content only | Nothing | Directory usage |
+| VPN, standard tier (WireGuard to a TNP exit) | All destinations, contents and DNS — it sees an encrypted flow to the exit | n/a (no relay) | Your IP (they see the exit's) | **Nothing** — Oxy runs the exit: every destination, plus anything not end-to-end encrypted, tied to your account (§8) |
+| Full tunnel, private tier (Phase 8+) | All destinations | Content only | Nothing | Directory usage |
 
 The "hides from the destination: nothing" column is the one users most often get
 wrong. TNP changes how your traffic arrives. It does not change what you say when
 it gets there.
+
+## 8. The standard-tier VPN (WireGuard), stated for users
+
+Implemented, off until an exit is deployed ([`vpn.md`](./vpn.md) §10). This is
+the statement the dashboard makes where a device is added, in every locale, and
+the one any other surface must not go beyond.
+
+**It protects**
+
+- From the local network (public Wi-Fi, others on the same router) and the ISP:
+  they see one encrypted WireGuard flow to a TNP exit — not destinations, not DNS
+  lookups, not contents.
+- The user's IP from the sites they visit, which see the exit's address.
+
+**It does not protect**
+
+- From TNP. Oxy operates the exit and can technically see every destination
+  address and port, and the content of anything not encrypted by the site
+  itself (HTTPS hides content, not which site). Oxy also runs the resolver the
+  config names. Exits keep aggregates only (§4, exit-nodes.md §9.3) — a promise
+  about operation, not a property the user can verify.
+- Identity. It is not anonymity: one operator runs the exit and holds the
+  account each device belongs to, and an observer of both the user's link and
+  the exit can correlate them by timing.
+- From what the user tells a site, or from their own device (§3).
+- From the hosting provider (AWS), which can observe the exit's traffic.
+
+**Whom it is for, and whom not.** It replaces a commercial VPN for someone who
+wants their ISP and local network out of their browsing. Someone whose safety
+depends on not being identified — an activist or journalist facing a government
+— is told to use Tor Browser instead, until TNP's private tier exists and has
+been measured (§2, §5).
+
+**What TNP stores** per device: owner, name, public key, tunnel address,
+creation time (§4 table). The private key is generated on the device and never
+sent.
