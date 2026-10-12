@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { readVpnConfig } from './vpn.js';
 
 // `.env` is loaded by Bun itself (every entry point runs on Bun) before any
@@ -20,7 +21,21 @@ import {
 //
 // DEPLOY REQUIREMENT: set TNP_PARKING_IP to the AWS NLB Elastic IP once the
 // dns-server NLB is provisioned (oxy-infra app-tnp.tf is pending).
-const parkingIp = process.env.TNP_PARKING_IP?.trim() ?? '';
+/**
+ * `TNP_PARKING_IP`: empty when unset, otherwise a dotted-quad IPv4 address —
+ * it is served as an A record and as the resolver address the install page
+ * puts into users' DNS settings, so a malformed value stops the API at startup
+ * instead of reaching either.
+ */
+export function parseParkingIp(value: string | undefined): string {
+  const ip = value?.trim() ?? '';
+  if (ip && isIP(ip) !== 4) {
+    throw new Error(`TNP_PARKING_IP must be an IPv4 address, got ${JSON.stringify(ip)}`);
+  }
+  return ip;
+}
+
+const parkingIp = parseParkingIp(process.env.TNP_PARKING_IP);
 if (!parkingIp) {
   console.warn(
     '[tnp-api] TNP_PARKING_IP is not set — parking/custom-TLD A records will be omitted. ' +
