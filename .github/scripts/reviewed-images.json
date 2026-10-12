@@ -3,13 +3,11 @@
   "recipes": [
     {
       "name": "tnp-api",
-      "services": ["tnp-api"],
       "ecrRepository": "oxy/tnp-api",
       "dockerfile": "Dockerfile.api",
-      "dockerfileSha256": "b43478d6f2a876f95b04c9ef1607eb7db8511af9b6847567b39aea7dfa05fc66",
+      "context": ".",
       "target": null,
-      "tagSuffix": "",
-      "cacheScope": "tnp-api"
+      "buildInputsSha256": "2560a9ea0bcb9669856d8a9877d5b638efb24ab3223a72a276cf31189d270e2f"
     }
   ]
 }
