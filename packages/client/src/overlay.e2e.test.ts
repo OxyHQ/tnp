@@ -85,7 +85,11 @@ describe('client → relay → service node → target', () => {
   });
 
   test('a slow reader applies backpressure instead of buffering the target without bound', async () => {
-    const TOTAL = 24 * 1024 * 1024;
+    // Large enough that kernel socket buffers cannot hide a missing
+    // backpressure path: four loopback hops (target, service node, relay,
+    // SOCKS) can each autotune several MB of buffering under load, which once
+    // let 19 MB through before the stall on a busy machine.
+    const TOTAL = 96 * 1024 * 1024;
     let written = 0;
     const target = net.createServer((socket) => {
       const chunk = Buffer.alloc(64 * 1024, 0x5a);
@@ -138,7 +142,9 @@ describe('client → relay → service node → target', () => {
       // is bounded by the end-to-end window plus socket buffers.
       // Stalled: at most a socket buffer more trickles out once the window is spent.
       expect(written - plateau).toBeLessThanOrEqual(2 * 1024 * 1024);
-      expect(written).toBeLessThan(TOTAL / 2);
+      // Bounded: the end-to-end window plus whatever the kernel buffers on
+      // the four hops, far short of the body.
+      expect(written).toBeLessThan(48 * 1024 * 1024);
       expect(h.core.stats().backpressureDestroys).toBe(0);
       // And resuming delivers everything.
       const all = new Promise<void>((r) => socket.on('end', () => r()));
