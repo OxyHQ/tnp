@@ -244,3 +244,22 @@ describe('request timeout', () => {
     await new Promise((resolve) => setTimeout(resolve, 350));
   });
 });
+
+describe('body limits', () => {
+  test('only /me/dns-rules accepts a body past the default 100 KB', async () => {
+    const base = await serve();
+    const big = JSON.stringify({ ciphertext: 'A'.repeat(200_000) });
+    const headers = { 'Content-Type': 'application/json', 'x-test-user': 'alice' };
+    // Parsed, then refused by the contract: the envelope is incomplete.
+    const rules = await fetch(`${base}/me/dns-rules`, { method: 'PUT', headers, body: big });
+    expect(rules.status).toBe(400);
+    expect(rules.headers.get('cache-control')).toBe('no-store');
+    // Every other route keeps the default limit.
+    const other = await quietFetch(`${base}/relays/register`, {
+      method: 'POST',
+      headers,
+      body: big,
+    });
+    expect(other.status).toBe(413);
+  });
+});

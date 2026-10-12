@@ -28,6 +28,7 @@ import clientRouter, { installerRoute } from './routes/client.js';
 import dnsRouter from './routes/dns.js';
 import domainKeysRouter from './routes/domain-keys.js';
 import domainsRouter from './routes/domains.js';
+import meRouter, { dnsRulesBodyParser } from './routes/me.js';
 import nodesRouter from './routes/nodes.js';
 import relaysRouter from './routes/relays.js';
 import tldsRouter from './routes/tlds.js';
@@ -90,6 +91,9 @@ export function createApp(options: AppOptions): express.Express {
   // neither a JSON parse nor a token validation.
   app.use(limits.perAddress);
   app.use(requestTimeout(options.requestTimeoutMs ?? config.requestTimeoutMs));
+  // The encrypted DNS-rule envelope may exceed the default 100 KB; this
+  // parser runs first on that one path, and the app-wide one then skips it.
+  app.use('/me/dns-rules', dnsRulesBodyParser);
   app.use(express.json());
 
   // Serve installer scripts when accessed via get.tnp.network
@@ -118,6 +122,8 @@ export function createApp(options: AppOptions): express.Express {
   app.use('/domain-keys', auth, limits.perUser, domainKeysRouter);
   app.use('/nodes', auth, limits.perUser, nodesRouter);
   app.use('/relays', auth, limits.perUser, relaysRouter);
+  // The caller's own resources; every route requires auth.
+  app.use('/me', auth, limits.perUser, meRouter);
 
   // The optional services layer (docs/architecture/services.md). Every action is
   // off unless its flag is set, and no adapter is constructed until a flagged
