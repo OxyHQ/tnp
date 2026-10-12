@@ -138,6 +138,23 @@ describe('served installers', () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
+  test('neither installer changes system-wide DNS; only `tnp install` routes native names', () => {
+    for (const script of [INSTALL_SH, INSTALL_PS1]) {
+      for (const forbidden of [
+        /resolv\.conf/i,
+        /networksetup/i,
+        /Set-DnsClientServerAddress/i,
+        /Add-DnsClientNrptRule/i,
+        /resolvectl/i,
+        /nameserver\s/i,
+        /\/etc\/resolver/i,
+      ]) {
+        expect(script).not.toMatch(forbidden);
+      }
+      expect(script).toMatch(/ install["']?\s/);
+    }
+  });
+
   test('install.sh parses as POSIX sh', () => {
     const result = Bun.spawnSync(['sh', '-n'], { stdin: new TextEncoder().encode(INSTALL_SH) });
     expect(result.stderr.toString()).toBe('');
