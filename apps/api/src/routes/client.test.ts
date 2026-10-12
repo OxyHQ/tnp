@@ -415,5 +415,6 @@ describe.skipIf(!pwsh || !hasOpenSsl3)('install.ps1 verification under pwsh', ()
     expect(output).toContain('ALL PASS');
     expect(output).not.toContain('FAIL');
     expect(result.exitCode).toBe(0);
-  });
+    // pwsh takes several seconds to start on a cold runner.
+  }, 120_000);
 });
