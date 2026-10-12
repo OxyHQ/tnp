@@ -3,9 +3,13 @@
 How a client learns which relays, service nodes and exits exist, what keys they
 hold, and whether they are usable.
 
-**Status: partial.** A relay and service-node directory exists in the API. It is
-**unsigned**, relay registration is broken end to end (audit B2), and there is no
-health, capability or version data. Phases 3 and 5.
+**Status: partial.** The relay directory is **signed** (§2, implemented):
+`GET /relays/directory`, verified by every client against a pinned key, with
+rollback protection and a local cache. Relays prove their listed key on every
+connection (transport.md §6.2). Not yet: exits, health measured rather than
+heartbeat liveness, protocol/software versions, diversity constraints, and
+in-band key rotation. Service-node key material travels with each name's
+domain key (resolution), not in this directory.
 
 ---
 
@@ -34,13 +38,38 @@ because it arrived over TLS.
   old one's signature before the old one is retired.
 
 This is what makes a compromised API insufficient to steer every client onto
-attacker relays (threat-model adversary 5).
+attacker relays (threat-model adversary 5) — **once the signing key is held
+apart from the API.** Today it is not (below), so the signature protects
+against network and database tampering and against stale or rolled-back
+documents, not against a compromised API.
+
+**Implemented** (`@tnp/crypto` `relay-directory.ts`, `@tnp/shared-types`
+`relay-directory.ts`, `apps/api/src/registry/relayDirectory.ts`,
+`packages/client/src/relay-directory.ts`):
+
+| Item | Value |
+|---|---|
+| Document | `{v: 1, serial, issuedAt, expiresAt, relays: [{endpoint, relayKey, operator, capabilities, region}], signature}`, JSON |
+| Signed bytes | length-prefixed canonical encoding under the context `tnp-relay-directory-v1` (no JSON canonicalization involved) |
+| Signature | Ed25519 by the directory signing key; clients pin one or two keys (`RELAY_DIRECTORY_SIGNING_KEYS_BASE64`) |
+| Validity | 24 h; at most 7 days accepted; `issuedAt` at most 10 min ahead of the client clock |
+| Serial | the signing time in seconds, never lowered by one API process; clients keep the highest accepted per device (`relay-directory.json`, 0600) and refuse lower |
+| Bounds | ≤ 256 relays, ≤ 128 KiB canonical, endpoints canonical `wss://` on a public host, unique; strict fields |
+| Key custody | the API signs at request time with `TNP_DIRECTORY_SIGNING_SEED` (base64 32-byte seed; SSM SecureString in production). Unset: `GET /relays/directory` answers **503** — never an unsigned listing |
+| Contents | Oxy relays from `TNP_OXY_RELAYS`; community relays from the registry only while heartbeat-fresh and key-proven (relays.md §2) |
+
+Rotation: pin the next key beside the current one in a client release, move
+the seed once that release is widespread, drop the old key in a later
+release. A rotation statement signed by the old key (the scheme above) is not
+implemented.
 
 ## 3. Distribution
 
 - Primary: fetched from the API, verified by signature, cached locally with its
-  validity window.
+  validity window. (Implemented; refetched every 10 minutes while in use.)
 - The cached copy is used when the API is unreachable, until it expires.
+  (Implemented; also when a fetched document is refused — the cached one is
+  verified data, re-verified before use.)
 - Bootstrap: a small set of directory endpoints and the pinned signing key ship
   with the client.
 - **Open question** (threat model §7.2): how to distribute the directory without

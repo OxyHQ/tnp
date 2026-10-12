@@ -1,10 +1,12 @@
-# Publish TNP API and DNS images to ECR in us-west-2.
+# Publish TNP API, DNS and relay images to ECR in us-west-2.
 #
-# This workflow deliberately does NOT deploy. The API and DNS ECS services
-# are activated by a separate reviewed infrastructure change that pins the
-# digest printed here. TNP Relay is outside this publisher's scope. Publishing
-# a reviewed image and activating traffic are different operations and must
-# never be coupled implicitly.
+# This workflow deliberately does NOT deploy. Each ECS service is activated by
+# a separate reviewed infrastructure change that pins the digest printed here.
+# For the relay that change also sets RELAY_ENDPOINT and RELAY_KEY_SEED, lists
+# it in the API's TNP_OXY_RELAYS and scales it up; until then a published relay
+# image serves nothing (docs/architecture/relays.md §8). Publishing a reviewed
+# image and activating traffic are different operations and must never be
+# coupled implicitly.
 #
 # Called by ci.yml only after typecheck, tests, and both Docker builds pass for
 # the exact main commit. workflow_dispatch is an operational retry path, not a
@@ -38,11 +40,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # No `dockerfile` here: both are reviewed recipes, so each one's
+          # No `dockerfile` here: each is a reviewed recipe, so its
           # Dockerfile, context and target come only from the guard below,
           # which verified them.
           - app: tnp-api
           - app: tnp-dns
+          - app: tnp-relay
     steps:
       - name: Validate the immutable main source
         run: |
@@ -86,7 +89,7 @@ jobs:
       # tag would make a later scale-up select an artefact no reviewed infra
       # change named. The promotion PR must pin the digest printed below.
       #
-      # The API and DNS ECR repositories reject tag overwrites. This explicit
+      # The ECR repositories reject tag overwrites. This explicit
       # lookup produces a clearer failure and the concurrency group prevents
       # two runs racing through it for the same commit.
       # Every image builds only what the owner reviewed. Its Dockerfile,
@@ -107,6 +110,7 @@ jobs:
           case "$APP" in
             tnp-api) python3 -B .github/scripts/reviewed-image.py guard --recipe tnp-api ;;
             tnp-dns) python3 -B .github/scripts/reviewed-image.py guard --recipe tnp-dns ;;
+            tnp-relay) python3 -B .github/scripts/reviewed-image.py guard --recipe tnp-relay ;;
             *)
               echo "::error::$APP has no reviewed recipe; refusing to build it."
               exit 1

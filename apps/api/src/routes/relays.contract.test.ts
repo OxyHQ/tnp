@@ -21,8 +21,19 @@ import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 import express from 'express';
 import type { Server } from 'node:http';
 import type { OxyAuthRequest } from '@oxy.so/core/server';
-import type { RegisterRelayRequest, RelayHeartbeatRequest } from '@tnp/shared-types';
-import relaysRouter from './relays.js';
+import {
+  encodeBase64,
+  generateSigningKeyPair,
+  signingKeyPairFromSeed,
+  signRelayRegistryProof,
+} from '@tnp/crypto';
+import {
+  type RegisterRelayRequest,
+  type RelayHeartbeatRequest,
+  verifySignedRelayDirectory,
+} from '@tnp/shared-types';
+import { directorySignerFromSeed } from '../registry/relayDirectory.js';
+import relaysRouter, { createRelaysRouter } from './relays.js';
 
 /** Status the handler returns once a body is past validation and hits the absent database. */
 const REACHED_HANDLER = 500;
@@ -224,5 +235,115 @@ describe('the gate itself', () => {
         listening.close((err) => (err ? reject(err) : resolve()));
       });
     }
+  });
+});
+
+const relayKey = generateSigningKeyPair();
+const RELAY_ENDPOINT = 'wss://relay.example.test:8443';
+
+function proofFor(purpose: 'register' | 'heartbeat', issuedAt = Math.floor(Date.now() / 1000)) {
+  return {
+    issuedAt,
+    signature: signRelayRegistryProof(
+      { purpose, endpoint: RELAY_ENDPOINT, relayKey: relayKey.publicKey, issuedAt },
+      relayKey.secretKey,
+    ),
+  };
+}
+
+describe('relay key proofs', () => {
+  const registration = {
+    endpoint: RELAY_ENDPOINT,
+    publicKey: encodeBase64(relayKey.publicKey),
+    capacity: { maxConnections: 100, bandwidth: 250 },
+    location: 'eu-west',
+  };
+
+  test('a registration carrying a valid proof is accepted', async () => {
+    const request: RegisterRelayRequest = { ...registration, proof: proofFor('register') };
+    expect(await postPastValidation('/relays/register', request)).toBe(REACHED_HANDLER);
+  });
+
+  test('a proof that does not verify is refused before any query', async () => {
+    const stale = proofFor('register', Math.floor(Date.now() / 1000) - 3600);
+    const wrongPurpose = proofFor('heartbeat');
+    const otherKey = {
+      ...registration,
+      publicKey: encodeBase64(generateSigningKeyPair().publicKey),
+    };
+    for (const body of [
+      { ...registration, proof: stale },
+      { ...registration, proof: wrongPurpose },
+      { ...otherKey, proof: proofFor('register') },
+    ]) {
+      const res = await post('/relays/register', body);
+      expect(res.status).toBe(400);
+      expect(res.error).toContain('proof does not verify');
+    }
+  });
+
+  test('a heartbeat carrying a proof is the contract shape', async () => {
+    const request: RelayHeartbeatRequest = {
+      endpoint: RELAY_ENDPOINT,
+      proof: proofFor('heartbeat'),
+    };
+    expect(await postPastValidation('/relays/heartbeat', request)).toBe(REACHED_HANDLER);
+  });
+});
+
+describe('GET /relays/directory', () => {
+  async function getFrom(router: express.Router) {
+    const app = express();
+    app.use('/relays', router);
+    const listening = await new Promise<Server>((resolve) => {
+      const s = app.listen(0, () => resolve(s));
+    });
+    const address = listening.address();
+    if (address === null || typeof address === 'string') throw new Error('no TCP port');
+    const logged = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await fetch(`http://127.0.0.1:${address.port}/relays/directory`);
+      return { status: res.status, body: (await res.json()) as unknown };
+    } finally {
+      logged.mockRestore();
+      await new Promise<void>((resolve) => listening.close(() => resolve()));
+    }
+  }
+
+  test('without a signing seed it answers 503 and never an unsigned listing', async () => {
+    const res = await getFrom(createRelaysRouter(new Set(), { signer: null, oxyRelays: [] }));
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ error: 'The signed relay directory is not available' });
+    // The default router in this test process has no TNP_DIRECTORY_SIGNING_SEED either.
+    expect((await getFrom(relaysRouter)).status).toBe(503);
+  });
+
+  test('with a seed it serves a document a client verifies with the matching key', async () => {
+    const seed = crypto.getRandomValues(new Uint8Array(32));
+    const signed = directorySignerFromSeed(encodeBase64(seed));
+    if (!signed.signer) throw new Error('signer');
+    const oxyKey = encodeBase64(generateSigningKeyPair().publicKey);
+    // No database here: community relays are unavailable, so the directory
+    // degrades to the configured Oxy relays and is still signed.
+    const res = await getFrom(
+      createRelaysRouter(new Set(), {
+        signer: signed.signer,
+        oxyRelays: [{ endpoint: 'wss://relay.tnp.network', relayKey: oxyKey, region: 'us-west-2' }],
+      }),
+    );
+    expect(res.status).toBe(200);
+    const verified = verifySignedRelayDirectory(res.body, {
+      now: Math.floor(Date.now() / 1000),
+      trustedKeys: [signingKeyPairFromSeed(seed).publicKey],
+    });
+    expect(verified.ok).toBe(true);
+    if (!verified.ok) return;
+    expect(verified.directory.relays.map((r) => [r.endpoint, r.operator, r.relayKey])).toEqual([
+      ['wss://relay.tnp.network', 'oxy', oxyKey],
+    ]);
+    // And only with that key: the pinned production key does not verify a test signer.
+    expect(verifySignedRelayDirectory(res.body, { now: Math.floor(Date.now() / 1000) }).ok).toBe(
+      false,
+    );
   });
 });

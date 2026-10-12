@@ -7,8 +7,8 @@ connections only — no public IP, no port forwarding, no inbound firewall rule.
 tnp serve example.ox --target http://127.0.0.1:8080
 ```
 
-**Status: implemented for one relay per node; not deployed** (the relay is
-parked, [`relays.md`](./relays.md) §8). Key binding to the domain owner,
+**Status: implemented for one relay per node (with fail-over); not deployed**
+(the relay is publishable, not yet activated, [`relays.md`](./relays.md) §8). Key binding to the domain owner,
 authentication to the relay, end-to-end sessions and backpressure are in
 place (audit S2, S3, S6 closed in code). Multiple relays per node, per-port
 targets, directory revocation and access control are not.
@@ -49,8 +49,11 @@ whoever asked with nothing signed and nothing verified (audit S3).
 4. Publish: `POST /nodes/register` with the grant chain and certificate; the
    registry verifies them against the domain key. The Oxy identity is not in
    the chain — the domain key is the root.
-5. Relay: `--relay`, or an Oxy-operated relay from the (unsigned) directory.
-6. Connect out to `<relay>/service` and answer its challenge
+5. Relay: Oxy-operated relays from the signed directory, fastest first, failed
+   over in order — or `--relay` (a relay not in the directory only with a loud
+   warning).
+6. Connect out to `<relay>/service`, make it prove its directory key
+   (transport.md §6.2), then answer its challenge
    (transport.md §6.1).
 7. Serve circuits: Noise NK responder per `CIRCUIT_CREATE`, then sealed
    `OPEN` → connect to the target → sealed `OPENED` or `RESET`.

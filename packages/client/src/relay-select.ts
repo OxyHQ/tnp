@@ -1,39 +1,170 @@
 /**
- * Which relay `tnp serve` uses when the operator did not name one.
+ * Which relays `tnp serve` attaches to.
  *
- * Only an Oxy-operated relay is ever chosen automatically. A community relay
- * can be registered by any Oxy account, and the relay a service node attaches
- * to sees the node's address, which domain it serves, and when and how much it
- * is reached — so attaching to one is a decision for the person running the
- * node, made with `--relay`, never something the directory's first entry
- * decides for them. Before this, `tnp serve` took the first listed relay,
- * which any account could arrange to be its own.
+ * A relay is selectable only through the SIGNED relay directory
+ * (relay-directory.ts; docs/architecture/relays.md §8, blocker 6). Within it:
  *
- * The directory is not signed yet (docs/architecture/relays.md §7), so this
- * trusts the registry's `operator` field; the registry now decides that field
- * itself instead of believing the relay.
+ * - Automatically, only Oxy-operated relays are chosen. A community relay
+ *   sees the node's address, which domain it serves, and when and how much it
+ *   is reached, so attaching to one is a decision for the person running the
+ *   node, made with `--relay`, never something the directory decides for
+ *   them. Oxy relays are ordered by measured latency (a connection plus the
+ *   relay's identity proof); the node fails over down the list.
+ * - With `--relay <url>`: if the URL is in the directory, the relay must prove
+ *   the directory's key for it. If it is not, the operator's explicit choice
+ *   is honoured with a loud warning — the relay cannot be authenticated, and
+ *   clients will refuse it anyway, since they only use listed relays.
  */
 
+import { decodeBase64Strict, encodeBase64 } from '@tnp/crypto';
 import {
   normalizeRelayEndpoint,
   publicRelayEndpointProblem,
-  type RelayDirectoryEntry,
+  RelayCapability,
 } from '@tnp/shared-types';
+import type { VerifiedRelayDirectory } from './relay-directory';
+import type { RelayCandidate } from './service-node';
 
-export type RelaySelection = { ok: true; endpoint: string } | { ok: false; message: string };
+export type { RelayCandidate } from './service-node';
+
+export type RelaySelection =
+  | { ok: true; candidates: RelayCandidate[] }
+  | { ok: false; message: string };
 
 export const NO_AUTOMATIC_RELAY_MESSAGE =
-  'no Oxy-operated relay is available. Community relays are never selected automatically: ' +
-  'anyone can run one, and the relay a service node uses sees its address, its domain and ' +
-  'when it is reached. Choose a relay you trust with --relay wss://<relay>.';
+  'no Oxy-operated relay is available in the signed relay directory. Community relays are ' +
+  'never selected automatically: anyone can run one, and the relay a service node uses sees ' +
+  'its address, its domain and when it is reached. Choose a relay you trust with --relay wss://<relay>.';
 
-export function selectAutomaticRelay(directory: readonly RelayDirectoryEntry[]): RelaySelection {
-  for (const entry of directory) {
-    if (entry.operator !== 'oxy') continue;
-    const endpoint = normalizeRelayEndpoint(entry.endpoint);
-    // The registry refuses these now; an older registry did not, so check here too.
-    if (endpoint === null || publicRelayEndpointProblem(endpoint) !== null) continue;
-    return { ok: true, endpoint };
+/** Round-trip time to a relay including its identity proof (ms), or null when unusable. */
+export type RelayProbe = (endpoint: string, relayKey: Uint8Array) => Promise<number | null>;
+
+/**
+ * Oxy-operated relays from a verified directory that serve service nodes,
+ * fastest first; relays that failed the probe go last (in directory order),
+ * still as fail-over candidates.
+ */
+export async function selectAutomaticRelays(
+  directory: VerifiedRelayDirectory,
+  probe: RelayProbe,
+): Promise<RelaySelection> {
+  const oxy = directory.relays.filter(
+    (r) => r.operator === 'oxy' && r.capabilities.includes(RelayCapability.SERVICE),
+  );
+  if (oxy.length === 0) return { ok: false, message: NO_AUTOMATIC_RELAY_MESSAGE };
+  const timed = await Promise.all(
+    oxy.map(async (relay, index) => ({
+      relay,
+      index,
+      ms: await probe(relay.endpoint, relay.key).catch(() => null),
+    })),
+  );
+  timed.sort((a, b) => {
+    if (a.ms !== null && b.ms !== null) return a.ms - b.ms || a.index - b.index;
+    if (a.ms !== null) return -1;
+    if (b.ms !== null) return 1;
+    return a.index - b.index;
+  });
+  return {
+    ok: true,
+    candidates: timed.map(({ relay }) => ({ endpoint: relay.endpoint, relayKey: relay.key })),
+  };
+}
+
+export type ExplicitRelay =
+  | { ok: true; candidate: RelayCandidate; warning: string | null }
+  | { ok: false; message: string };
+
+/**
+ * Resolve `--relay <url>` (and optional `--relay-key <base64>`) against the
+ * directory, when there is one. The directory wins: a `--relay-key` that
+ * disagrees with the directory's key for the same URL is refused.
+ */
+export function resolveExplicitRelay(
+  url: string,
+  directory: VerifiedRelayDirectory | null,
+  relayKeyBase64: string | null,
+): ExplicitRelay {
+  const endpoint = normalizeRelayEndpoint(url);
+  if (!endpoint) {
+    return { ok: false, message: `--relay ${JSON.stringify(url)} is not a ws:// or wss:// URL` };
   }
-  return { ok: false, message: NO_AUTOMATIC_RELAY_MESSAGE };
+  let given: Uint8Array | null = null;
+  if (relayKeyBase64 !== null) {
+    try {
+      given = decodeBase64Strict(relayKeyBase64.trim(), 32);
+    } catch {
+      return { ok: false, message: '--relay-key must be canonical base64 of a 32-byte key' };
+    }
+  }
+  const listed = directory?.relays.find(
+    (r) => r.endpoint === endpoint && r.capabilities.includes(RelayCapability.SERVICE),
+  );
+  if (listed) {
+    if (given && encodeBase64(given) !== listed.relayKey) {
+      return {
+        ok: false,
+        message: `--relay-key does not match the key the signed directory lists for ${endpoint}`,
+      };
+    }
+    return { ok: true, candidate: { endpoint, relayKey: listed.key }, warning: null };
+  }
+  const unlisted =
+    `${endpoint} is NOT in the signed relay directory` +
+    (directory ? '' : ' (no verified directory could be obtained)') +
+    '. Clients only use relays the signed directory lists, so they will refuse to reach ' +
+    'this service through it.';
+  if (given) {
+    return {
+      ok: true,
+      candidate: { endpoint, relayKey: given },
+      warning: `${unlisted} The relay must prove the key you gave with --relay-key.`,
+    };
+  }
+  const plaintext = publicRelayEndpointProblem(endpoint) !== null;
+  return {
+    ok: true,
+    candidate: { endpoint, relayKey: null },
+    warning:
+      `${unlisted} Its identity CANNOT be verified: whoever answers at that URL receives this ` +
+      'node’s connection, domain and grant chain.' +
+      (plaintext ? ' It is also not a public wss:// endpoint.' : '') +
+      ' Pass --relay-key <base64> to require the relay to prove a key.',
+  };
+}
+
+/**
+ * `tnp serve`'s choice of relays, from the flags and the signed directory.
+ * Returns the candidates in preference order, or a message saying why there
+ * are none. Warnings are passed to `warn` — they are the operator's to see.
+ */
+export async function chooseServiceRelays(params: {
+  relayFlag: string | null;
+  relayKeyFlag: string | null;
+  directory: () => Promise<VerifiedRelayDirectory>;
+  probe: RelayProbe;
+  warn: (message: string) => void;
+}): Promise<RelaySelection> {
+  let directory: VerifiedRelayDirectory | null = null;
+  let directoryProblem: string | null = null;
+  try {
+    directory = await params.directory();
+  } catch (err) {
+    directoryProblem = err instanceof Error ? err.message : String(err);
+  }
+
+  if (params.relayFlag) {
+    if (directoryProblem) params.warn(directoryProblem);
+    const explicit = resolveExplicitRelay(params.relayFlag, directory, params.relayKeyFlag);
+    if (!explicit.ok) return explicit;
+    if (explicit.warning) params.warn(`WARNING: ${explicit.warning}`);
+    return { ok: true, candidates: [explicit.candidate] };
+  }
+  if (!directory) {
+    return {
+      ok: false,
+      message: `${directoryProblem ?? 'no verified relay directory'}. No relay is selected without a verified signed directory.`,
+    };
+  }
+  return selectAutomaticRelays(directory, params.probe);
 }

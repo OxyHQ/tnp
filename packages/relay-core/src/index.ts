@@ -11,6 +11,7 @@ export {
   type DomainKeyLookup,
   RelayCore,
   type RelayCoreOptions,
+  type RelayIdentity,
   type RelayStats,
   type RelayTransport,
 } from './core.js';

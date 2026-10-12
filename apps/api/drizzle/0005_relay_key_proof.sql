@@ -1,0 +1,1 @@
+ALTER TABLE "relays" ADD COLUMN "key_proven_at" timestamp with time zone;

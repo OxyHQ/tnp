@@ -8,9 +8,12 @@
  *      (overlay/identity.ts); an X25519 key certified by the node key
  *   2. publish chain + certificate to the registry (`POST /nodes/register`),
  *      which verifies them; clients verify them again themselves
- *   3. connect to the relay's `/service`, answer its challenge with a
+ *   3. connect to the relay's `/service`; make the relay prove it holds the
+ *      key the SIGNED directory lists for that endpoint (transport.md §6.2)
+ *      before anything else is sent; then answer its challenge with a
  *      signature by the node key (the relay checks the chain against the
- *      domain key: audit S2)
+ *      domain key: audit S2). A relay that cannot be reached or cannot prove
+ *      its key is failed over to the next candidate.
  *   4. per CIRCUIT_CREATE: Noise NK responder → CIRCUIT_CREATED carrying
  *      message 2 (the relay can no longer fake it: S5)
  *   5. sealed OPEN(port) → connect to the target → sealed OPENED, or a sealed
@@ -62,6 +65,7 @@ import {
   type SigningKeyPair,
 } from './overlay/identity';
 import { pipeSocket } from './overlay/pipe';
+import { RelayIdentityCheck } from './overlay/relay-identity';
 import { SecureCircuit } from './overlay/secure-circuit';
 import { OverlayStore } from './overlay/store';
 import { parseLocalTarget } from './parse-input';
@@ -86,16 +90,28 @@ const nowSeconds = () => Math.floor(Date.now() / 1000);
 // The node itself, independent of the registry and the CLI (tests drive it)
 // ---------------------------------------------------------------------------
 
+/**
+ * A relay a service node may attach to. `relayKey` is the key the signed
+ * directory lists for the endpoint; the relay must prove it before the node
+ * authenticates. `null` only for an operator's explicit `--relay` override of
+ * a relay that is not in the directory, which `tnp serve` warns about loudly.
+ */
+export interface RelayCandidate {
+  endpoint: string;
+  relayKey: Uint8Array | null;
+}
+
 export interface ServiceNodeOptions {
   name: string;
   target: { host: string; port: number };
-  relayEndpoint: string;
+  /** In order of preference. Failed over on connect or identity failure. */
+  relays: RelayCandidate[];
   nodeKey: SigningKeyPair;
   chain: Grant[];
   /** Publish the current chain and certificate (the registry). Called at start and on every rotation. */
   publish?: (chain: Grant[], kaCert: KeyAgreementCertificate) => Promise<void>;
-  /** Liveness to the registry while attached to the relay. */
-  heartbeat?: () => Promise<void>;
+  /** Liveness to the registry while attached to a relay; receives that relay's endpoint. */
+  heartbeat?: (relayEndpoint: string) => Promise<void>;
   /** Called when the chain nears expiry; return a renewed chain, or null when it cannot be renewed here. */
   renewChain?: () => Grant[] | null;
   now?: () => number;
@@ -115,7 +131,16 @@ export class ServiceNode {
   private state: ServiceNodeState = 'connecting';
   private readonly circuits: CircuitTable<SecureCircuit>;
   private readonly keys: KeyAgreementKeys;
-  private readonly endpoint: string;
+  private readonly relays: RelayCandidate[];
+  private relayIndex = 0;
+  private identity: RelayIdentityCheck | null = null;
+  private relayVerified = false;
+  private challenge: Uint8Array | null = null;
+  private authSent = false;
+  /** This connection reached AUTH_OK (a later drop retries the same relay first). */
+  private servedOnConnection = false;
+  /** The relay said another node serves the name; failing over would split it. */
+  private conflict = false;
   private chain: Grant[];
   private stopped = false;
   private reconnectDelay = RECONNECT_MIN_MS;
@@ -131,9 +156,12 @@ export class ServiceNode {
   lastRefusal: string | null = null;
 
   constructor(private readonly options: ServiceNodeOptions) {
-    const endpoint = normalizeRelayEndpoint(options.relayEndpoint);
-    if (!endpoint) throw new Error('relay endpoint must be a ws:// or wss:// URL');
-    this.endpoint = endpoint;
+    if (options.relays.length === 0) throw new Error('at least one relay is required');
+    this.relays = options.relays.map((relay) => {
+      const endpoint = normalizeRelayEndpoint(relay.endpoint);
+      if (!endpoint) throw new Error('relay endpoint must be a ws:// or wss:// URL');
+      return { endpoint, relayKey: relay.relayKey };
+    });
     this.now = options.now ?? nowSeconds;
     this.log = options.log ?? ((m) => console.log(`[service-node] ${m}`));
     this.chain = options.chain;
@@ -152,6 +180,15 @@ export class ServiceNode {
 
   get status(): ServiceNodeState {
     return this.state;
+  }
+
+  /** The relay this node is attached to (or trying). */
+  get relayEndpoint(): string {
+    return this.relays[this.relayIndex].endpoint;
+  }
+
+  private get endpoint(): string {
+    return this.relayEndpoint;
   }
 
   get activeCircuits(): number {
@@ -225,6 +262,13 @@ export class ServiceNode {
   private connect(): void {
     if (this.stopped) return;
     this.state = 'connecting';
+    const relay = this.relays[this.relayIndex];
+    this.identity = relay.relayKey ? new RelayIdentityCheck(relay.endpoint, relay.relayKey) : null;
+    this.relayVerified = relay.relayKey === null;
+    this.challenge = null;
+    this.authSent = false;
+    this.servedOnConnection = false;
+    this.conflict = false;
     let opened: { socket: FrameSocket; ready: Promise<void> };
     try {
       opened = FrameSocket.open(
@@ -245,9 +289,26 @@ export class ServiceNode {
     // Set before the first frame can arrive: the relay's HELLO must be answerable.
     this.socket = opened.socket;
     this.state = 'authenticating';
-    opened.ready.catch(() => {
-      // onClose schedules the reconnect.
-    });
+    const socket = opened.socket;
+    const identity = this.identity;
+    opened.ready.then(
+      () => {
+        if (this.socket !== socket) return;
+        if (identity) socket.send(identity.helloFrame());
+        // A relay that neither proves itself nor accepts us is not waited on
+        // forever: it is closed, and failed over.
+        const timer = setTimeout(() => {
+          if (this.socket === socket && !this.servedOnConnection) {
+            this.log(`relay ${this.endpoint} did not complete the handshake in time`);
+            socket.close(1008, 'handshake timeout');
+          }
+        }, 2 * RELAY_CONNECT_TIMEOUT_MS);
+        timer.unref?.();
+      },
+      () => {
+        // onClose schedules the reconnect.
+      },
+    );
   }
 
   private onRelayClosed(socket: FrameSocket | undefined): void {
@@ -256,6 +317,15 @@ export class ServiceNode {
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = null;
     for (const circuit of this.circuits.drain()) circuit.remoteDestroyed();
+    // A relay that never accepted us on this connection (unreachable, failed
+    // its identity proof, refused us) is failed over to the next candidate. A
+    // relay that served us and dropped is retried first: it is probably a
+    // restart. A name conflict is not failed over — that would split the name.
+    if (!this.servedOnConnection && !this.conflict && this.relays.length > 1) {
+      this.relayIndex = (this.relayIndex + 1) % this.relays.length;
+      this.log(`failing over to relay ${this.relayEndpoint}`);
+      if (this.relayIndex !== 0) this.nextDelayOverride ??= RECONNECT_MIN_MS / 4;
+    }
     this.scheduleReconnect();
   }
 
@@ -293,6 +363,7 @@ export class ServiceNode {
             'it will not replace that node. Stop the other node, or use another relay.',
         );
         this.nextDelayOverride = RECONNECT_CONFLICT_MS;
+        this.conflict = true;
       } else {
         this.log(`the relay refused this node (${this.lastRefusal})`);
       }
@@ -318,39 +389,71 @@ export class ServiceNode {
 
   private onAuthFrame(frame: Frame): void {
     if (frame.type === FrameType.HELLO) {
-      const challenge = decodeServiceHello(frame.payload);
-      const signature = signServiceAuth(
-        {
-          name: this.options.name,
-          endpoint: this.endpoint,
-          challenge,
-          nodeKey: this.options.nodeKey.publicKey,
-        },
-        this.options.nodeKey.secretKey,
-      );
-      this.send(
-        encodeFrame({
-          type: FrameType.AUTH,
-          payload: encodeServiceAuth({ name: this.options.name, chain: this.chain, signature }),
-        }),
-      );
+      if (this.challenge) return;
+      this.challenge = decodeServiceHello(frame.payload);
+      this.maybeAuthenticate();
+      return;
+    }
+    if (frame.type === FrameType.HELLO_ACK && this.identity && !this.relayVerified) {
+      try {
+        this.identity.verify(frame);
+      } catch (err) {
+        this.lastRefusal = 'RELAY_IDENTITY';
+        this.log(
+          `REFUSING relay ${this.endpoint}: ${err instanceof Error ? err.message : 'identity not proven'}. ` +
+            'It is not the relay the signed directory lists; this node did not authenticate to it.',
+        );
+        this.socket?.close(1008, 'relay identity not proven');
+        return;
+      }
+      this.relayVerified = true;
+      this.maybeAuthenticate();
       return;
     }
     if (frame.type === FrameType.AUTH_OK) {
+      if (!this.authSent) return;
       this.state = 'serving';
+      this.servedOnConnection = true;
       this.lastRefusal = null;
       this.reconnectDelay = RECONNECT_MIN_MS;
       this.log(`serving ${this.options.name} via ${this.endpoint}`);
       for (const resolve of this.servingWaiters.splice(0)) resolve();
       if (this.options.heartbeat) {
+        const endpoint = this.endpoint;
         const beat = () =>
-          this.options.heartbeat?.().catch((err: unknown) => {
+          this.options.heartbeat?.(endpoint).catch((err: unknown) => {
             this.log(`heartbeat failed: ${err instanceof Error ? err.message : 'error'}`);
           });
         void beat();
         this.heartbeatTimer = setInterval(beat, HEARTBEAT_INTERVAL_MS);
       }
     }
+  }
+
+  /**
+   * Send AUTH once both have happened: the relay's challenge arrived, and the
+   * relay proved the directory's key. A node never hands its grant chain and
+   * a signature to a relay that has not proved who it is.
+   */
+  private maybeAuthenticate(): void {
+    const challenge = this.challenge;
+    if (!challenge || !this.relayVerified || this.authSent) return;
+    this.authSent = true;
+    const signature = signServiceAuth(
+      {
+        name: this.options.name,
+        endpoint: this.endpoint,
+        challenge,
+        nodeKey: this.options.nodeKey.publicKey,
+      },
+      this.options.nodeKey.secretKey,
+    );
+    this.send(
+      encodeFrame({
+        type: FrameType.AUTH,
+        payload: encodeServiceAuth({ name: this.options.name, chain: this.chain, signature }),
+      }),
+    );
   }
 
   private destroy(id: bigint, reason: number = DESTROY_NORMAL): void {
@@ -472,7 +575,8 @@ export interface ServiceNodeConfig {
   domain: string;
   localTarget: string;
   apiBaseUrl: string;
-  relayEndpoint: string;
+  /** In order of preference (relay-select.ts). */
+  relays: RelayCandidate[];
   authToken: string;
   /** Overlay key directory; defaults to <data dir>/overlay. */
   storeRoot?: string;
@@ -586,13 +690,14 @@ export async function startServiceNode(
   const node = new ServiceNode({
     name: config.domain,
     target,
-    relayEndpoint: config.relayEndpoint,
+    relays: config.relays,
     nodeKey: credentials.nodeKey,
     chain: credentials.chain,
     renewChain: credentials.renewChain ?? undefined,
     publish: (chain, kaCert) =>
       apiClient.registerServiceNode(domainId, chain, kaCert, config.authToken),
-    heartbeat: () => apiClient.sendHeartbeat(domainId, config.relayEndpoint, config.authToken),
+    heartbeat: (relayEndpoint) =>
+      apiClient.sendHeartbeat(domainId, relayEndpoint, config.authToken),
   });
   await node.start();
   console.log(`[service-node] forwarding to ${target.host}:${target.port}`);

@@ -16,6 +16,14 @@
       "context": ".",
       "target": null,
       "buildInputsSha256": "bc7df9130ef9de82290c13d7d21ba5ea33d64825f4e86f4084044aa97139adfd"
+    },
+    {
+      "name": "tnp-relay",
+      "ecrRepository": "oxy/tnp-relay",
+      "dockerfile": "Dockerfile.relay",
+      "context": ".",
+      "target": null,
+      "buildInputsSha256": "11e38997b3cdcc7d484416abd948a35192f72654d4fb52bcd7b2cabc04c70727"
     }
   ]
 }

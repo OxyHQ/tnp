@@ -228,6 +228,43 @@ export function decodeStreamMessage(plaintext: Uint8Array): StreamMessage {
 }
 
 // ---------------------------------------------------------------------------
+// Relay identity (HELLO from a peer / HELLO_ACK from the relay), transport.md §6.2
+// ---------------------------------------------------------------------------
+
+/** HELLO from a client or service node to a relay: a fresh 32-byte nonce. */
+export const RELAY_HELLO_NONCE_SIZE = 32;
+/** HELLO_ACK from a relay: relay key (32) ‖ Ed25519 signature (64). */
+export const RELAY_HELLO_ACK_SIZE = 96;
+
+export function encodeRelayHello(nonce: Uint8Array): Uint8Array {
+  if (nonce.length !== RELAY_HELLO_NONCE_SIZE) throw new RangeError('HELLO nonce must be 32 bytes');
+  return nonce.slice();
+}
+
+export function decodeRelayHello(payload: Uint8Array): Uint8Array {
+  if (payload.length !== RELAY_HELLO_NONCE_SIZE) throw violation('HELLO nonce wrong size');
+  return payload.slice();
+}
+
+export function encodeRelayHelloAck(relayKey: Uint8Array, signature: Uint8Array): Uint8Array {
+  if (relayKey.length !== 32 || signature.length !== 64) {
+    throw new RangeError('HELLO_ACK needs a 32-byte key and a 64-byte signature');
+  }
+  const out = new Uint8Array(RELAY_HELLO_ACK_SIZE);
+  out.set(relayKey, 0);
+  out.set(signature, 32);
+  return out;
+}
+
+export function decodeRelayHelloAck(payload: Uint8Array): {
+  relayKey: Uint8Array;
+  signature: Uint8Array;
+} {
+  if (payload.length !== RELAY_HELLO_ACK_SIZE) throw violation('HELLO_ACK wrong size');
+  return { relayKey: payload.slice(0, 32), signature: payload.slice(32) };
+}
+
+// ---------------------------------------------------------------------------
 // Service-node registration (HELLO / AUTH / AUTH_OK)
 // ---------------------------------------------------------------------------
 

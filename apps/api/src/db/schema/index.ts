@@ -246,6 +246,12 @@ export const relays = pgTable(
     location: text('location').notNull().default(''),
     status: relayStatus('status').notNull().default('offline'),
     lastSeen: timestamp('last_seen', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * When the relay last proved possession of `publicKey` (a signed
+     * registration or heartbeat). The signed directory lists a community
+     * relay only while this is fresh; null for relays that never proved it.
+     */
+    keyProvenAt: timestamp('key_proven_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

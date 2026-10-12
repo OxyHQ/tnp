@@ -8,9 +8,16 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { generateSigningKeyPair } from '@tnp/crypto';
 import { makeTestCredentials, type TestServiceCredentials } from '@tnp/crypto/testing';
-import { RelayCore, type RelayLimits, serveRelay, type RelayServer } from '@tnp/relay-core';
-import type { DnsResolveOverlay } from '@tnp/shared-types';
+import {
+  RelayCore,
+  type RelayIdentity,
+  type RelayLimits,
+  serveRelay,
+  type RelayServer,
+} from '@tnp/relay-core';
+import { type DnsResolveOverlay, normalizeRelayEndpoint } from '@tnp/shared-types';
 import { PinStore } from '../overlay/pins';
 import { OverlayStore } from '../overlay/store';
 import { ServiceNode } from '../service-node';
@@ -59,6 +66,14 @@ export function patternBytes(size: number, seed = 0): Buffer {
 export interface Harness {
   creds: TestServiceCredentials;
   relayEndpoint: string;
+  /** The relay's key (what the signed directory would list for it). */
+  relayIdentity: RelayIdentity;
+  /**
+   * The client's stand-in for the signed directory: endpoint → relay key.
+   * Tests add a hostile relay here to model a LISTED relay that misbehaves,
+   * or leave it out to model one that is not listed.
+   */
+  relayKeys: Map<string, Uint8Array>;
   relay: RelayServer;
   core: RelayCore;
   node: ServiceNode;
@@ -77,7 +92,7 @@ export interface HarnessOptions {
   /** Point the client at a different relay URL (a hostile wrapper) than the node uses. */
   clientRelay?: (relayEndpoint: string) => string;
   /** Use an existing relay instead of starting one. */
-  externalRelay?: { endpoint: string; keys: Map<string, string> };
+  externalRelay?: { endpoint: string; keys: Map<string, string>; identity: RelayIdentity };
   target?: { port: number };
   /** Relay takes client addresses from X-Forwarded-For (lets one test act as several addresses). */
   relayTrustForwardedFor?: boolean;
@@ -93,6 +108,7 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
   let core: RelayCore | null = null;
   const keys = options.externalRelay?.keys ?? new Map<string, string>();
   keys.set(name, creds.domainKeyB64);
+  const relayIdentity = options.externalRelay?.identity ?? generateSigningKeyPair();
   if (options.externalRelay) {
     relayEndpoint = options.externalRelay.endpoint;
   } else {
@@ -100,6 +116,7 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
     relayEndpoint = `ws://127.0.0.1:${port}`;
     core = new RelayCore({
       endpoint: relayEndpoint,
+      identity: relayIdentity,
       lookupDomainKey: async (n) => keys.get(n) ?? null,
       limits: options.limits,
     });
@@ -114,7 +131,7 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
   const node = new ServiceNode({
     name,
     target: { host: '127.0.0.1', port: options.target?.port ?? target.port },
-    relayEndpoint,
+    relays: [{ endpoint: relayEndpoint, relayKey: relayIdentity.publicKey }],
     nodeKey: creds.nodeKey,
     chain: creds.chain,
     streamIdleMs: options.nodeStreamIdleMs,
@@ -138,13 +155,20 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
       kaCert,
     };
   };
-  const tunnels = new TunnelManager({ pins, resolveOverlay: async () => overlay() });
+  const relayKeys = new Map<string, Uint8Array>([[relayEndpoint, relayIdentity.publicKey]]);
+  const tunnels = new TunnelManager({
+    pins,
+    resolveOverlay: async () => overlay(),
+    relayKeys: directoryLookup(relayKeys),
+  });
   const socks = new SocksProxy({ port: 0, tunnelManager: tunnels });
   await socks.ready;
 
   return {
     creds,
     relayEndpoint,
+    relayIdentity,
+    relayKeys,
     relay: relay as RelayServer,
     core: core as RelayCore,
     node,
@@ -223,4 +247,10 @@ export function httpGet(size: number): string {
 export function splitHttp(body: Buffer): { head: string; payload: Buffer } {
   const end = body.indexOf('\r\n\r\n');
   return { head: body.subarray(0, end).toString('latin1'), payload: body.subarray(end + 4) };
+}
+
+/** A `TunnelManager.relayKeys` over a map, keyed by normalized endpoint. */
+export function directoryLookup(map: Map<string, Uint8Array>) {
+  return async (endpoint: string): Promise<Uint8Array | null> =>
+    map.get(normalizeRelayEndpoint(endpoint) ?? endpoint) ?? null;
 }

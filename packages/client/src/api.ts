@@ -5,6 +5,7 @@ import {
   type DnsResolveResponse,
   type DnsRulesRecord,
   type DomainKeyRecord,
+  MAX_RELAY_DIRECTORY_RESPONSE_BYTES,
   parseDnsRulesRecord,
   parseDomainKeyRecord,
   type RegisterDomainKeyRequest,
@@ -143,6 +144,25 @@ export class TnpApiClient {
   }
 
   /**
+   * The raw `GET /relays/directory` body: a SIGNED document the caller must
+   * verify (relay-directory.ts) before using anything in it. Bounded before
+   * parsing. A 503 means the API has no signing key configured, and there is
+   * then no directory — never an unsigned one.
+   */
+  async getRelayDirectory(): Promise<unknown> {
+    const res = await fetch(`${this.baseUrl}/relays/directory`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.status === 503) throw new Error('the API serves no signed relay directory (503)');
+    if (!res.ok) throw new Error(`TNP API returned ${res.status}`);
+    const text = await res.text();
+    if (text.length > MAX_RELAY_DIRECTORY_RESPONSE_BYTES) {
+      throw new Error('the relay directory response is too large');
+    }
+    return JSON.parse(text) as unknown;
+  }
+
+  /**
    * Publish a service node's grant chain and key-agreement certificate (auth
    * required). The registry verifies them against the domain key before
    * storing; clients verify them again and do not rely on that.
@@ -251,10 +271,11 @@ export class TnpApiClient {
    *
    * A relay is identified in the directory by its endpoint, so that is what
    * the heartbeat carries. It used to send a relay id it had never been given
-   * along with traffic counters the registry does not accept.
+   * along with traffic counters the registry does not accept. It now also
+   * carries a fresh proof of the relay key, which keeps the relay in the
+   * signed directory.
    */
-  async sendRelayHeartbeat(endpoint: string, authToken: string): Promise<void> {
-    const request: RelayHeartbeatRequest = { endpoint };
+  async sendRelayHeartbeat(request: RelayHeartbeatRequest, authToken: string): Promise<void> {
     await this.postContract('/relays/heartbeat', request, authToken, WRITE_TIMEOUT_MS);
   }
 }

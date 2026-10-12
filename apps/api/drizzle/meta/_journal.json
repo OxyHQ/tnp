@@ -36,6 +36,13 @@
       "when": 1791801181809,
       "tag": "0004_dns_rule_sets",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791808587142,
+      "tag": "0005_relay_key_proof",
+      "breakpoints": true
     }
   ]
 }

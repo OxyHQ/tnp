@@ -3,14 +3,17 @@
  *
  * Routing, authentication and every bound come from `@tnp/relay-core`, the
  * same code `apps/relay` runs. This file only adds what a community relay run
- * from the binary needs on top: registering with the relay directory and
- * heartbeating.
+ * from the binary needs on top: its relay key (the identity key file), which
+ * it proves to every peer that asks (transport.md §6.2), and registering with
+ * the registry and heartbeating — each signed with that key, which is what
+ * gets the relay into the SIGNED directory as `community` (relays.md §2).
  *
  * It used to carry its own copy of the routing — global client-chosen circuit
  * ids, unauthenticated `/service?domain=` with eviction, no bounds — with the
  * same bugs as `apps/relay`, so a fix to one was not a fix (audit S1, S2, S6).
  */
 
+import { signRelayRegistryProof, type RelayRegistryProofPurpose } from '@tnp/crypto';
 import {
   apiDomainKeyLookup,
   type DomainKeyLookup,
@@ -22,9 +25,10 @@ import {
   normalizeRelayEndpoint,
   parseRegisterRelayRequest,
   type RegisterRelayRequest,
+  type RelayKeyProof,
 } from '@tnp/shared-types';
 import type { TnpApiClient } from './api';
-import { loadOrCreateIdentity, toBase64 } from './crypto';
+import { type IdentityKeypair, loadOrCreateIdentity, toBase64 } from './crypto';
 
 export interface RelayNodeStats {
   serviceNodes: number;
@@ -53,7 +57,10 @@ export interface RelayNodeConfig {
   authToken: string;
   location: string;
   apiBaseUrl: string;
+  /** The relay key (Ed25519), created on first run. */
   identityKeyPath: string;
+  /** Use this relay key instead of the file (tests). */
+  identity?: IdentityKeypair;
   /** Override the registry lookup of domain keys (tests). */
   lookupDomainKey?: DomainKeyLookup;
 }
@@ -68,6 +75,7 @@ export class RelayNode {
   private startTime = 0;
   /** Canonical endpoint the registry accepted, and the key the heartbeat uses. */
   private registeredEndpoint: string | null = null;
+  private identity: IdentityKeypair | null = null;
   private running = false;
 
   constructor(private config: RelayNodeConfig) {}
@@ -112,9 +120,8 @@ export class RelayNode {
    * sending is a typecheck failure and a value the registry would refuse is a
    * local error naming the field, not a 400 from a round trip.
    */
-  private buildRegistration(): RegisterRelayRequest {
+  private buildRegistration(identity: IdentityKeypair): RegisterRelayRequest {
     const endpoint = this.publicEndpoint();
-    const identity = loadOrCreateIdentity(this.config.identityKeyPath);
 
     const request: RegisterRelayRequest = {
       endpoint,
@@ -126,6 +133,7 @@ export class RelayNode {
         bandwidth: this.config.bandwidth,
       },
       location: this.config.location,
+      proof: keyProof(identity, 'register', endpoint),
     };
 
     const parsed = parseRegisterRelayRequest(request);
@@ -146,11 +154,14 @@ export class RelayNode {
         ? `ws://${this.config.host}:${this.config.port}`
         : this.publicEndpoint();
 
+    const identity = this.config.identity ?? loadOrCreateIdentity(this.config.identityKeyPath);
+    this.identity = identity;
+
     // Register with the API before binding anything. A relay that cannot be
     // published is not a relay anyone can reach, and failing here leaves the
     // node stopped rather than listening-but-invisible.
     if (this.config.authToken) {
-      const request = this.buildRegistration();
+      const request = this.buildRegistration(identity);
       try {
         const registration = await apiClient.registerRelay(request, this.config.authToken);
         this.registeredEndpoint = registration.endpoint;
@@ -162,6 +173,7 @@ export class RelayNode {
 
     this.core = new RelayCore({
       endpoint: normalizeRelayEndpoint(endpoint) ?? endpoint,
+      identity,
       lookupDomainKey: this.config.lookupDomainKey ?? apiDomainKeyLookup(this.config.apiBaseUrl),
       limits: { maxConnections: Math.max(1, this.config.maxConnections) },
     });
@@ -178,7 +190,13 @@ export class RelayNode {
     if (registeredEndpoint && this.config.authToken) {
       this.heartbeatTimer = setInterval(() => {
         apiClient
-          .sendRelayHeartbeat(registeredEndpoint, this.config.authToken)
+          .sendRelayHeartbeat(
+            {
+              endpoint: registeredEndpoint,
+              proof: keyProof(identity, 'heartbeat', registeredEndpoint),
+            },
+            this.config.authToken,
+          )
           .catch((err: unknown) => {
             // A missed heartbeat is not fatal — the registry degrades the relay
             // and it recovers on the next one — but a run of them means the
@@ -201,6 +219,28 @@ export class RelayNode {
     this.core = null;
     this.running = false;
     this.registeredEndpoint = null;
+    this.identity = null;
     if (relay) await relay.stop();
   }
+
+  /** The relay key this node proves (base64), once started. */
+  get relayKey(): string | null {
+    return this.identity ? toBase64(this.identity.publicKey) : null;
+  }
+}
+
+/** A fresh registry proof: this relay holds `identity` for `endpoint`, now. */
+function keyProof(
+  identity: IdentityKeypair,
+  purpose: RelayRegistryProofPurpose,
+  endpoint: string,
+): RelayKeyProof {
+  const issuedAt = Math.floor(Date.now() / 1000);
+  return {
+    issuedAt,
+    signature: signRelayRegistryProof(
+      { purpose, endpoint, relayKey: identity.publicKey, issuedAt },
+      identity.secretKey,
+    ),
+  };
 }

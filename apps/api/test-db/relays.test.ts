@@ -5,9 +5,11 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { eq, sql } from 'drizzle-orm';
+import { encodeBase64, generateSigningKeyPair, signRelayRegistryProof } from '@tnp/crypto';
 import type { RegisterRelayRequest } from '@tnp/shared-types';
 import { relays } from '../src/db/schema/index.js';
 import {
+  listProvenCommunityRelays,
   listRelayDirectory,
   RELAY_STALE_AFTER_SECONDS,
   recordRelayHeartbeat,
@@ -159,5 +161,100 @@ describe('order', () => {
       ['endpoint', 'location', 'operator', 'publicKey', 'status'].sort(),
     );
     expect(JSON.stringify(entry)).not.toContain('secret-account');
+  });
+});
+
+describe('key proofs and the signed directory', () => {
+  const key = generateSigningKeyPair();
+  const publicKey = encodeBase64(key.publicKey);
+  const now = () => Math.floor(Date.now() / 1000);
+  const proof = (purpose: 'register' | 'heartbeat', endpoint: string, issuedAt = now()) => ({
+    issuedAt,
+    signature: signRelayRegistryProof(
+      { purpose, endpoint, relayKey: key.publicKey, issuedAt },
+      key.secretKey,
+    ),
+  });
+
+  async function proven(endpoint: string, operatorUserId: string) {
+    await registerRelay(t.db, {
+      request: { ...request(endpoint), publicKey },
+      operatorUserId,
+      oxyOperators: OXY,
+      keyProven: true,
+    });
+    return recordRelayHeartbeat(t.db, {
+      endpoint,
+      operatorUserId,
+      proof: proof('heartbeat', endpoint),
+    });
+  }
+
+  test('only relays that proved their key are offered to the signed directory', async () => {
+    expect(await proven('wss://proven.example.test', 'a')).toBe('ok');
+    await live('wss://unproven.example.test', 'b');
+    const listed = await listProvenCommunityRelays(t.db);
+    expect(listed.map((r) => r.endpoint)).toEqual(['wss://proven.example.test']);
+    expect(listed[0]?.publicKey).toBe(publicKey);
+    // The legacy listing still has both.
+    expect(await listRelayDirectory(t.db, { oxyOperators: OXY, operator: null })).toHaveLength(2);
+  });
+
+  test('a heartbeat proof that does not verify against the registered key changes nothing', async () => {
+    await proven('wss://relay.example.test', 'a');
+    await t.db
+      .update(relays)
+      .set({ keyProvenAt: sql`now() - interval '1 hour'` })
+      .where(eq(relays.endpoint, 'wss://relay.example.test'));
+    const other = generateSigningKeyPair();
+    const issuedAt = now();
+    const forged = {
+      issuedAt,
+      signature: signRelayRegistryProof(
+        {
+          purpose: 'heartbeat',
+          endpoint: 'wss://relay.example.test',
+          relayKey: other.publicKey,
+          issuedAt,
+        },
+        other.secretKey,
+      ),
+    };
+    expect(
+      await recordRelayHeartbeat(t.db, {
+        endpoint: 'wss://relay.example.test',
+        operatorUserId: 'a',
+        proof: forged,
+      }),
+    ).toBe('bad-proof');
+    expect(await listProvenCommunityRelays(t.db)).toEqual([]);
+    // Another account's heartbeat for it is not found, proof or not.
+    expect(
+      await recordRelayHeartbeat(t.db, {
+        endpoint: 'wss://relay.example.test',
+        operatorUserId: 'b',
+        proof: proof('heartbeat', 'wss://relay.example.test'),
+      }),
+    ).toBe('not-found');
+  });
+
+  test('a stale proof or a re-registration without one drops the relay from the directory', async () => {
+    await proven('wss://relay.example.test', 'a');
+    expect(await listProvenCommunityRelays(t.db)).toHaveLength(1);
+    await t.db
+      .update(relays)
+      .set({
+        keyProvenAt: sql`now() - make_interval(secs => ${RELAY_STALE_AFTER_SECONDS + 1})`,
+      })
+      .where(eq(relays.endpoint, 'wss://relay.example.test'));
+    expect(await listProvenCommunityRelays(t.db)).toEqual([]);
+
+    await proven('wss://relay.example.test', 'a');
+    await registerRelay(t.db, {
+      request: request('wss://relay.example.test'),
+      operatorUserId: 'a',
+      oxyOperators: OXY,
+    });
+    expect(await listProvenCommunityRelays(t.db)).toEqual([]);
   });
 });

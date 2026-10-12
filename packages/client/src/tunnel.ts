@@ -9,18 +9,22 @@
  *     2. get the overlay block (DNS cache hint or `/dns/resolve`)
  *     3. verify it: pin → rotation → grant chain → key-agreement certificate
  *        (overlay/verify.ts). A failure refuses the connection.
- *     4. CIRCUIT_CREATE {name, Noise msg1} on a relay connection, with a
+ *     4. look the relay it names up in the SIGNED relay directory; a relay
+ *        that is not listed is refused (relays.md §8, blocker 6). On connect
+ *        the relay must prove it holds the listed key for this endpoint and
+ *        this connection (overlay/relay-identity.ts) before any circuit.
+ *     5. CIRCUIT_CREATE {name, Noise msg1} on a relay connection, with a
  *        circuit id from the CSPRNG, connection-scoped
- *     5. CIRCUIT_CREATED {Noise msg2} from the SERVICE NODE → session; a
+ *     6. CIRCUIT_CREATED {Noise msg2} from the SERVICE NODE → session; a
  *        relay answering on its own fails key confirmation here
- *     6. sealed OPEN(port) → sealed OPENED → a `SecureCircuit` to pipe
+ *     7. sealed OPEN(port) → sealed OPENED → a `SecureCircuit` to pipe
  *
  * Replaces a manager that numbered circuits from 1 in every process (audit
  * S1), derived one shared key for both directions from whatever key the API
  * returned (S3, S5), and never looked at its send buffer (S6).
  */
 
-import type { VerifiedKeyAgreementKey } from '@tnp/crypto';
+import { toHex, type VerifiedKeyAgreementKey } from '@tnp/crypto';
 import {
   CircuitTable,
   ClientHandshake,
@@ -42,6 +46,7 @@ import {
 import { normalizeRelayEndpoint } from '@tnp/shared-types';
 import { FrameSocket } from './overlay/frame-socket';
 import type { PinStore } from './overlay/pins';
+import { RelayIdentityCheck, RelayIdentityError } from './overlay/relay-identity';
 import { SecureCircuit, type SecureCircuitHooks } from './overlay/secure-circuit';
 import { OverlayVerificationError, serviceNameFor, verifyOverlay } from './overlay/verify';
 
@@ -60,10 +65,22 @@ export class TunnelError extends Error {
   }
 }
 
+/**
+ * The relay key the signed directory lists for an endpoint, or null when the
+ * endpoint is not listed. Throws when there is no verified directory.
+ */
+export type RelayKeyLookup = (endpoint: string) => Promise<Uint8Array | null>;
+
 export interface TunnelManagerOptions {
   pins: PinStore;
   /** Fetch the `/dns/resolve` overlay block for a destination; null when there is none. */
   resolveOverlay: (destination: string) => Promise<unknown | null>;
+  /**
+   * The signed relay directory (relay-directory.ts `relayKeyFor`). A relay
+   * the resolve record names is used only if it is listed, and only after it
+   * proves the listed key.
+   */
+  relayKeys: RelayKeyLookup;
   /** Unix seconds. */
   now?: () => number;
   openTimeoutMs?: number;
@@ -94,15 +111,27 @@ class RelayLink {
   readonly circuits = new CircuitTable<Entry>(MAX_CIRCUITS_PER_CONNECTION);
   private pending = 0;
   private socket: FrameSocket | null = null;
+  private readonly identity: RelayIdentityCheck;
+  private verified = false;
+  private onVerified: ((err: Error | null) => void) | null = null;
   closed = false;
 
   constructor(
     readonly endpoint: string,
+    relayKey: Uint8Array,
     private readonly onGone: (link: RelayLink) => void,
     private readonly headers?: Record<string, string>,
-  ) {}
+  ) {
+    this.identity = new RelayIdentityCheck(endpoint, relayKey);
+  }
 
+  /** Connect, then make the relay prove its directory key. Nothing else is sent before that. */
   async connect(): Promise<void> {
+    const proven = new Promise<void>((resolve, reject) => {
+      this.onVerified = (err) => (err ? reject(err) : resolve());
+    });
+    // Rejections are consumed below; a failure before the await must not be unhandled.
+    proven.catch(() => {});
     const { socket, ready } = FrameSocket.open(
       `${this.endpoint}/tunnel`,
       {
@@ -119,10 +148,30 @@ class RelayLink {
     );
     this.socket = socket;
     await ready;
+    socket.send(this.identity.helloFrame());
+    const timer = setTimeout(
+      () =>
+        this.identityFailed(new RelayIdentityError('the relay did not prove its identity in time')),
+      RELAY_CONNECT_TIMEOUT_MS,
+    );
+    try {
+      await proven;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private identityFailed(err: Error): void {
+    const notify = this.onVerified;
+    this.onVerified = null;
+    notify?.(err);
+    this.socket?.close(1008, 'relay identity not proven');
   }
 
   get hasCapacity(): boolean {
-    return !this.closed && !this.circuits.atCapacity && this.pending < MAX_PENDING_OPENS;
+    return (
+      this.verified && !this.closed && !this.circuits.atCapacity && this.pending < MAX_PENDING_OPENS
+    );
   }
 
   openCircuit(
@@ -198,6 +247,27 @@ class RelayLink {
   }
 
   private dispatch(frame: Frame): void {
+    if (!this.verified) {
+      // Before the proof, the only frames that mean anything are PING and the
+      // HELLO_ACK. Anything else — including circuit frames — ends the link.
+      if (frame.type === FrameType.PING && frame.circuitId === 0n) {
+        this.socket?.send(encodeFrame({ type: FrameType.PONG, payload: frame.payload }));
+        return;
+      }
+      try {
+        this.identity.verify(frame);
+      } catch (err) {
+        this.identityFailed(
+          err instanceof Error ? err : new RelayIdentityError('relay identity not proven'),
+        );
+        return;
+      }
+      this.verified = true;
+      const notify = this.onVerified;
+      this.onVerified = null;
+      notify?.(null);
+      return;
+    }
     if (frame.circuitId === 0n) {
       // Connection-level: PING from the relay is answered; anything else from
       // an anonymous client's point of view is ignored.
@@ -272,6 +342,9 @@ class RelayLink {
   private teardown(): void {
     if (this.closed) return;
     this.closed = true;
+    const notify = this.onVerified;
+    this.onVerified = null;
+    notify?.(new TunnelError('relay connection lost before it proved its identity'));
     for (const entry of this.circuits.drain()) {
       if (entry.state === 'creating') {
         clearTimeout(entry.timer);
@@ -340,13 +413,14 @@ export class TunnelManager {
     const verified = verifyOverlay(name, overlay, this.options.pins, this.now());
 
     const endpoint = this.checkEndpoint(verified.relay);
+    const relayKey = await this.directoryKey(endpoint);
     // Capacity is re-checked after every await and the circuit claimed in the
     // same synchronous step, so concurrent opens cannot overfill one link.
-    let link = await this.linkFor(endpoint);
+    let link = await this.linkFor(endpoint, relayKey);
     for (let tries = 0; !link.hasCapacity; tries++) {
       if (tries > this.maxLinks)
         throw new TunnelError('relay connections are full', ErrorCode.CIRCUIT_LIMIT);
-      link = await this.linkFor(endpoint);
+      link = await this.linkFor(endpoint, relayKey);
     }
     let markOpened: () => void = () => {};
     let markFailed: (err: Error) => void = () => {};
@@ -399,12 +473,39 @@ export class TunnelManager {
     return endpoint;
   }
 
-  private async linkFor(endpoint: string): Promise<RelayLink> {
+  /**
+   * The signed directory's key for `endpoint`. A relay that is not listed is
+   * never used: the resolve record that named it is registry data, and a
+   * relay is selectable only through the signed directory.
+   */
+  private async directoryKey(endpoint: string): Promise<Uint8Array> {
+    let key: Uint8Array | null;
+    try {
+      key = await this.options.relayKeys(endpoint);
+    } catch (err) {
+      throw new TunnelError(
+        `refusing the relay: ${err instanceof Error ? err.message : 'no verified relay directory'}`,
+        ErrorCode.AUTH_FAILED,
+      );
+    }
+    if (!key) {
+      throw new TunnelError(
+        `refusing relay ${endpoint}: it is not in the signed relay directory`,
+        ErrorCode.AUTH_FAILED,
+      );
+    }
+    return key;
+  }
+
+  private async linkFor(endpoint: string, relayKey: Uint8Array): Promise<RelayLink> {
+    // Keyed by endpoint AND key: a link proven against one key is never used
+    // for a directory that lists another.
+    const slot = `${endpoint} ${toHex(relayKey)}`;
     for (;;) {
-      const links = this.links.get(endpoint) ?? [];
+      const links = this.links.get(slot) ?? [];
       const ready = links.find((l) => l.hasCapacity);
       if (ready) return ready;
-      const inFlight = this.connecting.get(endpoint);
+      const inFlight = this.connecting.get(slot);
       if (inFlight) {
         await inFlight.catch(() => undefined);
         continue;
@@ -417,24 +518,38 @@ export class TunnelManager {
       }
       const link = new RelayLink(
         endpoint,
+        relayKey,
         (gone) => {
-          const list = this.links.get(endpoint);
+          const list = this.links.get(slot);
           if (!list) return;
           const rest = list.filter((l) => l !== gone);
-          if (rest.length) this.links.set(endpoint, rest);
-          else this.links.delete(endpoint);
+          if (rest.length) this.links.set(slot, rest);
+          else this.links.delete(slot);
         },
         this.options.headers,
       );
-      const promise = link.connect().then(() => {
-        this.links.set(endpoint, [...(this.links.get(endpoint) ?? []), link]);
-        return link;
-      });
-      this.connecting.set(endpoint, promise);
+      const promise = link.connect().then(
+        () => {
+          this.links.set(slot, [...(this.links.get(slot) ?? []), link]);
+          return link;
+        },
+        (err: unknown) => {
+          link.close();
+          if (err instanceof RelayIdentityError) {
+            throw new TunnelError(err.message, ErrorCode.AUTH_FAILED);
+          }
+          throw err instanceof TunnelError
+            ? err
+            : new TunnelError(
+                err instanceof Error ? err.message : 'could not connect to the relay',
+              );
+        },
+      );
+      this.connecting.set(slot, promise);
       try {
         return await promise;
       } finally {
-        this.connecting.delete(endpoint);
+        this.connecting.delete(slot);
       }
     }
   }

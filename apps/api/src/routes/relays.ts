@@ -4,22 +4,71 @@ import {
   parseRegisterRelayRequest,
   parseRelayHeartbeatRequest,
   type RelayDirectoryEntry,
+  type RelayDirectoryResponse,
   type RelayHeartbeatResponse,
   type RelayRegistration,
 } from '@tnp/shared-types';
 import { config } from '../config.js';
 import { getDb } from '../db/postgres.js';
-import { listRelayDirectory, recordRelayHeartbeat, registerRelay } from '../registry/relays.js';
+import {
+  type DirectorySigner,
+  type OxyRelayConfig,
+  RelayDirectoryService,
+} from '../registry/relayDirectory.js';
+import {
+  listProvenCommunityRelays,
+  listRelayDirectory,
+  recordRelayHeartbeat,
+  registerRelay,
+  relayKeyProofValid,
+} from '../registry/relays.js';
 import { logError } from '../utils/logError.js';
 
+export interface RelayDirectoryRouteConfig {
+  signer: DirectorySigner | null;
+  oxyRelays: readonly OxyRelayConfig[];
+}
+
 /**
- * `oxyOperators` is injectable so the contract tests can run the router with
- * an allowlist of their choosing; production passes `TNP_OXY_RELAY_OPERATORS`.
+ * `oxyOperators` and `directory` are injectable so the contract tests can run
+ * the router with configuration of their choosing; production passes
+ * `TNP_OXY_RELAY_OPERATORS`, `TNP_DIRECTORY_SIGNING_SEED` and `TNP_OXY_RELAYS`.
  */
 export function createRelaysRouter(
   oxyOperators: ReadonlySet<string> = config.oxyRelayOperators,
+  directory: RelayDirectoryRouteConfig = config.relayDirectory,
 ): Router {
   const router = Router();
+
+  const directoryService = directory.signer
+    ? new RelayDirectoryService({
+        signer: directory.signer,
+        oxyRelays: directory.oxyRelays,
+        listCommunity: () => listProvenCommunityRelays(getDb()),
+        onError: (err) => logError('Relay directory: community relays unavailable:', err),
+      })
+    : null;
+
+  // GET /relays/directory -- the SIGNED directory clients select relays from
+  // (discovery.md §2). No signing key, no directory: 503, never an unsigned
+  // listing in its place.
+  router.get('/directory', async (_req, res) => {
+    if (!directoryService) {
+      res.status(503).json({ error: 'The signed relay directory is not available' });
+      return;
+    }
+    try {
+      const body: RelayDirectoryResponse = await directoryService.current();
+      // Signed and short-lived: a cache may hold it briefly. A stale copy
+      // from a cache is still a valid signed document, and clients keep the
+      // highest serial they have seen.
+      res.set('Cache-Control', 'public, max-age=30');
+      res.json(body);
+    } catch (err) {
+      logError('Relay directory error:', err);
+      res.status(500).json({ error: 'Failed to build the relay directory' });
+    }
+  });
 
   // GET /relays -- list live relays (public). Rules: registry/relays.ts.
   router.get('/', async (req, res) => {
@@ -54,10 +103,30 @@ export function createRelaysRouter(
         return;
       }
 
+      // A proof that is sent must verify; one that is absent only keeps the
+      // relay out of the signed directory (registry/relays.ts).
+      const { proof } = parsed.value;
+      const keyProven =
+        proof !== undefined &&
+        relayKeyProofValid({
+          proof,
+          purpose: 'register',
+          endpoint: parsed.value.endpoint,
+          publicKey: parsed.value.publicKey,
+          nowSeconds: Math.floor(Date.now() / 1000),
+        });
+      if (proof !== undefined && !keyProven) {
+        res.status(400).json({
+          error: 'proof does not verify for this endpoint and publicKey (or is not fresh)',
+        });
+        return;
+      }
+
       const registration: RelayRegistration | null = await registerRelay(getDb(), {
         request: parsed.value,
         operatorUserId: getRequiredOxyUserId(req),
         oxyOperators,
+        keyProven,
       });
 
       if (!registration) {
@@ -80,12 +149,17 @@ export function createRelaysRouter(
         return;
       }
 
-      const found = await recordRelayHeartbeat(getDb(), {
+      const outcome = await recordRelayHeartbeat(getDb(), {
         endpoint: parsed.value.endpoint,
         operatorUserId: getRequiredOxyUserId(req),
+        proof: parsed.value.proof,
       });
-      if (!found) {
+      if (outcome === 'not-found') {
         res.status(404).json({ error: 'Relay not found' });
+        return;
+      }
+      if (outcome === 'bad-proof') {
+        res.status(400).json({ error: 'proof does not verify for the registered key' });
         return;
       }
 

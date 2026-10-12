@@ -6,9 +6,9 @@ separate role with separate consent ([`exit-nodes.md`](./exit-nodes.md)).
 
 **Status: one implementation (`@tnp/relay-core`), used by the standalone
 server (`apps/relay`) and the relay in the `tnp` binary. Service-node
-authentication, connection-scoped circuits and bounds are implemented and
-tested; relay authentication to clients and the signed directory are not.
-Parked: not published, not deployed (§8).**
+authentication, connection-scoped circuits, bounds, the signed relay directory
+and relay authentication to clients are implemented and tested. The image is
+publishable; serving traffic is activated by an oxy-infra pin (§8).**
 
 ---
 
@@ -40,10 +40,27 @@ Registration is authenticated at both ends: the API authenticates the operator,
 and clients authenticate the relay by its directory-published key during the
 handshake. A relay that is not in the signed directory is not selectable.
 
-**Implemented today:** steps 1, 3 (endpoint, identity key, capacity) and 5
-through the registry; there is no signed directory (4) and clients do not
-authenticate the relay. What **is** authenticated is the service node, to the
-relay (transport.md §6.1): it signs the relay's challenge with its node key and
+**Implemented:** steps 1, 3 (endpoint, relay key, capacity), 4 and 5, with
+these specifics:
+
+- **The signed directory** (`GET /relays/directory`, discovery.md §2) lists
+  Oxy-operated relays from the API's `TNP_OXY_RELAYS` configuration
+  (`{endpoint, relayKey, region}` — no account token involved) and community
+  relays from the registry: heartbeat-fresh, `wss://` on a public host, and
+  only while they have proved possession of their relay key within the last
+  90 s. That proof is a signature by the relay key over
+  `purpose ‖ endpoint ‖ key ‖ issuedAt` (`@tnp/crypto` `signRelayRegistryProof`),
+  sent with every registration and heartbeat and accepted within ±5 min of
+  the registry's clock. A registry relay is always `community` in the signed
+  directory; `oxy` comes only from the API's configuration. Oxy does not yet
+  verify reachability (step 4's "verifies reachability" is open).
+- **Relays prove their key to clients and service nodes** on every connection
+  (transport.md §6.2). A client uses a relay only if the signed directory
+  lists its endpoint, and only after the relay has signed the client's nonce
+  and that endpoint with the listed key.
+
+What is also authenticated is the service node, to the relay
+(transport.md §6.1): it signs the relay's challenge with its node key and
 presents a grant chain that must verify to the **domain key** the registry
 publishes for the name (`GET /domain-keys/:name`, cached 60 s, "no key" cached
 10 s, a registry error fails closed and is not cached). That is a stated
@@ -170,27 +187,32 @@ From the [audit](./audit-2026-08-06.md):
 |---|---|
 | ~~**Registration is non-functional**~~ | Fixed. The client sent `{port, location}` where the API required `{endpoint, publicKey, operator, capacity}`, and the heartbeat mismatched the same way, so every call 400d and `tnp relay` aborted at startup (B2). Both shapes are now declared once in `@tnp/shared-types`, which the API parses with and the relay builds from. `tnp relay` takes `--endpoint`, the public URL clients dial, and registers with its identity key and its stated capacity. |
 | ~~**No service-node authentication**~~ | Fixed. `/service` sends a challenge and accepts nothing but an `AUTH` proving possession of a node key the name's domain key authorized (transport.md §6.1). `/tunnel` stays unauthenticated by design — clients have no identity — and is rate-limited per address. |
-| **No relay authentication to clients** | Open. Clients cannot tell a relay from an impostor at the same URL; the end-to-end session makes an impostor unable to read or alter traffic, not unable to observe or drop it. Needs the signed directory (Phase 5). |
+| ~~**No relay authentication to clients**~~ | Fixed. A relay signs each peer's fresh nonce and the endpoint the peer dialed with its relay key (transport.md §6.2); clients and service nodes check the key against the signed directory and send nothing else until it verifies. An impostor at the same URL is refused before it sees a circuit or a name. |
 | ~~**`operator` is self-asserted**~~ | Fixed in the registry (security review 2026-10). `operator` is no longer a request field: a relay is published as `oxy` only while the account that registered it is on the API's `TNP_OXY_RELAY_OPERATORS` allowlist (empty by default), evaluated when the directory is read, so rows written while the field was self-asserted are `community` too. Relays released earlier still send the field; it is ignored. What remains open is §2's relay authentication: the allowlist proves which *account* registered a relay, not that the machine answering at the endpoint is the one that registered. |
 | ~~**`ws://` endpoints, eternal listings, gameable order**~~ | Fixed in the registry. Only `wss://` endpoints on a public host are accepted (IP literals in loopback, private, link-local, CGNAT and similar ranges, `localhost` and single-label names are refused). A relay is listed only while its last heartbeat is under 90 s old — nothing ever wrote `offline`, so one heartbeat used to list it forever. The order is Oxy-operated first, then longest-registered; it used to be status then endpoint string, so `ws://` sorted ahead of every `wss://`. |
-| ~~**`tnp serve` takes the first listed relay**~~ | Fixed in the client. Without `--relay`, `tnp serve` (and the interactive menu) selects only an Oxy-operated relay and otherwise refuses, saying why; a community relay is used only when named with `--relay`. The directory is still unsigned, so this trusts the registry's `operator` field. |
+| ~~**`tnp serve` takes the first listed relay**~~ | Fixed in the client. Without `--relay`, `tnp serve` (and the interactive menu) selects only Oxy-operated relays from the **signed** directory, fastest first (connect plus identity proof), and fails over down the list; with none it refuses, saying why. A community relay is used only when named with `--relay`; a `--relay` that is not in the directory is used only with a loud warning (and `--relay-key` to require a key), and clients will not use it. |
 | ~~**Domain takeover**~~ | Fixed. A second node for a name with a different node key is refused (`ALREADY_REGISTERED`) and the incumbent stays; only the same node key may replace its own connection. |
 | ~~**Global circuit IDs**~~ | Fixed: §4 (S1). |
 | ~~**No limits**~~ | Fixed: §3 (S6). |
 | ~~**Duplicated implementation**~~ | Fixed. `@tnp/relay-core` is the only relay; `apps/relay` and `packages/client/src/relay-node.ts` are thin bindings around it. |
-| **Unsigned directory** | Open. Clients cannot verify a relay is legitimate (Phase 5). |
+| ~~**Unsigned directory**~~ | Fixed. `GET /relays/directory` is signed with a key the client pins; clients refuse an unsigned, badly signed, expired or rolled-back directory, and select relays only from a verified one (discovery.md §2). The legacy `GET /relays` listing remains, unsigned, for clients released before; nothing in this release reads it. |
 | ~~**No transport tests**~~ | Fixed. `packages/relay-core` tests authentication, ownership, isolation, takeover, bounds and backpressure against fake transports and a real Bun server; `packages/client/src/overlay.{e2e,adversarial}.test.ts` run client → relay → service node over loopback, standalone and embedded, including a hostile relay. |
 
-Phase 5 adds the signed directory, health, peering and selection.
+Phase 5 still adds health measurement, peering and multi-relay diversity.
 
 ## 8. Deployment security gate
 
-`tnp-relay` is intentionally not an AWS-publishable artefact and its ECS service
-must remain at `desired_count = 0`. The API and DNS image workflow has no relay
-matrix entry, task-definition registration, rollout, or scaling operation.
+The relay image (`tnp-relay`) is a reviewed, publishable artefact: CI builds
+it on every pull request, starts it with a throwaway key and checks that it
+proves that key (`apps/relay/src/self-test.ts`), and `deploy-aws.yml`
+publishes it under the reviewed-image pin like the API and DNS images. The
+publisher never registers task definitions, rolls out or scales anything:
+**serving traffic is activated only by an oxy-infra change** that pins a
+reviewed digest, sets `RELAY_ENDPOINT` and `RELAY_KEY_SEED`, lists the relay
+in the API's `TNP_OXY_RELAYS`, gives the API `TNP_DIRECTORY_SIGNING_SEED`, and
+scales the service up.
 
-Do not add the relay to that workflow or activate traffic until all of these are
-closed with tests and a separate security review:
+The blockers that kept it parked, each closed with tests:
 
 1. `/service` and `/tunnel` authenticate the caller and the relay.
 2. Operator identity and domain ownership are verified rather than asserted.
@@ -200,21 +222,48 @@ closed with tests and a separate security review:
 5. Standalone and embedded implementations share one tested relay core.
 6. Clients verify a signed directory before selecting a relay.
 
-Keeping the service at zero is necessary but not sufficient: publishing an
-apparently deployable relay image would create an unsafe shortcut around this
-gate, so the publisher excludes it entirely.
-
-**Gate status after the Phase 3 transport cutover:**
-
 | # | Status |
 |---|---|
-| 1 | **Partly closed.** `/service` authenticates the service node. `/tunnel` does not authenticate clients, by design, and the relay is not authenticated to anyone. |
-| 2 | **Closed for domains, as far as the registry can be trusted.** Serving a name requires a chain from the name's domain key, checked against the registry's copy (§2). Operator identity: the registry decides `operator` from an account allowlist (§7); it does not prove the machine at the endpoint is the one that registered. |
+| 1 | **Closed.** `/service` authenticates the service node (transport.md §6.1). The relay authenticates to every client and service node by its directory-listed key (§6.2). `/tunnel` does not authenticate clients, by design: clients have no identity. |
+| 2 | **Closed for domains, as far as the registry can be trusted** (§2). Operator: `oxy` only from the API's `TNP_OXY_RELAYS`; registry relays are `community` and listed only after proving their key. |
 | 3 | **Closed** (§4). |
 | 4 | **Closed**, with the backpressure model of §3 (circuit destruction, not read pausing) and the per-address caveat behind a load balancer. No per-identity or bandwidth limits. |
 | 5 | **Closed.** One core, tested. |
-| 6 | **Open.** No signed directory (Phase 5). |
+| 6 | **Closed** (PR "signed relay directory"). See below for exactly what it guarantees. |
 
-The relay stays parked: no workflow builds or publishes its image, and its ECS
-service stays at zero. Item 6, the open half of item 1, and a separate security
-review are still required before that changes.
+**What the signed directory and relay authentication guarantee:**
+
+- A client (or service node) uses a relay only if a directory signed by a
+  pinned key (`RELAY_DIRECTORY_SIGNING_KEYS_BASE64` in `@tnp/shared-types`)
+  lists its endpoint, the directory is unexpired (24 h validity), and its
+  serial is no lower than the highest that device has accepted (persisted;
+  rollback refused). There is no unsigned fallback: a fetch that fails or is
+  refused uses only a previously verified, still-valid cached copy.
+- The relay answering at that endpoint proves, per connection, that it holds
+  the listed key. Forged, replayed and cross-endpoint proofs are refused
+  (`packages/client/src/relay-identity.test.ts`).
+- So network tampering (TLS interception, a hostile edge), registry/database
+  tampering (a forged row is not a signed entry) and stale or rolled-back
+  directories cannot steer a client onto a relay the directory signer did not
+  list.
+
+**What they do not guarantee:**
+
+- **The API holds the directory signing key** (`TNP_DIRECTORY_SIGNING_SEED`,
+  SSM) and signs at request time. A compromised API, or anyone with that SSM
+  parameter, can sign a directory listing any relay. Removing that needs
+  offline signing or a transparency log (discovery.md §3, open question).
+- A relay's identity proof is not bound to the TLS channel: a party that can
+  terminate TLS for the endpoint and forward to the genuine relay passes. It
+  then sees what a network observer sees — circuits are end-to-end encrypted.
+- **End-to-end confidentiality never depended on the directory.** Every
+  circuit is keyed to the name's domain key through a verified grant chain
+  (transport.md §9.1); a listed relay, honest or not, reads no payload. What a
+  relay sees is in transport.md §11.5 — a malicious *listed* relay can still
+  observe and drop.
+- A `tnp serve --relay <url>` the directory does not list is the operator's
+  explicit choice, used with a loud warning and unauthenticated unless
+  `--relay-key` is given; clients refuse to reach a service through it.
+- Directory key rotation is by pinning two keys (current and next) in a
+  client release before switching the seed (`relay-directory.ts` in
+  `@tnp/shared-types`); there is no in-band rotation statement yet.

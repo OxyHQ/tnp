@@ -9,8 +9,9 @@ key** (§1, "Domain keys and pinning"). That closes audit findings S1, S2, S3
 (for names a client has already used) and S5 in code. Not implemented: the Oxy
 identity → device key hierarchy (service nodes do not use it — see below), the
 connection handshake of transport.md §6 beyond service-node authentication,
-the signed directory, signed record sets, and directory-published revocation.
-None of it is deployed: the relay is parked ([`relays.md`](./relays.md) §8).
+signed record sets, and directory-published revocation. The signed relay
+directory and relay authentication are implemented; none of the overlay is
+deployed until the relay is activated ([`relays.md`](./relays.md) §8).
 
 ---
 
@@ -373,7 +374,7 @@ resolved before private mode ships — not after.
 | Downgrade of version or capabilities | The handshake signature covers the whole transcript, so any modification breaks it. The session handshake binds version, role and name in its prologue and has no negotiable suite. Security capabilities are never negotiable downward. |
 | Key substitution | Every key is used only via a verified grant chain to the name's domain key, which the client has pinned; a different domain key needs a rotation signed by the pinned one. An unchained key is not usable: the session handshake accepts only a `VerifiedKeyAgreementKey`, checked at run time. First contact still trusts the registry (§1). |
 | Rollback to an older grant or certificate | Per-pin high-water marks on grant and certificate serials; a lower serial for the same issuer and subject is refused (`rolled-back`). |
-| Directory substitution | The directory is signed; clients pin the directory signing key and reject an unsigned or stale directory rather than falling back. |
+| Directory substitution | The directory is signed; clients pin the directory signing key(s) and reject an unsigned, badly signed, expired or rolled-back (lower serial) directory rather than falling back to unverified data ([`discovery.md`](./discovery.md) §2). Each relay proves its listed key per connection ([`transport.md`](./transport.md) §6.2). The API holds the signing key, so this does not defend against a compromised API. |
 | Rollback to an old signed record set | Monotonic serials; a client refuses a serial lower than the highest it has seen for that name. |
 
 The replay, reflection, truncation, session-handshake, key-substitution and
@@ -382,8 +383,10 @@ tested end to end against a hostile relay
 (`packages/client/src/overlay.adversarial.test.ts`); none is deployed while the
 relay is parked. The connection-handshake replay and downgrade rows apply to a
 handshake that is not implemented (only service-node authentication is, with a
-per-connection challenge). The signed directory and signed record sets are not
-implemented.
+per-connection challenge). The signed directory and relay authentication to
+clients are implemented (`@tnp/crypto` `relay-directory.ts`, tested in
+`packages/client/src/relay-{directory,identity}.test.ts`); signed record sets
+are not.
 
 ## 6. Rotation and revocation
 

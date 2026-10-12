@@ -2,6 +2,10 @@
  * The relay is assumed hostile (transport.md §9). A man-in-the-middle relay
  * wrapper sits between the client and a real relay and attacks the circuit:
  * replay, reordering, reflection, tampering, truncation and impersonation.
+ * The wrapper is a LISTED relay — in the client's (stand-in) signed directory
+ * with its own key, which it proves — because that is the relay that can
+ * attack circuits at all: an unlisted one is refused before any circuit
+ * (relay-identity.test.ts).
  * Each must be DETECTED end to end — the circuit fails with the matching code
  * and no altered byte ever reaches the application.
  *
@@ -11,14 +15,16 @@
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ServerWebSocket } from 'bun';
-import { generateSigningKeyPair, signServiceAuth } from '@tnp/crypto';
+import { generateSigningKeyPair, signRelayIdentity, signServiceAuth } from '@tnp/crypto';
 import { generateX25519KeyPair } from '@tnp/crypto/primitives';
 import { makeTestCredentials } from '@tnp/crypto/testing';
 import {
   decodeError,
   decodeFrame,
+  decodeRelayHello,
   encodeCircuitCreate,
   encodeFrame,
+  encodeRelayHelloAck,
   encodeServiceAuth,
   ErrorCode,
   FrameType,
@@ -55,9 +61,35 @@ interface Wire {
 /** Return the frames to actually deliver (in order) for one observed frame. */
 type Tamper = (dir: Direction, bytes: Uint8Array, wire: Wire) => Uint8Array[];
 
-/** A WebSocket MITM in front of a real relay's /tunnel. */
-async function hostileRelay(upstream: string, tamper: Tamper): Promise<string> {
+/**
+ * A WebSocket MITM in front of a real relay's /tunnel. It answers the
+ * client's HELLO itself with its own key for its own URL and, when given
+ * `listIn`, lists itself there: a relay in the directory that turns hostile.
+ */
+async function hostileRelay(
+  upstream: string,
+  tamper: Tamper,
+  listIn?: Map<string, Uint8Array>,
+): Promise<string> {
   const port = await freePort();
+  const url = `ws://127.0.0.1:${port}`;
+  const identity = generateSigningKeyPair();
+  listIn?.set(url, identity.publicKey);
+  const proveIdentity = (bytes: Uint8Array, wire: Wire): boolean => {
+    if (typeOf(bytes) !== FrameType.HELLO) return false;
+    const nonce = decodeRelayHello(decodeFrame(bytes).payload);
+    const signature = signRelayIdentity(
+      { endpoint: url, nonce, relayKey: identity.publicKey },
+      identity.secretKey,
+    );
+    wire.toClient(
+      encodeFrame({
+        type: FrameType.HELLO_ACK,
+        payload: encodeRelayHelloAck(identity.publicKey, signature),
+      }),
+    );
+    return true;
+  };
   interface Data {
     up?: WebSocket;
     queue: Uint8Array[];
@@ -82,6 +114,7 @@ async function hostileRelay(upstream: string, tamper: Tamper): Promise<string> {
           for (const q of ws.data.queue.splice(0))
             for (const b of tamper('to-relay', q, wire)) up.send(b as Uint8Array<ArrayBuffer>);
         });
+        (ws.data as Data & { wire: Wire }).wire = wire;
         up.addEventListener('message', (e) => {
           const bytes = new Uint8Array(e.data as ArrayBuffer);
           for (const b of tamper('to-client', bytes, wire)) ws.sendBinary(b);
@@ -91,6 +124,7 @@ async function hostileRelay(upstream: string, tamper: Tamper): Promise<string> {
       },
       message(ws: ServerWebSocket<Data>, msg) {
         const bytes = new Uint8Array(msg as Buffer);
+        if (proveIdentity(bytes, (ws.data as Data & { wire: Wire }).wire)) return;
         const up = ws.data.up;
         if (!up || up.readyState !== WebSocket.OPEN) {
           ws.data.queue.push(bytes.slice());
@@ -105,7 +139,7 @@ async function hostileRelay(upstream: string, tamper: Tamper): Promise<string> {
     },
   });
   cleanups.push(() => server.stop(true));
-  return `ws://127.0.0.1:${port}`;
+  return url;
 }
 
 function typeOf(bytes: Uint8Array): number {
@@ -126,7 +160,7 @@ async function attack(
     externalRelay: undefined,
   }).then(async (harness) => harness);
   harnesses.push(h);
-  hostile = await hostileRelay(h.relayEndpoint, tamper);
+  hostile = await hostileRelay(h.relayEndpoint, tamper, h.relayKeys);
   const circuit = await h.tunnels.openStream('example.ox', 80);
   return run(circuit, h);
 }
@@ -277,22 +311,26 @@ describe('a hostile relay is detected end to end', () => {
     harnesses.push(h);
     let count = 0;
     let cut = false;
-    hostile = await hostileRelay(h.relayEndpoint, (dir, b, wire) => {
-      if (dir !== 'to-client') return [b];
-      if (cut) return [];
-      if (typeOf(b) === FrameType.STREAM_DATA && ++count === 4) {
-        cut = true;
-        wire.toClient(
-          encodeFrame({
-            type: FrameType.CIRCUIT_DESTROY,
-            circuitId: new DataView(b.buffer, b.byteOffset + 4, 8).getBigUint64(0, false),
-            payload: new Uint8Array(2),
-          }),
-        );
-        return [];
-      }
-      return [b];
-    });
+    hostile = await hostileRelay(
+      h.relayEndpoint,
+      (dir, b, wire) => {
+        if (dir !== 'to-client') return [b];
+        if (cut) return [];
+        if (typeOf(b) === FrameType.STREAM_DATA && ++count === 4) {
+          cut = true;
+          wire.toClient(
+            encodeFrame({
+              type: FrameType.CIRCUIT_DESTROY,
+              circuitId: new DataView(b.buffer, b.byteOffset + 4, 8).getBigUint64(0, false),
+              payload: new Uint8Array(2),
+            }),
+          );
+          return [];
+        }
+        return [b];
+      },
+      h.relayKeys,
+    );
     const res = await socksFetch(h.socks.port, 'example.ox', 80, httpGet(400_000));
     expect(res.reply).toBe(0);
     expect(res.error).toBe('reset');
@@ -302,25 +340,29 @@ describe('a hostile relay is detected end to end', () => {
     let hostile = '';
     const h = await startHarness({ clientRelay: () => hostile });
     harnesses.push(h);
-    hostile = await hostileRelay(h.relayEndpoint, (dir, b, wire) => {
-      if (dir === 'to-relay' && typeOf(b) === FrameType.CIRCUIT_CREATE) {
-        const frame = decodeFrame(b);
-        wire.toClient(
-          encodeFrame({
-            type: FrameType.CIRCUIT_CREATED,
-            circuitId: frame.circuitId,
-            // A well-formed message 2 from the relay's own ephemeral: valid
-            // curve point, but the relay cannot produce the tag.
-            payload: new Uint8Array([
-              ...generateX25519KeyPair().publicKey,
-              ...crypto.getRandomValues(new Uint8Array(HANDSHAKE_MESSAGE_SIZE - 32)),
-            ]),
-          }),
-        );
-        return [];
-      }
-      return [b];
-    });
+    hostile = await hostileRelay(
+      h.relayEndpoint,
+      (dir, b, wire) => {
+        if (dir === 'to-relay' && typeOf(b) === FrameType.CIRCUIT_CREATE) {
+          const frame = decodeFrame(b);
+          wire.toClient(
+            encodeFrame({
+              type: FrameType.CIRCUIT_CREATED,
+              circuitId: frame.circuitId,
+              // A well-formed message 2 from the relay's own ephemeral: valid
+              // curve point, but the relay cannot produce the tag.
+              payload: new Uint8Array([
+                ...generateX25519KeyPair().publicKey,
+                ...crypto.getRandomValues(new Uint8Array(HANDSHAKE_MESSAGE_SIZE - 32)),
+              ]),
+            }),
+          );
+          return [];
+        }
+        return [b];
+      },
+      h.relayKeys,
+    );
     const err = await h.tunnels.openStream('example.ox', 80).then(
       () => null,
       (e: unknown) => e,
@@ -368,7 +410,7 @@ describe('service-node authentication at a real relay', () => {
     const node = new ServiceNode({
       name: 'example.ox',
       target: { host: '127.0.0.1', port: h.target.port },
-      relayEndpoint: h.relayEndpoint,
+      relays: [{ endpoint: h.relayEndpoint, relayKey: h.relayIdentity.publicKey }],
       nodeKey: forged.nodeKey,
       chain: forged.chain,
       log: () => {},
@@ -387,7 +429,7 @@ describe('service-node authentication at a real relay', () => {
     const node2 = new ServiceNode({
       name: 'example.ox',
       target: { host: '127.0.0.1', port: 1 },
-      relayEndpoint: h.relayEndpoint,
+      relays: [{ endpoint: h.relayEndpoint, relayKey: h.relayIdentity.publicKey }],
       nodeKey: second.nodeKey,
       chain: second.chain,
       log: () => {},
@@ -434,7 +476,7 @@ describe('malformed input never crashes a service node', () => {
     const node = new ServiceNode({
       name: 'example.ox',
       target: { host: '127.0.0.1', port: 1 },
-      relayEndpoint: endpoint,
+      relays: [{ endpoint, relayKey: null }],
       nodeKey: creds.nodeKey,
       chain: creds.chain,
       log: () => {},

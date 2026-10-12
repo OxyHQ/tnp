@@ -7,6 +7,7 @@ import {
   FrameType,
   MAX_FRAME_SIZE,
 } from '@tnp/protocol/v1';
+import { generateSigningKeyPair } from '@tnp/crypto';
 import { RelayCore } from './core';
 import { type RelayServer, serveRelay } from './serve';
 
@@ -18,6 +19,7 @@ afterEach(async () => {
 function start(limits = {}): RelayServer {
   const core = new RelayCore({
     endpoint: 'ws://127.0.0.1',
+    identity: generateSigningKeyPair(),
     lookupDomainKey: async () => null,
     limits,
   });

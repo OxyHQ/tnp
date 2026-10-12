@@ -12,10 +12,26 @@ export {
   type RelayDirectoryEntry,
   type RelayHeartbeatRequest,
   type RelayHeartbeatResponse,
+  type RelayKeyProof,
+  RELAY_KEY_PROOF_WINDOW_SECONDS,
   type RelayOperator,
   type RelayRegistration,
   type RelayStatus,
 } from './relays.js';
+
+export {
+  describeDirectoryRejection,
+  MAX_RELAY_DIRECTORY_RESPONSE_BYTES,
+  RELAY_DIRECTORY_LIFETIME_SECONDS,
+  RELAY_DIRECTORY_SIGNING_KEYS_BASE64,
+  RelayCapability,
+  type RelayDirectoryFailure,
+  type RelayDirectoryResponse,
+  relayDirectorySigningKeys,
+  type SignedRelayDirectoryResult,
+  type VerifySignedRelayDirectoryOptions,
+  verifySignedRelayDirectory,
+} from './relay-directory.js';
 
 export {
   parseRegisterServiceNodeRequest,

@@ -15,6 +15,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { verifyRelayRegistryProof } from '@tnp/crypto';
 import { parseRegisterRelayRequest } from '@tnp/shared-types';
 import { TnpApiClient } from './api';
 import { fromBase64 } from './crypto';
@@ -101,6 +102,23 @@ describe('RelayNode.start', () => {
     // the directory publishes, so a wrong-length or non-base64 value would be
     // a relay nobody can verify.
     expect(fromBase64(parsed.value.publicKey).length).toBe(ED25519_PUBLIC_KEY_BYTES);
+
+    // And it proves it holds that key, which is what lists it in the signed
+    // directory: a fresh registry proof by the same key for the same endpoint.
+    const proof = parsed.value.proof;
+    expect(proof).toBeDefined();
+    expect(Math.abs((proof?.issuedAt ?? 0) - Date.now() / 1000)).toBeLessThan(60);
+    expect(
+      verifyRelayRegistryProof(
+        {
+          purpose: 'register',
+          endpoint: parsed.value.endpoint,
+          relayKey: parsed.value.publicKey,
+          issuedAt: proof?.issuedAt ?? 0,
+        },
+        proof?.signature ?? '',
+      ),
+    ).toBe(true);
   });
 
   test('publishes the canonical form of the endpoint the operator typed', async () => {

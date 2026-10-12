@@ -49,6 +49,8 @@
       "dependencies": {
         "@oxy.so/core": "4.2.0",
         "@oxy.so/telemetry": "1.2.0",
+        "@tnp/crypto": "workspace:*",
+        "@tnp/protocol": "workspace:*",
         "@tnp/relay-core": "workspace:*",
         "@tnp/shared-types": "workspace:*",
       },
