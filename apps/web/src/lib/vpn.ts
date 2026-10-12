@@ -21,6 +21,7 @@ import {
   type RenameVpnDeviceRequest,
   renderWireGuardConfig,
   splitVpnEndpoint,
+  tunnelFileName,
   VPN_PERSISTENT_KEEPALIVE_SECONDS,
   type VpnDevice,
   type VpnDeviceList,
@@ -30,6 +31,7 @@ import {
 } from '@tnp/shared-types';
 
 export type { WireGuardKeyPair };
+export { tunnelFileName };
 
 export interface VpnApi {
   list(): Promise<VpnDeviceList>;
@@ -91,21 +93,6 @@ export interface DeviceConfigInput {
 /** The `.conf` text the WireGuard apps import (and the QR code encodes). */
 export function wireGuardConfig(input: DeviceConfigInput): string {
   return renderWireGuardConfig(input);
-}
-
-/**
- * A file name WireGuard accepts as a tunnel name (`wg-quick` and the Windows
- * app use the file name: 1-15 of `[A-Za-z0-9_=+.-]`).
- */
-export function tunnelFileName(deviceName: string): string {
-  const slug = deviceName
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^A-Za-z0-9_=+.-]+/g, '-')
-    .replace(/^[-.]+|[-.]+$/g, '')
-    .slice(0, 11)
-    .replace(/[-.]+$/, '');
-  return `tnp${slug ? `-${slug}` : ''}`.slice(0, 15);
 }
 
 /** A single-quoted shell word. Every value is validated first; this refuses rather than escapes. */

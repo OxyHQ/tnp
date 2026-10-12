@@ -216,6 +216,7 @@ export {
   parseVpnExit,
   renderWireGuardConfig,
   splitVpnEndpoint,
+  tunnelFileName,
   VPN_ALLOWED_IPS,
   VPN_DEVICE_NAME_MAX_LENGTH,
   VPN_EXIT_TUNNEL_IPV4,

@@ -21,6 +21,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createRulesEnvelope } from '@tnp/crypto/dns-rules';
 import {
+  parseCreateVpnDeviceRequest,
   parsePutDnsRulesRequest,
   parseRegisterRelayRequest,
   parseRelayHeartbeatRequest,
@@ -44,7 +45,9 @@ import {
 } from '@tnp/crypto';
 import { verifySignedRelayDirectory } from '@tnp/shared-types';
 import { makeTestCredentials } from '@tnp/crypto/testing';
+import { generateWireGuardKeyPair } from '@tnp/crypto/wireguard';
 import { TnpApiClient } from './api';
+import { vpnAdd } from './vpn-cli';
 
 const BASE_URL = 'https://api.example.test';
 const AUTH_TOKEN = 'test-auth-token';
@@ -385,6 +388,75 @@ describe('personal DNS rules', () => {
         kdfParams: { alg: 'argon2id', m: 8, t: 1, p: 1 },
       }),
     ).rejects.toThrow('the API returned a malformed rule set');
+  });
+});
+
+describe('VPN devices', () => {
+  test('registerVpnDevice sends a body POST /me/vpn/devices accepts — name and public key only', async () => {
+    const keys = generateWireGuardKeyPair();
+    const request = { name: 'Laptop', publicKey: keys.publicKey };
+    const sent = await capture((client) => client.registerVpnDevice(request, AUTH_TOKEN), {
+      device: {},
+      network: {},
+    });
+    expect(sent.url).toBe(`${BASE_URL}/me/vpn/devices`);
+    expect(sent.method).toBe('POST');
+    expect(expectAccepted(parseCreateVpnDeviceRequest(sent.body), 'POST /me/vpn/devices')).toEqual(
+      request,
+    );
+    expect(Object.keys(sent.body as object).sort()).toEqual(['name', 'publicKey']);
+    expect(JSON.stringify(sent.body)).not.toContain(keys.privateKey);
+  });
+
+  test('the CLI command sends what the route accepts and keeps the private key local', async () => {
+    const keys = generateWireGuardKeyPair();
+    let file = '';
+    let written = '';
+    const sent = await capture(
+      (client) =>
+        vpnAdd(['My', 'laptop'], {
+          api: client,
+          token: AUTH_TOKEN,
+          generate: () => keys,
+          writeFile: (path, data) => {
+            file = path;
+            written = data;
+          },
+          log: () => {},
+          cwd: '/tmp/tnp-contract',
+        }),
+      {
+        device: {
+          id: DOMAIN_ID,
+          name: 'My laptop',
+          publicKey: keys.publicKey,
+          ipv4: '10.77.0.9',
+          ipv6: 'fd85:d596:af02::a4d:9',
+          createdAt: '2026-10-12T00:00:00.000Z',
+        },
+        network: {
+          exits: [
+            {
+              id: 'usw2-1',
+              region: 'us-west-2',
+              endpoint: 'usw2-1.exit.example:51820',
+              publicKey: generateWireGuardKeyPair().publicKey,
+            },
+          ],
+          dns: ['198.51.100.53'],
+          allowedIPs: ['0.0.0.0/0', '::/0'],
+          maxDevices: 10,
+        },
+      },
+    );
+    expect(expectAccepted(parseCreateVpnDeviceRequest(sent.body), 'POST /me/vpn/devices')).toEqual({
+      name: 'My laptop',
+      publicKey: keys.publicKey,
+    });
+    expect(JSON.stringify(sent.body)).not.toContain(keys.privateKey);
+    expect(file).toBe('/tmp/tnp-contract/tnp-My-laptop.conf');
+    expect(written).toContain(`PrivateKey = ${keys.privateKey}\n`);
+    expect(written).toContain('AllowedIPs = 0.0.0.0/0, ::/0\n');
   });
 });
 

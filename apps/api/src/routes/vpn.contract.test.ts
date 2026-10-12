@@ -204,13 +204,14 @@ describe('the other /me/vpn routes', () => {
 describe('GET /exit/peers', () => {
   test('without the exit token: 401, whatever is sent', async () => {
     enabled = true;
-    for (const headers of [
+    const cases: Array<Record<string, string>> = [
       {},
       { Authorization: '' },
       { Authorization: 'Bearer wrong-token-wrong-token-wrong-token' },
       { Authorization: `Bearer ${EXIT_TOKEN.slice(1)}` },
       { Authorization: EXIT_TOKEN },
-    ]) {
+    ];
+    for (const headers of cases) {
       const res = await call('GET', '/exit/peers', undefined, headers);
       expect(res.status).toBe(401);
       expect(res.headers.get('www-authenticate')).toBe('Bearer');

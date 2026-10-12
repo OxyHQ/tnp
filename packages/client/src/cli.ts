@@ -65,6 +65,7 @@ Usage:
   tnp status           Check if the resolver service is running
   tnp rules <cmd>      Personal DNS rules: pull, status, approve, revoke, forget
                        (tnp rules help)
+  tnp vpn <cmd>        WireGuard VPN devices: add, list, revoke (tnp vpn help)
   tnp test <domain>    Test resolving a TNP domain
   tnp domain ...       Manage domain keys and node grants (tnp domain help)
   tnp pins [forget <name>]
@@ -882,6 +883,11 @@ switch (command) {
   case 'rules': {
     const { runRulesCommand } = await import('./rules-cli');
     process.exit(await runRulesCommand(process.argv.slice(3)));
+    break;
+  }
+  case 'vpn': {
+    const { runVpnCommand } = await import('./vpn-cli');
+    process.exit(await runVpnCommand(process.argv.slice(3)));
     break;
   }
   case 'version':

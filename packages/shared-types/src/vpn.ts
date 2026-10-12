@@ -363,6 +363,21 @@ export function renderWireGuardConfig(input: WireGuardConfigInput): string {
   ].join('\n');
 }
 
+/**
+ * A file name WireGuard accepts as a tunnel name (`wg-quick` and the Windows
+ * app use the file name: 1-15 of `[A-Za-z0-9_=+.-]`).
+ */
+export function tunnelFileName(deviceName: string): string {
+  const slug = deviceName
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9_=+.-]+/g, '-')
+    .replace(/^[-.]+|[-.]+$/g, '')
+    .slice(0, 11)
+    .replace(/[-.]+$/, '');
+  return `tnp${slug ? `-${slug}` : ''}`.slice(0, 15);
+}
+
 /** An IPv4 or IPv6 prefix in `address/length` form. */
 export function isCidr(value: unknown): value is string {
   if (typeof value !== 'string') return false;
