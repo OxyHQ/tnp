@@ -123,6 +123,8 @@ export class SecureCircuit {
 
   private events: SecureCircuitEvents | null = null;
   private backlog: Backlog[] = [];
+  /** When a record last went either way (ms since epoch), for idle timeouts. */
+  lastActivity = Date.now();
 
   /** Attach the data path; replays anything that arrived first. */
   bind(events: SecureCircuitEvents): void {
@@ -224,6 +226,7 @@ export class SecureCircuit {
   /** A frame for this circuit arrived from the relay. */
   receive(frame: Frame): void {
     if (this.done) return;
+    this.lastActivity = Date.now();
     if (frame.type === FrameType.CIRCUIT_DESTROY) {
       this.remoteDestroyed();
       return;
@@ -385,6 +388,7 @@ export class SecureCircuit {
   }
 
   private sendRecord(record: Uint8Array): boolean {
+    this.lastActivity = Date.now();
     const ok = this.link.send(
       encodeFrame({
         type: FrameType.STREAM_DATA,

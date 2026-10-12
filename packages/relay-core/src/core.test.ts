@@ -144,6 +144,44 @@ function openCircuit(c: Peer, s: Peer, id: bigint): bigint {
   return fwd.circuitId;
 }
 
+describe('domain-key lookups', () => {
+  test('identical lookups are coalesced and missing names are cached, bounded', async () => {
+    let calls = 0;
+    const creds = makeTestCredentials(NAME);
+    const core = makeCore(
+      {},
+      {
+        lookupDomainKey: async (name) => {
+          calls++;
+          await new Promise((r) => setTimeout(r, 20));
+          return name === NAME ? creds.domainKeyB64 : null;
+        },
+        limits: { authBurstPerIp: 100 },
+      },
+    );
+    // Several nodes authenticate for the same name at once: one lookup.
+    await Promise.all([service(core, creds), service(core, creds), service(core, creds)]);
+    await new Promise((r) => setTimeout(r, 40));
+    expect(calls).toBe(1);
+    // Random names: each looked up once, then answered from the negative cache.
+    const random = makeTestCredentials('nobody.ox');
+    await service(core, random);
+    await new Promise((r) => setTimeout(r, 40));
+    await service(core, random);
+    await new Promise((r) => setTimeout(r, 40));
+    expect(calls).toBe(2);
+  });
+
+  test('AUTH attempts are rate-limited per address', async () => {
+    const core = makeCore({}, { limits: { authBurstPerIp: 2, authRefillPerSecondPerIp: 0 } });
+    const creds = makeTestCredentials('nobody.ox');
+    await service(core, creds);
+    await service(core, creds);
+    const third = await service(core, creds);
+    expect(errorCode(third.t.last())).toBe(ErrorCode.RATE_LIMIT);
+  });
+});
+
 describe('service-node authentication (S2)', () => {
   test('a valid proof is accepted with AUTH_OK', async () => {
     const creds = makeTestCredentials(NAME);
@@ -391,11 +429,11 @@ describe('circuits (S1)', () => {
 
   test('100 concurrent circuits across clients stay isolated', async () => {
     const { core, s } = await setup();
-    const clients = Array.from({ length: 4 }, (_, i) => client(core, `10.0.1.${i}`));
+    const clients = Array.from({ length: 8 }, (_, i) => client(core, `10.0.1.${i}`));
     const map = new Map<bigint, { peer: Peer; id: bigint }>();
     for (let i = 0; i < 100; i++) {
-      const peer = clients[i % 4];
-      const id = BigInt(i % 25) + 1n; // ids collide across connections on purpose
+      const peer = clients[i % 8];
+      const id = BigInt(Math.floor(i / 8)) + 1n; // ids collide across connections on purpose
       map.set(openCircuit(peer, s, id), { peer, id });
     }
     expect(core.stats().circuits).toBe(100);
@@ -426,11 +464,95 @@ describe('bounds (S6)', () => {
   }
 
   test('a client cannot hold more than 64 circuits', async () => {
-    const { core, s } = await setup({ limits: { createBurstPerIp: 1000 } });
+    const { core, s } = await setup({
+      limits: {
+        createBurstPerIp: 1000,
+        maxCircuitsPerClientPerService: 1000,
+        maxCircuitsPerIpPerService: 1000,
+      },
+    });
     const c = client(core);
     for (let i = 1; i <= 64; i++) openCircuit(c, s, BigInt(i));
     create(c, 65n);
     expect(decodeDestroy(c.t.last().payload)).toBe(ErrorCode.CIRCUIT_LIMIT);
+  });
+
+  test('one address cannot take every circuit slot of a service; an innocent client still gets in', async () => {
+    // Handshake rate limits are generous here so the per-service cap is what refuses.
+    const { core, s } = await setup({ limits: { createBurstPerIp: 10_000 } });
+    // The attacker opens as many circuits as it can, over many connections
+    // from one address, and holds them.
+    const attackerConns = Array.from({ length: 8 }, () => client(core, '10.6.6.6'));
+    let held = 0;
+    let refused = 0;
+    for (const conn of attackerConns) {
+      for (let i = 1; i <= 40; i++) {
+        create(conn, BigInt(i));
+        const fwd = s.t.take().at(-1);
+        if (fwd?.type === FrameType.CIRCUIT_CREATE) {
+          s.h.receive(
+            encodeFrame({
+              type: FrameType.CIRCUIT_CREATED,
+              circuitId: fwd.circuitId,
+              payload: msg2,
+            }),
+          );
+          held++;
+        }
+        const last = conn.t.take().at(-1);
+        if (last?.type === FrameType.CIRCUIT_DESTROY) {
+          expect(decodeDestroy(last.payload)).toBe(ErrorCode.CIRCUIT_LIMIT);
+          refused++;
+        }
+      }
+    }
+    expect(held).toBe(core.limits.maxCircuitsPerIpPerService);
+    expect(held).toBeLessThan(core.limits.maxCircuitsPerService);
+    expect(refused).toBeGreaterThan(0);
+    // An innocent client from another address opens a circuit normally.
+    const innocent = client(core, '10.1.2.3');
+    openCircuit(innocent, s, 1n);
+  });
+
+  test('one connection is capped per service even below the address cap', async () => {
+    const { core, s } = await setup({ limits: { maxCircuitsPerIpPerService: 1000 } });
+    const c = client(core);
+    for (let i = 1; i <= core.limits.maxCircuitsPerClientPerService; i++)
+      openCircuit(c, s, BigInt(i));
+    create(c, 999n);
+    expect(decodeDestroy(c.t.last().payload)).toBe(ErrorCode.CIRCUIT_LIMIT);
+    // Closing one frees a slot.
+    c.h.receive(
+      encodeFrame({ type: FrameType.CIRCUIT_DESTROY, circuitId: 1n, payload: encodeDestroy(0) }),
+    );
+    openCircuit(c, s, 1000n);
+  });
+
+  test('an open circuit with no traffic is destroyed after the idle timeout', async () => {
+    let now = Date.now();
+    const { core, s } = await setup({ clock: () => now, sweepIntervalMs: 5 });
+    const c = client(core);
+    openCircuit(c, s, 1n);
+    now += core.limits.circuitIdleMs + 1;
+    await new Promise((r) => setTimeout(r, 30));
+    expect(c.t.last().type).toBe(FrameType.CIRCUIT_DESTROY);
+    expect(core.stats().circuits).toBe(0);
+    expect(core.stats().idleDestroys).toBe(1);
+  });
+
+  test('the global buffer budget closes the largest offenders first', async () => {
+    const { core } = await setup({ sweepIntervalMs: 5, limits: { globalBufferLimit: 1000 } });
+    const small = client(core, '10.0.0.1');
+    const big = client(core, '10.0.0.2');
+    const medium = client(core, '10.0.0.3');
+    small.t.buffered = 100;
+    big.t.buffered = 900;
+    medium.t.buffered = 500;
+    await new Promise((r) => setTimeout(r, 30));
+    expect(big.t.closedWith).toBe(1013);
+    expect(medium.t.closedWith).toBeNull();
+    expect(small.t.closedWith).toBeNull();
+    expect(core.stats().memoryCloses).toBe(1);
   });
 
   test('pending opens are bounded', async () => {

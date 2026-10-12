@@ -56,8 +56,18 @@ export function loadKeyPair(
   area: StoreArea,
   name: string,
 ): SigningKeyPair | null {
-  const raw = store.readPrivate(store.pathFor(area, name));
-  if (raw === null) return null;
+  const path = store.pathFor(area, name);
+  const raw = store.readPrivate(path);
+  if (raw === null) {
+    if (store.exists(`${path}.pending`)) {
+      throw new Error(
+        `a domain key rotation for ${name} was interrupted: ${path}.pending holds the key the ` +
+          `registry may now have. Check \`tnp domain key show ${name}\`; if it matches, rename ` +
+          `${path}.pending to ${path}.`,
+      );
+    }
+    return null;
+  }
   let parsed: { secretKey?: unknown };
   try {
     parsed = JSON.parse(raw) as { secretKey?: unknown };

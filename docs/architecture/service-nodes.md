@@ -62,6 +62,24 @@ before deriving a session key, so the registry cannot substitute a key for a
 name the client has used before; on first contact it still can
 ([`threat-model.md`](./threat-model.md)).
 
+### Keep the domain key elsewhere
+
+The first `tnp serve` on a machine with no domain key creates one there, and
+says that this puts the root of trust on the most exposed machine. Prefer:
+create it with `tnp domain key init <name>` on an offline device, run
+`tnp serve` on the server (it prints its node key and stops, asking for a
+grant), issue `tnp domain grant <name> --node-key <key> --out grant.json` on
+the offline device, and copy the grant to the server. Rotating the domain key
+(`tnp domain key rotate`) retires every node granted under the old one.
+
+### Fairness and idle circuits
+
+The service node cannot see clients (the relay hides them), so fairness is
+the relay's job: one client connection, and one IP address, may hold at most
+16 circuits to a service (of its 256). A circuit whose client has not sent
+`OPEN` within 10 s, or that carries no record either way for 10 minutes, is
+reset by the node.
+
 ## 2. Targets
 
 A node may publish several services:

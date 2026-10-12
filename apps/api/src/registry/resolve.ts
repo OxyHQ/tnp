@@ -54,6 +54,9 @@ export type NameFacts =
         domainKey: string | null;
         /** Rotation statements for the domain key, oldest first. */
         domainKeyRotations: DomainKeyRotation[];
+        /** Set when the key was reset after a release (registry/domainKeys.ts). */
+        domainKeyResetFrom?: string | null;
+        domainKeyResetAt?: Date | null;
         /** `@` for the registered name itself, otherwise the labels below it. */
         label: string;
         /** Every record stored at `label`, of every type. */
@@ -107,6 +110,8 @@ export async function loadNameFacts(db: Executor, name: string): Promise<NameFac
       expiresAt: domains.expiresAt,
       domainKey: domains.domainKey,
       domainKeyRotations: domains.domainKeyRotations,
+      domainKeyResetFrom: domains.domainKeyResetFrom,
+      domainKeyResetAt: domains.domainKeyResetAt,
     })
     .from(domains)
     .where(and(eq(domains.name, domainName), eq(domains.tld, tld), eq(domains.status, 'active')))
@@ -161,6 +166,8 @@ export async function loadNameFacts(db: Executor, name: string): Promise<NameFac
       expiresAt: domain.expiresAt,
       domainKey: domain.domainKey,
       domainKeyRotations: domain.domainKeyRotations,
+      domainKeyResetFrom: domain.domainKeyResetFrom,
+      domainKeyResetAt: domain.domainKeyResetAt,
       label,
       records,
       hasDescendants: descendants?.present ?? false,
@@ -177,7 +184,12 @@ export async function loadNameFacts(db: Executor, name: string): Promise<NameFac
  * node whose key material is certain to be refused.
  */
 function overlayFor(
-  domain: { domainKey: string | null; domainKeyRotations: DomainKeyRotation[] },
+  domain: {
+    domainKey: string | null;
+    domainKeyRotations: DomainKeyRotation[];
+    domainKeyResetFrom?: string | null;
+    domainKeyResetAt?: Date | null;
+  },
   node: ServiceNodeFacts,
   now: Date,
 ): DnsResolveOverlay | null {
@@ -190,6 +202,14 @@ function overlayFor(
     rotations: domain.domainKeyRotations,
     chain: node.chain,
     kaCert: node.kaCert,
+    ...(domain.domainKeyResetFrom && domain.domainKeyResetAt
+      ? {
+          keyReset: {
+            previousKeyFingerprint: domain.domainKeyResetFrom,
+            since: domain.domainKeyResetAt.toISOString(),
+          },
+        }
+      : {}),
   };
 }
 

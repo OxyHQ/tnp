@@ -102,6 +102,8 @@ export interface RelayStats {
   protocolViolations: number;
   backpressureDestroys: number;
   authFailures: number;
+  idleDestroys: number;
+  memoryCloses: number;
 }
 
 export interface ConnectionHandle {
@@ -126,6 +128,10 @@ interface Circuit {
   serviceId: bigint;
   open: boolean;
   createdAt: number;
+  /** Last frame forwarded either way (ms), for the idle timeout. */
+  lastActivity: number;
+  /** The service's name, for the per-IP-per-service count. */
+  name: string;
 }
 
 type ServiceState = 'awaiting-auth' | 'verifying' | 'ready';
@@ -136,6 +142,8 @@ interface Connection {
   ip: string;
   circuits: CircuitTable<Circuit>;
   pending: number;
+  /** Client connections: circuits held to each service connection. */
+  perService: Map<Connection, number>;
   violations: number;
   closed: boolean;
   openedAt: number;
@@ -158,6 +166,12 @@ export class RelayCore {
   private readonly connections = new Set<Connection>();
   private readonly services = new Map<string, Connection>();
   private circuitCount = 0;
+  /** `ip \0 name` → circuits that address holds to that service. Entries exist only while > 0. */
+  private readonly ipService = new Map<string, number>();
+  /** In-flight domain-key lookups, coalesced per name. */
+  private readonly lookups = new Map<string, Promise<Uint8Array | null>>();
+  /** Names recently found to have no domain key (bounded; expiry ms). */
+  private readonly noKey = new Map<string, number>();
   private sweepTimer: ReturnType<typeof setInterval> | null;
   private readonly counters = {
     circuitsOpened: 0,
@@ -168,6 +182,8 @@ export class RelayCore {
     protocolViolations: 0,
     backpressureDestroys: 0,
     authFailures: 0,
+    idleDestroys: 0,
+    memoryCloses: 0,
   };
 
   constructor(options: RelayCoreOptions) {
@@ -248,6 +264,7 @@ export class RelayCore {
       ip,
       circuits: new CircuitTable<Circuit>(maxCircuits),
       pending: 0,
+      perService: new Map(),
       violations: 0,
       closed: false,
       openedAt: this.clock(),
@@ -488,6 +505,16 @@ export class RelayCore {
       reject(ErrorCode.CIRCUIT_REJECTED);
       return;
     }
+    // Fairness: one connection, and one address, may hold only a small share
+    // of a service's circuits — so nobody can take all of them.
+    const ipKey = `${conn.ip}\0${name}`;
+    if (
+      (conn.perService.get(service) ?? 0) >= this.limits.maxCircuitsPerClientPerService ||
+      (this.ipService.get(ipKey) ?? 0) >= this.limits.maxCircuitsPerIpPerService
+    ) {
+      reject(ErrorCode.CIRCUIT_LIMIT);
+      return;
+    }
     if (service.circuits.atCapacity) {
       reject(ErrorCode.RESOURCE_EXHAUSTED);
       return;
@@ -503,10 +530,14 @@ export class RelayCore {
       serviceId,
       open: false,
       createdAt: this.clock(),
+      lastActivity: this.clock(),
+      name,
     };
     conn.circuits.add(id, circuit);
     service.circuits.add(serviceId, circuit);
     conn.pending++;
+    conn.perService.set(service, (conn.perService.get(service) ?? 0) + 1);
+    this.ipService.set(ipKey, (this.ipService.get(ipKey) ?? 0) + 1);
     this.circuitCount++;
 
     // The payload goes to the service node unchanged: it needs the name (to
@@ -535,6 +566,7 @@ export class RelayCore {
     new DataView(out.buffer).setBigUint64(4, destId, false);
     const result = dest.transport.send(out);
     if (result === 0) return; // destination is closing; its close handler cleans up
+    circuit.lastActivity = this.clock();
     this.counters.framesForwarded++;
     this.counters.bytesForwarded += out.byteLength;
   }
@@ -567,6 +599,13 @@ export class RelayCore {
     if (ownedByService) circuit.service.circuits.delete(circuit.serviceId);
     if (!circuit.open) circuit.client.pending--;
     this.circuitCount--;
+    const perService = (circuit.client.perService.get(circuit.service) ?? 1) - 1;
+    if (perService > 0) circuit.client.perService.set(circuit.service, perService);
+    else circuit.client.perService.delete(circuit.service);
+    const ipKey = `${circuit.client.ip}\0${circuit.name}`;
+    const perIp = (this.ipService.get(ipKey) ?? 1) - 1;
+    if (perIp > 0) this.ipService.set(ipKey, perIp);
+    else this.ipService.delete(ipKey);
     const payload = encodeDestroy(reason);
     if (notify !== 'service') {
       this.sendTo(circuit.client, FrameType.CIRCUIT_DESTROY, circuit.clientId, payload);
@@ -595,6 +634,11 @@ export class RelayCore {
       this.fail(conn, ErrorCode.PROTOCOL_VIOLATION);
       return;
     }
+    // Each AUTH costs a registry lookup: rate-limited per address.
+    if (!this.ips.allowAuth(conn.ip, this.clock())) {
+      this.authFailed(conn, ErrorCode.RATE_LIMIT);
+      return;
+    }
     conn.state = 'verifying';
     void this.verifyService(conn, auth.name, auth.chain as Grant[], auth.signature);
   }
@@ -607,8 +651,7 @@ export class RelayCore {
   ): Promise<void> {
     let domainKey: Uint8Array | null = null;
     try {
-      const looked = await this.lookupDomainKey(name);
-      domainKey = looked === null ? null : parsePublicKey(looked);
+      domainKey = await this.domainKeyFor(name);
     } catch {
       domainKey = null;
     }
@@ -669,6 +712,36 @@ export class RelayCore {
     conn.transport.send(encodeFrame({ type: FrameType.AUTH_OK }));
   }
 
+  /**
+   * The registered domain key for `name`, with identical lookups in flight
+   * coalesced into one, and names without a key remembered briefly (bounded)
+   * so random names cannot spend the relay's registry budget. A registry
+   * error is not cached: it throws and the caller fails closed.
+   */
+  private domainKeyFor(name: string): Promise<Uint8Array | null> {
+    const now = this.clock();
+    const negative = this.noKey.get(name);
+    if (negative !== undefined) {
+      if (negative > now) return Promise.resolve(null);
+      this.noKey.delete(name);
+    }
+    const inFlight = this.lookups.get(name);
+    if (inFlight) return inFlight;
+    const lookup = (async () => {
+      const looked = await this.lookupDomainKey(name);
+      const key = looked === null ? null : parsePublicKey(looked);
+      if (key === null) {
+        if (this.noKey.size >= this.limits.lookupCacheMax) {
+          this.noKey.delete(this.noKey.keys().next().value as string);
+        }
+        this.noKey.set(name, this.clock() + this.limits.lookupNegativeTtlMs);
+      }
+      return key;
+    })().finally(() => this.lookups.delete(name));
+    this.lookups.set(name, lookup);
+    return lookup;
+  }
+
   private authFailed(conn: Connection, code: ErrorCodeValue): void {
     this.counters.authFailures++;
     this.fail(conn, code, code === ErrorCode.RESOURCE_EXHAUSTED ? CLOSE_TRY_LATER : CLOSE_POLICY);
@@ -704,11 +777,36 @@ export class RelayCore {
         for (const [, circuit] of conn.circuits.entries()) {
           if (!circuit.open && nowMs - circuit.createdAt > this.limits.createTimeoutMs) {
             this.removeCircuit(circuit, 'both', ErrorCode.TARGET_UNREACHABLE);
+          } else if (circuit.open && nowMs - circuit.lastActivity > this.limits.circuitIdleMs) {
+            this.counters.idleDestroys++;
+            this.removeCircuit(circuit, 'both', ErrorCode.RESOURCE_EXHAUSTED);
           }
         }
       }
     }
+    this.enforceGlobalBuffer();
     this.ips.sweep(nowMs);
+    for (const [name, expiry] of this.noKey) if (expiry <= nowMs) this.noKey.delete(name);
+  }
+
+  /** Close the connections holding the most buffered bytes until the total fits the budget. */
+  private enforceGlobalBuffer(): void {
+    let total = 0;
+    const sized: Array<[Connection, number]> = [];
+    for (const conn of this.connections) {
+      if (conn.closed) continue;
+      const buffered = conn.transport.bufferedAmount();
+      total += buffered;
+      if (buffered > 0) sized.push([conn, buffered]);
+    }
+    if (total <= this.limits.globalBufferLimit) return;
+    sized.sort((a, b) => b[1] - a[1]);
+    for (const [conn, buffered] of sized) {
+      if (total <= this.limits.globalBufferLimit) break;
+      this.counters.memoryCloses++;
+      this.fail(conn, ErrorCode.RESOURCE_EXHAUSTED, CLOSE_TRY_LATER);
+      total -= buffered;
+    }
   }
 
   /**
@@ -721,8 +819,7 @@ export class RelayCore {
     if (!name) return;
     let current: Uint8Array | null = null;
     try {
-      const looked = await this.lookupDomainKey(name);
-      current = looked === null ? null : parsePublicKey(looked);
+      current = await this.domainKeyFor(name);
     } catch {
       return; // registry unreachable: keep the node; it authenticated against a key we had
     }

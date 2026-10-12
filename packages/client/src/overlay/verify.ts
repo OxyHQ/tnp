@@ -19,13 +19,19 @@
  */
 
 import {
+  domainKeyFingerprint,
   followDomainKeyRotations,
   KeyAgreementRole,
   type VerifiedKeyAgreementKey,
   verifyKeyAgreementCertificate,
 } from '@tnp/crypto';
-import { type DnsResolveOverlay, isCanonicalName, parseDnsResolveOverlay } from '@tnp/shared-types';
-import type { PinStore } from './pins';
+import {
+  type DnsResolveOverlay,
+  type DomainKeyReset,
+  isCanonicalName,
+  parseDnsResolveOverlay,
+} from '@tnp/shared-types';
+import { PinStore } from './pins';
 
 export type OverlayRefusal =
   | 'not-native'
@@ -67,6 +73,8 @@ export interface VerifiedOverlay {
   key: VerifiedKeyAgreementKey;
   /** True when this verification created the pin (first contact). */
   firstContact: boolean;
+  /** The registry marks this name's current key as a reset after a release. */
+  keyReset?: DomainKeyReset;
 }
 
 export function verifyOverlay(
@@ -82,44 +90,63 @@ export function verifyOverlay(
     throw new OverlayVerificationError('no-overlay', `${name} has no service node online`);
   }
 
-  const pin = pins.get(name);
-  if (pin && pin.domainKey !== overlay.domainKey) {
-    const followed = followDomainKeyRotations({
+  // The whole decision runs against the pin as it is on disk now, under the
+  // pin store's lock, so a concurrent `tnp pins forget` or another process's
+  // pin is never overwritten by a decision made on a stale read.
+  return pins.update(name, (pin) => {
+    if (pin && pin.domainKey !== overlay.domainKey) {
+      const followed = followDomainKeyRotations({
+        name,
+        pinned: pin.domainKey,
+        current: overlay.domainKey,
+        rotations: overlay.rotations,
+      });
+      if (!followed.ok) {
+        const reset =
+          overlay.keyReset &&
+          overlay.keyReset.previousKeyFingerprint === domainKeyFingerprint(pin.domainKey)
+            ? ` The registry says ${name} was released and registered again with a new key on ` +
+              `${overlay.keyReset.since}, without a signature from the key you pinned: it may now ` +
+              'belong to someone else.'
+            : '';
+        throw new OverlayVerificationError(
+          'pin-mismatch',
+          `REFUSING ${name}: its domain key changed since you pinned it on ${pin.pinnedAt}, and the ` +
+            `change is not signed by the key you pinned.${reset} Someone — the registry, or ` +
+            'whoever can alter its answers — may be impersonating this name to read your ' +
+            'traffic. Do not override this unless the owner confirms, through a channel you ' +
+            `trust, that the change is theirs; then run \`tnp pins forget ${name}\`.`,
+        );
+      }
+    }
+
+    const verified = verifyKeyAgreementCertificate(overlay.kaCert, overlay.chain, {
+      trustedRoots: [overlay.domainKey],
+      role: KeyAgreementRole.SERVICE_NODE,
       name,
-      pinned: pin.domainKey,
-      current: overlay.domainKey,
-      rotations: overlay.rotations,
+      now: nowSeconds,
+      knownSerials: new Map(Object.entries(pin?.serials ?? {})),
     });
-    if (!followed.ok) {
+    if (!verified.ok) {
       throw new OverlayVerificationError(
-        'pin-mismatch',
-        `REFUSING ${name}: its domain key changed since you pinned it on ${pin.pinnedAt}, and the ` +
-          'change is not signed by the key you pinned. Someone — the registry, or whoever can ' +
-          'alter its answers — may be impersonating this name to read your traffic. Do not ' +
-          'override this unless the owner confirms, through a channel you trust, that they lost ' +
-          `their key; then run \`tnp pins forget ${name}\`.`,
+        'bad-chain',
+        `REFUSING ${name}: the service node's key does not verify against the domain key ` +
+          `(${verified.reason}). The registry may be serving a substituted key.`,
       );
     }
-  }
 
-  const verified = verifyKeyAgreementCertificate(overlay.kaCert, overlay.chain, {
-    trustedRoots: [overlay.domainKey],
-    role: KeyAgreementRole.SERVICE_NODE,
-    name,
-    now: nowSeconds,
-    knownSerials: pins.knownSerials(name),
+    return {
+      pin: PinStore.next(pin, overlay.domainKey, [
+        ...verified.chain.serials,
+        { key: verified.serialKey, serial: verified.serial },
+      ]),
+      result: {
+        name,
+        relay: overlay.relay,
+        key: verified.key,
+        firstContact: !pin,
+        ...(overlay.keyReset ? { keyReset: overlay.keyReset } : {}),
+      },
+    };
   });
-  if (!verified.ok) {
-    throw new OverlayVerificationError(
-      'bad-chain',
-      `REFUSING ${name}: the service node's key does not verify against the domain key ` +
-        `(${verified.reason}). The registry may be serving a substituted key.`,
-    );
-  }
-
-  pins.record(name, overlay.domainKey, [
-    ...verified.chain.serials,
-    { key: verified.serialKey, serial: verified.serial },
-  ]);
-  return { name, relay: overlay.relay, key: verified.key, firstContact: !pin };
 }

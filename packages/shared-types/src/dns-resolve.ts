@@ -10,6 +10,8 @@
 
 import type { DomainKeyRotation, Grant, KeyAgreementCertificate } from '@tnp/crypto';
 import {
+  type DomainKeyReset,
+  parseKeyResetShape,
   parseChainShape,
   parseKeyAgreementCertificateShape,
   parseKeyShape,
@@ -47,6 +49,8 @@ export interface DnsResolveOverlay {
   chain: Grant[];
   /** The service node's current key-agreement certificate. */
   kaCert: KeyAgreementCertificate;
+  /** Present when the domain key was reset after a release, without a signed rotation. */
+  keyReset?: DomainKeyReset;
 }
 
 /**
@@ -70,6 +74,8 @@ export function parseDnsResolveOverlay(value: unknown): ParseResult<DnsResolveOv
   if (!chain.ok) return chain;
   const kaCert = parseKeyAgreementCertificateShape(r.kaCert);
   if (!kaCert.ok) return kaCert;
+  const keyReset = parseKeyResetShape(r.keyReset);
+  if (!keyReset.ok) return keyReset;
   return {
     ok: true,
     value: {
@@ -79,6 +85,7 @@ export function parseDnsResolveOverlay(value: unknown): ParseResult<DnsResolveOv
       rotations: rotations.value,
       chain: chain.value,
       kaCert: kaCert.value,
+      ...(keyReset.value ? { keyReset: keyReset.value } : {}),
     },
   };
 }

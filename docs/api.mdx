@@ -131,10 +131,10 @@ Each native name's **domain key** (Ed25519) is generated on the owner's device (
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/domain-keys/:name` | none | `{ name, domainKey, rotations }` for an active `label.tld`, or 404 (no key, reserved TLD, not two labels). Relays check service nodes against this. |
+| GET | `/domain-keys/:name` | none | `{ name, domainKey, rotations, keyReset? }` for an active `label.tld`, or 404 (no key, reserved TLD, not two labels, or a name withheld after expiry when `TNP_NATIVE_EXPIRY_ENFORCED` is on — the same rule as `/dns/resolve`). Relays check service nodes against this. |
 | POST | `/domain-keys` | required, owner | Body `{ name, domainKey, rotation? }`. First key: `201`. Same key again: `200`. A different key requires `rotation`, a statement signed by the **current** key retiring it in favour of `domainKey` with `issuedAt` later than the previous rotation and at most 300 s in the future: `200`, otherwise `403`. `400` for a malformed body, a non-canonical key, or a rotation when no key exists; `404` unknown name; `409` lost a concurrent write. |
 
-There is deliberately no reset. A lost domain key cannot be replaced in-band, because a reset is indistinguishable — to a client that pinned the old key — from the takeover pinning exists to refuse. The last 32 rotation statements are kept.
+The last 32 rotation statements are kept. Releasing a name (`DELETE /domains/:id`) keeps its key and history in a tombstone that is never deleted. When the name is registered again, its first key must be the released key (history restored) or come with a `rotation` signed by it; otherwise `403` until the **reset hold** has passed since the release (`TNP_DOMAIN_KEY_RESET_HOLD_DAYS`, default 30), after which an unrelated key is accepted and published with `keyReset: { previousKeyFingerprint, since }` — the hex SHA-256 of the key it replaced and when. Pinned clients keep refusing it. There is no faster reset.
 
 ## Service nodes (`/nodes`)
 

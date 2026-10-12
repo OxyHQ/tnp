@@ -27,6 +27,33 @@ export interface RelayLimits {
   maxPendingPerClient: number;
   /** Circuits one service-node connection carries. */
   maxCircuitsPerService: number;
+  /**
+   * Circuits one CLIENT CONNECTION may hold to any one service, and circuits
+   * one IP ADDRESS may hold to any one service across all its connections.
+   * Both well below `maxCircuitsPerService`, so a single address cannot take
+   * every slot a service has (it is refused, fairly, with CIRCUIT_LIMIT) and
+   * an innocent client still gets in.
+   */
+  maxCircuitsPerClientPerService: number;
+  maxCircuitsPerIpPerService: number;
+  /**
+   * An open circuit with no frame in either direction for this long is
+   * destroyed. Above the service node's own stream idle timeout, so the
+   * service node normally ends it first with a sealed reset.
+   */
+  circuitIdleMs: number;
+  /**
+   * Bytes buffered across ALL connections. Per-connection limits times the
+   * connection cap is far too much memory; above this, the connections with
+   * the most buffered are closed first until the total is back under it.
+   */
+  globalBufferLimit: number;
+  /** Service-node AUTH attempts per IP (each costs a registry lookup): bucket and refill per second. */
+  authBurstPerIp: number;
+  authRefillPerSecondPerIp: number;
+  /** How long a name with no domain key is remembered as such (bounded, per name). */
+  lookupNegativeTtlMs: number;
+  lookupCacheMax: number;
   /** Circuits across the whole relay. */
   maxCircuits: number;
   /** Names served at once. */
@@ -70,6 +97,14 @@ export const DEFAULT_LIMITS: RelayLimits = {
   maxCircuitsPerClient: MAX_CIRCUITS_PER_CONNECTION,
   maxPendingPerClient: MAX_PENDING_OPENS,
   maxCircuitsPerService: 256,
+  maxCircuitsPerClientPerService: 16,
+  maxCircuitsPerIpPerService: 16,
+  circuitIdleMs: 15 * 60_000,
+  globalBufferLimit: 512 * 1024 * 1024,
+  authBurstPerIp: 10,
+  authRefillPerSecondPerIp: 0.2,
+  lookupNegativeTtlMs: 30_000,
+  lookupCacheMax: 4096,
   maxCircuits: 32_768,
   maxServiceNodes: 4096,
   createBurstPerIp: 128,
@@ -121,6 +156,7 @@ interface IpEntry {
   connections: number;
   connect: TokenBucket;
   create: TokenBucket;
+  auth: TokenBucket;
 }
 
 /**
@@ -161,6 +197,11 @@ export class IpTracker {
           this.limits.createRefillPerSecondPerIp,
           now,
         ),
+        auth: new TokenBucket(
+          this.limits.authBurstPerIp,
+          this.limits.authRefillPerSecondPerIp,
+          now,
+        ),
       };
       this.entries.set(ip, entry);
     }
@@ -181,10 +222,21 @@ export class IpTracker {
     return entry ? entry.create.take(now) : false;
   }
 
+  /** One service-node AUTH from `ip`. */
+  allowAuth(ip: string, now: number): boolean {
+    const entry = this.entries.get(ip);
+    return entry ? entry.auth.take(now) : false;
+  }
+
   /** Drop entries with no connection whose buckets have refilled. */
   sweep(now: number): void {
     for (const [ip, entry] of this.entries) {
-      if (entry.connections === 0 && entry.connect.full(now) && entry.create.full(now)) {
+      if (
+        entry.connections === 0 &&
+        entry.connect.full(now) &&
+        entry.create.full(now) &&
+        entry.auth.full(now)
+      ) {
         this.entries.delete(ip);
       }
     }

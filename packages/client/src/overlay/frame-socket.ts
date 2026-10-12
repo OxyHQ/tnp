@@ -65,8 +65,12 @@ export class FrameSocket {
     url: string,
     handlers: FrameSocketHandlers,
     timeoutMs: number,
+    headers?: Record<string, string>,
   ): { socket: FrameSocket; ready: Promise<void> } {
-    const ws = new WebSocket(url);
+    // `headers` is Bun's extension to the WebSocket constructor.
+    const ws = headers
+      ? new WebSocket(url, { headers } as unknown as string[])
+      : new WebSocket(url);
     ws.binaryType = 'arraybuffer';
     const socket = new FrameSocket(ws, handlers);
     const ready = new Promise<void>((resolve, reject) => {

@@ -19,7 +19,9 @@ import {
   splitHttp,
   startHarness,
 } from './testing/overlay-harness';
+import { ErrorCode } from '@tnp/protocol/v1';
 import { TnpApiClient } from './api';
+import { TunnelError, TunnelManager } from './tunnel';
 
 const harnesses: Harness[] = [];
 afterEach(async () => {
@@ -56,7 +58,11 @@ describe('client → relay → service node → target', () => {
   });
 
   test('100 concurrent circuits each get exactly their own bytes', async () => {
-    const h = await harness();
+    // Every client here shares 127.0.0.1, so the per-address fairness caps
+    // (exercised below) are lifted: this test is about isolation.
+    const h = await harness({
+      limits: { maxCircuitsPerIpPerService: 200, maxCircuitsPerClientPerService: 64 },
+    });
     const sizes = Array.from({ length: 100 }, (_, i) => 1000 + i * 137);
     const results = await Promise.all(
       sizes.map((size) =>
@@ -123,7 +129,8 @@ describe('client → relay → service node → target', () => {
       await new Promise((r) => setTimeout(r, 500));
       // The producer stalled well short of the whole body: what it got rid of
       // is bounded by the end-to-end window plus socket buffers.
-      expect(written).toBe(plateau);
+      // Stalled: at most a socket buffer more trickles out once the window is spent.
+      expect(written - plateau).toBeLessThanOrEqual(2 * 1024 * 1024);
       expect(written).toBeLessThan(TOTAL / 2);
       expect(h.core.stats().backpressureDestroys).toBe(0);
       // And resuming delivers everything.
@@ -136,6 +143,51 @@ describe('client → relay → service node → target', () => {
       target.close();
     }
   }, 60_000);
+});
+
+describe('circuit-slot exhaustion', () => {
+  test('one address holding opened, silent circuits cannot lock an innocent client out', async () => {
+    const h = await harness({ relayTrustForwardedFor: true });
+    const attacker = new TunnelManager({
+      pins: h.pins,
+      resolveOverlay: async () => h.overlay(),
+      headers: { 'x-forwarded-for': '203.0.113.66' },
+    });
+    try {
+      // Open far more streams than the per-address share, and hold them silently.
+      const attempts = await Promise.allSettled(
+        Array.from({ length: 60 }, () => attacker.openStream('example.ox', 80)),
+      );
+      const held = attempts.filter((a) => a.status === 'fulfilled').length;
+      const refused = attempts.filter(
+        (a) =>
+          a.status === 'rejected' &&
+          a.reason instanceof TunnelError &&
+          a.reason.code === ErrorCode.CIRCUIT_LIMIT,
+      ).length;
+      expect(held).toBeLessThanOrEqual(h.core.limits.maxCircuitsPerIpPerService);
+      expect(refused).toBeGreaterThan(0);
+      // The innocent client (another address) still gets a full answer.
+      const res = await socksFetch(h.socks.port, 'example.ox', 80, httpGet(5000));
+      expect(splitHttp(res.body).payload.equals(patternBytes(5000))).toBe(true);
+    } finally {
+      attacker.shutdown();
+    }
+  }, 30_000);
+
+  test('the service node resets an opened circuit that stays silent', async () => {
+    const h = await harness({ nodeStreamIdleMs: 300 });
+    const circuit = await h.tunnels.openStream('example.ox', 80);
+    const closed = await new Promise<{ code?: number } | null>((resolve) => {
+      circuit.bind({
+        onData: () => {},
+        onEnd: () => {},
+        onWritable: () => {},
+        onClose: (error) => resolve(error),
+      });
+    });
+    expect(closed?.code).toBe(ErrorCode.RESOURCE_EXHAUSTED);
+  });
 });
 
 describe('the relay embedded in the tnp binary', () => {

@@ -12,9 +12,16 @@ import {
   signDomainKeyRotation,
 } from '@tnp/crypto';
 import { makeTestCredentials } from '@tnp/crypto/testing';
-import { eq } from 'drizzle-orm';
-import { serviceNodes } from '../src/db/schema/index.js';
-import { lookupDomainKey, registerDomainKey } from '../src/registry/domainKeys.js';
+import { and, eq } from 'drizzle-orm';
+import { domains, serviceNodes } from '../src/db/schema/index.js';
+import {
+  DEFAULT_RESET_HOLD_SECONDS,
+  lookupDomainKey,
+  registerDomainKey,
+  tombstoneDomainKey,
+} from '../src/registry/domainKeys.js';
+import { registerServiceNode } from '../src/registry/nodes.js';
+import { domainKeyFingerprint, verifyKeyAgreementCertificate } from '@tnp/crypto';
 import { seedDomain, seedTld } from './fixtures.js';
 import { createTestDatabase, type TestDatabase } from './harness.js';
 
@@ -52,12 +59,30 @@ function rotation(
   );
 }
 
-const register = (name: string, domainKey: string, rot?: DomainKeyRotation, userId = OWNER) =>
+const register = (
+  name: string,
+  domainKey: string,
+  rot?: DomainKeyRotation,
+  userId = OWNER,
+  now = NOW,
+) =>
   registerDomainKey(t.db, {
     userId,
     request: rot ? { name, domainKey, rotation: rot } : { name, domainKey },
-    now: NOW,
+    now,
   });
+
+/** What `DELETE /domains/:id` does: tombstone the key, delete the row, in one transaction. */
+async function release(label: string): Promise<void> {
+  const [row] = await t.db
+    .select({ id: domains.id })
+    .from(domains)
+    .where(and(eq(domains.name, label), eq(domains.tld, 'ox')));
+  await t.db.transaction(async (tx) => {
+    await tombstoneDomainKey(tx, row.id);
+    await tx.delete(domains).where(eq(domains.id, row.id));
+  });
+}
 
 describe('domain keys', () => {
   const a = key();
@@ -167,5 +192,133 @@ describe('domain keys', () => {
     const record = await lookupDomainKey(t.db, 'history.ox');
     expect(record?.domainKey).toBe(current.b64);
     expect(record?.rotations).toHaveLength(MAX_DOMAIN_KEY_ROTATIONS);
+  });
+});
+
+describe('release and re-registration cannot reset a key quietly', () => {
+  const original = key();
+
+  test('a released name keeps its key: an unrelated key is refused during the hold', async () => {
+    await seedDomain(t.db, { name: 'released', oxyUserId: OWNER });
+    expect((await register('released.ox', original.b64)).status).toBe(201);
+    await release('released');
+    // Anyone — the same session or a new owner — registers the name again.
+    await seedDomain(t.db, { name: 'released', oxyUserId: 'new-owner' });
+    const attempt = await register(
+      'released.ox',
+      key().b64,
+      undefined,
+      'new-owner',
+      Math.floor(Date.now() / 1000),
+    );
+    expect(attempt.status).toBe(403);
+    expect('error' in attempt ? attempt.error : '').toContain(
+      'rotation statement signed by that key',
+    );
+    expect(await lookupDomainKey(t.db, 'released.ox')).toBeNull();
+  });
+
+  test('the released key itself is accepted again, with its history', async () => {
+    expect(await register('released.ox', original.b64, undefined, 'new-owner')).toEqual({
+      status: 201,
+      record: { name: 'released.ox', domainKey: original.b64, rotations: [] },
+    });
+  });
+
+  test('a new key with a rotation signed by the released key is accepted, unmarked', async () => {
+    await seedDomain(t.db, { name: 'handover', oxyUserId: OWNER });
+    expect((await register('handover.ox', original.b64)).status).toBe(201);
+    await release('handover');
+    await seedDomain(t.db, { name: 'handover', oxyUserId: OWNER });
+    const next = key();
+    const rot = rotation('handover.ox', original, next, NOW);
+    const result = await register('handover.ox', next.b64, rot);
+    expect(result).toEqual({
+      status: 201,
+      record: { name: 'handover.ox', domainKey: next.b64, rotations: [rot] },
+    });
+  });
+
+  test('after the hold, an unrelated key is accepted but published as a reset', async () => {
+    await seedDomain(t.db, { name: 'abandoned', oxyUserId: OWNER });
+    expect((await register('abandoned.ox', original.b64)).status).toBe(201);
+    await release('abandoned');
+    await seedDomain(t.db, { name: 'abandoned', oxyUserId: 'new-owner' });
+    const later = Math.floor(Date.now() / 1000) + DEFAULT_RESET_HOLD_SECONDS + 60;
+    const fresh = key();
+    const result = await register('abandoned.ox', fresh.b64, undefined, 'new-owner', later);
+    expect(result.status).toBe(201);
+    const record = await lookupDomainKey(t.db, 'abandoned.ox');
+    expect(record?.domainKey).toBe(fresh.b64);
+    expect(record?.keyReset?.previousKeyFingerprint).toBe(domainKeyFingerprint(original.b64));
+  });
+
+  test('a name withheld after expiry publishes no key, as resolve withholds it', async () => {
+    await seedDomain(t.db, { name: 'lapsed', oxyUserId: OWNER, expiresAt: new Date('2000-01-01') });
+    expect((await register('lapsed.ox', key().b64)).status).toBe(201);
+    expect(
+      await lookupDomainKey(t.db, 'lapsed.ox', { expiryEnforced: true, now: new Date() }),
+    ).toBeNull();
+    expect(
+      await lookupDomainKey(t.db, 'lapsed.ox', { expiryEnforced: false, now: new Date() }),
+    ).not.toBeNull();
+  });
+});
+
+describe('node registration cannot land under a retired key', () => {
+  test('racing a rotation, the stored chain always verifies against the current key', async () => {
+    for (let i = 0; i < 8; i++) {
+      const label = `race${i}`;
+      const domain = await seedDomain(t.db, { name: label, oxyUserId: OWNER });
+      const oldKey = key();
+      const newKey = key();
+      expect((await register(`${label}.ox`, oldKey.b64)).status).toBe(201);
+      const creds = makeTestCredentials(`${label}.ox`, { domainKey: oldKey });
+      const now = Math.floor(Date.now() / 1000);
+      await Promise.all([
+        registerServiceNode(t.db, {
+          userId: OWNER,
+          domainId: domain.id,
+          chain: creds.chain,
+          kaCert: creds.kaCert,
+          now,
+        }),
+        register(`${label}.ox`, newKey.b64, rotation(`${label}.ox`, oldKey, newKey, now)),
+      ]);
+      const [row] = await t.db
+        .select({ chain: serviceNodes.chain, kaCert: serviceNodes.kaCert })
+        .from(serviceNodes)
+        .where(eq(serviceNodes.domainId, domain.id));
+      const current = (await lookupDomainKey(t.db, `${label}.ox`))?.domainKey;
+      expect(current).toBe(newKey.b64);
+      if (row?.kaCert && row.chain.length > 0) {
+        const verified = verifyKeyAgreementCertificate(row.kaCert, row.chain, {
+          trustedRoots: [current as string],
+          role: 'service-node',
+          name: `${label}.ox`,
+          now,
+        });
+        expect(verified.ok).toBe(true);
+      }
+    }
+  });
+
+  test('a chain under a key that is no longer current is refused', async () => {
+    const domain = await seedDomain(t.db, { name: 'stale', oxyUserId: OWNER });
+    const oldKey = key();
+    const newKey = key();
+    expect((await register('stale.ox', oldKey.b64)).status).toBe(201);
+    expect(
+      (await register('stale.ox', newKey.b64, rotation('stale.ox', oldKey, newKey, NOW))).status,
+    ).toBe(200);
+    const creds = makeTestCredentials('stale.ox', { domainKey: oldKey });
+    const outcome = await registerServiceNode(t.db, {
+      userId: OWNER,
+      domainId: domain.id,
+      chain: creds.chain,
+      kaCert: creds.kaCert,
+      now: Math.floor(Date.now() / 1000),
+    });
+    expect(outcome.status).toBe(422);
   });
 });

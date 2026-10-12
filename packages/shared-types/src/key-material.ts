@@ -151,6 +151,40 @@ export function parseRotationsShape(value: unknown): ParseResult<DomainKeyRotati
   return { ok: true, value: out };
 }
 
+/**
+ * The registry accepted a domain key for this name WITHOUT a rotation signed
+ * by the key it had before: the name was released (with a key) and later
+ * registered again, after the reset hold. A client that pinned the previous
+ * key keeps refusing; a client meeting the name for the first time can see
+ * that its current key is not the original.
+ */
+export interface DomainKeyReset {
+  /** `domainKeyFingerprint` (hex SHA-256) of the key in force before the reset. */
+  previousKeyFingerprint: string;
+  /** ISO 8601: when the new key was accepted. */
+  since: string;
+}
+
+const FINGERPRINT_RE = /^[0-9a-f]{64}$/;
+
+export function parseKeyResetShape(value: unknown): ParseResult<DomainKeyReset | undefined> {
+  if (value === undefined) return { ok: true, value: undefined };
+  const r = asRecord(value);
+  if (!r) return fail('keyReset must be an object');
+  if (onlyFields(r, ['previousKeyFingerprint', 'since']))
+    return fail('keyReset has an unexpected field');
+  if (
+    typeof r.previousKeyFingerprint !== 'string' ||
+    !FINGERPRINT_RE.test(r.previousKeyFingerprint)
+  ) {
+    return fail('keyReset previousKeyFingerprint must be a hex SHA-256');
+  }
+  if (typeof r.since !== 'string' || Number.isNaN(Date.parse(r.since)) || r.since.length > 40) {
+    return fail('keyReset since must be an ISO 8601 time');
+  }
+  return { ok: true, value: { previousKeyFingerprint: r.previousKeyFingerprint, since: r.since } };
+}
+
 export function parseKeyShape(value: unknown, field: string): ParseResult<string> {
   if (!isB64(value)) return fail(`${field} must be a base64 key`);
   return { ok: true, value };

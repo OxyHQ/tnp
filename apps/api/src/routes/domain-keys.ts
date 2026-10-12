@@ -1,13 +1,15 @@
 /**
  * `/domain-keys` — publish and rotate each native name's DOMAIN KEY.
  *
- * The rules, and why there is no reset, are in `registry/domainKeys.ts` and
- * docs/architecture/security.md §1. This file only maps HTTP onto them.
+ * The rules (rotation only, tombstones on release, the visible reset hold)
+ * are in `registry/domainKeys.ts` and docs/architecture/security.md §1. This
+ * file only maps HTTP onto them.
  */
 
 import { getRequiredOxyUserId, requireOxyAuth } from '@oxy.so/core/server';
 import { parseRegisterDomainKeyRequest } from '@tnp/shared-types';
 import { Router } from 'express';
+import { config } from '../config.js';
 import { getDb } from '../db/postgres.js';
 import {
   canonicalKey,
@@ -29,7 +31,10 @@ router.get('/:name', async (req, res) => {
       res.status(404).json({ error: 'No domain key for this name' });
       return;
     }
-    const record = await lookupDomainKey(getDb(), name);
+    const record = await lookupDomainKey(getDb(), name, {
+      expiryEnforced: config.nativeExpiryEnforced,
+      now: new Date(),
+    });
     if (!record) {
       res.status(404).json({ error: 'No domain key for this name' });
       return;
@@ -63,6 +68,7 @@ router.post('/', requireOxyAuth, async (req, res) => {
       userId,
       request: parsed.value,
       now: Math.floor(Date.now() / 1000),
+      resetHoldSeconds: config.domainKeyResetHoldSeconds,
     });
     if ('error' in result) {
       res.status(result.status).json({ error: result.error });

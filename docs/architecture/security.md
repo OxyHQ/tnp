@@ -169,10 +169,23 @@ whoever runs the command — `<user data dir>/overlay/` (`~/.local/share/tnp` or
 `$XDG_DATA_HOME/tnp` on Linux, `~/Library/Application Support/tnp` on macOS,
 `%LOCALAPPDATA%\tnp` on Windows; `TNP_DATA_DIR` overrides) — never the
 sandboxed resolver daemon's directory: `domain-keys/<name>.json`,
-`node-keys/<name>.json`, `grants/<name>.json` and `pins.json`. Files are
-written to an exclusive temp file and renamed, mode `0600` (an ACL on
-Windows), in a `0700` directory; a symlink at the target is refused, and a key
-file readable by others is tightened to `0600` with a warning.
+`node-keys/<name>.json`, `grants/<name>.json` and `pins.json`. Under `sudo`
+the directory is the **invoking** user's (`SUDO_USER`, home from the password
+database, `XDG_DATA_HOME` ignored) and files written there are handed back to
+that user, so `sudo tnp connect`, `tnp pins` and `tnp test` share one pin
+store. Files are written to an exclusive temp file, flushed and renamed, mode
+`0600` (an ACL on Windows), in a `0700` directory; a symlink at the target is
+refused, and a key file readable by others is tightened to `0600` with a
+warning.
+
+**Keep the domain key off the serving host.** A domain key on the machine that
+serves the name is on the machine most exposed to the internet: whoever takes
+that host takes the name and can sign rotations that pinned clients follow.
+`tnp serve` says so when it creates the key there. The safer arrangement is
+the domain key on an offline device, and each service node authorized from it
+with `tnp domain grant <name> --node-key <key>` (the node prints its key);
+nodes without the domain key cannot renew their own grant and warn before it
+expires.
 
 **Registration and rotation.** The owner registers the public half once with
 `POST /domain-keys` (Oxy-authenticated, owner only). After that the registry
@@ -186,17 +199,36 @@ u32 len ‖ "tnp-domain-key-rotation-v1" ‖ u32 len ‖ name
 
 `issuedAt` must be later than the previous statement's and at most 300 s in
 the future; the registry keeps the last 32 statements and serves them with the
-key. `tnp domain key rotate <name>` writes the new key to disk first, then
-registers the rotation, then replaces the local key (keeping the old one as
-`.previous`). A successful rotation clears the published chain and certificate
-of the name's service node, relays drop nodes chained under the old key at
-their next re-check (every 10 minutes), and clients that follow the rotation
-verify against the new key — so rotating is how an owner retires every node
-under a key. **There is no reset path.** A lost domain key cannot be replaced
-in-band: a reset would be indistinguishable, to a client that pinned the old
-key, from the takeover pinning exists to refuse. Recovery is an out-of-band
-operator action, and pinned clients will refuse the new key until their users
-forget the pin.
+key. `tnp domain key rotate <name>` writes the new key to `<name>.json.pending`
+first, then registers the rotation; once the registry accepts it the retired
+secret is overwritten and unlinked (never kept — it could still sign a rotation
+clients pinned to it would follow) and the pending key renamed into place. A
+refused rotation removes the pending key. A successful rotation clears the
+published chain and certificate of the name's service node in the same
+transaction (node registration locks the same row and re-checks the key, so it
+cannot land afterwards under the retired key), relays drop nodes chained under
+the old key at their next re-check (every 10 minutes), and clients that follow
+the rotation verify against the new key — so rotating is how an owner retires
+every node under a key.
+
+**Release, re-registration and resets — exactly what is guaranteed.** While a
+name is registered, its key changes only by a rotation signed by the current
+key; the owner's Oxy account alone cannot replace it. Releasing the name
+(`DELETE /domains/:id`) does not forget the key: it is kept, with its rotation
+history, in a tombstone that is never deleted. When the name is registered
+again — by anyone — its first key must be the released key, or come with a
+rotation signed by it; otherwise the registry accepts an unrelated key only
+after the **reset hold** (30 days after the release by default,
+`TNP_DOMAIN_KEY_RESET_HOLD_DAYS`), and then publishes it with `keyReset:
+{ previousKeyFingerprint, since }` (the SHA-256 of the key it replaced) in
+`/domain-keys` and the resolve overlay. A client that pinned the previous key
+keeps refusing and is told the name was released and registered again; a
+client meeting the name for the first time can see the key is not the
+original. So an Oxy session — or whoever compels one — can replace a name's
+key only by releasing it and waiting out the hold, visibly. A lost domain key
+has exactly this recovery path and no faster one. Whoever can write the
+registry's database directly is not bound by any of this; pinning is the
+defence there.
 
 **Node credentials.** On the owner's device the node grant is issued locally
 and renewed automatically when less than 7 days remain. A node on another
@@ -214,7 +246,11 @@ certificate against the domain key in the `/dns/resolve` overlay block
 ([`transport.md`](./transport.md) §9.1), for the name it derived itself. After
 the first successful verification it pins that domain key for the name in
 `pins.json`, with rollback high-water marks for the grant and certificate
-serials it has seen (at most 32 per name). Afterwards it accepts a different
+serials it has seen (at most 256 per name, the least recently raised dropped
+first). Every change to the pin file is made under an exclusive lock file
+(stale locks broken after 10 s) against a fresh read and written atomically,
+and nothing is cached in memory, so concurrent processes never lose each
+other's pins and `tnp pins forget` is not undone by a running client. Afterwards it accepts a different
 domain key **only** if the overlay's rotation history leads from the pinned key
 to the presented one through statements each signed by the key it retires, in
 increasing `issuedAt` order. Otherwise it refuses, fail-closed, with a message

@@ -122,6 +122,7 @@ export {
 } from './domain-keys.js';
 
 export {
+  type DomainKeyReset,
   isCanonicalName,
   MAX_CHAIN_LENGTH,
   MAX_ROTATIONS,

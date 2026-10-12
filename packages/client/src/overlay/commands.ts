@@ -12,7 +12,6 @@ import {
   issueNodeGrant,
   loadKeyPair,
   NODE_GRANT_LIFETIME,
-  saveKeyPair,
   signRotation,
 } from './identity';
 import { PinStore } from './pins';
@@ -93,11 +92,29 @@ export async function cmdDomain(
     const path = store.pathFor('domain-keys', name);
     const keyJson = (kp: { publicKey: Uint8Array; secretKey: Uint8Array }) =>
       `${JSON.stringify({ publicKey: encodeBase64(kp.publicKey), secretKey: encodeBase64(kp.secretKey) }, null, 2)}\n`;
-    store.writePrivate(`${path}.pending`, keyJson(next));
-    await api.registerDomainKey({ name, domainKey: encodeBase64(next.publicKey), rotation }, auth);
-    store.writePrivate(`${path}.previous`, keyJson(current));
-    saveKeyPair(store, 'domain-keys', name, next);
+    const pending = `${path}.pending`;
+    store.writePrivate(pending, keyJson(next));
+    try {
+      await api.registerDomainKey(
+        { name, domainKey: encodeBase64(next.publicKey), rotation },
+        auth,
+      );
+    } catch (err) {
+      // Not accepted: the current key stays the root; the unused one goes.
+      store.shred(pending);
+      throw err;
+    }
+    // Accepted. The retired secret is overwritten and removed — never kept:
+    // whoever holds it can sign a rotation that clients still pinned to it
+    // would follow. Then the pending key takes its place, atomically.
+    store.shred(path);
+    store.promote(pending, path);
     console.log(`rotated the domain key for ${name} to ${encodeBase64(next.publicKey)}`);
+    console.log('The retired key was overwritten and deleted on this device.');
+    console.log(
+      'Destroy every other copy of it (backups, other devices): it can still sign a rotation that ' +
+        'clients pinned to it would follow. Back up the NEW key offline.',
+    );
     console.log(
       "Every node granted by the old key is now refused; restart `tnp serve` to re-grant this device's node.",
     );

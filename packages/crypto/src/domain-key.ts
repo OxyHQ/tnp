@@ -40,8 +40,10 @@ import {
   PUBLIC_KEY_LENGTH,
   parsePublicKey,
   SIGNATURE_LENGTH,
+  toHex,
 } from './encoding.js';
 import { assertSecretMatches } from './grants.js';
+import { sha256 } from './primitives.js';
 import { isValidScope } from './scope.js';
 
 /** Domain-separation tag; distinct from grants, certificates and relay auth. */
@@ -217,6 +219,14 @@ export function followDomainKeyRotations(options: FollowRotationsOptions): Follo
     ok: false,
     detail: 'no chain of rotation statements signed by the pinned key leads to the presented key',
   };
+}
+
+/**
+ * A domain key's fingerprint: lowercase hex SHA-256 of its 32 raw bytes. Used
+ * to say WHICH key a name was reset away from without republishing it.
+ */
+export function domainKeyFingerprint(key: string | Uint8Array): string {
+  return toHex(sha256(parsePublicKey(key)));
 }
 
 /** A fresh Ed25519 key pair (tweetnacl's 64-byte secret form) from the platform CSPRNG. */

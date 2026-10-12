@@ -12,7 +12,9 @@
 
 import type { DomainKeyRotation } from '@tnp/crypto';
 import {
+  type DomainKeyReset,
   isCanonicalName,
+  parseKeyResetShape,
   parseKeyShape,
   parseRotationShape,
   parseRotationsShape,
@@ -24,6 +26,8 @@ export interface DomainKeyRecord {
   name: string;
   domainKey: string;
   rotations: DomainKeyRotation[];
+  /** Present when the current key was accepted without a signed rotation (a reset after release). */
+  keyReset?: DomainKeyReset;
 }
 
 /**
@@ -73,8 +77,15 @@ export function parseDomainKeyRecord(body: unknown): ParseResult<DomainKeyRecord
   if (!domainKey.ok) return domainKey;
   const rotations = parseRotationsShape(record.rotations);
   if (!rotations.ok) return rotations;
+  const keyReset = parseKeyResetShape(record.keyReset);
+  if (!keyReset.ok) return keyReset;
   return {
     ok: true,
-    value: { name: record.name, domainKey: domainKey.value, rotations: rotations.value },
+    value: {
+      name: record.name,
+      domainKey: domainKey.value,
+      rotations: rotations.value,
+      ...(keyReset.value ? { keyReset: keyReset.value } : {}),
+    },
   };
 }

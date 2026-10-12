@@ -75,6 +75,8 @@ const RECONNECT_CONFLICT_MS = 5 * 60_000;
 const RELAY_CONNECT_TIMEOUT_MS = 10_000;
 const TARGET_CONNECT_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_CIRCUITS = 256;
+/** A circuit with no traffic for this long is reset (relay-core's circuit idle timeout is longer). */
+const DEFAULT_STREAM_IDLE_MS = 10 * 60_000;
 /** A circuit whose client has not sent OPEN by then is reset. */
 const OPEN_TIMEOUT_MS = 10_000;
 
@@ -98,6 +100,11 @@ export interface ServiceNodeOptions {
   renewChain?: () => Grant[] | null;
   now?: () => number;
   maxCircuits?: number;
+  /**
+   * A circuit with no record in either direction for this long is reset, so
+   * opened-but-silent circuits cannot hold this node's slots. Default 10 min.
+   */
+  streamIdleMs?: number;
   log?: (message: string) => void;
 }
 
@@ -116,6 +123,7 @@ export class ServiceNode {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private maintenanceTimer: ReturnType<typeof setInterval> | null = null;
+  private idleTimer: ReturnType<typeof setInterval> | null = null;
   private servingWaiters: Array<() => void> = [];
   private readonly now: () => number;
   private readonly log: (message: string) => void;
@@ -160,6 +168,17 @@ export class ServiceNode {
     await this.publish();
     this.maintenanceTimer = setInterval(() => void this.maintain(), MAINTENANCE_INTERVAL_MS);
     this.maintenanceTimer.unref?.();
+    const idleMs = this.options.streamIdleMs ?? DEFAULT_STREAM_IDLE_MS;
+    this.idleTimer = setInterval(
+      () => {
+        const cutoff = Date.now() - idleMs;
+        for (const [, circuit] of this.circuits.entries()) {
+          if (circuit.lastActivity < cutoff) circuit.reset(ErrorCode.RESOURCE_EXHAUSTED);
+        }
+      },
+      Math.max(50, Math.min(30_000, Math.floor(idleMs / 2))),
+    );
+    this.idleTimer.unref?.();
     this.connect();
   }
 
@@ -175,6 +194,7 @@ export class ServiceNode {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     if (this.maintenanceTimer) clearInterval(this.maintenanceTimer);
+    if (this.idleTimer) clearInterval(this.idleTimer);
     for (const circuit of this.circuits.drain()) circuit.abort();
     this.socket?.close();
   }
@@ -488,7 +508,14 @@ export async function prepareNodeCredentials(
       `[tnp] generated the domain key for ${name}: ${store.pathFor('domain-keys', name)}`,
     );
     console.log(
-      '[tnp] BACK IT UP. It is the root of trust for this name: clients pin it, and without it you cannot rotate.',
+      '[tnp] BACK IT UP OFFLINE. It is the root of trust for this name: clients pin it, and without it you cannot rotate.',
+    );
+    console.log(
+      '[tnp] It is now on the host that serves the name, the machine most exposed to the internet. ' +
+        'Anyone who takes this host takes the name, and can sign rotations clients will follow. ' +
+        'Safer: keep the domain key on an offline device and authorize this node from there ' +
+        `(\`tnp domain grant ${name} --node-key <this node's key>\`), then delete ` +
+        `${store.pathFor('domain-keys', name)} here.`,
     );
   }
 

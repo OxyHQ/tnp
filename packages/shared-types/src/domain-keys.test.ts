@@ -56,6 +56,29 @@ describe('parseDomainKeyRecord', () => {
   });
 });
 
+describe('keyReset', () => {
+  const record = { name: 'example.ox', domainKey: encodeBase64(b.publicKey), rotations: [] };
+  const keyReset = { previousKeyFingerprint: 'ab'.repeat(32), since: '2026-11-20T00:00:00.000Z' };
+
+  test('is carried by the domain-key record and the resolve overlay', () => {
+    expect(parseDomainKeyRecord({ ...record, keyReset })).toEqual({
+      ok: true,
+      value: { ...record, keyReset },
+    });
+  });
+
+  test('is shape-checked', () => {
+    expect(parseDomainKeyRecord({ ...record, keyReset: { ...keyReset, extra: 1 } }).ok).toBe(false);
+    expect(
+      parseDomainKeyRecord({ ...record, keyReset: { ...keyReset, previousKeyFingerprint: 'zz' } })
+        .ok,
+    ).toBe(false);
+    expect(
+      parseDomainKeyRecord({ ...record, keyReset: { ...keyReset, since: 'yesterday' } }).ok,
+    ).toBe(false);
+  });
+});
+
 describe('parseDnsResolveOverlay', () => {
   const creds = makeTestCredentials('example.ox');
   const overlay = {

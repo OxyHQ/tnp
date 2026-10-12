@@ -108,9 +108,11 @@ export const domains = pgTable(
      * The domain key (Ed25519, canonical base64): the root of every grant
      * chain for this name. Generated on the owner's device; the registry only
      * publishes it. Set once by the owner, and replaced afterwards only by a
-     * rotation statement signed by the current key (routes/domain-keys.ts) —
-     * there is no reset, so a compelled registry that overwrites it here is
-     * refused by every client that pinned the old one.
+     * rotation statement signed by the current key (registry/domainKeys.ts).
+     * A name released and registered again inherits the released key through
+     * `domain_key_tombstones`: only a rotation signed by that key, or a reset
+     * after the hold, which is marked below. Whoever can write this column
+     * directly can still change it; clients that pinned the old key refuse.
      */
     domainKey: text('domain_key'),
     /** Rotation statements, oldest first, at most MAX_DOMAIN_KEY_ROTATIONS. */
@@ -118,6 +120,13 @@ export const domains = pgTable(
       .$type<DomainKeyRotation[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
+    /**
+     * Set when the current key was accepted WITHOUT a rotation from the key
+     * this name had before it was released: the fingerprint of that previous
+     * key, and when the reset happened. Published as `keyReset`.
+     */
+    domainKeyResetFrom: text('domain_key_reset_from'),
+    domainKeyResetAt: timestamp('domain_key_reset_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
@@ -128,6 +137,29 @@ export const domains = pgTable(
     index('domains_oxy_user_id_idx').on(table.oxyUserId),
     index('domains_owner_id_idx').on(table.ownerId),
   ],
+);
+
+/**
+ * The last domain key of every released name — never deleted.
+ *
+ * Releasing a name deletes its `domains` row, and with it the domain key. If
+ * that were the end of it, an Oxy session (or anyone who compels one) could
+ * release a name and register it again to get a "first" key accepted with no
+ * signature from the old one: a reset by another route. The tombstone keeps
+ * the released key so a re-registration of the same name needs a rotation
+ * signed by it, or waits out the reset hold and is marked as a reset.
+ */
+export const domainKeyTombstones = pgTable(
+  'domain_key_tombstones',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    tld: text('tld').notNull(),
+    domainKey: text('domain_key').notNull(),
+    rotations: jsonb('rotations').$type<DomainKeyRotation[]>().notNull().default(sql`'[]'::jsonb`),
+    releasedAt: timestamp('released_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('domain_key_tombstones_name_tld_key').on(table.name, table.tld)],
 );
 
 /**

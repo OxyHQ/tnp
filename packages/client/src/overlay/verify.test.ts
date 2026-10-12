@@ -7,7 +7,12 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { encodeBase64, generateSigningKeyPair, isVerifiedKeyAgreementKey } from '@tnp/crypto';
+import {
+  domainKeyFingerprint,
+  encodeBase64,
+  generateSigningKeyPair,
+  isVerifiedKeyAgreementKey,
+} from '@tnp/crypto';
 import { makeTestCredentials, type TestServiceCredentials } from '@tnp/crypto/testing';
 import type { DnsResolveOverlay } from '@tnp/shared-types';
 import { signRotation } from './identity';
@@ -178,6 +183,38 @@ describe('a pinned name', () => {
     const err = refusal(() => verifyOverlay('example.ox', overlayFor(older), pins));
     expect(err.reason).toBe('bad-chain');
     expect(err.message).toContain('rolled-back');
+  });
+});
+
+describe('a key reset after release', () => {
+  test('a pinned client refuses it and is told the name was released and re-registered', () => {
+    const pins = new PinStore(store());
+    const original = makeTestCredentials('example.ox');
+    verifyOverlay('example.ox', overlayFor(original), pins);
+    const reset = makeTestCredentials('example.ox');
+    const err = refusal(() =>
+      verifyOverlay(
+        'example.ox',
+        overlayFor(reset, {
+          keyReset: {
+            previousKeyFingerprint: domainKeyFingerprint(original.domainKeyB64),
+            since: '2026-11-20T00:00:00.000Z',
+          },
+        }),
+        pins,
+      ),
+    );
+    expect(err.reason).toBe('pin-mismatch');
+    expect(err.message).toContain('released and registered again');
+    expect(pins.get('example.ox')?.domainKey).toBe(original.domainKeyB64);
+  });
+
+  test('a first-contact client sees the reset flag on the verified result', () => {
+    const pins = new PinStore(store());
+    const reset = makeTestCredentials('example.ox');
+    const flag = { previousKeyFingerprint: 'a'.repeat(64), since: '2026-11-20T00:00:00.000Z' };
+    const result = verifyOverlay('example.ox', overlayFor(reset, { keyReset: flag }), pins);
+    expect(result.keyReset).toEqual(flag);
   });
 });
 

@@ -79,6 +79,9 @@ export interface HarnessOptions {
   /** Use an existing relay instead of starting one. */
   externalRelay?: { endpoint: string; keys: Map<string, string> };
   target?: { port: number };
+  /** Relay takes client addresses from X-Forwarded-For (lets one test act as several addresses). */
+  relayTrustForwardedFor?: boolean;
+  nodeStreamIdleMs?: number;
 }
 
 export async function startHarness(options: HarnessOptions = {}): Promise<Harness> {
@@ -100,7 +103,12 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
       lookupDomainKey: async (n) => keys.get(n) ?? null,
       limits: options.limits,
     });
-    relay = serveRelay({ core, hostname: '127.0.0.1', port });
+    relay = serveRelay({
+      core,
+      hostname: '127.0.0.1',
+      port,
+      trustForwardedFor: options.relayTrustForwardedFor,
+    });
   }
 
   const node = new ServiceNode({
@@ -109,6 +117,7 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
     relayEndpoint,
     nodeKey: creds.nodeKey,
     chain: creds.chain,
+    streamIdleMs: options.nodeStreamIdleMs,
     log: process.env.TNP_TEST_DEBUG ? (m) => console.error(`[node] ${m}`) : () => {},
   });
   await node.start();

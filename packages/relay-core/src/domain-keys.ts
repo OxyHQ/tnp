@@ -35,12 +35,10 @@ export function apiDomainKeyLookup(
   const doFetch = options.fetch ?? fetch;
   const base = apiBaseUrl.replace(/\/+$/, '');
   const cache = new Map<string, { key: string | null; expires: number }>();
+  const inFlight = new Map<string, Promise<string | null>>();
 
-  return async (name) => {
+  const fetchKey = async (name: string): Promise<string | null> => {
     const now = Date.now();
-    const hit = cache.get(name);
-    if (hit && hit.expires > now) return hit.key;
-
     const res = await doFetch(`${base}/domain-keys/${encodeURIComponent(name)}`, {
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -59,5 +57,16 @@ export function apiDomainKeyLookup(
     }
     cache.set(name, { key, expires: now + (key ? ttl : negativeTtl) });
     return key;
+  };
+
+  return (name) => {
+    const hit = cache.get(name);
+    if (hit && hit.expires > Date.now()) return Promise.resolve(hit.key);
+    // Identical lookups in flight share one request.
+    const pending = inFlight.get(name);
+    if (pending) return pending;
+    const request = fetchKey(name).finally(() => inFlight.delete(name));
+    inFlight.set(name, request);
+    return request;
   };
 }

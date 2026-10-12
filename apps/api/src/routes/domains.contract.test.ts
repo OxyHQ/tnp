@@ -42,6 +42,8 @@ const domain = {
   unlisted: false,
   domainKey: null,
   domainKeyRotations: [],
+  domainKeyResetFrom: null,
+  domainKeyResetAt: null,
   createdAt,
   updatedAt,
   expiresAt: null,

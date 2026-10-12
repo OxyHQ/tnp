@@ -1,5 +1,5 @@
 {
-  "id": "c988a97c-16a9-40d9-84b7-2a4b27928449",
+  "id": "6243164c-53f2-40ca-b62e-8138abfb682d",
   "prevId": "57fc0bea-e151-46e7-8814-a594e60811aa",
   "version": "7",
   "dialect": "postgresql",
@@ -526,6 +526,80 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.domain_key_tombstones": {
+      "name": "domain_key_tombstones",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tld": {
+          "name": "tld",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "domain_key": {
+          "name": "domain_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rotations": {
+          "name": "rotations",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "released_at": {
+          "name": "released_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "domain_key_tombstones_name_tld_key": {
+          "name": "domain_key_tombstones_name_tld_key",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "tld",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.domains": {
       "name": "domains",
       "schema": "",
@@ -588,6 +662,18 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'[]'::jsonb"
+        },
+        "domain_key_reset_from": {
+          "name": "domain_key_reset_from",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "domain_key_reset_at": {
+          "name": "domain_key_reset_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",

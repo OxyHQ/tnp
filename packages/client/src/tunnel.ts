@@ -74,6 +74,8 @@ export interface TunnelManagerOptions {
    * every network observer which name each circuit is for.
    */
   allowPlaintextRelay?: boolean;
+  /** Extra HTTP headers on relay connections (for a proxy in front; tests). */
+  headers?: Record<string, string>;
 }
 
 type Entry =
@@ -97,6 +99,7 @@ class RelayLink {
   constructor(
     readonly endpoint: string,
     private readonly onGone: (link: RelayLink) => void,
+    private readonly headers?: Record<string, string>,
   ) {}
 
   async connect(): Promise<void> {
@@ -112,6 +115,7 @@ class RelayLink {
         },
       },
       RELAY_CONNECT_TIMEOUT_MS,
+      this.headers,
     );
     this.socket = socket;
     await ready;
@@ -411,13 +415,17 @@ export class TunnelManager {
           ErrorCode.CIRCUIT_LIMIT,
         );
       }
-      const link = new RelayLink(endpoint, (gone) => {
-        const list = this.links.get(endpoint);
-        if (!list) return;
-        const rest = list.filter((l) => l !== gone);
-        if (rest.length) this.links.set(endpoint, rest);
-        else this.links.delete(endpoint);
-      });
+      const link = new RelayLink(
+        endpoint,
+        (gone) => {
+          const list = this.links.get(endpoint);
+          if (!list) return;
+          const rest = list.filter((l) => l !== gone);
+          if (rest.length) this.links.set(endpoint, rest);
+          else this.links.delete(endpoint);
+        },
+        this.options.headers,
+      );
       const promise = link.connect().then(() => {
         this.links.set(endpoint, [...(this.links.get(endpoint) ?? []), link]);
         return link;

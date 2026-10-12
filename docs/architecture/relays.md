@@ -80,6 +80,10 @@ silently.
 | Frame size | `MAX_FRAME_SIZE` (20 + 65535 B) as the WebSocket `maxPayloadLength`; larger closes the connection |
 | Circuits per client connection | 64; 32 awaiting `CIRCUIT_CREATED` |
 | Circuits per service-node connection | 256 |
+| Circuits to one service | 16 per client connection, 16 per IP address (refused with `CIRCUIT_LIMIT`), so one address cannot hold a service's slots |
+| Idle open circuit | destroyed after 15 min with no frame either way (the service node resets after 10) |
+| Buffered bytes, whole relay | 512 MiB; above it the connections holding the most are closed first |
+| Service-node `AUTH` per IP | burst 10, refill one per 5 s; domain-key lookups coalesced per name, names without a key cached 30 s (4096 max) |
 | Circuits per relay | 32 768 |
 | Names served | 4096 |
 | Connections | 4096 per relay, 32 per IP address |
@@ -88,7 +92,7 @@ silently.
 | Buffer towards a client | 64 × 256 KiB + 1 MiB |
 | Buffer towards a service node | 256 × 256 KiB + 1 MiB |
 | Service-node `AUTH`, `CIRCUIT_CREATED` | within 10 s each |
-| Frames for circuits a connection does not own | dropped; more than 64 closes the connection |
+| Frames for circuits a connection does not own | dropped, never forwarded (no penalty: in-flight frames after a teardown look the same); more than 64 frames of types a peer may not send close the connection |
 | IP addresses tracked | 65 536; a full table refuses new addresses |
 | Idle connections | 120 s, with WebSocket pings |
 

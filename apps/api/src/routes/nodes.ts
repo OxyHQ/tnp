@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { and, eq, sql } from 'drizzle-orm';
 import { requireOxyAuth, getRequiredOxyUserId } from '@oxy.so/core/server';
-import { KeyAgreementRole, verifyKeyAgreementCertificate } from '@tnp/crypto';
 import { isReservedTld } from '@tnp/namespace';
 import {
   parseRegisterServiceNodeRequest,
@@ -12,7 +11,7 @@ import {
 } from '@tnp/shared-types';
 import { getDb } from '../db/postgres.js';
 import { domains, serviceNodes, tlds } from '../db/schema/index.js';
-import { toServiceNodeLookup } from '../registry/nodes.js';
+import { registerServiceNode, toServiceNodeLookup } from '../registry/nodes.js';
 import { logError } from '../utils/logError.js';
 
 const router = Router();
@@ -35,64 +34,21 @@ router.post('/register', requireOxyAuth, async (req, res) => {
     }
     const { domainId, chain, kaCert } = parsed.value;
 
-    const db = getDb();
-
-    const [domain] = await db
-      .select({
-        id: domains.id,
-        oxyUserId: domains.oxyUserId,
-        name: domains.name,
-        tld: domains.tld,
-        domainKey: domains.domainKey,
-      })
-      .from(domains)
-      .where(eq(domains.id, domainId))
-      .limit(1);
-
-    if (!domain) {
-      res.status(404).json({ error: 'Domain not found' });
-      return;
-    }
-    if (domain.oxyUserId !== userId) {
-      res.status(403).json({ error: 'You do not own this domain' });
-      return;
-    }
-
-    if (!domain.domainKey) {
-      res.status(409).json({ error: 'Register a domain key first: tnp domain key init <name>' });
-      return;
-    }
-
-    const verified = verifyKeyAgreementCertificate(kaCert, chain, {
-      trustedRoots: [domain.domainKey],
-      role: KeyAgreementRole.SERVICE_NODE,
-      name: `${domain.name}.${domain.tld}`,
+    // Verified against the CURRENT domain key, in one transaction with the
+    // domain row locked (registry/nodes.ts, registerServiceNode).
+    const outcome = await registerServiceNode(getDb(), {
+      userId,
+      domainId,
+      chain,
+      kaCert,
       now: Math.floor(Date.now() / 1000),
     });
-    if (!verified.ok) {
-      // The reason enum only: the detail can describe attacker-supplied input.
-      res.status(422).json({ error: `Key material does not verify: ${verified.reason}` });
+
+    if ('error' in outcome) {
+      res.status(outcome.status).json({ error: outcome.error });
       return;
     }
-    const publicKey = kaCert.signer;
-
-    // One node per domain, enforced by a unique index rather than by convention.
-    const [node] = await db
-      .insert(serviceNodes)
-      .values({ domainId: domain.id, oxyUserId: userId, publicKey, chain, kaCert })
-      .onConflictDoUpdate({
-        target: serviceNodes.domainId,
-        set: {
-          publicKey,
-          chain,
-          kaCert,
-          oxyUserId: userId,
-          lastSeen: sql`now()`,
-          updatedAt: sql`now()`,
-        },
-      })
-      .returning();
-
+    const node = outcome.node;
     if (!node) {
       res.status(500).json({ error: 'Failed to register service node' });
       return;
