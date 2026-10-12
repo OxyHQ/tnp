@@ -305,7 +305,10 @@ encodes resolved's routing rule and checks the old and new configurations
 against it.
 
 **What is recorded.** Everything added is written to
-`<dataDir>/dns-routing-{install,connect}.json`; teardown removes exactly that.
+`dns-routing-{install,connect}.json` in the root/Administrators-only system
+state directory (config.ts `routingStateDirs`); teardown removes exactly
+that, and a record is only ever acted on as far as TNP could have written it
+(`sanitizeRoutingState`).
 Repairs of what older releases did: the legacy drop-in and `/etc/resolver/com`
 and `/etc/resolver/app` (only when they point at 127.0.0.1) are removed; on
 Windows, when an install from before this version is detected (its scheduled
@@ -327,9 +330,11 @@ cover (naming.md §3), `tnp rules` adds a third delegate
 (`tnp-rules.dns-delegate`), link (`tnp2`), `/etc/resolver/<name>` files or
 NRPT rules (comment `Managed by TNP (personal rules)`), pointed at the
 installed resolver's recorded target and recorded in
-`<dataDir>/dns-routing-rules.json` (`rules-routing.ts`). Nothing pre-existing
+`dns-routing-rules.json` beside them (`rules-routing.ts`). Nothing pre-existing
 is overwritten, nothing is routed without an installed resolver, and the
 native-TLD routing above is never touched by it.
 
-**Not verified on real systems by tests:** the generated configuration is
-unit-tested; its effect on Windows, macOS and each systemd version is not.
+**Verified on real systems:** on Windows and macOS by
+`.github/workflows/client-platforms.yml` (install, resolve `.ox` and a public
+name through the system resolver, uninstall back to the exact prior DNS
+state). Each systemd version is still only unit-tested.

@@ -134,10 +134,27 @@ Users entry from an older build does not survive. **Residual:** the tools
 themselves (`reg.exe`, `icacls.exe`, `powershell.exe`) are found under
 `%SystemRoot%\System32` as the environment names it; a user who can set their
 own `SystemRoot` and then gets TNP run elevated could substitute them. Taking
-the system directory from `GetSystemDirectoryW` closes that and is next. None
-of the Windows paths are executed in CI; the plans, the probe's parsing and
-the checks are unit-tested, and the probe script runs under `pwsh` on Linux
-with `Get-Acl` stubbed.
+the system directory from `GetSystemDirectoryW` closes that and is next.
+
+**Executed on real Windows and macOS** (`.github/workflows/client-platforms.yml`,
+on every pull request): the client unit tests run natively on
+`windows-latest` and `macos-latest`, and the compiled binary is installed with
+administrator rights against a local fake API, resolved through
+(`Resolve-DnsName`, `dscacheutil`), its ACLs/modes read back, the kill switch
+refused, enforced (plain DNS to 1.1.1.1 blocked, loopback answered),
+crash-tested and removed, and `uninstall --purge` checked to leave adapter
+DNS, NRPT, `/etc/resolver` and pf exactly as before. The real installers run
+against the signed release: `install.ps1` under Windows PowerShell 5.1,
+`install.sh` with LibreSSL and with OpenSSL 3.
+
+**Privileged state.** Everything root/SYSTEM acts on is kept in the system
+state directory (`/Library/Application Support/tnp`, `%ProgramData%\tnp`):
+the DNS routing records and, on macOS, the resolver's TLD cache. Until 0.5.1
+both followed the invoking user's data directory, so the SYSTEM task and the
+root daemon wrote into a directory that user controls, and uninstall ran
+teardown commands from a record the user could replace. Records from that
+location are still read to tear down an older install, reduced to what TNP
+itself could have written (`sanitizeRoutingState`).
 
 **Uninstall.** `tnp uninstall` removes the service, TNP's DNS routing,
 kill-switch rules and autoconnect units, then lists the data still on disk.

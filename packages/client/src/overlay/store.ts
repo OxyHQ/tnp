@@ -133,10 +133,18 @@ export function overlayDir(base?: string): string {
 
 export type StoreArea = 'domain-keys' | 'node-keys' | 'grants';
 
+/**
+ * On Windows every private write also sets and verifies the file's ACL, which
+ * starts icacls and Windows PowerShell (about a second on a CI runner), so a
+ * lock is held far longer there. With the POSIX figures, four processes
+ * recording pins at once timed out waiting on each other on a Windows runner,
+ * and a slow holder risked having its live lock broken as stale.
+ */
+const SLOW_WRITES = process.platform === 'win32';
 /** A lock older than this is a crashed holder's and is broken. */
-const STALE_LOCK_MS = 10_000;
+const STALE_LOCK_MS = SLOW_WRITES ? 60_000 : 10_000;
 /** How long to wait for another process's lock before giving up. */
-const LOCK_WAIT_MS = 5_000;
+const LOCK_WAIT_MS = SLOW_WRITES ? 30_000 : 5_000;
 
 const sleeper = new Int32Array(new SharedArrayBuffer(4));
 function sleepSync(ms: number): void {
@@ -263,7 +271,7 @@ export class OverlayStore {
    * O_EXCL, never followed through a symlink). Several processes share the
    * pin file and the relay-directory state; each change is re-read, decided
    * and written atomically under this lock, so one never overwrites another.
-   * A lock older than 10 s is a crashed holder's and is broken.
+   * A lock older than STALE_LOCK_MS is a crashed holder's and is broken.
    */
   withLock<T>(path: string, fn: () => T): T {
     const lockPath = `${path}.lock`;

@@ -516,9 +516,24 @@ const windowsPowerShell = (() => {
 
 const POWERSHELLS = [
   { label: 'pwsh', path: pwsh, timeout: 120_000 },
-  // Several times slower than pwsh at the BigInteger arithmetic.
-  { label: 'Windows PowerShell 5.1', path: windowsPowerShell, timeout: 900_000 },
+  { label: 'Windows PowerShell 5.1', path: windowsPowerShell, timeout: 300_000 },
 ];
+
+/**
+ * The environment for a PowerShell child on Windows. Windows PowerShell must
+ * not inherit pwsh's PSModulePath (bun test is started from pwsh on GitHub's
+ * runners), or it cannot load its own modules: `Get-FileHash` "is not
+ * recognized".
+ */
+function windowsChildEnv(home: string, shell: string): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = { HOME: home };
+  for (const [key, value] of Object.entries(process.env)) {
+    if (shell === windowsPowerShell && key.toLowerCase() === 'psmodulepath') continue;
+    env[key] = value;
+  }
+  env.HOME = home;
+  return env;
+}
 
 describe.skipIf(!pwsh && !windowsPowerShell)('install.ps1 verification', () => {
   let dir: string;
@@ -586,7 +601,7 @@ describe.skipIf(!pwsh && !windowsPowerShell)('install.ps1 verification', () => {
             // Windows processes need SystemRoot and friends to start at all.
             env:
               process.platform === 'win32'
-                ? { ...process.env, HOME: dir }
+                ? windowsChildEnv(dir, shell.path as string)
                 : { PATH: process.env.PATH ?? '', HOME: dir },
           },
         );

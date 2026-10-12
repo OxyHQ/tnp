@@ -101,22 +101,23 @@ catch { if ("$_" -like '*not a 64-byte Ed25519 signature*') { Pass 'a truncated 
 # -- 3. The whole installer, as a user runs it --------------------------------
 
 # Functions shadow cmdlets, and a script finds them in its caller's scope: the
-# menu answer is "2" (skip the service), and downloads can be altered.
+# menu answer is "2" (skip the service), and downloads can be altered. The
+# switch is global: inside install.ps1, $script: is install.ps1's own scope.
 function Read-Host { param($Prompt) return '2' }
-$script:Tamper = $null
+$global:TnpTestTamper = $null
 function Invoke-WebRequest {
     param([string]$Uri, [string]$OutFile, [switch]$UseBasicParsing)
     Microsoft.PowerShell.Utility\Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing
-    if ($script:Tamper -and $Uri.EndsWith("/$($script:Tamper)")) {
+    if ($global:TnpTestTamper -and $Uri.EndsWith("/$($global:TnpTestTamper)")) {
         $stream = [IO.File]::Open($OutFile, 'Append')
         try { $stream.WriteByte(0x0a) } finally { $stream.Dispose() }
-        Write-Host "(test) appended a byte to $($script:Tamper) after download"
+        Write-Host "(test) appended a byte to $($global:TnpTestTamper) after download"
     }
 }
 
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 function Invoke-Installer([string]$InstallDir, [string]$Tamper) {
-    $script:Tamper = $Tamper
+    $global:TnpTestTamper = $Tamper
     $env:TNP_INSTALL_DIR = $InstallDir
     try { & $Rendered; return $null }
     catch { return "$_" }

@@ -18,12 +18,12 @@ import { lstatSync, rmdirSync, rmSync, unlinkSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
 import { join, posix, win32 } from 'node:path';
 import { type AutoConnectUser, removeAutoConnect } from './autoconnect';
-import { dataDir, logPath, RESOLVER_STATE_DIR } from './config';
+import { logPath, RESOLVER_STATE_DIR, routingStateDirs } from './config';
 import {
-  readRoutingState,
+  readRecordedRouting,
   removeNativeRouting,
   type RoutingDeps,
-  routingStatePath,
+  type RoutingStateDirs,
   systemDeps,
 } from './dns-routing';
 import { removeRulesRouting } from './rules-routing';
@@ -91,8 +91,15 @@ export function tnpTraces(ctx: TraceContext): Trace[] {
             },
             {
               path: programData,
-              what: 'configuration, kill-switch record and active personal DNS rules',
-              files: ['config.json', 'killswitch.json', 'dns-rules.conf'],
+              what: 'configuration, kill-switch record, DNS routing records and active personal DNS rules',
+              files: [
+                'config.json',
+                'killswitch.json',
+                'dns-rules.conf',
+                'dns-routing-install.json',
+                'dns-routing-connect.json',
+                'dns-routing-rules.json',
+              ],
             },
           ]
         : []),
@@ -147,7 +154,7 @@ export function tnpTraces(ctx: TraceContext): Trace[] {
       },
       {
         path: '/Library/Application Support/tnp',
-        what: 'kill-switch record and personal DNS rules key',
+        what: "kill-switch record, DNS routing records, the resolver's TLD cache and personal DNS rules key",
       },
       ...ctx.homes.map((home) => ({
         // posix: these are macOS paths whatever OS computes them (tests).
@@ -263,8 +270,8 @@ export interface UninstallReport {
 }
 
 /**
- * Remove the DNS routing a `tnp connect` session recorded at `statePath`, and
- * the record. Returns false when there is none.
+ * Remove the DNS routing a `tnp connect` session recorded, and the record.
+ * Returns false when there is none.
  *
  * Uninstall must call this BEFORE it removes the installed routing. A session
  * is stacked on top of the install: on macOS it backs up the installed
@@ -275,10 +282,14 @@ export interface UninstallReport {
  * restores the install's file, which stays behind after "uninstall --purge"
  * pointing `.ox` at a resolver that no longer exists.
  */
-export function removeConnectRouting(statePath: string, deps: RoutingDeps = systemDeps): boolean {
-  if (!deps.exists(statePath)) return false;
-  removeNativeRouting(readRoutingState(statePath, deps), deps);
-  deps.remove(statePath);
+export function removeConnectRouting(
+  dirs: RoutingStateDirs = routingStateDirs(),
+  deps: RoutingDeps = systemDeps,
+): boolean {
+  const { state, paths } = readRecordedRouting('connect', dirs, deps);
+  if (paths.length === 0) return false;
+  removeNativeRouting(state, deps);
+  for (const path of paths) deps.remove(path);
   return true;
 }
 
@@ -288,7 +299,7 @@ export function performUninstall(opts: { purge: boolean; publicDnsIp: string }):
   // A `tnp connect` that died without restoring left its routing recorded.
   // Removed first: see removeConnectRouting.
   try {
-    if (removeConnectRouting(routingStatePath(dataDir(), 'connect'))) {
+    if (removeConnectRouting()) {
       report.done.push('DNS routing left by an interrupted `tnp connect`');
     }
   } catch (err) {

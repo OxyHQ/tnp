@@ -26,6 +26,7 @@ import {
   resolvedLinkCommands,
   resolvedServerSpec,
   type RoutingDeps,
+  sanitizeRoutingState,
   windowsLegacyAdapterRepairScript,
   windowsNrptAddScript,
   windowsNrptRemoveScript,
@@ -402,5 +403,93 @@ describe('applyNativeRouting / removeNativeRouting', () => {
     const f = fake('win32');
     applyNativeRouting({ owner: 'connect', target: LOCAL_5354 }, f.deps);
     expect(f.warnings.join(' ')).toContain('cannot use port 5354');
+  });
+});
+
+describe('sanitizeRoutingState: a record is only what TNP could have written', () => {
+  const LOCAL_53 = { address: '127.0.0.1', port: 53 };
+
+  test('a genuine record survives unchanged', () => {
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      const f = fake(platform);
+      const { state } = applyNativeRouting({ owner: 'install', target: LOCAL_53 }, f.deps);
+      expect(sanitizeRoutingState(JSON.parse(JSON.stringify(state)), platform)).toEqual(state);
+    }
+    const f = fake('linux', { systemd: 'systemd 255 (255.4)' });
+    const { state } = applyNativeRouting({ owner: 'connect', target: LOCAL_53 }, f.deps);
+    expect(state.down.length).toBeGreaterThan(0);
+    expect(sanitizeRoutingState(JSON.parse(JSON.stringify(state)), 'linux')).toEqual(state);
+  });
+
+  test('foreign files and commands are dropped, and said so', () => {
+    const f = fake('darwin');
+    const { state } = applyNativeRouting({ owner: 'install', target: LOCAL_53 }, f.deps);
+    const warnings: string[] = [];
+    const clean = sanitizeRoutingState(
+      {
+        ...state,
+        files: [...state.files, '/etc/sudoers', '/etc/resolver/../sudoers', '/etc/resolver/com'],
+        down: ['touch /tmp/pwned', 'resolvectl revert tnp0'],
+        backups: { '/etc/sudoers': 'ALL ALL=(ALL) NOPASSWD: ALL\n' },
+      },
+      'darwin',
+      { warn: (m) => warnings.push(m) },
+    );
+    expect(clean?.files).toEqual(['/etc/resolver/ox']);
+    expect(clean?.down).toEqual([]);
+    expect(clean?.backups).toEqual({});
+    expect(warnings.join(' ')).toContain('/etc/sudoers');
+    expect(warnings.join(' ')).toContain('touch /tmp/pwned');
+  });
+
+  test("a Linux record may only take down its own owner's link", () => {
+    const clean = sanitizeRoutingState(
+      {
+        version: 1,
+        owner: 'connect',
+        mechanism: 'resolved-link',
+        target: LOCAL_53,
+        tlds: ['ox'],
+        files: ['/etc/systemd/dns-delegate.d/tnp.dns-delegate'],
+        backups: {},
+        down: ['resolvectl revert tnp1', 'ip link delete tnp1', 'ip link delete eth0'],
+      },
+      'linux',
+    );
+    // The install owner's delegate is not connect's to remove.
+    expect(clean?.files).toEqual([]);
+    expect(clean?.down).toEqual(['resolvectl revert tnp1', 'ip link delete tnp1']);
+  });
+
+  test('a record from the legacy location loses its backups and any non-loopback target', () => {
+    const clean = sanitizeRoutingState(
+      {
+        version: 1,
+        owner: 'install',
+        mechanism: 'macos-resolver',
+        target: { address: '192.0.2.66', port: 53 },
+        tlds: ['ox'],
+        files: ['/etc/resolver/ox'],
+        backups: { '/etc/resolver/ox': 'nameserver 192.0.2.66\n' },
+        down: [],
+      },
+      'darwin',
+      { legacy: true },
+    );
+    expect(clean?.backups).toEqual({});
+    expect(clean?.target).toBeNull();
+    expect(clean?.files).toEqual(['/etc/resolver/ox']);
+  });
+
+  test('anything that is not a routing record is refused', () => {
+    for (const value of [
+      null,
+      'x',
+      [],
+      { version: 2, owner: 'install' },
+      { version: 1, owner: 'root' },
+    ]) {
+      expect(sanitizeRoutingState(value, 'darwin')).toBeNull();
+    }
   });
 });

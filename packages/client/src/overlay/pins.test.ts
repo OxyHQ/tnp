@@ -61,7 +61,7 @@ describe('PinStore across processes', () => {
     store.ensureDir(r);
     const lock = `${store.pinsPath}.lock`;
     writeFileSync(lock, '12345\n');
-    const old = new Date(Date.now() - 60_000);
+    const old = new Date(Date.now() - 120_000);
     utimesSync(lock, old, old);
     new PinStore(store).record('after.ox', key(), []);
     expect(new PinStore(store).get('after.ox')).toBeDefined();

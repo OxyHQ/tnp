@@ -264,7 +264,18 @@ try {
     icacls $ConfigFile | Write-Host
     $problems = @(Get-AclProblems $ConfigDir) + @(Get-AclProblems $ConfigFile)
     if ($problems.Count) { Fail ($problems -join '; ') }
-    Pass "$ConfigDir and config.json: no access for Users, Everyone or Authenticated Users"
+    # The routing record and the SYSTEM resolver's TLD cache are never in the
+    # installing user's profile (0.5.1 put both there; SYSTEM wrote the cache
+    # and tnp acted on the record elevated).
+    $record = Join-Path $ConfigDir 'dns-routing-install.json'
+    if (-not (Test-Path -LiteralPath $record)) { Fail "no install routing record in $ConfigDir" }
+    $problems = @(Get-AclProblems $record)
+    if ($problems.Count) { Fail ($problems -join '; ') }
+    Wait-Until "the SYSTEM resolver's TLD cache in its own profile" 30 { Test-Path -LiteralPath (Join-Path $SystemDataDir 'tlds.json') }
+    foreach ($f in @('tlds.json', 'dns-routing-install.json')) {
+        if (Test-Path -LiteralPath (Join-Path $UserDataDir $f)) { Fail "$f was written into the installing user's $UserDataDir" }
+    }
+    Pass "$ConfigDir and config.json: no access for Users, Everyone or Authenticated Users; routing record there, TLD cache in SYSTEM's profile, nothing in $UserDataDir"
     EndGroup
 
     # ── Kill switch ──────────────────────────────────────────────────────────

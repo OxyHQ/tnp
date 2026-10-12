@@ -173,7 +173,7 @@ name is answered differently by any TNP code path.
   Windows (an exact FQDN rule, plus the `.name` suffix for a block with
   subdomains). On Linux and macOS a routed name carries its subdomains to the
   TNP resolver too; those it simply forwards upstream. What was written is
-  recorded in `<dataDir>/dns-routing-rules.json`, and revoke, forget and
+  recorded in the root-only `dns-routing-rules.json`, and revoke, forget and
   uninstall remove exactly that. A pre-existing `/etc/resolver/<name>` or a
   foreign file at the delegate path is never overwritten, and nothing is
   routed without an installed resolver (a name sent to a resolver that is not

@@ -15,10 +15,18 @@ import { execSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { dirname, join, win32 } from 'node:path';
 import type { TnpConfig } from './config';
-import { configDir, configPath, dataDir, logPath, saveConfig, systemStateDir } from './config';
+import {
+  configDir,
+  configPath,
+  logPath,
+  routingStateDirs,
+  saveConfig,
+  systemStateDir,
+  writeSystemStateFile,
+} from './config';
 import {
   applyNativeRouting,
-  readRoutingState,
+  readRecordedRouting,
   removeNativeRouting,
   repairLegacyWindowsAdapters,
   ROUTED_TLDS,
@@ -57,17 +65,14 @@ export const SERVICE_USER = 'tnp';
  */
 export const NATIVE_TLDS = ROUTED_TLDS;
 
-const installStatePath = () => routingStatePath(dataDir(), 'install');
-
 /**
  * Record exactly what install added to the OS DNS configuration, so uninstall
- * removes that and nothing else.
+ * removes that and nothing else. Root/Administrators only (routingStateDirs).
  */
 function saveInstallState(state: RoutingState): void {
-  const path = installStatePath();
+  const path = routingStatePath(routingStateDirs().current, 'install');
   try {
-    mkdirSync(dataDir(), { recursive: true });
-    writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+    writeSystemStateFile(path, `${JSON.stringify(state, null, 2)}\n`);
   } catch (err) {
     console.warn(
       `[tnp] could not record DNS routing state at ${path}: ${err instanceof Error ? err.message : String(err)}`,
@@ -75,11 +80,19 @@ function saveInstallState(state: RoutingState): void {
   }
 }
 
+/** Whether an install recorded its routing (here or where 0.5.1 kept it). */
+function installRecorded(): boolean {
+  const dirs = routingStateDirs();
+  return [dirs.current, dirs.legacy]
+    .filter((dir): dir is string => dir !== null)
+    .some((dir) => existsSync(routingStatePath(dir, 'install')));
+}
+
 /** Remove the DNS routing a previous install recorded, and legacy leftovers. */
 function removeInstalledRouting(): void {
-  const path = installStatePath();
-  removeNativeRouting(readRoutingState(path));
-  safeUnlink(path);
+  const { state, paths } = readRecordedRouting('install', routingStateDirs());
+  removeNativeRouting(state);
+  for (const path of paths) safeUnlink(path);
 }
 
 const platform = process.platform;
@@ -547,7 +560,7 @@ function installWindows(binaryPath: string, cfg: TnpConfig): void {
 
   // An install from before this version prepended 127.0.0.1 to every adapter
   // and recorded nothing. Its task exists and our state file does not.
-  const legacyInstall = !existsSync(installStatePath()) && windowsTaskExists();
+  const legacyInstall = !installRecorded() && windowsTaskExists();
 
   // schtasks reads task XML only from a file. It gets an unpredictable name,
   // O_EXCL creation and the admin-only program directory — never a fixed name
@@ -587,7 +600,7 @@ function windowsTaskExists(): boolean {
 }
 
 function uninstallWindows(): void {
-  const legacyInstall = !existsSync(installStatePath()) && windowsTaskExists();
+  const legacyInstall = !installRecorded() && windowsTaskExists();
   runSilent(`schtasks /End /TN "${WIN_TASK_NAME}"`);
   runSilent(`schtasks /Delete /TN "${WIN_TASK_NAME}" /F`);
 

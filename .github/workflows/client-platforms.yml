@@ -62,8 +62,12 @@ jobs:
         id: deps
         run: bun install --frozen-lockfile --cpu='*' --os='*'
 
+      # Each private write on Windows also sets and verifies an ACL, which
+      # starts icacls and Windows PowerShell (about a second), so the tests
+      # that write many files need more than bun's 5 s default.
       - name: Client unit tests (native Windows)
-        run: bun run --filter @tnp/client test
+        working-directory: packages/client
+        run: bun test --timeout 60000
 
       # The installer tests include the PowerShell verifier harness, here under
       # both pwsh and Windows PowerShell 5.1 (powershell.exe).
