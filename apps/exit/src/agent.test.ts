@@ -46,7 +46,11 @@ function fakeWg(initial: Array<[string, string[]]> = []) {
     }
     return '';
   };
-  return { peers, calls, runWg };
+  const conntrack: string[][] = [];
+  const runConntrack = async (args: string[]) => {
+    conntrack.push(args);
+  };
+  return { peers, calls, runWg, conntrack, runConntrack };
 }
 
 describe('syncOnce', () => {
@@ -62,6 +66,7 @@ describe('syncOnce', () => {
     const deps = {
       fetchPeers: async () => JSON.parse(JSON.stringify(body)),
       runWg: wg.runWg,
+      runConntrack: wg.runConntrack,
       iface: 'wg0',
     };
 
@@ -87,7 +92,9 @@ describe('syncOnce', () => {
       async () => ({ peers: 'nope' }),
       async () => [],
     ]) {
-      await expect(syncOnce({ fetchPeers, runWg: wg.runWg, iface: 'wg0' })).rejects.toThrow();
+      await expect(
+        syncOnce({ fetchPeers, runWg: wg.runWg, runConntrack: wg.runConntrack, iface: 'wg0' }),
+      ).rejects.toThrow();
     }
     expect(wg.calls.filter((c) => c[0] === 'set')).toEqual([]);
     expect(wg.peers.size).toBe(1);
@@ -100,7 +107,12 @@ describe('syncOnce', () => {
       return 'interface: wg0\n  public key: x';
     };
     await expect(
-      syncOnce({ fetchPeers: async () => ({ peers: [peer(2)] }), runWg, iface: 'wg0' }),
+      syncOnce({
+        fetchPeers: async () => ({ peers: [peer(2)] }),
+        runWg,
+        runConntrack: async () => {},
+        iface: 'wg0',
+      }),
     ).rejects.toThrow();
     expect(calls).toEqual([['show', 'wg0', 'allowed-ips']]);
   });
@@ -176,6 +188,7 @@ describe('ExitAgent health', () => {
         return { peers: [] };
       },
       runWg: fakeWg().runWg,
+      runConntrack: async () => {},
       iface: 'wg0',
       intervalMs: 20_000,
       log: () => {},
@@ -209,6 +222,7 @@ describe('ExitAgent health', () => {
     const agent = new ExitAgent({
       fetchPeers: async () => ({ peers: [p, { ...p, publicKey: 'bad' }] }),
       runWg: fakeWg().runWg,
+      runConntrack: async () => {},
       iface: 'wg0',
       intervalMs: 20_000,
       log: (line) => lines.push(line),

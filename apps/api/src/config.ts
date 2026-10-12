@@ -187,6 +187,13 @@ export const config = {
    * through `/dns/resolve` from one address.
    */
   rateLimitExempt: parseList(process.env.TNP_RATE_LIMIT_EXEMPT),
+  /**
+   * The public addresses of TNP's WireGuard exits. Every VPN user behind an
+   * exit shares its address, so requests from it are metered per Oxy account
+   * when authenticated and against a larger shared tier otherwise — never
+   * exempt (`middleware/networkLimits.ts`).
+   */
+  vpnExitAddresses: parseList(process.env.TNP_VPN_EXIT_ADDRESSES),
   /** WireGuard exits, device DNS and exit tokens; null while the VPN is off. See `vpn.ts`. */
   vpn: vpn.config,
 };

@@ -7,7 +7,7 @@
  * boot. This process runs unprivileged with CAP_NET_ADMIN only.
  */
 
-import { createPeerFetcher, createWgRunner, ExitAgent } from './agent.js';
+import { createConntrackRunner, createPeerFetcher, createWgRunner, ExitAgent } from './agent.js';
 import { AgentConfigError, readAgentConfig } from './config.js';
 
 let config: ReturnType<typeof readAgentConfig>;
@@ -23,8 +23,10 @@ try {
 const agent = new ExitAgent({
   fetchPeers: createPeerFetcher({ apiUrl: config.apiUrl, token: config.token }),
   runWg: createWgRunner(config.wgBin),
+  runConntrack: createConntrackRunner(config.conntrackBin),
   iface: config.iface,
   intervalMs: config.intervalMs,
+  maxStaleMs: config.maxStaleMs,
 });
 
 const server =

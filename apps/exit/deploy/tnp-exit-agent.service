@@ -37,6 +37,11 @@ RestrictRealtime=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX
+# The agent needs the API (HTTPS) and wg0 over netlink. It never needs the
+# instance metadata service, which hands out the instance role's credentials.
+IPAddressDeny=169.254.169.254/32 fd00:ec2::254/128
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
 SystemCallArchitectures=native
 UMask=0077
 

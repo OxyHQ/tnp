@@ -22,8 +22,12 @@ import { QR_MARGIN, qrMatrix, qrPath } from '../src/lib/qr';
 import {
   addDevice,
   httpVpnApi,
-  OPENWRT_KILL_SWITCH,
+  CLIPBOARD_CLEAR_MS,
+  copyText,
+  OPENWRT_ALLOW_FALLBACK,
+  OPENWRT_REMOVE,
   openWrtCommands,
+  routerWireGuardConfig,
   tunnelFileName,
   type VpnApi,
   wireGuardConfig,
@@ -36,6 +40,7 @@ const NETWORK: VpnNetwork = {
       id: 'usw2-1',
       region: 'us-west-2',
       endpoint: 'usw2-1.exit.example:51820',
+      endpointIp: '203.0.113.10',
       publicKey: EXIT_KEY,
     },
   ],
@@ -156,54 +161,100 @@ describe('wireGuardConfig', () => {
 });
 
 describe('openWrtCommands', () => {
-  test('matches the reviewed command list', () => {
-    expect(openWrtCommands(INPUT)).toBe(
-      [
-        'uci -q delete network.wg0',
-        'uci set network.wg0=interface',
-        "uci set network.wg0.proto='wireguard'",
-        `uci set network.wg0.private_key='${PRIVATE}'`,
-        "uci add_list network.wg0.addresses='10.77.3.4/32'",
-        "uci add_list network.wg0.addresses='fd85:d596:af02::a4d:304/128'",
-        "uci add_list network.wg0.dns='198.51.100.53'",
-        'uci -q delete network.wg0_tnp',
-        'uci set network.wg0_tnp=wireguard_wg0',
-        "uci set network.wg0_tnp.description='TNP exit usw2-1'",
-        `uci set network.wg0_tnp.public_key='${EXIT_KEY}'`,
-        "uci set network.wg0_tnp.endpoint_host='usw2-1.exit.example'",
-        "uci set network.wg0_tnp.endpoint_port='51820'",
-        "uci add_list network.wg0_tnp.allowed_ips='0.0.0.0/0'",
-        "uci add_list network.wg0_tnp.allowed_ips='::/0'",
-        "uci set network.wg0_tnp.route_allowed_ips='1'",
-        "uci set network.wg0_tnp.persistent_keepalive='25'",
-        "uci set network.wan.peerdns='0'",
-        "uci -q get network.wan6 >/dev/null && uci set network.wan6.peerdns='0'",
-        'uci -q delete firewall.tnp',
-        'uci set firewall.tnp=zone',
-        "uci set firewall.tnp.name='tnp'",
-        "uci set firewall.tnp.input='REJECT'",
-        "uci set firewall.tnp.output='ACCEPT'",
-        "uci set firewall.tnp.forward='REJECT'",
-        "uci set firewall.tnp.masq='1'",
-        "uci set firewall.tnp.mtu_fix='1'",
-        "uci add_list firewall.tnp.network='wg0'",
-        'uci -q delete firewall.tnp_lan',
-        'uci set firewall.tnp_lan=forwarding',
-        "uci set firewall.tnp_lan.src='lan'",
-        "uci set firewall.tnp_lan.dest='tnp'",
-        'uci commit network',
-        'uci commit firewall',
-        'service network restart',
-        'service firewall restart',
-        '',
-      ].join('\n'),
-    );
+  const KILL_SWITCH = [
+    "for s in $(uci -X show firewall | sed -n 's/^firewall\\.\\([^.=]*\\)=forwarding$/\\1/p'); do",
+    '  [ "$(uci -q get firewall.$s.src)" = lan ] && [ "$(uci -q get firewall.$s.dest)" = wan ] && uci delete firewall.$s',
+    'done',
+  ];
+  const reviewed = (killSwitch: boolean) =>
+    [
+      'uci -q delete network.wg0',
+      'uci set network.wg0=interface',
+      "uci set network.wg0.proto='wireguard'",
+      `uci set network.wg0.private_key='${PRIVATE}'`,
+      "uci add_list network.wg0.addresses='10.77.3.4/32'",
+      "uci add_list network.wg0.addresses='fd85:d596:af02::a4d:304/128'",
+      "uci add_list network.wg0.dns='198.51.100.53'",
+      'uci -q delete network.wg0_tnp',
+      'uci set network.wg0_tnp=wireguard_wg0',
+      "uci set network.wg0_tnp.description='TNP exit usw2-1'",
+      `uci set network.wg0_tnp.public_key='${EXIT_KEY}'`,
+      "uci set network.wg0_tnp.endpoint_host='203.0.113.10'",
+      "uci set network.wg0_tnp.endpoint_port='51820'",
+      "uci add_list network.wg0_tnp.allowed_ips='0.0.0.0/0'",
+      "uci add_list network.wg0_tnp.allowed_ips='::/0'",
+      "uci set network.wg0_tnp.route_allowed_ips='1'",
+      "uci set network.wg0_tnp.persistent_keepalive='25'",
+      "uci set network.wan.peerdns='0'",
+      "uci -q get network.wan6 >/dev/null && uci set network.wan6.peerdns='0'",
+      "uci -q get network.wan6 >/dev/null && uci set network.wan6.sourcefilter='0'",
+      'uci -q delete firewall.tnp',
+      'uci set firewall.tnp=zone',
+      "uci set firewall.tnp.name='tnp'",
+      "uci set firewall.tnp.input='REJECT'",
+      "uci set firewall.tnp.output='ACCEPT'",
+      "uci set firewall.tnp.forward='REJECT'",
+      "uci set firewall.tnp.masq='1'",
+      "uci set firewall.tnp.mtu_fix='1'",
+      "uci add_list firewall.tnp.network='wg0'",
+      'uci -q delete firewall.tnp_lan',
+      'uci set firewall.tnp_lan=forwarding',
+      "uci set firewall.tnp_lan.src='lan'",
+      "uci set firewall.tnp_lan.dest='tnp'",
+      'uci -q delete firewall.tnp_no_v6_wan',
+      'uci set firewall.tnp_no_v6_wan=rule',
+      "uci set firewall.tnp_no_v6_wan.name='TNP: no LAN IPv6 to the provider'",
+      "uci set firewall.tnp_no_v6_wan.family='ipv6'",
+      "uci set firewall.tnp_no_v6_wan.src='lan'",
+      "uci set firewall.tnp_no_v6_wan.dest='wan'",
+      "uci set firewall.tnp_no_v6_wan.proto='all'",
+      "uci set firewall.tnp_no_v6_wan.target='REJECT'",
+      'uci -q delete firewall.tnp_no_v6_tnp',
+      'uci set firewall.tnp_no_v6_tnp=rule',
+      "uci set firewall.tnp_no_v6_tnp.name='TNP: IPv6 is not carried'",
+      "uci set firewall.tnp_no_v6_tnp.family='ipv6'",
+      "uci set firewall.tnp_no_v6_tnp.src='lan'",
+      "uci set firewall.tnp_no_v6_tnp.dest='tnp'",
+      "uci set firewall.tnp_no_v6_tnp.proto='all'",
+      "uci set firewall.tnp_no_v6_tnp.target='REJECT'",
+      ...(killSwitch ? KILL_SWITCH : []),
+      'uci commit network',
+      'uci commit firewall',
+      'service network restart',
+      'service firewall restart',
+      '',
+    ].join('\n');
+
+  test('matches the reviewed command list, with the kill switch on by default', () => {
+    expect(openWrtCommands(INPUT)).toBe(reviewed(true));
+    expect(openWrtCommands(INPUT, { killSwitch: true })).toBe(reviewed(true));
   });
 
-  test('a bracketed IPv6 endpoint becomes a bare endpoint_host', () => {
-    const exit = { ...INPUT.exit, endpoint: '[2001:db8::7]:51820' };
-    expect(openWrtCommands({ ...INPUT, exit })).toContain(
+  test('the kill switch is an explicit opt-out', () => {
+    expect(openWrtCommands(INPUT, { killSwitch: false })).toBe(reviewed(false));
+  });
+
+  test('no IPv6 leak: source routing off, LAN IPv6 refused towards wan and tnp', () => {
+    for (const killSwitch of [true, false]) {
+      const text = openWrtCommands(INPUT, { killSwitch });
+      expect(text).toContain("uci set network.wan6.sourcefilter='0'");
+      expect(text).toContain("uci set firewall.tnp_no_v6_wan.dest='wan'");
+      expect(text).toContain("uci set firewall.tnp_no_v6_tnp.dest='tnp'");
+      expect(text.match(/target='REJECT'/g)).toHaveLength(2);
+    }
+  });
+
+  test('the router dials the exit by IP literal, never the hostname (it has no DNS before the tunnel)', () => {
+    const text = openWrtCommands(INPUT);
+    expect(text).not.toContain('usw2-1.exit.example');
+    expect(routerWireGuardConfig(INPUT)).toContain('Endpoint = 203.0.113.10:51820\n');
+    expect(routerWireGuardConfig(INPUT)).not.toContain('usw2-1.exit.example');
+    const v6 = { ...INPUT.exit, endpointIp: '2001:db8::7' };
+    expect(openWrtCommands({ ...INPUT, exit: v6 })).toContain(
       "uci set network.wg0_tnp.endpoint_host='2001:db8::7'",
+    );
+    expect(routerWireGuardConfig({ ...INPUT, exit: v6 })).toContain(
+      'Endpoint = [2001:db8::7]:51820\n',
     );
   });
 
@@ -211,15 +262,59 @@ describe('openWrtCommands', () => {
     expect(() => openWrtCommands({ ...INPUT, privateKey: "x'; reboot; '" })).toThrow();
     expect(() => openWrtCommands({ ...INPUT, dns: ["1.1.1.1'; reboot"] })).toThrow();
     expect(() =>
-      openWrtCommands({ ...INPUT, exit: { ...INPUT.exit, endpoint: "a'b.example:51820" } }),
+      openWrtCommands({ ...INPUT, exit: { ...INPUT.exit, endpointIp: "1.2.3.4'; reboot" } }),
     ).toThrow();
   });
 
-  test('the kill switch removes only the lan → wan forwarding', () => {
-    expect(OPENWRT_KILL_SWITCH).toContain('= lan ]');
-    expect(OPENWRT_KILL_SWITCH).toContain('= wan ]');
-    expect(OPENWRT_KILL_SWITCH).toContain('uci delete firewall.$s');
-    expect(OPENWRT_KILL_SWITCH).not.toContain('network');
+  test('allowing fallback and removing TNP restore lan → wan forwarding and source routing', () => {
+    expect(OPENWRT_ALLOW_FALLBACK).toContain("uci set firewall.tnp_fallback.dest='wan'");
+    expect(OPENWRT_REMOVE).toContain("uci set firewall.tnp_fallback.dest='wan'");
+    expect(OPENWRT_REMOVE).toContain("uci set network.wan6.sourcefilter='1'");
+    expect(OPENWRT_REMOVE).toContain("uci set network.wan.peerdns='1'");
+    for (const section of ['wg0', 'wg0_tnp'])
+      expect(OPENWRT_REMOVE).toContain(`uci -q delete network.${section}`);
+    for (const section of ['tnp', 'tnp_lan', 'tnp_no_v6_wan', 'tnp_no_v6_tnp']) {
+      expect(OPENWRT_REMOVE).toContain(`uci -q delete firewall.${section}\n`);
+    }
+  });
+});
+
+describe('copying a secret', () => {
+  test('the clipboard is overwritten after 60 s if it still holds the secret', async () => {
+    let clip = '';
+    const timers: Array<[() => void, number]> = [];
+    const clipboard = {
+      writeText: async (t: string) => {
+        clip = t;
+      },
+      readText: async () => clip,
+    };
+    await copyText(clipboard, 'PrivateKey = x', true, (fn, ms) => timers.push([fn, ms]));
+    expect(clip).toBe('PrivateKey = x');
+    expect(timers.map(([, ms]) => ms)).toEqual([CLIPBOARD_CLEAR_MS]);
+    expect(CLIPBOARD_CLEAR_MS).toBe(60_000);
+    timers[0]?.[0]();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(clip).toBe('');
+  });
+
+  test('something else copied since is left alone; public text is not scheduled', async () => {
+    let clip = '';
+    const timers: Array<() => void> = [];
+    const clipboard = {
+      writeText: async (t: string) => {
+        clip = t;
+      },
+      readText: async () => clip,
+    };
+    await copyText(clipboard, 'secret', true, (fn) => timers.push(fn));
+    clip = 'the user copied something else';
+    timers[0]?.();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(clip).toBe('the user copied something else');
+    const before = timers.length;
+    await copyText(clipboard, 'sudo wg-quick up tnp', false, (fn) => timers.push(fn));
+    expect(timers.length).toBe(before);
   });
 });
 

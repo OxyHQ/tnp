@@ -87,8 +87,14 @@ export interface VpnExit {
   id: string;
   /** Approximate location label shown to the user, e.g. `us-west-2`. */
   region: string;
-  /** `host:port` the WireGuard client dials. Hostname, IPv4 or `[IPv6]`. */
+  /** `host:port` the WireGuard apps dial. Hostname, IPv4 or `[IPv6]`. */
   endpoint: string;
+  /**
+   * The exit's address as an IP literal (its Elastic IP). Router configs dial
+   * this instead of `endpoint`'s hostname: a router that sends its DNS through
+   * the tunnel cannot resolve the tunnel's own endpoint at boot.
+   */
+  endpointIp: string;
   /** The exit's WireGuard public key. */
   publicKey: string;
 }
@@ -130,6 +136,12 @@ export function parseVpnExit(value: unknown, label = 'exit'): ParseResult<VpnExi
   if (!splitVpnEndpoint(r.endpoint)) {
     return { ok: false, error: `${label}.endpoint must be host:port` };
   }
+  if (
+    typeof r.endpointIp !== 'string' ||
+    !(isValidIpv4(r.endpointIp) || isValidIpv6(r.endpointIp))
+  ) {
+    return { ok: false, error: `${label}.endpointIp must be an IP address` };
+  }
   if (!isValidWireGuardPublicKey(r.publicKey)) {
     return { ok: false, error: `${label}.publicKey must be a WireGuard public key` };
   }
@@ -139,9 +151,32 @@ export function parseVpnExit(value: unknown, label = 'exit'): ParseResult<VpnExi
       id: r.id,
       region: r.region,
       endpoint: r.endpoint as string,
+      endpointIp: r.endpointIp,
       publicKey: r.publicKey,
     },
   };
+}
+
+/** `endpointIp:port`, with the brackets an IPv6 literal needs. */
+export function vpnExitIpEndpoint(exit: Pick<VpnExit, 'endpoint' | 'endpointIp'>): string {
+  const port = splitVpnEndpoint(exit.endpoint)?.port ?? VPN_WIREGUARD_PORT;
+  return exit.endpointIp.includes(':')
+    ? `[${exit.endpointIp}]:${port}`
+    : `${exit.endpointIp}:${port}`;
+}
+
+/**
+ * An exit agent's bearer secret: at least 43 base64url characters (256 bits
+ * when random), and not visibly low-entropy. Production tokens are 64
+ * characters from `openssl rand -base64 48 | tr '+/' '-_' | tr -d '='`.
+ */
+export const MIN_EXIT_TOKEN_LENGTH = 43;
+
+export function isStrongExitToken(token: unknown): token is string {
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43,512}$/.test(token)) return false;
+  // A random 43-character base64url string has ~30 distinct characters; fewer
+  // than 16 means a pattern, a repeated character or a word, not a secret.
+  return new Set(token).size >= 16;
 }
 
 // ---------------------------------------------------------------------------
@@ -321,6 +356,8 @@ export function parseExitPeersResponse(body: unknown): ParseResult<ParsedExitPee
 export interface WireGuardConfigInput {
   /** Held by the device only. */
   privateKey: string;
+  /** Dial the exit's IP literal instead of its hostname (routers). */
+  useEndpointIp?: boolean;
   device: Pick<VpnDevice, 'ipv4' | 'ipv6'>;
   exit: VpnExit;
   dns: readonly string[];
@@ -356,7 +393,7 @@ export function renderWireGuardConfig(input: WireGuardConfigInput): string {
     '[Peer]',
     `# TNP exit ${exit.id} (${exit.region})`,
     `PublicKey = ${exit.publicKey}`,
-    `Endpoint = ${exit.endpoint}`,
+    `Endpoint = ${input.useEndpointIp ? vpnExitIpEndpoint(exit) : exit.endpoint}`,
     `AllowedIPs = ${allowedIPs.join(', ')}`,
     `PersistentKeepalive = ${VPN_PERSISTENT_KEEPALIVE_SECONDS}`,
     '',

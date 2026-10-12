@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { AgentConfigError, readAgentConfig } from './config';
 
-const TOKEN = 'k'.repeat(48);
+const TOKEN = 'Q3Jx9vT0bWk2LpZy8sNfA1cR7uHeGmYd4KoJiV5qXzB6wE_-tUaS0nlrPMDhCgIF';
 
 describe('readAgentConfig', () => {
   test('defaults', () => {
@@ -12,6 +12,8 @@ describe('readAgentConfig', () => {
       intervalMs: 20_000,
       healthPort: 9817,
       wgBin: '/usr/bin/wg',
+      conntrackBin: '/usr/sbin/conntrack',
+      maxStaleMs: 600_000,
     });
   });
 
@@ -41,6 +43,9 @@ describe('readAgentConfig', () => {
     const cases: Array<Record<string, string>> = [
       {},
       { TNP_EXIT_TOKEN: 'short' },
+      { TNP_EXIT_TOKEN: 'k'.repeat(64) },
+      { TNP_EXIT_TOKEN: TOKEN, TNP_EXIT_WG_BIN: 'wg' },
+      { TNP_EXIT_TOKEN: TOKEN, TNP_EXIT_CONNTRACK_BIN: '../conntrack' },
       { TNP_EXIT_TOKEN: TOKEN, TNP_API_URL: 'http://api.tnp.network' },
       { TNP_EXIT_TOKEN: TOKEN, TNP_API_URL: 'https://user:pw@api.tnp.network' },
       { TNP_EXIT_TOKEN: TOKEN, TNP_API_URL: 'not a url' },

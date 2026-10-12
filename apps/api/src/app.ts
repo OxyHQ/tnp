@@ -61,6 +61,7 @@ export function createApp(options: AppOptions): express.Express {
       trustCloudflareHeader: config.trustCloudflareHeader,
       cloudflareIpRanges: config.cloudflareIpRanges,
       exempt: config.rateLimitExempt,
+      vpnExitAddresses: config.vpnExitAddresses,
     },
   );
   if (limits.invalidEntries.length > 0) {

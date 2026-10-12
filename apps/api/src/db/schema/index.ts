@@ -390,6 +390,18 @@ export const vpnDevices = pgTable(
   ],
 );
 
+/**
+ * Tunnel addresses recently freed by a revoked device, held back from reuse
+ * for 24 h so a new device never inherits flows (conntrack, remote sessions)
+ * that were the old one's. Only the address and when it was freed: no
+ * account, no key, nothing that says whose it was. Rows older than the hold
+ * are deleted on the next allocation.
+ */
+export const vpnAddressQuarantine = pgTable('vpn_address_quarantine', {
+  address: text('address').primaryKey(),
+  releasedAt: timestamp('released_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 // ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------

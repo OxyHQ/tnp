@@ -9,7 +9,7 @@
  * `--print` asks for it, so it does not land in terminal scrollback by default.
  */
 
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { generateWireGuardKeyPair, type WireGuardKeyPair } from '@tnp/crypto/wireguard';
 import {
@@ -30,7 +30,9 @@ Usage:
       and write a wg-quick config (mode 0600) to <file>, default ./tnp-<name>.conf.
       --print also prints the config, private key included.
   tnp vpn list            Your devices
-  tnp vpn revoke <id>     Revoke a device; exits stop accepting it within a minute
+  tnp vpn revoke <id>     Revoke a device; exits drop it at their next sync (normally
+                          within a minute; an exit cut off from TNP drops every
+                          device after 10 minutes)
 
 Needs TNP_TOKEN (or --token-stdin). Then, on Linux:
   sudo install -m 600 tnp-<name>.conf /etc/wireguard/ && sudo wg-quick up tnp-<name>
@@ -51,6 +53,7 @@ export interface VpnCliDeps {
   token: string;
   generate?: () => WireGuardKeyPair;
   writeFile?: (path: string, data: string) => void;
+  exists?: (path: string) => boolean;
   log?: (line: string) => void;
   cwd?: string;
 }
@@ -81,15 +84,32 @@ export async function vpnAdd(argv: readonly string[], deps: VpnCliDeps): Promise
   const log = deps.log ?? console.log;
   const name = positional(argv).join(' ').trim();
   if (!name) throw new Error('usage: tnp vpn add <name>');
+  // Everything that can fail locally is checked BEFORE the device is
+  // registered, so a typo never leaves an orphaned device on the account.
+  const { network: current } = await deps.api.listVpnDevices(deps.token);
+  const exitId = option(argv, '--exit');
+  const chosen = exitId ? current.exits.find((e) => e.id === exitId) : current.exits[0];
+  if (!chosen) {
+    throw new Error(
+      exitId
+        ? `no exit named ${exitId} (exits: ${current.exits.map((e) => e.id).join(', ') || 'none'})`
+        : 'the API listed no exit',
+    );
+  }
+  const file = resolve(
+    deps.cwd ?? process.cwd(),
+    option(argv, '--out') ?? `${tunnelFileName(name)}.conf`,
+  );
+  if ((deps.exists ?? existsSync)(file)) {
+    throw new Error(`${file} already exists; choose another name or --out`);
+  }
+
   const keys = (deps.generate ?? generateWireGuardKeyPair)();
   const request: CreateVpnDeviceRequest = { name, publicKey: keys.publicKey };
   const { device, network } = await deps.api.registerVpnDevice(request, deps.token);
   if (device.publicKey !== keys.publicKey)
     throw new Error('the API returned a device for a different key');
-
-  const exitId = option(argv, '--exit');
-  const exit = exitId ? network.exits.find((e) => e.id === exitId) : network.exits[0];
-  if (!exit) throw new Error(exitId ? `no exit named ${exitId}` : 'the API listed no exit');
+  const exit = network.exits.find((e) => e.id === chosen.id) ?? chosen;
 
   const config = renderWireGuardConfig({
     privateKey: keys.privateKey,
@@ -98,10 +118,6 @@ export async function vpnAdd(argv: readonly string[], deps: VpnCliDeps): Promise
     dns: network.dns,
     allowedIPs: network.allowedIPs,
   });
-  const file = resolve(
-    deps.cwd ?? process.cwd(),
-    option(argv, '--out') ?? `${tunnelFileName(name)}.conf`,
-  );
   (deps.writeFile ?? writePrivate)(file, config);
 
   log(`[tnp] added ${device.name}: ${device.ipv4}, exit ${exit.id} (${exit.region})`);
@@ -153,7 +169,9 @@ export async function runVpnCommand(argv: readonly string[]): Promise<number> {
         const id = positional(rest)[0];
         if (!id) throw new Error('usage: tnp vpn revoke <id>   (ids: tnp vpn list)');
         await api.revokeVpnDevice(id, token.token);
-        console.log('[tnp] revoked; exits stop accepting it within a minute');
+        console.log(
+          '[tnp] revoked; exits drop it at their next sync, normally within a minute (at most about 10 minutes)',
+        );
         return 0;
       }
       default:

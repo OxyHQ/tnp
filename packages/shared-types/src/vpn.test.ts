@@ -9,8 +9,10 @@ import {
   parseRenameVpnDeviceRequest,
   parseVpnExit,
   renderWireGuardConfig,
+  isStrongExitToken,
   splitVpnEndpoint,
   VPN_ALLOWED_IPS,
+  vpnExitIpEndpoint,
   vpnIndexOfIpv4,
   vpnIpv4ForIndex,
   vpnIpv6ForIpv4,
@@ -21,6 +23,7 @@ const EXIT = {
   id: 'usw2-1',
   region: 'us-west-2',
   endpoint: 'usw2-1.exit.example:51820',
+  endpointIp: '203.0.113.10',
   publicKey: key(),
 };
 
@@ -90,6 +93,36 @@ describe('endpoints and exits', () => {
     expect(parseVpnExit({ ...EXIT, id: 'Bad Id' }).ok).toBe(false);
     expect(parseVpnExit({ ...EXIT, region: 'line\nbreak' }).ok).toBe(false);
     expect(parseVpnExit({ ...EXIT, endpoint: 'nope' }).ok).toBe(false);
+    expect(parseVpnExit({ ...EXIT, endpointIp: undefined }).ok).toBe(false);
+    expect(parseVpnExit({ ...EXIT, endpointIp: 'usw2-1.exit.example' }).ok).toBe(false);
+    expect(parseVpnExit({ ...EXIT, endpointIp: '2001:db8::10' }).ok).toBe(true);
+  });
+
+  test('the IP endpoint keeps the port and brackets IPv6', () => {
+    expect(vpnExitIpEndpoint(EXIT)).toBe('203.0.113.10:51820');
+    expect(vpnExitIpEndpoint({ endpoint: 'x.example:4444', endpointIp: '2001:db8::10' })).toBe(
+      '[2001:db8::10]:4444',
+    );
+  });
+});
+
+describe('exit tokens', () => {
+  test('at least 43 base64url characters that are not a visible pattern', () => {
+    const real = 'Q3Jx9vT0bWk2LpZy8sNfA1cR7uHeGmYd4KoJiV5qXzB6wE_-tUaS0nlrPMDhCgIF';
+    expect(real).toHaveLength(64);
+    expect(isStrongExitToken(real)).toBe(true);
+    expect(isStrongExitToken(real.slice(0, 43))).toBe(true);
+    for (const weak of [
+      real.slice(0, 42),
+      'a'.repeat(64),
+      'abababababababababababababababababababababab',
+      'password'.repeat(8),
+      `${real.slice(0, 50)}+/`,
+      `${real} `,
+      undefined,
+    ]) {
+      expect(isStrongExitToken(weak)).toBe(false);
+    }
   });
 });
 
@@ -205,6 +238,12 @@ describe('renderWireGuardConfig', () => {
         'PersistentKeepalive = 25',
         '',
       ].join('\n'),
+    );
+  });
+
+  test('routers dial the exit by IP literal', () => {
+    expect(renderWireGuardConfig({ ...input, useEndpointIp: true })).toContain(
+      'Endpoint = 203.0.113.10:51820\n',
     );
   });
 

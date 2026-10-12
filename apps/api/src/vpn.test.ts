@@ -7,10 +7,11 @@ const EXIT = {
   id: 'usw2-1',
   region: 'us-west-2',
   endpoint: 'usw2-1.exit.example:51820',
+  endpointIp: '203.0.113.10',
   publicKey: generateWireGuardKeyPair().publicKey,
 };
-const TOKEN_A = 'a'.repeat(40);
-const TOKEN_B = 'b'.repeat(40);
+const TOKEN_A = 'Q3Jx9vT0bWk2LpZy8sNfA1cR7uHeGmYd4KoJiV5qXzB6wE_-tUaS0nlrPMDhCgIF';
+const TOKEN_B = 'zR8kP2mWq5Xv0LtYb7NcHs3Jd9GfE1aUo6Ki4ZyTe_-wQrBnMxVpSgCjDlhAIOuF';
 
 const env = (over: Record<string, string | undefined> = {}) => ({
   TNP_VPN_EXITS: JSON.stringify([EXIT]),
@@ -67,10 +68,12 @@ describe('readVpnConfig', () => {
     }
   });
 
-  test('short tokens are ignored and counted, and their text is never echoed', () => {
-    const { config, warnings } = readVpnConfig(env({ TNP_EXIT_TOKENS: `short-secret,${TOKEN_A}` }));
+  test('weak tokens are ignored and counted, and their text is never echoed', () => {
+    const { config, warnings } = readVpnConfig(
+      env({ TNP_EXIT_TOKENS: `short-secret,${'a'.repeat(64)},${TOKEN_A}` }),
+    );
     expect(config?.exitTokenDigests).toEqual([digestToken(TOKEN_A)]);
-    expect(warnings.join(' ')).toContain('ignored 1 TNP_EXIT_TOKENS entry');
+    expect(warnings.join(' ')).toContain('ignored 2 TNP_EXIT_TOKENS entries');
     expect(warnings.join(' ')).not.toContain('short-secret');
     const none = readVpnConfig(env({ TNP_EXIT_TOKENS: '' }));
     expect(none.config?.exitTokenDigests).toEqual([]);
@@ -95,7 +98,7 @@ describe('exitTokenMatches', () => {
       `Bearer ${TOKEN_A.slice(1)}`,
       `Bearer ${TOKEN_A}a`,
       `Bearer ${TOKEN_A} `,
-      `Bearer ${'c'.repeat(40)}`,
+      `Bearer ${'c'.repeat(64)}`,
     ]) {
       expect(exitTokenMatches(header, digests)).toBe(false);
     }

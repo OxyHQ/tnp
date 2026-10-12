@@ -15,12 +15,14 @@
  *   address). With neither, the feature stays off: a config without a resolver
  *   would leave every device on whatever DNS its network hands it.
  * - `TNP_EXIT_TOKENS` bearer secrets the exit agents present, comma-separated,
- *   one per exit so each can be revoked alone. At least 32 characters each;
+ *   one per exit so each can be revoked alone. At least 43 base64url
+ *   characters each (`isStrongExitToken`);
  *   held only as SHA-256 digests in memory.
  */
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import {
+  isStrongExitToken,
   isValidIpv4,
   isValidIpv6,
   parseVpnExit,
@@ -44,9 +46,6 @@ export interface VpnConfigResult {
   /** Problems an operator must see at startup. Never contains a token. */
   warnings: string[];
 }
-
-export const MIN_EXIT_TOKEN_LENGTH = 32;
-const TOKEN_RE = /^[\x21-\x7e]{32,512}$/;
 
 function list(value: string | undefined): string[] {
   return (value ?? '')
@@ -99,12 +98,12 @@ export function readVpnConfig(env: Record<string, string | undefined>): VpnConfi
   const exitTokenDigests: Uint8Array[] = [];
   let ignored = 0;
   for (const token of list(env.TNP_EXIT_TOKENS)) {
-    if (TOKEN_RE.test(token)) exitTokenDigests.push(digestToken(token));
+    if (isStrongExitToken(token)) exitTokenDigests.push(digestToken(token));
     else ignored++;
   }
   if (ignored > 0) {
     warnings.push(
-      `ignored ${ignored} TNP_EXIT_TOKENS entr${ignored === 1 ? 'y' : 'ies'}: tokens must be ${MIN_EXIT_TOKEN_LENGTH}-512 printable characters`,
+      `ignored ${ignored} TNP_EXIT_TOKENS entr${ignored === 1 ? 'y' : 'ies'}: tokens must be at least 43 random base64url characters`,
     );
   }
   if (exitTokenDigests.length === 0) {

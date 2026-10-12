@@ -206,9 +206,11 @@ export { exportAdGuard, exportDnsmasq, exportHosts, exportUci } from './dns-rule
 
 export {
   isCidr,
+  isStrongExitToken,
   isVpnDeviceIpv4,
   isVpnDeviceIpv6,
   MAX_EXIT_PEERS,
+  MIN_EXIT_TOKEN_LENGTH,
   parseCreateVpnDeviceRequest,
   parseExitPeersResponse,
   parseRenameVpnDeviceRequest,
@@ -230,6 +232,7 @@ export {
   VPN_WIREGUARD_PORT,
   vpnIndexOfIpv4,
   vpnIpv4ForIndex,
+  vpnExitIpEndpoint,
   vpnIpv6ForIpv4,
   type CreateVpnDeviceRequest,
   type ExitPeer,

@@ -166,7 +166,7 @@ The standard-tier VPN ([`vpn.mdx`](./vpn.mdx), [`architecture/vpn.md` §10](./ar
 | GET | `/me/vpn/devices` | required | `{ devices: [{ id, name, publicKey, ipv4, ipv6, createdAt }], network: { exits: [{ id, region, endpoint, publicKey }], dns, allowedIPs, maxDevices } }`. |
 | POST | `/me/vpn/devices` | required | Body `{ name, publicKey }` — the device's WireGuard public key, canonical base64 of 32 bytes. A body carrying a private key is refused. Allocates a random free tunnel address in `10.77.0.0/16` (IPv6 derived in `fd85:d596:af02::/64`). `201 { device, network }`; `409 device_limit` past 10 devices; `409 public_key_in_use`. Rate-limited as a registration. |
 | PATCH | `/me/vpn/devices/:id` | required | Rename. Body `{ name }`. `404` unless it is the caller's. |
-| DELETE | `/me/vpn/devices/:id` | required | Revoke. `204`; exits drop the peer on their next poll. Works even while the VPN is off. |
+| DELETE | `/me/vpn/devices/:id` | required | Revoke. `204`; exits drop the peer and its flows on their next poll (an exit cut off from the API drops every peer after 10 minutes). The address is held 24 h before reuse. Works even while the VPN is off. |
 | GET | `/exit/peers` | exit token | For TNP's exit agents only: `Authorization: Bearer <one of TNP_EXIT_TOKENS>`, compared in constant time. `{ peers: [{ publicKey, ipv4, ipv6 }] }` — no account ids, no names. `401` without a valid token, whatever Oxy session is presented. |
 
 ## Client distribution (`/client`)
@@ -230,7 +230,8 @@ function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void 
 | `TNP_RATE_LIMIT_EXEMPT` | *empty* | Addresses or CIDRs exempt from per-address limits — TNP's own DNS server, which resolves every query through `/dns/resolve`. |
 | `POSTGRES_STATEMENT_TIMEOUT_MS` | `5000` | Server-side statement timeout on every pooled connection. `0` disables it. |
 | `TNP_REQUEST_TIMEOUT_MS` | `10000` | A request still running after this is answered `503`. `0` disables it. |
-| `TNP_VPN_EXITS` | *none* | JSON array of `{ id, region, endpoint, publicKey }`: TNP's WireGuard exits (`endpoint` is `host:port`, `publicKey` the exit's WireGuard public key). Unset or malformed: the VPN is off (a malformed value is logged, never fatal). |
+| `TNP_VPN_EXITS` | *none* | JSON array of `{ id, region, endpoint, endpointIp, publicKey }`: TNP's WireGuard exits (`endpoint` is `host:port` for apps, `endpointIp` the exit's Elastic IP for routers, `publicKey` the exit's WireGuard public key). Unset or malformed: the VPN is off (a malformed value is logged, never fatal). |
 | `TNP_VPN_DNS` | `TNP_PARKING_IP` | Comma-separated resolver addresses for device configs (`DNS =`). With neither set, the VPN stays off. |
-| `TNP_EXIT_TOKENS` | *none* | Comma-separated bearer secrets for `/exit/peers`, one per exit, each 32–512 printable characters. Held only as SHA-256 digests. |
+| `TNP_EXIT_TOKENS` | *none* | Comma-separated bearer secrets for `/exit/peers`, one per exit, each at least 43 base64url characters and not visibly low-entropy (`isStrongExitToken`). Held only as SHA-256 digests. |
+| `TNP_VPN_EXIT_ADDRESSES` | *empty* | The exits' public addresses. Requests from them are metered per Oxy account when authenticated (after auth, within a per-exit token-validation budget) and against a shared tier of 20 addresses' worth otherwise. Never exempt. |
 | `TNP_PARKING_IP` | *none* | A-record value returned for unregistered names on custom TLDs and as a fallback for record-less registered domains. There is deliberately **no** fallback: a stale literal would route every TNP query at a dead or attacker-controlled host, so when this is unset parking answers are omitted instead. In production it is the Elastic IP fronting the `tnp-dns` NLB. |

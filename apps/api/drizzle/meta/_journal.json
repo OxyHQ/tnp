@@ -43,6 +43,13 @@
       "when": 1791811013337,
       "tag": "0005_relay_directory",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791811730075,
+      "tag": "0006_vpn_address_quarantine",
+      "breakpoints": true
     }
   ]
 }

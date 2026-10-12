@@ -13,10 +13,15 @@
  * - `TNP_EXIT_POLL_SECONDS`  default 20, clamped to 5-300.
  * - `TNP_EXIT_HEALTH_PORT`   default 9817 on 127.0.0.1; 0 turns it off.
  * - `TNP_EXIT_WG_BIN`        default `/usr/bin/wg` (a system path, not a PATH lookup).
+ * - `TNP_EXIT_CONNTRACK_BIN` default `/usr/sbin/conntrack`.
+ * - `TNP_EXIT_MAX_STALE_SECONDS` default 600, clamped to 60-3600: after this
+ *                            long without a successful sync, every peer is
+ *                            removed (fail closed; `agent.ts`).
  */
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { isStrongExitToken } from '@tnp/shared-types';
 
 export interface AgentConfig {
   apiUrl: string;
@@ -25,6 +30,8 @@ export interface AgentConfig {
   intervalMs: number;
   healthPort: number;
   wgBin: string;
+  conntrackBin: string;
+  maxStaleMs: number;
 }
 
 export class AgentConfigError extends Error {
@@ -35,7 +42,6 @@ export class AgentConfigError extends Error {
 }
 
 const IFACE_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,14}$/;
-const TOKEN_RE = /^[\x21-\x7e]{32,512}$/;
 
 function isLoopbackHost(host: string): boolean {
   return host === 'localhost' || host === '[::1]' || /^127\.\d+\.\d+\.\d+$/.test(host);
@@ -74,8 +80,8 @@ export function readAgentConfig(
   }
   if (!token)
     throw new AgentConfigError('TNP_EXIT_TOKEN (or the exit-token credential) is required');
-  if (!TOKEN_RE.test(token)) {
-    throw new AgentConfigError('the exit token must be 32-512 printable characters');
+  if (!isStrongExitToken(token)) {
+    throw new AgentConfigError('the exit token must be at least 43 random base64url characters');
   }
 
   const iface = env.TNP_EXIT_INTERFACE?.trim() || 'wg0';
@@ -91,10 +97,19 @@ export function readAgentConfig(
     throw new AgentConfigError('TNP_EXIT_HEALTH_PORT must be a port number or 0');
   }
 
-  const wgBin = env.TNP_EXIT_WG_BIN?.trim() || '/usr/bin/wg';
-  if (!/^[A-Za-z0-9_./-]+$/.test(wgBin) || wgBin.startsWith('-')) {
-    throw new AgentConfigError('TNP_EXIT_WG_BIN is not a program path');
-  }
+  const program = (name: string, fallback: string) => {
+    const value = env[name]?.trim() || fallback;
+    if (!/^\/[A-Za-z0-9_./-]+$/.test(value)) {
+      throw new AgentConfigError(`${name} must be an absolute program path`);
+    }
+    return value;
+  };
+  const wgBin = program('TNP_EXIT_WG_BIN', '/usr/bin/wg');
+  const conntrackBin = program('TNP_EXIT_CONNTRACK_BIN', '/usr/sbin/conntrack');
 
-  return { apiUrl, token, iface, intervalMs, healthPort, wgBin };
+  const stale = Number(env.TNP_EXIT_MAX_STALE_SECONDS?.trim() || '600');
+  const maxStaleMs =
+    Math.min(3600, Math.max(60, Number.isFinite(stale) ? Math.round(stale) : 600)) * 1000;
+
+  return { apiUrl, token, iface, intervalMs, healthPort, wgBin, conntrackBin, maxStaleMs };
 }

@@ -12,8 +12,15 @@
  *   draws again. Random rather than sequential so an address says nothing
  *   about how many devices exist or when this one was added.
  * - **The per-account cap.** Creating a device takes a transaction-scoped
- *   advisory lock on the account, then counts. Two concurrent creates for one
- *   account run one after the other, so neither can push it past the cap.
+ *   advisory lock, then counts. Two concurrent creates run one after the
+ *   other, so neither can push an account past the cap.
+ *
+ * And one by a lock: **a freed address is not reused for 24 h**
+ * (`vpn_address_quarantine`, address and release time only). Allocation and
+ * release both take the same transaction-scoped advisory lock, so a create
+ * can never slip between a delete and its quarantine row. Without the hold, a
+ * new device could inherit the old one's live flows — the exit's connection
+ * tracking, and remote servers' sessions keyed by the exit's address and port.
  */
 
 import { randomInt } from 'node:crypto';
@@ -27,13 +34,15 @@ import {
   vpnIpv4ForIndex,
   vpnIpv6ForIpv4,
 } from '@tnp/shared-types';
-import { vpnDevices } from '../db/schema/index.js';
+import { vpnAddressQuarantine, vpnDevices } from '../db/schema/index.js';
 import type { Executor } from './db.js';
 
 type Row = typeof vpnDevices.$inferSelect;
 
-/** Advisory-lock class for "one account's VPN devices" (the other key is the account hash). */
-const DEVICE_LOCK_CLASS = 7701;
+/** Advisory lock serialising address allocation and release (and so the per-account cap). */
+const ADDRESS_LOCK = 7_701_001;
+/** How long a freed address is held back before another device may get it. */
+export const VPN_ADDRESS_QUARANTINE_SECONDS = 24 * 60 * 60;
 /** Draws before giving up. At a quarter full, 32 clashes in a row is ~2^-64. */
 const MAX_ADDRESS_ATTEMPTS = 32;
 
@@ -72,6 +81,8 @@ export interface CreateVpnDeviceOptions {
   maxDevices: number;
   /** A host index in `[VPN_MIN_HOST_INDEX, VPN_MAX_HOST_INDEX]`. Injectable for tests. */
   drawIndex?: () => number;
+  /** Defaults to `VPN_ADDRESS_QUARANTINE_SECONDS`. */
+  quarantineSeconds?: number;
 }
 
 const defaultDraw = () => randomInt(VPN_MIN_HOST_INDEX, VPN_MAX_HOST_INDEX + 1);
@@ -83,10 +94,12 @@ export async function createVpnDevice(
   options: CreateVpnDeviceOptions,
 ): Promise<CreateVpnDeviceResult> {
   const drawIndex = options.drawIndex ?? defaultDraw;
+  const hold = options.quarantineSeconds ?? VPN_ADDRESS_QUARANTINE_SECONDS;
   return db.transaction(async (tx) => {
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(${DEVICE_LOCK_CLASS}::int4, hashtext(${oxyUserId}))`,
-    );
+    await tx.execute(sql`select pg_advisory_xact_lock(${ADDRESS_LOCK}::int8)`);
+    await tx
+      .delete(vpnAddressQuarantine)
+      .where(sql`${vpnAddressQuarantine.releasedAt} <= now() - make_interval(secs => ${hold})`);
 
     const [{ n }] = await tx
       .select({ n: count() })
@@ -99,6 +112,12 @@ export async function createVpnDevice(
       if (!Number.isInteger(index) || index < VPN_MIN_HOST_INDEX || index > VPN_MAX_HOST_INDEX) {
         throw new RangeError('drawn host index is outside the pool');
       }
+      const address = vpnIpv4ForIndex(index);
+      const [held] = await tx
+        .select({ address: vpnAddressQuarantine.address })
+        .from(vpnAddressQuarantine)
+        .where(eq(vpnAddressQuarantine.address, address));
+      if (held) continue;
       // No conflict target: a clash on the key or on the address both return
       // no row instead of aborting the transaction, and are told apart below.
       const [row] = await tx
@@ -107,7 +126,7 @@ export async function createVpnDevice(
           oxyUserId,
           name: request.name,
           publicKey: request.publicKey,
-          address: vpnIpv4ForIndex(index),
+          address,
         })
         .onConflictDoNothing()
         .returning();
@@ -143,11 +162,22 @@ export async function deleteVpnDevice(
   oxyUserId: string,
   id: string,
 ): Promise<boolean> {
-  const deleted = await db
-    .delete(vpnDevices)
-    .where(and(eq(vpnDevices.id, id), eq(vpnDevices.oxyUserId, oxyUserId)))
-    .returning({ id: vpnDevices.id });
-  return deleted.length > 0;
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(${ADDRESS_LOCK}::int8)`);
+    const [deleted] = await tx
+      .delete(vpnDevices)
+      .where(and(eq(vpnDevices.id, id), eq(vpnDevices.oxyUserId, oxyUserId)))
+      .returning({ address: vpnDevices.address });
+    if (!deleted) return false;
+    await tx
+      .insert(vpnAddressQuarantine)
+      .values({ address: deleted.address })
+      .onConflictDoUpdate({
+        target: vpnAddressQuarantine.address,
+        set: { releasedAt: sql`now()` },
+      });
+    return true;
+  });
 }
 
 /** Every device an exit must accept: a key and its addresses, nothing that names an account. */

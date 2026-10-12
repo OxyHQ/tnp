@@ -10,6 +10,7 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/opt/tnp-exit/src/apps/exit/deploy/wg-up.sh
+ExecStop=/usr/sbin/sysctl -q -w net.ipv4.ip_forward=0 net.ipv6.conf.all.forwarding=0
 ExecStop=/usr/sbin/ip link del wg0
 ExecStopPost=/usr/bin/rm -f /run/tnp-exit/agent-token
 TimeoutStartSec=120

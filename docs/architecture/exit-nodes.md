@@ -174,7 +174,10 @@ Nothing per connection. No `log` rule exists in the ruleset; the agent logs
 counts and errors only, never a key or an address; the journal is kept in
 memory only (`Storage=volatile`, 64 MB), so a disk snapshot holds no history.
 The state that does exist: the kernel's connection-tracking table, which NAT
-needs, in memory for the life of each flow; WireGuard's in-kernel peer state
+needs, in memory for the life of each flow — idle established TCP flows are
+forgotten after an hour (`nf_conntrack_tcp_timeout_established=3600`, not the
+kernel's five days), and a revoked peer's entries are deleted when it is
+removed; WireGuard's in-kernel peer state
 (each peer's current endpoint IP and last handshake), in memory, overwritten,
 never read or exported by TNP; and named aggregate nftables counters
 (forwarded, refused by class). The API never receives handshake times,
@@ -185,10 +188,30 @@ endpoints or traffic figures.
 `apps/exit/src/index.ts`, unprivileged (`User=tnp-exit`, `CAP_NET_ADMIN`
 only). Every ~20 s: `GET /exit/peers` with its bearer token, parse with the
 shared contract, read `wg show wg0 allowed-ips`, apply the difference with
-`wg set` argument arrays (no shell). Failure is conservative — an unreachable
-API, a non-200, a malformed body or unexpected `wg` output changes nothing, so
-existing devices keep working; only the API listing a device as gone removes it.
-`/health` on `127.0.0.1:9817` (`ok` / `starting` / `stale`).
+`wg set` argument arrays (no shell), then delete the connection-tracking
+entries of every removed peer (`conntrack -D`, argument arrays), so a revoked
+device's flows end at once.
+
+Failure is conservative only briefly. An unreachable API, a non-200, a
+malformed body or unexpected `wg` output changes nothing for up to **10
+minutes** (`TNP_EXIT_MAX_STALE_SECONDS`); after that the agent removes every
+peer — fail closed — because a device revoked during the outage would otherwise
+keep working for as long as it lasts. A **401/403** (this exit's token revoked)
+or **503 `vpn_not_configured`** removes every peer at once. Peers come back on
+the next successful sync. So the promise users are given is: a revoked device
+stops working at the exits' next sync, normally within a minute, and within
+about 10 minutes even if an exit is cut off from TNP.
+
+The API also holds a freed tunnel address back for **24 h** before another
+device can get it (`vpn_address_quarantine`: the address and when it was
+freed, nothing else), so no new device inherits the old one's flows, here or
+in remote servers' sessions keyed by the exit's address and port.
+
+`/health` on `127.0.0.1:9817` (`ok` / `starting` / `stale` / `flushed`). The unit
+runs with `IPAddressDeny` for the metadata service (`169.254.169.254`,
+`fd00:ec2::254`), `SystemCallFilter=@system-service`, and the usual systemd
+sandboxing; check `/health` after the first boot of a new image, since the
+syscall filter is enforced only on a real host.
 
 ### 9.5 Host bootstrap (for oxy-infra)
 
@@ -197,8 +220,9 @@ existing devices keep working; only the API listing a device as gone removes it.
 optional `TNP_API_URL`, `TNP_VPN_DNS`, `TNP_EXIT_SSM_PREFIX`
 (default `/tnp/exit/<id>`).
 
-1. Installs `wireguard-tools`, `nftables`, `git`, `unzip`.
-2. Reads region, VPC CIDRs and the uplink from IMDSv2.
+1. Installs `wireguard-tools`, `nftables`, `conntrack-tools`, `git`, `unzip`.
+2. **Refuses to continue if IMDSv1 answers** (an unauthenticated metadata GET
+   must fail), then reads region, VPC CIDRs and the uplink from IMDSv2.
 3. Keeps the journal in memory only.
 4. Installs Bun at the repository's pinned version, verified against a pinned
    SHA-256.
@@ -206,11 +230,15 @@ optional `TNP_API_URL`, `TNP_VPN_DNS`, `TNP_EXIT_SSM_PREFIX`
    `HEAD`, and installs the agent's production dependencies from the frozen
    lockfile. (Chosen over a release tarball because no exit release pipeline
    exists, and a pinned commit is content-addressed and reviewable.)
-6. Renders the ruleset, runs `nft -c`, loads it, **then** enables forwarding.
-7. Installs and starts `tnp-exit-wg.service` (at every boot: reads the private
-   key and agent token from SSM into `/run`, creates `wg0` with the key and
-   deletes the key file, so the key then exists only in kernel memory) and
-   `tnp-exit-agent.service` (token handed over with `LoadCredential=`).
+6. Renders the ruleset, runs `nft -c` and loads it. Forwarding is **not**
+   enabled by `sysctl.d`: at boot it could come up before the filter.
+7. Installs and starts `tnp-exit-wg.service`. At every boot it switches
+   forwarding off, verifies the `tnp_exit` table is loaded (else refuses),
+   reads the private key and agent token (at least 43 base64url characters)
+   from SSM into `/run`, creates `wg0` with the key and deletes the key file —
+   the key then exists only in kernel memory — and only then switches
+   forwarding on. Any failure, and stopping the unit, switch it off again.
+   Then `tnp-exit-agent.service` (token handed over with `LoadCredential=`).
 
 Example user-data:
 
@@ -233,13 +261,14 @@ key, not the disk, so the exit's public key and endpoint do not change.
 | Item | Requirement |
 |---|---|
 | Instance | arm64 (Graviton), AL2023. `t4g.small` to start; `c7gn.medium` or larger for many users |
-| Address | An Elastic IP, and a DNS-only (not proxied) record for the endpoint — Cloudflare's proxy cannot carry WireGuard UDP |
+| Address | An Elastic IP, and a DNS-only (not proxied) record for the endpoint — Cloudflare's proxy cannot carry WireGuard UDP. The EIP is also `endpointIp` in `TNP_VPN_EXITS`: routers dial it directly |
+| Subnet | A public subnet whose route table has **no S3 gateway endpoint** (a dedicated subnet and route table, or a public one without the endpoint): with one, peers' traffic to S3 would bypass the exit's public address and reach S3 from inside the VPC |
 | Security group | Inbound UDP 51820 from `0.0.0.0/0` and `::/0`; nothing else inbound (no SSH; use SSM Session Manager if shell access is wanted). Egress all |
 | Source/dest check | Leave **on**: traffic is masqueraded, so the instance only ever sends from its own address |
 | IAM | `ssm:GetParameter` on `parameter/tnp/exit/<id>/*` and `kms:Decrypt` on the key that encrypts them (condition `kms:ViaService` = SSM). Nothing else |
-| SSM | `/tnp/exit/<id>/wg-private-key` (SecureString, `wg genkey` output) and `/tnp/exit/<id>/agent-token` (SecureString, at least 32 random characters, one per exit) |
-| API env | `TNP_VPN_EXITS` gains `{ id, region, endpoint: "<host>:51820", publicKey }` with the public key of the SSM private key; `TNP_EXIT_TOKENS` gains that exit's token |
-| IMDS | IMDSv2 required, hop limit 1 |
+| SSM | `/tnp/exit/<id>/wg-private-key` (SecureString, `wg genkey` output) and `/tnp/exit/<id>/agent-token` (SecureString, at least 43 random base64url characters, e.g. `openssl rand -base64 48 \| tr '+/' '-_' \| tr -d '='`, one per exit) |
+| API env | `TNP_VPN_EXITS` gains `{ id, region, endpoint: "<host>:51820", endpointIp: "<EIP>", publicKey }` with the public key of the SSM private key; `TNP_EXIT_TOKENS` gains that exit's token; `TNP_VPN_EXIT_ADDRESSES` gains the EIP, so VPN users browsing the dashboard through the exit are rate-limited per account rather than as one address |
+| IMDS | IMDSv2 required, hop limit 1 (the bootstrap refuses an instance where IMDSv1 answers) |
 | Logging | **No VPC Flow Logs, traffic mirroring or packet capture** on the exit's subnet or ENI: they would record every destination this document says is not kept |
 | Public resolver | Add each exit's Elastic IP to the resolver's `TNP_DNS_RATE_LIMIT_EXEMPT` ([`dns-server.mdx`](../dns-server.mdx)). Without it, every peer of an exit shares one per-source budget there (`TNP_RATE_LIMIT_QPS`, default 20/s). Exempt sources still count toward the resolver's in-flight and TCP caps, and the exit's own per-peer limit (50 packets/s) bounds what any one device can send. The list is strict: an invalid entry stops the resolver from starting in production |
 | Abuse | AWS abuse reports for exit traffic go to Oxy; they can be answered only from the aggregates above (§6) |

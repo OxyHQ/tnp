@@ -1,17 +1,33 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateWireGuardKeyPair } from '@tnp/crypto/wireguard';
-import type { VpnDeviceResponse } from '@tnp/shared-types';
+import type { VpnDeviceResponse, VpnNetwork } from '@tnp/shared-types';
 import { type VpnCliApi, vpnAdd } from './vpn-cli';
 
 const dir = mkdtempSync(join(tmpdir(), 'tnp-vpn-cli-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-function api(): VpnCliApi {
+const NETWORK: VpnNetwork = {
+  exits: [
+    {
+      id: 'usw2-1',
+      region: 'us-west-2',
+      endpoint: 'usw2-1.exit.example:51820',
+      endpointIp: '203.0.113.10',
+      publicKey: generateWireGuardKeyPair().publicKey,
+    },
+  ],
+  dns: ['198.51.100.53'],
+  allowedIPs: ['0.0.0.0/0', '::/0'],
+  maxDevices: 10,
+};
+
+function api(registered: string[] = []): VpnCliApi {
   return {
     async registerVpnDevice(request): Promise<VpnDeviceResponse> {
+      registered.push(request.name);
       return {
         device: {
           id: crypto.randomUUID(),
@@ -21,30 +37,18 @@ function api(): VpnCliApi {
           ipv6: 'fd85:d596:af02::a4d:102',
           createdAt: new Date().toISOString(),
         },
-        network: {
-          exits: [
-            {
-              id: 'usw2-1',
-              region: 'us-west-2',
-              endpoint: 'usw2-1.exit.example:51820',
-              publicKey: generateWireGuardKeyPair().publicKey,
-            },
-          ],
-          dns: ['198.51.100.53'],
-          allowedIPs: ['0.0.0.0/0', '::/0'],
-          maxDevices: 10,
-        },
+        network: NETWORK,
       };
     },
     async listVpnDevices() {
-      throw new Error('unused');
+      return { devices: [], network: NETWORK };
     },
     async revokeVpnDevice() {},
   };
 }
 
 describe('tnp vpn add', () => {
-  test('writes the config with mode 0600, never over an existing file, and does not print the key', async () => {
+  test('writes the config with mode 0600 and does not print the key', async () => {
     const keys = generateWireGuardKeyPair();
     const lines: string[] = [];
     const file = await vpnAdd(['phone'], {
@@ -59,25 +63,36 @@ describe('tnp vpn add', () => {
     expect(readFileSync(file, 'utf8')).toContain(`PrivateKey = ${keys.privateKey}`);
     expect(lines.join('\n')).not.toContain(keys.privateKey);
     expect(lines.join('\n')).toContain('This is not anonymity');
-
-    await expect(
-      vpnAdd(['phone'], { api: api(), token: 't', log: () => {}, cwd: dir }),
-    ).rejects.toThrow();
-    expect(readFileSync(file, 'utf8')).toContain(keys.privateKey);
   });
 
-  test('--print shows the config; --exit picks an exit; an unknown exit is refused', async () => {
+  test('an existing file or an unknown exit is refused BEFORE anything is registered', async () => {
+    const registered: string[] = [];
+    writeFileSync(join(dir, 'tnp-taken.conf'), 'mine');
+    await expect(
+      vpnAdd(['taken'], { api: api(registered), token: 't', log: () => {}, cwd: dir }),
+    ).rejects.toThrow('already exists');
+    expect(readFileSync(join(dir, 'tnp-taken.conf'), 'utf8')).toBe('mine');
+    await expect(
+      vpnAdd(['desk', '--exit', 'nowhere'], {
+        api: api(registered),
+        token: 't',
+        log: () => {},
+        cwd: dir,
+      }),
+    ).rejects.toThrow('no exit named nowhere (exits: usw2-1)');
+    expect(registered).toEqual([]);
+  });
+
+  test('--print shows the config; --out names the file; a name is required', async () => {
     const lines: string[] = [];
-    await vpnAdd(['laptop', '--print', '--out', 'custom.conf'], {
+    await vpnAdd(['laptop', '--print', '--out', 'custom.conf', '--exit', 'usw2-1'], {
       api: api(),
       token: 't',
       log: (line) => lines.push(line),
       cwd: dir,
     });
     expect(lines.join('\n')).toContain('[Interface]');
-    await expect(
-      vpnAdd(['desk', '--exit', 'nowhere'], { api: api(), token: 't', log: () => {}, cwd: dir }),
-    ).rejects.toThrow('no exit named nowhere');
+    expect(readFileSync(join(dir, 'custom.conf'), 'utf8')).toContain('[Peer]');
     await expect(vpnAdd([], { api: api(), token: 't', log: () => {}, cwd: dir })).rejects.toThrow(
       'usage',
     );

@@ -17,10 +17,14 @@ import { qrMatrix, qrPath, QR_MARGIN } from '../lib/qr';
 import { useLocaleFormatter } from '../lib/useLocaleFormatter';
 import {
   addDevice,
+  copyText,
+  type DeviceConfigInput,
   httpVpnApi,
   type NewDevice,
-  OPENWRT_KILL_SWITCH,
+  OPENWRT_ALLOW_FALLBACK,
+  OPENWRT_REMOVE,
   openWrtCommands,
+  routerWireGuardConfig,
   tunnelFileName,
   wireGuardConfig,
 } from '../lib/vpn';
@@ -340,7 +344,6 @@ function NewDevicePanel({
     [created, device, exit, network],
   );
   const config = useMemo(() => (input ? wireGuardConfig(input) : ''), [input]);
-  const uci = useMemo(() => (input ? openWrtCommands(input) : ''), [input]);
 
   const download = () => {
     const url = URL.createObjectURL(new Blob([config], { type: 'text/plain' }));
@@ -391,7 +394,7 @@ function NewDevicePanel({
       <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto]">
         <div className="min-w-0 space-y-2">
           <p className={LABEL}>{t('config.file', { file: fileName })}</p>
-          <CopyBlock text={config} />
+          <CopyBlock text={config} secret />
           <button type="button" onClick={download} className={PRIMARY_BUTTON}>
             {t('config.download', { file: fileName })}
           </button>
@@ -430,7 +433,7 @@ function NewDevicePanel({
           {guide === 'desktop' && <DesktopGuide />}
           {guide === 'linux' && <LinuxGuide fileName={fileName} />}
           {guide === 'openwrt' && (
-            <OpenWrtGuide uci={uci} ipv4={device.ipv4} dns={network.dns.join(', ')} />
+            <OpenWrtGuide input={input} ipv4={device.ipv4} dns={network.dns.join(', ')} />
           )}
         </div>
       </div>
@@ -495,57 +498,90 @@ function LinuxGuide({ fileName }: { fileName: string }) {
   );
 }
 
-function OpenWrtGuide({ uci, ipv4, dns }: { uci: string; ipv4: string; dns: string }) {
+function OpenWrtGuide({
+  input,
+  ipv4,
+  dns,
+}: {
+  input: DeviceConfigInput;
+  ipv4: string;
+  dns: string;
+}) {
   const { t } = useTranslation('vpn');
+  const [fallback, setFallback] = useState(false);
+  const routerConfig = useMemo(() => routerWireGuardConfig(input), [input]);
+  const uci = useMemo(() => openWrtCommands(input, { killSwitch: !fallback }), [input, fallback]);
   return (
     <>
       <Note k="guide.openwrt.intro" />
       <Note k="guide.openwrt.packages" />
       <h4 className="font-mono text-xs text-foreground">{t('guide.openwrt.luciHeading')}</h4>
       <ol className="list-decimal space-y-2 pl-5 font-mono text-xs text-muted-foreground">
-        {(['luci1', 'luci2', 'luci3', 'luci4', 'luci5', 'luci6'] as const).map((step) => (
-          <li key={step}>
-            <Trans
-              i18nKey={`guide.openwrt.${step}`}
-              t={t}
-              values={{ ipv4, dns }}
-              components={{ code: CODE }}
-            />
-          </li>
-        ))}
+        {(['luci1', 'luci2', 'luci3', 'luci4', 'luci5', 'luci6', 'luci7', 'luci8'] as const).map(
+          (step) => (
+            <li key={step}>
+              <Trans
+                i18nKey={`guide.openwrt.${step}`}
+                t={t}
+                values={{ ipv4, dns }}
+                components={{ code: CODE }}
+              />
+            </li>
+          ),
+        )}
       </ol>
+      <h4 className="font-mono text-xs text-foreground">
+        {t('guide.openwrt.routerConfigHeading')}
+      </h4>
+      <CopyBlock text={routerConfig} secret />
       <h4 className="font-mono text-xs text-foreground">{t('guide.openwrt.cliHeading')}</h4>
       <p className="font-mono text-xs text-warning-text">{t('guide.openwrt.cliNote')}</p>
-      <CopyBlock text={uci} />
       <h4 className="font-mono text-xs text-foreground">{t('guide.openwrt.killHeading')}</h4>
       <Note k="guide.openwrt.killText" />
-      <CopyBlock text={OPENWRT_KILL_SWITCH} />
-      <Note k="guide.openwrt.killUndo" />
+      <label className="flex items-start gap-2 font-mono text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={fallback}
+          onChange={(e) => setFallback(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span>{t('guide.openwrt.killToggle')}</span>
+      </label>
+      <CopyBlock text={uci} secret />
       <Note k="guide.openwrt.ipv6" />
+      <h4 className="font-mono text-xs text-foreground">{t('guide.openwrt.fallbackHeading')}</h4>
+      <Note k="guide.openwrt.fallbackText" />
+      <CopyBlock text={OPENWRT_ALLOW_FALLBACK} />
+      <h4 className="font-mono text-xs text-foreground">{t('guide.openwrt.removeHeading')}</h4>
+      <Note k="guide.openwrt.removeText" />
+      <CopyBlock text={OPENWRT_REMOVE} />
     </>
   );
 }
 
-function CopyBlock({ text }: { text: string }) {
-  const { t } = useTranslation('common');
+function CopyBlock({ text, secret = false }: { text: string; secret?: boolean }) {
+  const { t } = useTranslation(['common', 'vpn']);
   const [copied, setCopied] = useState(false);
   const copy = () => {
-    void navigator.clipboard.writeText(text);
+    void copyText(navigator.clipboard, text, secret).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <div className="relative">
-      <pre className="max-h-96 overflow-auto whitespace-pre rounded-md border border-border bg-background p-3 pr-16 font-mono text-xs text-foreground">
-        {text}
-      </pre>
-      <button
-        type="button"
-        onClick={copy}
-        className="absolute right-2 top-2 cursor-pointer rounded-md border border-border bg-card px-2 py-1 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
-      >
-        {copied ? t('copied') : t('copy')}
-      </button>
+    <div className="space-y-1">
+      <div className="relative">
+        <pre className="max-h-96 overflow-auto whitespace-pre rounded-md border border-border bg-background p-3 pr-16 font-mono text-xs text-foreground">
+          {text}
+        </pre>
+        <button
+          type="button"
+          onClick={copy}
+          className="absolute right-2 top-2 cursor-pointer rounded-md border border-border bg-card px-2 py-1 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {copied ? t('common:copied') : t('common:copy')}
+        </button>
+      </div>
+      {secret && <p className="font-mono text-xs text-warning-text">{t('vpn:config.clipboard')}</p>}
     </div>
   );
 }

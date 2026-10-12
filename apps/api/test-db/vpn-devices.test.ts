@@ -17,7 +17,7 @@ import {
   type VpnDeviceResponse,
   vpnIpv6ForIpv4,
 } from '@tnp/shared-types';
-import { vpnDevices } from '../src/db/schema/index.js';
+import { vpnAddressQuarantine, vpnDevices } from '../src/db/schema/index.js';
 import {
   createVpnDevice,
   deleteVpnDevice,
@@ -42,6 +42,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await t.db.delete(vpnDevices);
+  await t.db.delete(vpnAddressQuarantine);
 });
 
 const key = () => generateWireGuardKeyPair().publicKey;
@@ -139,6 +140,49 @@ describe('createVpnDevice', () => {
   });
 });
 
+describe('address quarantine', () => {
+  test('the address of a revoked device is held for 24 h, keeping only address and time', async () => {
+    const first = await createVpnDevice(t.db, 'alice', device(), { ...CAP, drawIndex: () => 300 });
+    if (!first.ok) throw new Error(first.code);
+    expect(await deleteVpnDevice(t.db, 'alice', first.device.id)).toBe(true);
+
+    const rows = await t.sql<Record<string, unknown>[]>`select * from vpn_address_quarantine`;
+    expect(rows.map((r) => Object.keys(r).sort())).toEqual([['address', 'released_at']]);
+    expect(rows[0]?.address).toBe(first.device.ipv4);
+
+    // Only that address is ever drawn: it is held, so the pool reads as exhausted.
+    expect(await createVpnDevice(t.db, 'bob', device(), { ...CAP, drawIndex: () => 300 })).toEqual({
+      ok: false,
+      code: 'address_pool_exhausted',
+    });
+    // Other addresses are unaffected.
+    const draws = [300, 301];
+    const other = await createVpnDevice(t.db, 'bob', device(), {
+      ...CAP,
+      drawIndex: () => draws.shift() ?? 302,
+    });
+    expect(other.ok && other.device.ipv4).toBe('10.77.1.45');
+  });
+
+  test('after the hold the address is reusable and its quarantine row is deleted', async () => {
+    await t.db.insert(vpnAddressQuarantine).values({ address: '10.77.1.44' });
+    await t.sql`update vpn_address_quarantine set released_at = now() - interval '25 hours'`;
+    const reused = await createVpnDevice(t.db, 'carol', device(), { ...CAP, drawIndex: () => 300 });
+    expect(reused.ok && reused.device.ipv4).toBe('10.77.1.44');
+    expect(await t.sql`select 1 from vpn_address_quarantine`).toHaveLength(0);
+  });
+
+  test('a delete racing a create never hands out the freed address', async () => {
+    const victim = await createVpnDevice(t.db, 'alice', device(), { ...CAP, drawIndex: () => 400 });
+    if (!victim.ok) throw new Error(victim.code);
+    const [, raced] = await Promise.all([
+      deleteVpnDevice(t.db, 'alice', victim.device.id),
+      createVpnDevice(t.db, 'bob', device(), { ...CAP, drawIndex: () => 400 }),
+    ]);
+    expect(raced).toEqual({ ok: false, code: 'address_pool_exhausted' });
+  });
+});
+
 describe('rename, delete and isolation', () => {
   test('an owner can rename and delete their own device, nobody else can', async () => {
     const created = await createVpnDevice(t.db, 'alice', device('old'), CAP);
@@ -166,6 +210,7 @@ describe('through the real routers', () => {
         id: 'usw2-1',
         region: 'us-west-2',
         endpoint: 'usw2-1.exit.example:51820',
+        endpointIp: '203.0.113.10',
         publicKey: key(),
       },
     ],

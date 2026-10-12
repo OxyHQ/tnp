@@ -200,7 +200,10 @@ browser / tnp CLI ── POST /me/vpn/devices ──► TNP API ── vpn_devic
   the page's memory or a `0600` file. Full tunnel: `0.0.0.0/0, ::/0`.
 - **Exit.** Kernel WireGuard, nftables policy (exit-nodes.md §9), and the
   `apps/exit` agent, which polls `GET /exit/peers` and reconciles peers with
-  `wg set` argument arrays. A revoked device is removed within one poll.
+  `wg set` argument arrays. A revoked device is removed, and its flows
+  deleted, at the next poll; an exit that cannot reach the API removes every
+  peer after 10 minutes (exit-nodes.md §9.4). Freed addresses are held 24 h
+  before reuse. Routers dial the exit by its IP literal (`endpointIp`).
 - **Off by default.** Without `TNP_VPN_EXITS`, every `/me/vpn` route except
   DELETE answers 503 `vpn_not_configured` and the dashboard says the VPN is not
   available yet.
@@ -238,7 +241,7 @@ ranges are already in the ruleset so that change cannot forget them.
 | Test | Expected with the TNP config |
 |---|---|
 | DNS | Queries go to the configured resolver through the tunnel. On Linux only if `wg-quick` can set DNS (resolvconf or systemd-resolved); the guide says so. OpenWrt: `peerdns=0` on wan, resolver on `wg0`. |
-| IPv6 | Captured by `::/0`, refused at the exit; nothing leaves outside the tunnel. |
-| Kill switch | Windows app: built in for a `0.0.0.0/0` tunnel. Android: always-on + "block connections without VPN". iOS: on-demand, no hard kill switch. Linux `wg-quick`: none by default. OpenWrt: traffic stops while `wg0` is up but the exit is unreachable; falls back to wan if `wg0` goes down unless the lan→wan forwarding is removed (the guide's optional step). |
+| IPv6 | Phones and computers: captured by `::/0`, refused at the exit. OpenWrt: the provider's IPv6 default route is source-restricted (`wan6.sourcefilter`) and would beat `wg0`'s `::/0` for LAN devices, so the setup turns source routing off and refuses LAN IPv6 at the router (fw4 rules to `wan` and `tnp`). |
+| Kill switch | Windows app: built in for a `0.0.0.0/0` tunnel. Android: always-on + "block connections without VPN". iOS: on-demand, no hard kill switch. Linux `wg-quick`: none by default. OpenWrt: the generated setup removes the lan→wan forwarding **by default** (opt-out), so LAN traffic stops rather than falling back to the provider. |
 | Loop prevention | WireGuard's own UDP to the endpoint stays off the tunnel (wg-quick fwmark rule; OpenWrt endpoint host route). |
 | WebRTC | Browser-side; documented, not claimed as solved (§8). |

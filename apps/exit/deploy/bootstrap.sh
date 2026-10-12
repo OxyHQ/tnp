@@ -43,7 +43,7 @@ TNP_EXIT_SSM_PREFIX="${TNP_EXIT_SSM_PREFIX:-/tnp/exit/$TNP_EXIT_ID}"
 [[ "$TNP_EXIT_SSM_PREFIX" =~ ^/[A-Za-z0-9/_.-]+$ ]] || die "TNP_EXIT_SSM_PREFIX is not an SSM path"
 
 # --- Packages ---------------------------------------------------------------
-dnf install -y wireguard-tools nftables git unzip
+dnf install -y wireguard-tools nftables conntrack-tools git unzip
 command -v aws >/dev/null || dnf install -y awscli-2
 
 # --- Instance facts (IMDSv2) ------------------------------------------------
@@ -53,6 +53,12 @@ imds() {
     -H 'X-aws-ec2-metadata-token-ttl-seconds: 60')
   curl -fsS -H "X-aws-ec2-metadata-token: $token" "http://169.254.169.254/latest/meta-data/$1"
 }
+# IMDSv2 must be REQUIRED: with v1 allowed, anything that can make the host
+# issue a plain GET (a confused process, a forwarded request) can read the
+# instance role's credentials, which unlock the exit's private key in SSM.
+if curl -fsS -m 3 -o /dev/null http://169.254.169.254/latest/meta-data/ 2>/dev/null; then
+  die "IMDSv1 answers on this instance; require IMDSv2 (HttpTokens=required, hop limit 1) and relaunch"
+fi
 AWS_REGION=$(imds placement/region)
 MAC=$(imds mac)
 VPC_CIDRS=$(imds "network/interfaces/macs/$MAC/vpc-ipv4-cidr-blocks" | paste -sd, -)
@@ -114,7 +120,7 @@ TNP_EXIT_INTERFACE=wg0
 EOF
 chmod 0644 /etc/tnp-exit/exit.env /etc/tnp-exit/agent.env
 
-# --- Packet filter, before forwarding is switched on ------------------------
+# --- Packet filter (forwarding is switched on later, by wg-up.sh) -----------
 install -d -m 0755 /etc/nftables
 operator_args=(--operator-cidr "$VPC_CIDRS")
 [ -n "$VPC_CIDRS6" ] && operator_args+=(--operator-cidr "$VPC_CIDRS6")
@@ -129,11 +135,13 @@ systemctl enable nftables
 systemctl restart nftables
 nft list table inet tnp_exit >/dev/null || die "ruleset did not load"
 
+# No ip_forward here: wg-up.sh switches forwarding on only after verifying the
+# packet filter is loaded, and off again on failure or stop.
 cat >/etc/sysctl.d/90-tnp-exit.conf <<'EOF'
-net.ipv4.ip_forward = 1
-net.ipv6.conf.all.forwarding = 1
-# Forwarding would otherwise switch off the kernel's acceptance of router
-# advertisements on the uplink.
+net.ipv4.ip_forward = 0
+net.ipv6.conf.all.forwarding = 0
+# Forwarding (switched on by wg-up.sh) would otherwise switch off the kernel's
+# acceptance of router advertisements on the uplink.
 net.ipv6.conf.all.accept_ra = 2
 net.ipv6.conf.default.accept_ra = 2
 net.ipv4.conf.all.send_redirects = 0

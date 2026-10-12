@@ -34,6 +34,7 @@ const CONFIG: VpnConfig = {
       id: 'usw2-1',
       region: 'us-west-2',
       endpoint: 'usw2-1.exit.example:51820',
+      endpointIp: '203.0.113.10',
       publicKey: generateWireGuardKeyPair().publicKey,
     },
   ],
