@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Trans, useTranslation } from 'react-i18next';
+import type { ClientLatestResponse } from '@tnp/shared-types';
 import { apiFetch } from '../lib/api';
 
 type Platform = 'macos' | 'linux' | 'windows' | 'android' | 'ios' | 'router';
@@ -27,12 +28,7 @@ const DNS_HOST = 'dns.tnp.network';
 const INSTALL_CMD_UNIX = 'curl -fsSL https://get.tnp.network | sh';
 const INSTALL_CMD_WINDOWS = 'irm https://get.tnp.network/ps | iex';
 
-interface ClientInfo {
-  version: string;
-  changelog: string;
-  dns?: { ip: string; host: string };
-  platforms: Record<string, { url: string; sha256: string } | null>;
-}
+type ClientInfo = ClientLatestResponse;
 
 export default function Install() {
   const { t } = useTranslation(['install', 'common']);
