@@ -7,12 +7,27 @@
  * also ignored `TnpConfig.upstreamDns` entirely, so every TNP user's public DNS
  * went to one third party regardless of what they configured (audit B4).
  *
- * Both transports here carry the DNS **wire format** end to end, so an upstream
- * NXDOMAIN arrives as NXDOMAIN and nothing has to be reconstructed.
+ * Every transport here carries the DNS **wire format** end to end, so an
+ * upstream NXDOMAIN arrives as NXDOMAIN and nothing has to be reconstructed.
+ *
+ * Classic (UDP/TCP) upstreams are plaintext: anyone on the path — the local
+ * network, the ISP — reads every public name the device looks up and can
+ * answer in the upstream's place. The default is therefore DoH (RFC 8484), and
+ * a classic upstream is a deliberate user choice that is warned about.
+ *
+ * An answer is accepted only if it answers OUR question: the transaction ID
+ * on the wire is a fresh random value per attempt (never the client's), the
+ * UDP socket is connected so datagrams from any other source are discarded by
+ * the kernel, and the response's question section must match the one we sent.
+ * Anything else is ignored and the attempt keeps waiting until its timeout —
+ * that is the difference between an off-path spoofer having to win a 2^32
+ * race (ID × source port) and simply sending the first packet.
  */
 
+import { randomInt } from 'node:crypto';
 import dgram from 'node:dgram';
 import net from 'node:net';
+import { questionOf } from './guard';
 
 /** Per-attempt timeout. Kept short because a failover attempt follows. */
 const QUERY_TIMEOUT_MS = 4_000;
@@ -46,13 +61,17 @@ export class UpstreamError extends Error {
  * Parse an upstream spec.
  *
  * `1.1.1.1`, `1.1.1.1:5353` or `https://cloudflare-dns.com/dns-query`.
- * A bare address is classic DNS on port 53.
+ * A bare address is classic DNS on port 53. `http://` is refused: DoH without
+ * TLS is plaintext DNS with extra steps.
  */
 export function parseUpstream(spec: string): UpstreamConfig {
   const trimmed = spec.trim();
 
-  if (trimmed.startsWith('https://')) {
+  if (/^https:\/\//i.test(trimmed)) {
     return { transport: 'doh', address: trimmed };
+  }
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
+    throw new Error(`unsupported upstream "${trimmed}": use an https:// DoH URL or an IP address`);
   }
 
   // IPv6 in brackets, optionally with a port: [2001:db8::1]:53
@@ -75,7 +94,7 @@ export function parseUpstream(spec: string): UpstreamConfig {
   return { transport: 'classic', address: trimmed, port: 53 };
 }
 
-/** Send a query and return the raw wire response. */
+/** Send a query and return the raw wire response, carrying the query's own ID. */
 export async function queryUpstream(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Buffer> {
   return upstream.transport === 'doh'
     ? queryDoh(upstream, queryBuf)
@@ -98,12 +117,41 @@ export async function queryUpstreamTcp(
   return queryClassicTcp(upstream, queryBuf);
 }
 
+/**
+ * Whether `response` is a response to `sent`: QR set, the expected ID, and
+ * the same question (name compared case-insensitively).
+ */
+export function isResponseTo(response: Buffer, expectedId: number, sent: Buffer): boolean {
+  if (response.byteLength < 12) return false;
+  if (response.readUInt16BE(0) !== expectedId) return false;
+  if ((response.readUInt16BE(2) & 0x8000) === 0) return false;
+  const ours = questionOf(sent);
+  const theirs = questionOf(response);
+  return ours !== null && theirs !== null && ours.equals(theirs);
+}
+
+/** A copy of `buf` with its transaction ID replaced. */
+function withId(buf: Buffer, id: number): Buffer {
+  const out = Buffer.from(buf);
+  out.writeUInt16BE(id, 0);
+  return out;
+}
+
+function freshId(): number {
+  return randomInt(0, 0x10000);
+}
+
 // ---------------------------------------------------------------------------
 // Classic DNS
 // ---------------------------------------------------------------------------
 
 function queryClassicUdp(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    const callerId = queryBuf.readUInt16BE(0);
+    const wireId = freshId();
+    const outgoing = withId(queryBuf, wireId);
+    const port = upstream.port ?? 53;
+
     const socket = dgram.createSocket(net.isIPv6(upstream.address) ? 'udp6' : 'udp4');
     let settled = false;
 
@@ -111,7 +159,11 @@ function queryClassicUdp(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Bu
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      socket.close();
+      try {
+        socket.close();
+      } catch {
+        /* already closed */
+      }
       if (err) reject(err);
       else if (response) resolve(response);
     };
@@ -121,25 +173,40 @@ function queryClassicUdp(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Bu
       QUERY_TIMEOUT_MS,
     );
 
-    socket.on('message', (msg) => finish(null, Buffer.from(msg)));
+    socket.on('message', (msg, rinfo) => {
+      // The socket is connected, so the kernel already discards datagrams from
+      // other sources; the explicit check keeps that true on any runtime.
+      // (Address compared for IPv4 literals only: an IPv6 or hostname spec can
+      // be spelled differently from the address the kernel reports.)
+      if (rinfo.port !== port) return;
+      if (net.isIPv4(upstream.address) && rinfo.address !== upstream.address) return;
+      if (!isResponseTo(msg, wireId, outgoing)) return;
+      finish(null, withId(Buffer.from(msg), callerId));
+    });
     socket.on('error', (err) => finish(new UpstreamError(err.message, upstream.address)));
-    socket.send(queryBuf, upstream.port ?? 53, upstream.address, (err) => {
-      if (err) finish(new UpstreamError(err.message, upstream.address));
+    socket.connect(port, upstream.address, () => {
+      socket.send(outgoing, (err) => {
+        if (err) finish(new UpstreamError(err.message, upstream.address));
+      });
     });
   });
 }
 
 function queryClassicTcp(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    const callerId = queryBuf.readUInt16BE(0);
+    const wireId = freshId();
+    const outgoing = withId(queryBuf, wireId);
+
     const socket = net.createConnection({
       host: upstream.address,
       port: upstream.port ?? 53,
     });
 
     // TCP DNS frames each message with a two-byte big-endian length prefix.
-    const framed = Buffer.alloc(2 + queryBuf.byteLength);
-    framed.writeUInt16BE(queryBuf.byteLength, 0);
-    queryBuf.copy(framed, 2);
+    const framed = Buffer.alloc(2 + outgoing.byteLength);
+    framed.writeUInt16BE(outgoing.byteLength, 0);
+    outgoing.copy(framed, 2);
 
     let buffer = Buffer.alloc(0);
     let settled = false;
@@ -175,7 +242,12 @@ function queryClassicTcp(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Bu
       if (buffer.byteLength < 2) return;
       const length = buffer.readUInt16BE(0);
       if (buffer.byteLength < 2 + length) return;
-      finish(null, Buffer.from(buffer.subarray(2, 2 + length)));
+      const message = Buffer.from(buffer.subarray(2, 2 + length));
+      if (!isResponseTo(message, wireId, outgoing)) {
+        finish(new UpstreamError('response does not match the query', upstream.address));
+        return;
+      }
+      finish(null, withId(message, callerId));
     });
   });
 }
@@ -186,23 +258,28 @@ function queryClassicTcp(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Bu
 
 async function queryDoh(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Buffer> {
   // The message ID must be zero on DoH so responses are cacheable by HTTP
-  // intermediaries (RFC 8484 §4.1). The caller restores its own ID.
-  const outgoing = Buffer.from(queryBuf);
-  outgoing.writeUInt16BE(0, 0);
+  // intermediaries (RFC 8484 §4.1). The caller's ID is restored on return.
+  const callerId = queryBuf.readUInt16BE(0);
+  const outgoing = withId(queryBuf, 0);
 
+  // POST, not GET: a GET puts the query in the URL, where proxies and server
+  // access logs keep it.
   const response = await fetch(upstream.address, {
     method: 'POST',
     headers: { 'content-type': DOH_CONTENT_TYPE, accept: DOH_CONTENT_TYPE },
-    body: outgoing,
+    body: new Uint8Array(outgoing),
+    redirect: 'error',
     signal: AbortSignal.timeout(QUERY_TIMEOUT_MS),
   });
 
   if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
     throw new UpstreamError(`returned HTTP ${response.status}`, upstream.address);
   }
 
-  const contentType = response.headers.get('content-type') ?? '';
+  const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
   if (!contentType.startsWith(DOH_CONTENT_TYPE)) {
+    await response.body?.cancel().catch(() => undefined);
     // A JSON body here means the endpoint speaks the JSON API, not RFC 8484 —
     // a misconfiguration worth naming rather than failing to parse later.
     throw new UpstreamError(
@@ -211,12 +288,35 @@ async function queryDoh(upstream: UpstreamConfig, queryBuf: Buffer): Promise<Buf
     );
   }
 
-  const body = Buffer.from(await response.arrayBuffer());
-  if (body.byteLength > MAX_RESPONSE_BYTES) {
-    throw new UpstreamError('response exceeded the maximum DNS message size', upstream.address);
+  const body = await readCapped(response, upstream.address);
+  if (!isResponseTo(body, 0, outgoing)) {
+    throw new UpstreamError('response does not match the query', upstream.address);
   }
 
-  // Restore the caller's ID, which we zeroed above.
-  if (body.byteLength >= 2) body.writeUInt16BE(queryBuf.readUInt16BE(0), 0);
-  return body;
+  return withId(body, callerId);
+}
+
+/** Read a response body, refusing to buffer more than one DNS message's worth. */
+async function readCapped(response: Response, upstream: string): Promise<Buffer> {
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new UpstreamError('response exceeded the maximum DNS message size', upstream);
+  }
+  if (!response.body) return Buffer.alloc(0);
+
+  const reader = response.body.getReader();
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_RESPONSE_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      throw new UpstreamError('response exceeded the maximum DNS message size', upstream);
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks);
 }

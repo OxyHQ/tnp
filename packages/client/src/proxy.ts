@@ -1,14 +1,23 @@
 import { TnpApiClient, type DnsAnswer } from './api';
 import type { DnsProxyConfig } from './config';
-import { classifyName, isReservedTld, normalizeName, type NamespaceType } from '@tnp/namespace';
+import {
+  BUILTIN_NATIVE_TLDS,
+  classifyName,
+  normalizeName,
+  validateNativeTld,
+  type NamespaceType,
+} from '@tnp/namespace';
 import {
   buildResponse,
+  capEncodedForUdp,
+  clearAuthenticData,
   decodeQuery,
   encode,
   encodeForUdp,
   encodeRawError,
   rcodeOf,
   RCODE,
+  upstreamQuery,
   type Answer,
   type DecodedPacket,
   type Packet,
@@ -21,8 +30,12 @@ import {
   type UpstreamConfig,
 } from './dns/upstream';
 import { DnsCache } from './dns/cache';
+import { encodeTruncated, inspectQuery } from './dns/guard';
+import { isLoopback, SourceRateLimiter } from './dns/rate-limit';
 import dgram from 'node:dgram';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
+import { dirname } from 'node:path';
 
 /**
  * TTL for the synthetic 127.0.0.1 answer that routes an overlay domain into the
@@ -46,15 +59,55 @@ type TnpRecordType = (typeof TNP_RECORD_TYPES)[number];
  */
 const DEFAULT_MX_PREFERENCE = 10;
 
+/** Longest single TXT character-string (RFC 1035 §3.3: one length octet). */
+const TXT_CHUNK_BYTES = 255;
+
+/** Default per-source UDP rate limit (non-loopback sources only). */
+const DEFAULT_RATE_LIMIT = { perSecond: 20, burst: 100 };
+const DEFAULT_MAX_TCP_CONNECTIONS = 128;
+const DEFAULT_MAX_INFLIGHT = 256;
+
+/** TCP: most bytes buffered from one client before it is disconnected. */
+const TCP_MAX_BUFFER = 4096;
+/** TCP: close a connection that sends nothing for this long. */
+const TCP_IDLE_TIMEOUT_MS = 10_000;
+/**
+ * TCP: close every connection this long after it was accepted, however busy.
+ * The idle timer alone is re-armed by every byte, so a client trickling one
+ * byte at a time could hold a slot forever.
+ */
+const TCP_SESSION_DEADLINE_MS = 30_000;
+
+/**
+ * Answer to a TNP-native lookup, with the three outcomes kept apart: the
+ * old code returned an empty list for both "no such name" and "no records of
+ * this type", and then sent NXDOMAIN for both.
+ */
+type NativeResult =
+  | { kind: 'answers'; records: DnsAnswer[] }
+  | { kind: 'nodata' }
+  | { kind: 'nxdomain' };
+
 export class DnsProxy {
   private apiClient: TnpApiClient;
-  /** TLD policy table: native TLD -> whether it is flagged custom by the registry. */
-  private tlds = new Map<string, boolean>();
+  /**
+   * TLD policy table: native TLD -> whether it is flagged custom by the
+   * registry. Never empty: it always holds `BUILTIN_NATIVE_TLDS`, so a native
+   * name is classified as native from the first packet, before any TLD sync
+   * and whether or not the registry is reachable.
+   */
+  private tlds = builtinTable();
   private cache: DnsCache<DnsAnswer>;
   private upstreams: UpstreamConfig[];
   private udpServer: dgram.Socket | null = null;
   private tcpServer: net.Server | null = null;
   private config: DnsProxyConfig;
+  private readonly rateLimiter: SourceRateLimiter | null;
+  private readonly maxInflight: number;
+  private readonly maxTcpConnections: number;
+  private inflight = 0;
+  private tcpConnections = 0;
+  private slipCounter = 0;
 
   /**
    * Overlay info cache. When a domain has an active service node, the DNS proxy
@@ -77,6 +130,11 @@ export class DnsProxy {
     this.apiClient = new TnpApiClient(config.apiBaseUrl);
     this.cache = new DnsCache<DnsAnswer>({ maxEntries: config.cacheMaxEntries });
     this.upstreams = parseUpstreams(config.upstreamDns);
+    const rateLimit = config.rateLimit === undefined ? DEFAULT_RATE_LIMIT : config.rateLimit;
+    this.rateLimiter = rateLimit ? new SourceRateLimiter(rateLimit) : null;
+    this.maxInflight = config.maxInflight ?? DEFAULT_MAX_INFLIGHT;
+    this.maxTcpConnections = config.maxTcpConnections ?? DEFAULT_MAX_TCP_CONNECTIONS;
+    this.loadPersistedTlds();
   }
 
   /** Observability must never change DNS answers or expose query contents. */
@@ -94,6 +152,21 @@ export class DnsProxy {
     } catch {
       return false;
     }
+  }
+
+  /** The bound UDP port, once listening. Useful when configured with port 0. */
+  get udpPort(): number | null {
+    try {
+      return this.udpServer?.address().port ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The bound TCP port, once listening. */
+  get tcpPort(): number | null {
+    const address = this.tcpServer?.address();
+    return address && typeof address === 'object' ? address.port : null;
   }
 
   /** Enable overlay routing (DNS returns 127.0.0.1 for overlay domains). */
@@ -123,8 +196,18 @@ export class DnsProxy {
     return this.upstreams;
   }
 
+  /** The native TLDs currently classified as TNP's. */
+  getNativeTlds(): string[] {
+    return [...this.tlds.keys()];
+  }
+
   /**
    * Load the TLD policy table.
+   *
+   * The built-in native TLDs are always kept: an API response — empty, stale,
+   * truncated or hostile — can add approved TLDs but never remove `.ox`,
+   * because a client without `.ox` in its table forwards `.ox` lookups to the
+   * public upstream.
    *
    * Reserved TLDs are dropped rather than stored. The server already filters
    * them, but a resolver that shadows public names on the server's say-so is
@@ -132,19 +215,23 @@ export class DnsProxy {
    * client enforces the namespace rule itself (docs/architecture/naming.md,
    * rule N1).
    */
-  setTlds(tlds: Array<string | { name: string; custom?: boolean }>) {
-    this.tlds = new Map<string, boolean>();
+  setTlds(tlds: Array<string | { name: string; custom?: boolean }>): void {
+    const table = builtinTable();
     const refused: string[] = [];
 
     for (const t of tlds) {
-      const name = normalizeName(typeof t === 'string' ? t : t.name);
-      if (isReservedTld(name)) {
-        refused.push(name);
+      const raw = typeof t === 'string' ? t : t?.name;
+      if (typeof raw !== 'string') continue;
+      const valid = validateNativeTld(raw);
+      if (!valid.ok) {
+        refused.push(normalizeName(raw));
         continue;
       }
       const custom = typeof t === 'string' ? true : (t.custom ?? true);
-      this.tlds.set(name, custom);
+      table.set(valid.tld, custom);
     }
+
+    this.tlds = table;
 
     // Classification depends on this table, so entries cached under the old
     // one may now belong to the other namespace.
@@ -153,8 +240,8 @@ export class DnsProxy {
     console.log(`[tnp] loaded ${this.tlds.size} TLDs: ${[...this.tlds.keys()].join(', ')}`);
     if (refused.length > 0) {
       console.warn(
-        `[tnp] refused ${refused.length} reserved TLD(s) offered by the API: ${refused.join(', ')}. ` +
-          `These are delegated by the public DNS root and are resolved upstream, not by TNP.`,
+        `[tnp] refused ${refused.length} reserved or invalid TLD(s) offered by the API: ${refused.join(', ')}. ` +
+          `Reserved TLDs are delegated by the public DNS root or in private use, and are resolved upstream, not by TNP.`,
       );
     }
   }
@@ -190,7 +277,7 @@ export class DnsProxy {
       case 'NS':
         return { type: 'NS', name, ttl, data: value };
       case 'TXT':
-        return { type: 'TXT', name, ttl, data: value };
+        return { type: 'TXT', name, ttl, data: txtStrings(record.value) };
       case 'MX': {
         const match = /^(\d+)\s+(\S+)$/.exec(value);
         return {
@@ -210,18 +297,26 @@ export class DnsProxy {
   /**
    * Look up a TNP-native name, via the cache.
    *
-   * Returns null when the registry says the name does not exist, which the
-   * caller turns into NXDOMAIN. The old code returned an empty array for both
-   * "no such name" and "no records of this type", so the two were
-   * indistinguishable by the time they reached the wire.
+   * Honours the registry's `rcode` (`dns-resolve` contract in
+   * `@tnp/shared-types`): `NOERROR` with no answers is NODATA — the name exists
+   * without records of this type — and is never turned into NXDOMAIN. An API
+   * that predates `rcode` gets the old reading, empty meaning NXDOMAIN.
    */
-  private async resolveTnp(name: string, type: string): Promise<DnsAnswer[] | null> {
+  private async resolveTnp(name: string, type: string): Promise<NativeResult> {
     const clean = normalizeName(name);
 
     const cached = this.cache.get(clean, type);
-    if (cached) return cached.negative ? null : cached.records;
+    if (cached) {
+      if (cached.negative) return { kind: 'nxdomain' };
+      return cached.records.length === 0
+        ? { kind: 'nodata' }
+        : { kind: 'answers', records: cached.records };
+    }
 
     const response = await this.apiClient.resolveWithOverlay(clean, type);
+    if (!response || !Array.isArray(response.answers)) {
+      throw new Error('registry returned a malformed resolve response');
+    }
 
     // If overlay is enabled and the domain has an active service node, cache
     // the overlay info and answer with 127.0.0.1 so the connection is picked up
@@ -237,45 +332,51 @@ export class DnsProxy {
           { name: clean, type: 'A', value: '127.0.0.1', ttl: OVERLAY_TTL_SECONDS },
         ];
         this.cache.set(clean, type, synthetic);
-        return synthetic;
+        return { kind: 'answers', records: synthetic };
       }
     }
 
     if (response.answers.length === 0) {
       // Negative caching (RFC 2308). Without it every lookup of a nonexistent
       // name is a fresh round trip to the registry.
+      if (response.rcode === 'NOERROR') {
+        this.cache.setNoData(clean, type);
+        return { kind: 'nodata' };
+      }
       this.cache.setNegative(clean, type);
-      return null;
+      return { kind: 'nxdomain' };
     }
 
     this.cache.set(clean, type, response.answers);
-    return response.answers;
+    return { kind: 'answers', records: response.answers };
   }
 
   /**
    * Forward a public-DNS query upstream, in wire format end to end.
    *
-   * Tries each configured upstream in order. A truncated UDP answer is retried
-   * over TCP: returning it as-is would hand the client a silently partial
-   * record set.
+   * What goes upstream is rebuilt from the client's question (`upstreamQuery`):
+   * no client EDNS options, no DO, padded on DoH. Tries each configured
+   * upstream in order. A truncated UDP answer is retried over TCP: returning it
+   * as-is would hand the client a silently partial record set.
    */
-  private async forwardUpstream(query: DecodedPacket, queryBuf: Buffer): Promise<Buffer> {
+  private async forwardUpstream(query: DecodedPacket): Promise<Buffer> {
     let lastError: Error | null = null;
 
     for (const upstream of this.upstreams) {
       try {
+        const outgoing = upstreamQuery(query, { pad: upstream.transport === 'doh' });
         if (upstream.transport === 'classic') this.observeTraffic('outbound');
-        let response = await queryUpstream(upstream, queryBuf);
+        let response = await queryUpstream(upstream, outgoing);
         if (upstream.transport === 'classic') this.observeTraffic('inbound');
 
         // Bit 9 of the flags word is TC.
         if (response.byteLength >= 4 && (response.readUInt16BE(2) & 0x0200) !== 0) {
           this.observeTraffic('outbound');
-          response = await queryUpstreamTcp(upstream, queryBuf);
+          response = await queryUpstreamTcp(upstream, outgoing);
           this.observeTraffic('inbound');
         }
 
-        return response;
+        return clearAuthenticData(response);
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         const where = err instanceof UpstreamError ? err.upstream : upstream.address;
@@ -293,11 +394,20 @@ export class DnsProxy {
   }
 
   /**
-   * Answer one query. Returns the raw wire response.
+   * Answer one query. Returns the raw wire response, or an empty buffer when
+   * the packet deserves no reply at all.
    *
+   * The packet is vetted from its raw bytes (`inspectQuery`) before it is
+   * decoded, so a hostile packet costs one bounded pass, not a decode.
    * `forUdp` decides whether an oversized response is truncated with TC set.
    */
   async handleQuery(queryBuf: Buffer, forUdp: boolean): Promise<Buffer> {
+    const verdict = inspectQuery(queryBuf, forUdp ? 'udp' : 'tcp');
+    if (verdict.kind === 'drop') return Buffer.alloc(0);
+    if (verdict.kind === 'error') {
+      return encodeRawError(queryBuf, verdict.rcode) ?? Buffer.alloc(0);
+    }
+
     let query: DecodedPacket;
     try {
       query = decodeQuery(queryBuf);
@@ -311,17 +421,29 @@ export class DnsProxy {
       return encode(buildResponse(query, { rcode: 'FORMERR' }));
     }
 
-    // Classification happens first, offline, always. A public-dns name never
-    // reaches the TNP API — that is both the namespace guarantee and a privacy
-    // property, since it stops the API from learning the user's public
-    // browsing (docs/architecture/naming.md rule N4).
-    if (this.classify(question.name) !== 'tnp-native') {
-      const response = await this.forwardUpstream(query, queryBuf);
-      return forUdp ? capUdp(query, response) : response;
+    // Bound the work in flight: every resolution holds an upstream socket or a
+    // registry request for up to several seconds. Beyond the limit, SERVFAIL
+    // now beats queueing — and a native name still never goes upstream.
+    if (this.inflight >= this.maxInflight) {
+      return encode(buildResponse(query, { rcode: 'SERVFAIL' }));
     }
+    this.inflight++;
+    try {
+      // Classification happens first, offline, always. A public-dns name never
+      // reaches the TNP API — that is both the namespace guarantee and a privacy
+      // property, since it stops the API from learning the user's public
+      // browsing (docs/architecture/naming.md rule N4). A native name never
+      // reaches the upstream: see resolveNative.
+      if (this.classify(question.name) !== 'tnp-native') {
+        const response = await this.forwardUpstream(query);
+        return forUdp ? capEncodedForUdp(query, response) : response;
+      }
 
-    const packet = await this.resolveNative(query, question.name, question.type);
-    return forUdp ? encodeForUdp(query, packet) : encode(packet);
+      const packet = await this.resolveNative(query, question.name, question.type);
+      return forUdp ? encodeForUdp(query, packet) : encode(packet);
+    } finally {
+      this.inflight--;
+    }
   }
 
   /**
@@ -329,30 +451,32 @@ export class DnsProxy {
    *
    * Never falls through to public DNS: forwarding a nonexistent TNP name
    * upstream would let a TNP registration outrank a public one by simply not
-   * existing yet.
+   * existing yet, and would hand the name to the upstream operator and, for a
+   * plaintext upstream, to everyone on the path.
    */
   private async resolveNative(query: DecodedPacket, qname: string, qtype: string): Promise<Packet> {
-    let records: DnsAnswer[] | null;
+    let result: NativeResult;
     try {
-      records = await this.resolveTnp(qname, qtype);
+      result = await this.resolveTnp(qname, qtype);
     } catch (err) {
       // The registry is unreachable or errored. SERVFAIL says "ask again";
       // an empty NOERROR would say "this name has no such records", which is a
-      // claim we are not in a position to make.
+      // claim we are not in a position to make. The name is not logged: a
+      // resolver log is a browsing history.
       console.error(
-        `[tnp] registry lookup failed for ${qname}: ${err instanceof Error ? err.message : String(err)}`,
+        `[tnp] registry lookup failed: ${err instanceof Error ? err.message : String(err)}`,
       );
       return buildResponse(query, { rcode: 'SERVFAIL' });
     }
 
-    // The registry knows of no such name. NXDOMAIN is distinguishable from
-    // "exists, no records of this type"; the old resolver returned NOERROR for
-    // both, so a client could not tell them apart.
-    if (records === null) {
+    if (result.kind === 'nxdomain') {
       return buildResponse(query, { rcode: 'NXDOMAIN', authoritative: true });
     }
+    if (result.kind === 'nodata') {
+      return buildResponse(query, { rcode: 'NOERROR', authoritative: true });
+    }
 
-    const answers = records
+    const answers = result.records
       .map((record) => this.toAnswer(qname, record))
       .filter((answer): answer is NonNullable<typeof answer> => answer !== null);
 
@@ -367,80 +491,142 @@ export class DnsProxy {
         .map((u) => `${u.transport}:${u.address}`)
         .join(', ')}`,
     );
+    const plaintext = this.upstreams.filter((u) => u.transport === 'classic');
+    if (plaintext.length > 0) {
+      console.warn(
+        `[tnp] WARNING: ${plaintext.map((u) => u.address).join(', ')} is plaintext DNS. ` +
+          `Anyone on the network path can read and forge every public name this device looks up. ` +
+          `Use an https:// DoH upstream unless you mean this.`,
+      );
+    }
 
     this.udpServer = dgram.createSocket({ type: 'udp4', reuseAddr: true });
 
     this.udpServer.on('message', (msg: Buffer, rinfo: dgram.RemoteInfo) => {
       this.observeTraffic('inbound');
+      const query = Buffer.from(msg);
+
+      if (
+        this.rateLimiter &&
+        !isLoopback(rinfo.address) &&
+        !this.rateLimiter.allow(rinfo.address)
+      ) {
+        // Over the limit: drop, except that every second refused query gets a
+        // TC reply no bigger than the query (RRL "slip"), so a real client
+        // sharing an address with a flood can still get through over TCP.
+        this.slipCounter = (this.slipCounter + 1) % 2;
+        if (this.slipCounter !== 0) return;
+        const verdict = inspectQuery(query, 'udp');
+        if (verdict.kind !== 'ok') return;
+        this.sendUdp(encodeTruncated(query, verdict.questionEnd), rinfo);
+        return;
+      }
+
       // Defer to the next tick so a synchronous handler cannot block Bun's
       // event loop while the upstream fetch is in flight.
       setTimeout(() => {
-        this.handleQuery(Buffer.from(msg), true)
-          .then((response) => {
-            if (response.byteLength === 0) return;
-            if (this.udpServer) {
-              this.udpServer.send(response, 0, response.length, rinfo.port, rinfo.address);
-              this.observeTraffic('outbound');
-            }
-          })
+        this.handleQuery(query, true)
+          .then((response) => this.sendUdp(response, rinfo))
           .catch((err) => {
-            console.error(`[tnp] udp error: ${err instanceof Error ? err.stack : err}`);
+            console.error(`[tnp] udp error: ${err instanceof Error ? err.message : err}`);
           });
       }, 0);
     });
 
     this.udpServer.on('error', (err: Error) => console.error(`[tnp] udp server error: ${err}`));
-    this.udpServer.bind(listenPort, listenAddr);
 
-    // TCP DNS frames each message with a two-byte length prefix.
-    const TCP_MAX_BUFFER = 65535 + 2;
-    const TCP_IDLE_TIMEOUT_MS = 10_000;
+    this.tcpServer = net.createServer((socket) => this.handleTcpConnection(socket));
+    this.tcpServer.on('error', (err: Error) => console.error(`[tnp] tcp server error: ${err}`));
 
-    this.tcpServer = net.createServer((socket) => {
-      let buffer = Buffer.alloc(0);
-
-      socket.setTimeout(TCP_IDLE_TIMEOUT_MS);
-      socket.on('timeout', () => socket.destroy());
-      socket.on('error', () => socket.destroy());
-
-      socket.on('data', (data: Buffer) => {
-        buffer = Buffer.concat([buffer, data]);
-
-        if (buffer.length > TCP_MAX_BUFFER) {
-          console.warn('[tnp] tcp client exceeded max buffer size, closing connection');
-          socket.destroy();
-          return;
-        }
-
-        const processNext = () => {
-          if (buffer.length < 2) return;
-          const msgLen = buffer.readUInt16BE(0);
-          if (buffer.length < 2 + msgLen) return;
-          const queryBuf = Buffer.from(buffer.subarray(2, 2 + msgLen));
-          buffer = buffer.subarray(2 + msgLen);
-
-          this.observeTraffic('inbound');
-          this.handleQuery(queryBuf, false)
-            .then((response) => {
-              if (response.byteLength > 0) {
-                const lenBuf = Buffer.alloc(2);
-                lenBuf.writeUInt16BE(response.length, 0);
-                socket.write(Buffer.concat([lenBuf, response]));
-                this.observeTraffic('outbound');
-              }
-              processNext();
-            })
-            .catch((err) => {
-              console.error(`[tnp] tcp error: ${err}`);
-              processNext();
-            });
-        };
-        processNext();
+    const udp = this.udpServer;
+    const tcp = this.tcpServer;
+    await new Promise<void>((resolve, reject) => {
+      udp.once('error', reject);
+      udp.bind(listenPort, listenAddr, () => {
+        udp.off('error', reject);
+        resolve();
       });
     });
-    this.tcpServer.listen(listenPort, listenAddr);
+    // Same port for TCP. Port 0 (tests) lets each transport pick its own; read
+    // them back with `udpPort` / `tcpPort`.
+    await new Promise<void>((resolve, reject) => {
+      tcp.once('error', reject);
+      tcp.listen(listenPort, listenAddr, () => {
+        tcp.off('error', reject);
+        resolve();
+      });
+    });
 
-    console.log(`[tnp] DNS proxy listening on ${listenAddr}:${listenPort} (UDP+TCP)`);
+    console.log(
+      `[tnp] DNS proxy listening on ${listenAddr}:${this.udpPort}/udp, ${this.tcpPort}/tcp`,
+    );
+  }
+
+  private sendUdp(response: Buffer, rinfo: dgram.RemoteInfo): void {
+    if (response.byteLength === 0 || !this.udpServer) return;
+    this.udpServer.send(response, 0, response.length, rinfo.port, rinfo.address);
+    this.observeTraffic('outbound');
+  }
+
+  /**
+   * Serve one TCP client: two-byte length-prefixed messages, answered one at a
+   * time and in order, within a connection cap, an idle timeout, a hard
+   * session deadline and a bounded input buffer.
+   */
+  private handleTcpConnection(socket: net.Socket): void {
+    if (this.tcpConnections >= this.maxTcpConnections) {
+      socket.destroy();
+      return;
+    }
+    this.tcpConnections++;
+
+    let buffer = Buffer.alloc(0);
+    let busy = false;
+    const deadline = setTimeout(() => socket.destroy(), TCP_SESSION_DEADLINE_MS);
+
+    socket.setTimeout(TCP_IDLE_TIMEOUT_MS);
+    socket.on('timeout', () => socket.destroy());
+    socket.on('error', () => socket.destroy());
+    socket.once('close', () => {
+      clearTimeout(deadline);
+      this.tcpConnections--;
+    });
+
+    const processNext = () => {
+      if (busy || socket.destroyed || buffer.length < 2) return;
+      const msgLen = buffer.readUInt16BE(0);
+      if (buffer.length < 2 + msgLen) return;
+      const queryBuf = Buffer.from(buffer.subarray(2, 2 + msgLen));
+      buffer = buffer.subarray(2 + msgLen);
+
+      busy = true;
+      this.observeTraffic('inbound');
+      this.handleQuery(queryBuf, false)
+        .then((response) => {
+          if (response.byteLength > 0 && !socket.destroyed) {
+            const lenBuf = Buffer.alloc(2);
+            lenBuf.writeUInt16BE(response.length, 0);
+            socket.write(Buffer.concat([lenBuf, response]));
+            this.observeTraffic('outbound');
+          }
+        })
+        .catch((err) => {
+          console.error(`[tnp] tcp error: ${err instanceof Error ? err.message : err}`);
+        })
+        .finally(() => {
+          busy = false;
+          processNext();
+        });
+    };
+
+    socket.on('data', (data: Buffer) => {
+      buffer = Buffer.concat([buffer, data]);
+      if (buffer.length > TCP_MAX_BUFFER) {
+        socket.destroy();
+        return;
+      }
+      processNext();
+    });
   }
 
   stop() {
@@ -448,16 +634,32 @@ export class DnsProxy {
       clearInterval(this.tldSyncInterval);
       this.tldSyncInterval = null;
     }
-    this.udpServer?.close();
+    try {
+      this.udpServer?.close();
+    } catch {
+      /* not bound */
+    }
     this.tcpServer?.close();
   }
 
-  async syncTlds() {
+  /**
+   * Refresh the TLD table from the registry. Returns whether it succeeded.
+   *
+   * A failure keeps the current table (built-ins plus the last good list), and
+   * a success is persisted so the next start has it even offline.
+   */
+  async syncTlds(): Promise<boolean> {
     try {
       const tlds = await this.apiClient.fetchTlds();
+      if (!Array.isArray(tlds)) throw new Error('registry returned a malformed TLD list');
       this.setTlds(tlds);
+      this.persistTlds();
+      return true;
     } catch (err) {
-      console.error(`[tnp] failed to sync TLDs: ${err}`);
+      console.error(
+        `[tnp] failed to sync TLDs, keeping ${this.tlds.size} known: ${err instanceof Error ? err.message : err}`,
+      );
+      return false;
     }
   }
 
@@ -469,6 +671,62 @@ export class DnsProxy {
     this.tldSyncInterval = setInterval(() => this.syncTlds(), intervalMs);
     this.tldSyncInterval.unref?.();
   }
+
+  /** Seed the table from the last good registry list, if one was saved. */
+  private loadPersistedTlds(): void {
+    const path = this.config.tldCachePath;
+    if (!path) return;
+    let saved: unknown;
+    try {
+      saved = JSON.parse(readFileSync(path, 'utf-8'));
+    } catch {
+      return; // absent or unreadable: built-ins only
+    }
+    if (!Array.isArray(saved)) return;
+    const table = builtinTable();
+    for (const entry of saved) {
+      if (typeof entry !== 'string') continue;
+      const valid = validateNativeTld(entry);
+      if (valid.ok) table.set(valid.tld, true);
+    }
+    this.tlds = table;
+  }
+
+  private persistTlds(): void {
+    const path = this.config.tldCachePath;
+    if (!path) return;
+    try {
+      mkdirSync(dirname(path), { recursive: true });
+      const tmp = `${path}.${process.pid}.tmp`;
+      writeFileSync(tmp, `${JSON.stringify([...this.tlds.keys()])}\n`, { mode: 0o644 });
+      renameSync(tmp, path);
+    } catch (err) {
+      console.warn(
+        `[tnp] could not save the TLD list: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+}
+
+function builtinTable(): Map<string, boolean> {
+  return new Map(BUILTIN_NATIVE_TLDS.map((tld) => [tld, true]));
+}
+
+/**
+ * Split a TXT value into character-strings of at most 255 bytes.
+ *
+ * A TXT record is a sequence of length-prefixed strings with a one-byte
+ * length. Handing `dns-packet` one long string writes `length & 0xff` as the
+ * prefix — a malformed record that desynchronises every parser reading it.
+ */
+export function txtStrings(value: string): Buffer[] {
+  const bytes = Buffer.from(value, 'utf-8');
+  if (bytes.byteLength === 0) return [Buffer.alloc(0)];
+  const chunks: Buffer[] = [];
+  for (let offset = 0; offset < bytes.byteLength; offset += TXT_CHUNK_BYTES) {
+    chunks.push(bytes.subarray(offset, offset + TXT_CHUNK_BYTES));
+  }
+  return chunks;
 }
 
 /**
@@ -487,37 +745,12 @@ export function parseUpstreams(spec: string): UpstreamConfig[] {
 
   if (entries.length === 0) {
     throw new Error(
-      'No upstream DNS resolver configured. Set upstreamDns to an address ' +
-        '(e.g. "1.1.1.1") or an RFC 8484 DoH URL.',
+      'No upstream DNS resolver configured. Set upstreamDns to an RFC 8484 DoH URL ' +
+        '(e.g. "https://1.1.1.1/dns-query") or a plaintext address.',
     );
   }
 
   return entries;
-}
-
-/**
- * Truncate an already-encoded upstream response that will not fit in the
- * client's UDP budget. Re-encoding is avoided so upstream RDATA we do not model
- * passes through untouched.
- */
-function capUdp(query: DecodedPacket, response: Buffer): Buffer {
-  const limit = ednsLimit(query);
-  if (response.byteLength <= limit) return response;
-
-  // Header only, TC set: the client retries over TCP and gets the whole answer.
-  const header = Buffer.from(response.subarray(0, 12));
-  header.writeUInt16BE(header.readUInt16BE(2) | 0x0200, 2);
-  header.writeUInt16BE(0, 6); // ANCOUNT
-  header.writeUInt16BE(0, 8); // NSCOUNT
-  header.writeUInt16BE(0, 10); // ARCOUNT
-  header.writeUInt16BE(0, 4); // QDCOUNT — the question is dropped with the body
-  return header;
-}
-
-function ednsLimit(query: DecodedPacket): number {
-  const opt = query.additionals?.find((record) => record.type === 'OPT');
-  if (opt && opt.type === 'OPT') return Math.min(Math.max(opt.udpPayloadSize, 512), 4096);
-  return 512;
 }
 
 export { RCODE, rcodeOf };

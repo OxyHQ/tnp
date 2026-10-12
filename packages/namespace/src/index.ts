@@ -1,4 +1,5 @@
 export {
+  BUILTIN_NATIVE_TLDS,
   classifyName,
   isPublicRootTld,
   isReservedTld,
@@ -8,6 +9,7 @@ export {
   validateNativeLabel,
   validateNativeTld,
   RESERVED_TLD_COUNT,
+  PRIVATE_USE_TLDS,
   SPECIAL_USE_TLDS,
   type LabelValidation,
   type NamespaceType,

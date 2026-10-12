@@ -74,7 +74,7 @@ Config file location:
   "listenAddr": "127.0.0.1",
   "listenPort": 5354,
   "apiBaseUrl": "https://api.tnp.network",
-  "upstreamDns": "1.1.1.1",
+  "upstreamDns": "https://1.1.1.1/dns-query,https://8.8.8.8/dns-query",
   "cacheMaxEntries": 10000
 }
 ```

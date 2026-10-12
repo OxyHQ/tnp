@@ -407,6 +407,7 @@ async function actionConnect(): Promise<void> {
       tunnelManager,
       apiClient: proxy.getApiClient(),
       getOverlayInfo: (domain: string) => proxy.getOverlayInfo(domain),
+      classify: (domain: string) => proxy.classify(domain),
     });
 
     addLine('● Overlay client running', GREEN);

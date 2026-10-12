@@ -131,6 +131,24 @@ export class DnsCache<T extends CachedRecord = CachedRecord> {
     this.store(cacheKey(name, type), { records: [], negative: true }, ttl);
   }
 
+  /**
+   * Store NODATA: the name exists, but has no records of this type.
+   *
+   * Cached for the negative lifetime like NXDOMAIN (RFC 2308 §5), but read
+   * back as a non-negative entry with no records. Folding it into
+   * `setNegative` would turn "exists, no AAAA" into "does not exist" — which
+   * makes a dual-stack client give up on an IPv4-only name.
+   */
+  setNoData(name: string, type: string, soaMinimum?: number): void {
+    const ttl = clamp(
+      soaMinimum ?? DEFAULT_NEGATIVE_TTL_SECONDS,
+      MIN_TTL_SECONDS,
+      MAX_NEGATIVE_TTL_SECONDS,
+    );
+
+    this.store(cacheKey(name, type), { records: [], negative: false }, ttl);
+  }
+
   /** Drop everything. Used when the TLD policy table changes under us. */
   clear(): void {
     this.entries.clear();

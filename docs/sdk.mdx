@@ -86,7 +86,7 @@ interface TnpConfig {
   listenAddr: string;           // default "127.0.0.1"
   listenPort: number;           // default 5354
   apiBaseUrl: string;           // default "https://api.tnp.network"
-  upstreamDns: string;          // default "1.1.1.1"
+  upstreamDns: string;          // default DoH: "https://1.1.1.1/dns-query,https://8.8.8.8/dns-query"
   cacheMaxEntries: number;      // default 10000; answers use record TTLs
   privacyLevel: "access";      // private is explicitly unavailable
   socksPort: number;            // default 1080

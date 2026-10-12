@@ -176,7 +176,7 @@ describe('EDNS(0)', () => {
   test('reports the advertised buffer size, clamped', () => {
     expect(ednsUdpSize(decodeQuery(query('a.ox', 'A', { ednsSize: 1232 })))).toBe(1232);
     expect(ednsUdpSize(decodeQuery(query('a.ox', 'A', { ednsSize: 100 })))).toBe(512);
-    expect(ednsUdpSize(decodeQuery(query('a.ox', 'A', { ednsSize: 65535 })))).toBe(4096);
+    expect(ednsUdpSize(decodeQuery(query('a.ox', 'A', { ednsSize: 65535 })))).toBe(1232);
   });
 
   test('is null when the query carries no OPT record', () => {
@@ -202,9 +202,9 @@ describe('EDNS(0)', () => {
 
 describe('truncation', () => {
   // Sized to sit BETWEEN the two limits on purpose: above 512 so the plain-UDP
-  // case truncates, below 4096 so the EDNS case does not. A fixture on one side
+  // case truncates, below the 1232 UDP cap so the EDNS case does not. A fixture on one side
   // of both limits could not tell the two behaviours apart.
-  const manyAnswers: dnsPacket.Answer[] = Array.from({ length: 40 }, (_, i) => ({
+  const manyAnswers: dnsPacket.Answer[] = Array.from({ length: 15 }, (_, i) => ({
     type: 'TXT' as const,
     name: 'big.ox',
     ttl: 300,
@@ -215,7 +215,7 @@ describe('truncation', () => {
     const q = decodeQuery(query('big.ox', 'TXT', { ednsSize: 4096 }));
     const size = encode(buildResponse(q, { rcode: 'NOERROR', answers: manyAnswers })).byteLength;
     expect(size).toBeGreaterThan(512);
-    expect(size).toBeLessThanOrEqual(4096);
+    expect(size).toBeLessThanOrEqual(1232);
   });
 
   test('sets TC and drops the body when the response exceeds the UDP budget', () => {
@@ -240,7 +240,7 @@ describe('truncation', () => {
     const decoded = decodeQuery(udp);
 
     expect(decoded.flag_tc).toBe(false);
-    expect(decoded.answers).toHaveLength(40);
+    expect(decoded.answers).toHaveLength(15);
   });
 
   test('leaves a small response alone', () => {
