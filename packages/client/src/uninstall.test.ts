@@ -154,8 +154,8 @@ describe('removeConnectRouting', () => {
     return { deps, files };
   }
 
-  // Found on a real Mac (client-platforms.yml): `tnp connect` killed while
-  // running over an installed resolver, then `tnp uninstall --purge`.
+  // The sequence client-platforms.yml runs on a real Mac: `tnp connect` killed
+  // while running over an installed resolver, then `tnp uninstall --purge`.
   test('run before the install teardown, it leaves no /etc/resolver/ox behind', () => {
     const { deps, files } = macDeps();
     const install = applyNativeRouting({ owner: 'install', target: INSTALLED }, deps).state;
