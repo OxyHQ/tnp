@@ -11,7 +11,8 @@ import {
 } from '@tnp/shared-types';
 import { getDb } from '../db/postgres.js';
 import { domains, serviceNodes, tlds } from '../db/schema/index.js';
-import { effectiveServiceNodeStatus } from '../registry/nodes.js';
+import { toServiceNodeLookup } from '../registry/nodes.js';
+import { logError } from '../utils/logError.js';
 
 const router = Router();
 
@@ -69,7 +70,7 @@ router.post('/register', requireOxyAuth, async (req, res) => {
     };
     res.status(201).json(registration);
   } catch (err) {
-    console.error('Register service node error:', err);
+    logError('Register service node error:', err);
     res.status(500).json({ error: 'Failed to register service node' });
   }
 });
@@ -122,24 +123,12 @@ router.get('/:domain', async (req, res) => {
       return;
     }
 
-    // `lastSeen` is serialized here rather than left to `JSON.stringify`: the
-    // contract says ISO 8601 string, and a `Date` that only becomes one by way
-    // of the serializer is a shape no consumer's type can be checked against.
-    // The web dashboard has been rendering a "last seen" line conditionally
-    // since it was written, on a field this endpoint never sent.
-    //
-    // `status` is the effective one: nothing ever writes `offline`, so the
-    // stored column says `online` for a node that stopped heartbeating long
-    // ago. Same rule as `/dns/resolve` (registry/nodes.ts).
-    const lookup: ServiceNodeLookup = {
-      publicKey: node.publicKey,
-      connectedRelay: node.connectedRelay,
-      status: effectiveServiceNodeStatus(node, new Date()),
-      lastSeen: node.lastSeen.toISOString(),
-    };
+    // `status` is the effective one, never the stored column, which nothing
+    // sets back to `offline`; and no `lastSeen` (registry/nodes.ts).
+    const lookup: ServiceNodeLookup = toServiceNodeLookup(node, new Date());
     res.json(lookup);
   } catch (err) {
-    console.error('Lookup service node error:', err);
+    logError('Lookup service node error:', err);
     res.status(500).json({ error: 'Failed to look up service node' });
   }
 });
@@ -183,7 +172,7 @@ router.post('/heartbeat', requireOxyAuth, async (req, res) => {
     const response: ServiceNodeHeartbeatResponse = { status: 'ok' };
     res.json(response);
   } catch (err) {
-    console.error('Service node heartbeat error:', err);
+    logError('Service node heartbeat error:', err);
     res.status(500).json({ error: 'Failed to update heartbeat' });
   }
 });

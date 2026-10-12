@@ -12,7 +12,6 @@
   "emptyState": "你还没有域名。",
   "emptyStateRegister": "注册一个",
   "emptyStateToGetStarted": "开始使用。",
-  "lastSeen": "最后在线 {{time}}",
   "publicKey": "公钥：",
   "relay": "中继：",
   "noNodeConfigured": "未配置服务节点。请参阅下方的设置说明。",

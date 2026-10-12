@@ -96,6 +96,12 @@ export const domains = pgTable(
       .references(() => users.id, { onDelete: 'restrict' }),
     oxyUserId: text('oxy_user_id').notNull(),
     status: domainStatus('status').notNull().default('active'),
+    /**
+     * Owner-set: kept out of the public directory and search. Resolution and a
+     * lookup by exact name are unaffected — this hides a name from browsing,
+     * not from anyone who already knows it.
+     */
+    unlisted: boolean('unlisted').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }),

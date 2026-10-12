@@ -12,7 +12,6 @@
   "emptyState": "Aún no tienes dominios.",
   "emptyStateRegister": "Registra uno",
   "emptyStateToGetStarted": "para comenzar.",
-  "lastSeen": "visto por última vez {{time}}",
   "publicKey": "Clave pública:",
   "relay": "Relay:",
   "noNodeConfigured": "No hay nodo de servicio configurado. Consulta las instrucciones de configuración a continuación.",

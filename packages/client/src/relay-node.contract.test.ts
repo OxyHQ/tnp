@@ -92,7 +92,8 @@ describe('RelayNode.start', () => {
     }
 
     expect(parsed.value.endpoint).toBe('wss://relay.example.test:8443');
-    expect(parsed.value.operator).toBe('community');
+    // No operator claim: whether a relay is Oxy-operated is the registry's call.
+    expect(Object.keys(body as object)).not.toContain('operator');
     expect(parsed.value.capacity).toEqual({ maxConnections: 100, bandwidth: 250 });
     expect(parsed.value.location).toBe('eu-west');
 
@@ -120,6 +121,20 @@ describe('RelayNode.start', () => {
         /is not a ws:\/\/ or wss:\/\/ URL/,
       );
       // A relay that failed to register is stopped, not listening-but-invisible.
+      expect(relay.isRunning).toBe(false);
+    }
+  });
+
+  test('refuses to register a ws:// or private endpoint, before binding a port', async () => {
+    // The registry would refuse these; the relay says so before listening.
+    for (const [endpoint, reason] of [
+      ['ws://relay.example.test', /must use wss:\/\//],
+      ['wss://192.168.1.20:8443', /publicly reachable host/],
+    ] as const) {
+      const relay = new RelayNode(testConfig({ endpoint }));
+      await expect(relay.start(new TnpApiClient('https://api.example.test'))).rejects.toThrow(
+        reason,
+      );
       expect(relay.isRunning).toBe(false);
     }
   });

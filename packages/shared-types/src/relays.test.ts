@@ -5,6 +5,7 @@ import {
   normalizeRelayEndpoint,
   parseRegisterRelayRequest,
   parseRelayHeartbeatRequest,
+  publicRelayEndpointProblem,
   type RegisterRelayRequest,
 } from './relays.js';
 
@@ -13,7 +14,6 @@ function validRequest(): RegisterRelayRequest {
   return {
     endpoint: 'wss://relay.example.test',
     publicKey: 'Zm9vYmFyLXB1YmxpYy1rZXk=',
-    operator: 'community',
     capacity: { maxConnections: 100, bandwidth: 0 },
     location: 'eu-west',
   };
@@ -69,11 +69,62 @@ describe('parseRegisterRelayRequest', () => {
       value: {
         endpoint: 'wss://relay.example.test',
         publicKey: 'Zm9vYmFyLXB1YmxpYy1rZXk=',
-        operator: 'community',
         capacity: { maxConnections: 100, bandwidth: 0 },
         location: 'eu-west',
       },
     });
+  });
+
+  test('ignores a caller-asserted operator: the registry decides it', () => {
+    // Relays released before the registry decided `operator` still send it.
+    // They must keep registering, and what they claim must not survive the
+    // parse — `oxy` least of all.
+    for (const operator of ['oxy', 'community', 'someone-else', undefined]) {
+      const parsed = parseRegisterRelayRequest({ ...validRequest(), operator });
+      expect(parsed.ok).toBe(true);
+      expect(parsed.ok && Object.keys(parsed.value)).not.toContain('operator');
+    }
+  });
+
+  test('accepts only wss:// endpoints', () => {
+    const parsed = parseRegisterRelayRequest({
+      ...validRequest(),
+      endpoint: 'ws://relay.example.test',
+    });
+    expect(parsed).toEqual({
+      ok: false,
+      error: 'endpoint must use wss://; plain ws:// relays are not published',
+    });
+  });
+
+  test('refuses endpoints on loopback, private and local hosts', () => {
+    for (const endpoint of [
+      'wss://127.0.0.1',
+      'wss://2130706433',
+      'wss://0x7f.0.0.1',
+      'wss://10.1.2.3:8443',
+      'wss://172.20.0.1',
+      'wss://192.168.1.10',
+      'wss://169.254.169.254',
+      'wss://100.64.0.1',
+      'wss://0.0.0.0',
+      'wss://[::1]',
+      'wss://[::]',
+      'wss://[fe80::1]',
+      'wss://[fd00::1]',
+      'wss://[::ffff:127.0.0.1]',
+      'wss://[::ffff:10.0.0.1]',
+      'wss://localhost',
+      'wss://relay.localhost',
+      'wss://printer.local',
+      'wss://relay',
+      'wss://db.internal',
+    ]) {
+      const parsed = parseRegisterRelayRequest({ ...validRequest(), endpoint });
+      expect(parsed.ok ? `${endpoint} accepted` : parsed.error).toBe(
+        'endpoint must be a publicly reachable host, not a private, loopback or local address',
+      );
+    }
   });
 
   test('rejects the body the client sent before @tnp/shared-types existed', () => {
@@ -90,12 +141,10 @@ describe('parseRegisterRelayRequest', () => {
       [{ endpoint: undefined }, 'endpoint is required'],
       [
         { endpoint: 'relay.example.test' },
-        'endpoint must be a ws:// or wss:// URL with no credentials, query or fragment',
+        'endpoint must be a wss:// URL with no credentials, query or fragment',
       ],
       [{ publicKey: undefined }, 'publicKey is required'],
       [{ publicKey: '   ' }, 'publicKey is required'],
-      [{ operator: undefined }, "operator must be 'oxy' or 'community'"],
-      [{ operator: 'someone-else' }, "operator must be 'oxy' or 'community'"],
       [{ capacity: undefined }, 'capacity with maxConnections and bandwidth is required'],
       [{ capacity: [] }, 'capacity with maxConnections and bandwidth is required'],
       [
@@ -141,6 +190,26 @@ describe('parseRegisterRelayRequest', () => {
     for (const body of [null, undefined, 'endpoint', 7, ['wss://relay.example.test']]) {
       expect(parseRegisterRelayRequest(body).ok).toBe(false);
     }
+  });
+});
+
+describe('publicRelayEndpointProblem', () => {
+  test('accepts public hosts, by name or by address', () => {
+    for (const endpoint of [
+      'wss://relay.example.test',
+      'wss://relay.example.test:8443/edge',
+      'wss://203.0.114.7',
+      'wss://8.8.8.8',
+      'wss://[2606:4700::1111]',
+    ]) {
+      expect(publicRelayEndpointProblem(endpoint)).toBeNull();
+    }
+  });
+
+  test('refuses ws:// even for a public host', () => {
+    expect(publicRelayEndpointProblem('ws://relay.example.test')).toBe(
+      'endpoint must use wss://; plain ws:// relays are not published',
+    );
   });
 });
 

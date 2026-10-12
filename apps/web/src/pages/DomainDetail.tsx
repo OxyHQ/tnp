@@ -20,9 +20,7 @@ interface DomainData {
   tld: string;
   status: string;
   records: DnsRecord[];
-  createdAt: string;
   expiresAt: string | null;
-  updatedAt: string;
 }
 
 export default function DomainDetail() {
@@ -75,12 +73,10 @@ export default function DomainDetail() {
     { label: t('domainDetail:specs.status'), value: domain.status },
     { label: t('domainDetail:specs.tld'), value: `.${domain.tld}` },
     { label: t('domainDetail:specs.records'), value: `${domain.records.length}` },
-    { label: t('domainDetail:specs.registered'), value: formatDate(domain.createdAt) },
     {
       label: t('domainDetail:specs.expires'),
       value: domain.expiresAt ? formatDate(domain.expiresAt) : t('domainDetail:neverExpires'),
     },
-    { label: t('domainDetail:specs.lastUpdated'), value: formatDate(domain.updatedAt) },
   ];
 
   return (

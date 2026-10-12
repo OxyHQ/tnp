@@ -5,7 +5,6 @@ import { Trans, useTranslation } from 'react-i18next';
 import type { ServiceNodeLookup } from '@tnp/shared-types';
 import { apiFetch, errorMessage, errorStatus } from '../lib/api';
 import { loadInventoryPage, type InventoryDomain, type InventoryPage } from '../lib/ownedDomains';
-import { useLocaleFormatter } from '../lib/useLocaleFormatter';
 
 /** A domain's node lookup: pending, none registered (404), found, or failed. */
 type NodeState =
@@ -28,7 +27,6 @@ const fetchJson = <T,>(path: string) => apiFetch<T>(path);
 
 export default function ServiceNodes() {
   const { t } = useTranslation(['serviceNodes', 'common']);
-  const { formatRelativeTime } = useLocaleFormatter();
   const [page, setPage] = useState(1);
   const [inventory, setInventory] = useState<Inventory>({ status: 'loading' });
   const [copied, setCopied] = useState<string | null>(null);
@@ -199,11 +197,6 @@ export default function ServiceNodes() {
                       {label}
                     </span>
                   </div>
-                  {node?.lastSeen && (
-                    <span className="font-mono text-xs text-muted-foreground/70">
-                      {t('serviceNodes:lastSeen', { time: formatRelativeTime(node.lastSeen) })}
-                    </span>
-                  )}
                 </div>
 
                 {node && (

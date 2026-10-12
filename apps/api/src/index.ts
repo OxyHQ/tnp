@@ -1,177 +1,19 @@
-import {
-  getEcosystemActivity,
-  startEcosystemActivity,
-  stopEcosystemActivity,
-} from './ecosystemActivity.js';
-import express from 'express';
-import cors from 'cors';
+import { startEcosystemActivity, stopEcosystemActivity } from './ecosystemActivity.js';
 import { config } from './config.js';
-import { oxyAuthOptional } from './middleware/auth.js';
 import { runSeed } from './seed.js';
-
-import tldsRouter from './routes/tlds.js';
-import domainsRouter from './routes/domains.js';
-import clientRouter, { installerRoute } from './routes/client.js';
-import dnsRouter from './routes/dns.js';
-import nodesRouter from './routes/nodes.js';
-import relaysRouter from './routes/relays.js';
+import { createApp } from './app.js';
 import { closePostgres, connectPostgres, getDb } from './db/postgres.js';
 import { runMigrations } from './db/migrate.js';
-import { createHealthRouter } from './health.js';
-import { decideParkingPage, loadNameFacts } from './registry/resolve.js';
-import { escapeHtml, isValidHostname } from './utils/hostname.js';
 import { readServicesConfig } from './services/config.js';
 import { createProductionServicesRouter } from './services/routes.js';
+import { logError } from './utils/logError.js';
 
-const app = express();
-app.use((req, res, next) => {
-  const activity = getEcosystemActivity();
-  if (activity) activity.observeHttp(req, res, next);
-  else next();
-});
-
-app.use(
-  cors({
-    origin: config.corsOrigins,
-    credentials: true,
-  }),
-);
-app.use(express.json());
-
-// Serve installer scripts when accessed via get.tnp.network
-// curl -fsSL https://get.tnp.network | sh  →  serves install.sh
-// irm https://get.tnp.network/ps | iex     →  serves install.ps1 (also `/` from PowerShell)
-app.use((req, _res, next) => {
-  const host = req.hostname;
-  if (host !== 'get.tnp.network') return next();
-
-  const route = installerRoute(req.path, req.get('user-agent'));
-  if (route) req.url = route;
-  next();
-});
-
-// Public routes -- no auth needed at all
-app.use('/dns', dnsRouter);
-app.use('/client', clientRouter);
-app.use('/health', createHealthRouter());
-
-// Routes with mixed auth -- oxyAuthOptional resolves req.userId/req.user if a
-// token is present; individual write handlers enforce auth with requireOxyAuth
-// from @oxy.so/core/server. GET requests work without a token.
-app.use('/tlds', oxyAuthOptional, tldsRouter);
-app.use('/domains', oxyAuthOptional, domainsRouter);
-app.use('/nodes', oxyAuthOptional, nodesRouter);
-app.use('/relays', oxyAuthOptional, relaysRouter);
-
-// The optional services layer (docs/architecture/services.md). Every action is
-// off unless its flag is set, and no adapter is constructed until a flagged
-// route needs one — the network routes above never depend on it.
-app.use('/services', oxyAuthOptional, createProductionServicesRouter(readServicesConfig(), getDb));
-
-// Serve parking page directly for TNP domain Host headers.
-// When a user visits "nate.ox" in their browser and the domain has no
-// service node, DNS points to this server and we render the parking page
-// inline — no redirect, URL stays as "nate.ox".
-app.use(async (req, res, next) => {
-  const host = req.hostname;
-  if (
-    !host ||
-    host === 'localhost' ||
-    host.endsWith('tnp.network') ||
-    host.endsWith('oxy.so') ||
-    host.endsWith('pages.dev')
-  ) {
-    return next();
-  }
-  if (!host.includes('.')) return next();
-
-  // `req.hostname` is the raw Host header. Express does not validate it, so it
-  // can carry anything the sender put there — verified against Express 5.2.1:
-  // `Host: a.ox<script>alert(1)</script>` arrives intact. Reject anything that
-  // is not a plausible DNS name before it reaches a database query or the
-  // response body.
-  if (!isValidHostname(host)) return next();
-
-  const facts = await loadNameFacts(getDb(), host).catch((err: unknown) => {
-    console.error('Parking lookup error:', err);
-    return null;
-  });
-  if (!facts) return next();
-
-  const page = decideParkingPage(facts, {
-    parkingIp: config.parkingIp,
-    expiryEnforced: config.nativeExpiryEnforced,
-    now: new Date(),
-  });
-  if (!page) return next();
-
-  // `isValidHostname` already excludes every character that is dangerous here,
-  // so this escape is defence in depth rather than the primary control: it
-  // keeps the page safe if that validator is ever loosened.
-  const safeHost = escapeHtml(host);
-
-  const copy = {
-    available: {
-      title: `${safeHost} — Available on TNP`,
-      subtitle: 'This domain is available. Register it on The Network Protocol.',
-      ctaText: 'Register this domain',
-    },
-    registered: {
-      title: `${safeHost} — Registered on TNP`,
-      subtitle: 'This domain is registered on The Network Protocol.',
-      ctaText: 'View domain details',
-    },
-    // Never the "available" page: an expired name is held for its owner, and
-    // telling a visitor they can register it would be false.
-    held: {
-      title: `${safeHost} — Expired, held on TNP`,
-      subtitle:
-        "This domain's registration has expired. It is held for its owner and cannot be registered by anyone else.",
-      ctaText: 'View domain details',
-    },
-  }[page];
-  const { title, subtitle, ctaText } = copy;
-  // Encoded for URL semantics, then escaped for the HTML attribute it lands in.
-  // `encodeURIComponent` alone leaves `'` intact, which is harmless inside a
-  // double-quoted attribute and a breakout the moment someone changes the
-  // quoting — so both steps run rather than relying on the quote style.
-  // The detail page is per registered name, so a subdomain links to its parent.
-  const registrable = host.toLowerCase().split('.').slice(-2).join('.');
-  const ctaHref =
-    page === 'available'
-      ? 'https://tnp.network/register'
-      : `https://tnp.network/d/${escapeHtml(encodeURIComponent(registrable))}`;
-
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="robots" content="noindex,nofollow">
-  <title>${title}</title>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;color:#e0e0e0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;text-align:center;padding:2rem}
-    h1{font-size:2.5rem;color:#00ffa3;margin-bottom:1rem;letter-spacing:-0.02em}
-    p{font-size:0.875rem;color:#888;margin-bottom:2rem}
-    a{color:#00ffa3;text-decoration:none;font-size:0.875rem;transition:color .2s}
-    a:hover{color:#fff}
-    .links{display:flex;flex-direction:column;gap:0.75rem}
-    .footer{position:fixed;bottom:2rem;font-size:0.75rem;color:#444}
-    .footer a{color:#555;font-size:0.75rem}
-  </style>
-</head>
-<body>
-  <h1>${safeHost}</h1>
-  <p>${subtitle}</p>
-  <div class="links">
-    <a href="${ctaHref}">[${ctaText}]</a>
-    <a href="https://oxy.so/tnp">[What is TNP?]</a>
-  </div>
-  <div class="footer">Powered by <a href="https://tnp.network">TNP</a> · <a href="https://oxy.so">Oxy</a></div>
-</body>
-</html>`);
+// The optional services layer is built here and handed to the app: this file
+// is the one place the network may import it from (docs/architecture/services.md).
+// Every action is off unless its flag is set, and no adapter is constructed
+// until a flagged route needs one.
+const app = createApp({
+  servicesRouter: createProductionServicesRouter(readServicesConfig(), getDb),
 });
 
 async function start() {
@@ -208,6 +50,6 @@ async function start() {
 }
 
 start().catch((err) => {
-  console.error('Failed to start TNP API:', err);
+  logError('Failed to start TNP API:', err);
   process.exit(1);
 });

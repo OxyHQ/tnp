@@ -92,6 +92,11 @@ export function parsePrivacyLevel(value: string): PrivacyLevelResult {
 export interface TnpConfig extends DnsProxyConfig {
   privacyLevel: PrivacyLevel;
   socksPort: number;
+  /**
+   * Stored and shown, but no longer consulted when `tnp serve` picks a relay
+   * on its own: only an Oxy-operated relay is ever chosen automatically, and a
+   * community relay must be named with `--relay` (relay-select.ts).
+   */
   relayPreference: 'oxy' | 'community' | 'any';
   identityKeyPath: string;
   relayPort: number;

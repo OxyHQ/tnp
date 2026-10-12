@@ -4,6 +4,7 @@ export {
   normalizeRelayEndpoint,
   parseRegisterRelayRequest,
   parseRelayHeartbeatRequest,
+  publicRelayEndpointProblem,
   MAX_RELAY_BANDWIDTH_MBPS,
   MAX_RELAY_CONNECTIONS,
   type RegisterRelayRequest,
@@ -84,6 +85,8 @@ export {
   type UpdateDnsRecordRequest,
 } from './dns-records.js';
 
+export { parseUpdateDomainSettingsRequest } from './domains.js';
+
 export type {
   DomainStatus,
   NativeAvailability,
@@ -99,6 +102,8 @@ export type {
   PublicTld,
   RenewDomainResponse,
   TldProposalEntry,
+  UpdateDomainSettingsRequest,
+  UpdateDomainSettingsResponse,
 } from './domains.js';
 
 export type {

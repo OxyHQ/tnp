@@ -13,6 +13,7 @@
  */
 
 import type { DnsRecordDto } from './dns-records.js';
+import { asRecord, type ParseResult } from './parse.js';
 
 export type DomainStatus = 'active' | 'pending' | 'suspended';
 
@@ -23,14 +24,19 @@ export type DomainStatus = 'active' | 'pending' | 'suspended';
  */
 export type NativeExpiryStateDto = 'active' | 'renewable' | 'grace' | 'expired';
 
-/** A native domain as anyone may see it. */
+/**
+ * A native domain as anyone may see it.
+ *
+ * No `createdAt` or `updatedAt`: a public directory that stamps every name
+ * with when it was registered and when its records last changed is an
+ * activity log of every owner, readable by anyone. Owners see both in
+ * `OwnedDomain`.
+ */
 export interface PublicDomain {
   _id: string;
   name: string;
   tld: string;
   status: DomainStatus;
-  createdAt: string;
-  updatedAt: string;
   /** Null for a registration without an expiry. */
   expiresAt: string | null;
 }
@@ -40,7 +46,10 @@ export interface PublicDomainWithRecords extends PublicDomain {
   records: DnsRecordDto[];
 }
 
-/** `GET /domains`. */
+/**
+ * `GET /domains`. Unlisted names are not in it, nor in `GET /domains/search`;
+ * they still resolve and still answer `GET /domains/lookup/:domain`.
+ */
 export interface PublicDomainPage {
   domains: PublicDomain[];
   total: number;
@@ -50,7 +59,33 @@ export interface PublicDomainPage {
 
 /** A native domain as its owner sees it. */
 export interface OwnedDomain extends PublicDomain {
+  createdAt: string;
+  updatedAt: string;
   expiryState: NativeExpiryStateDto;
+  /**
+   * Whether the name is kept out of the public directory and search. It still
+   * resolves, and anyone who already knows it can still look it up.
+   */
+  unlisted: boolean;
+}
+
+/** `PATCH /domains/:id` request — the owner's settings for a name. */
+export interface UpdateDomainSettingsRequest {
+  unlisted: boolean;
+}
+
+/** `PATCH /domains/:id` response. */
+export type UpdateDomainSettingsResponse = OwnedDomain;
+
+export function parseUpdateDomainSettingsRequest(
+  body: unknown,
+): ParseResult<UpdateDomainSettingsRequest> {
+  const record = asRecord(body);
+  if (!record) return { ok: false, error: 'request body must be an object' };
+  if (typeof record.unlisted !== 'boolean') {
+    return { ok: false, error: 'unlisted must be a boolean' };
+  }
+  return { ok: true, value: { unlisted: record.unlisted } };
 }
 
 /** `GET /domains/owned` entry: a count, not the records, so the list stays cheap. */

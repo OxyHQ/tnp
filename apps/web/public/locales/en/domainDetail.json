@@ -19,9 +19,7 @@
     "status": "Status",
     "tld": "TLD",
     "records": "Records",
-    "registered": "Registered",
-    "expires": "Expires",
-    "lastUpdated": "Last Updated"
+    "expires": "Expires"
   },
   "noDnsRecords": "No DNS records configured",
   "howToResolveDesc": "To resolve <accent>{{domain}}</accent> on your device, install the TNP resolver. It configures your system DNS to query TNP nameservers for TNP domains while forwarding everything else to your default resolver.",
@@ -31,5 +29,16 @@
     "description": "{{domain}} is not registered on TNP or may have been released.",
     "registerLink": "register this domain"
   },
-  "neverExpires": "--"
+  "neverExpires": "--",
+  "visibility": {
+    "heading": "Visibility",
+    "listed": "Listed in the public directory and search.",
+    "unlisted": "Unlisted: hidden from the public directory and search. It still resolves, and anyone who knows the name can still look it up.",
+    "makeUnlisted": "Unlist",
+    "makeListed": "List publicly",
+    "saving": "Saving...",
+    "nowUnlisted": "{{domain}} is now unlisted",
+    "nowListed": "{{domain}} is now listed",
+    "failed": "Could not change visibility"
+  }
 }

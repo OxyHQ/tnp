@@ -21,6 +21,8 @@ A relay declares one or more. It does not get them by default.
 
 Operators are Oxy-run or community. Both use the same code and the same rules;
 "Oxy-operated" is a directory fact clients may weigh, not a privileged status.
+The registry decides it — from an allowlist of operator accounts — and never
+takes a relay's word for it (§7).
 
 ## 2. Registration
 
@@ -99,7 +101,9 @@ From the [audit](./audit-2026-08-06.md):
 |---|---|
 | ~~**Registration is non-functional**~~ | Fixed. The client sent `{port, location}` where the API required `{endpoint, publicKey, operator, capacity}`, and the heartbeat mismatched the same way, so every call 400d and `tnp relay` aborted at startup (B2). Both shapes are now declared once in `@tnp/shared-types`, which the API parses with and the relay builds from. `tnp relay` takes `--endpoint`, the public URL clients dial, and registers with its identity key and its stated capacity. |
 | **No authentication** | `/service?domain=x` and `/tunnel` upgrade with no handshake at all (S2). |
-| **`operator` is self-asserted** | A relay says whether it is Oxy-operated or community and the registry believes it. Clients that prefer Oxy relays can therefore be steered to a relay that simply claimed the label. Closed by the registration authentication in §2, which is Phase 3. |
+| ~~**`operator` is self-asserted**~~ | Fixed in the registry (security review 2026-10). `operator` is no longer a request field: a relay is published as `oxy` only while the account that registered it is on the API's `TNP_OXY_RELAY_OPERATORS` allowlist (empty by default), evaluated when the directory is read, so rows written while the field was self-asserted are `community` too. Relays released earlier still send the field; it is ignored. What remains open is §2's relay authentication: the allowlist proves which *account* registered a relay, not that the machine answering at the endpoint is the one that registered. |
+| ~~**`ws://` endpoints, eternal listings, gameable order**~~ | Fixed in the registry. Only `wss://` endpoints on a public host are accepted (IP literals in loopback, private, link-local, CGNAT and similar ranges, `localhost` and single-label names are refused). A relay is listed only while its last heartbeat is under 90 s old — nothing ever wrote `offline`, so one heartbeat used to list it forever. The order is Oxy-operated first, then longest-registered; it used to be status then endpoint string, so `ws://` sorted ahead of every `wss://`. |
+| ~~**`tnp serve` takes the first listed relay**~~ | Fixed in the client. Without `--relay`, `tnp serve` (and the interactive menu) selects only an Oxy-operated relay and otherwise refuses, saying why; a community relay is used only when named with `--relay`. The directory is still unsigned, so this trusts the registry's `operator` field. |
 | **Domain takeover** | Registering a domain evicts the incumbent service node and its circuits (S2). |
 | **Global circuit IDs** | §4 above (S1). |
 | **No limits** | No frame cap, no quotas, no backpressure, unbounded tables (S6). |

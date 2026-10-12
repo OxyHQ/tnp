@@ -31,6 +31,7 @@ import {
   type ZoneRecordDto,
 } from '@tnp/shared-types';
 import type { Database } from '../db/postgres.js';
+import { logError } from '../utils/logError.js';
 import {
   dnsZones,
   operations,
@@ -122,7 +123,7 @@ function sendError(res: Response, err: unknown, context: string): void {
       .json({ error: 'payments_not_configured', message: 'Purchases are not available yet.' });
     return;
   }
-  console.error(`[services] ${context}:`, err);
+  logError(`[services] ${context}:`, err);
   res.status(500).json({ error: 'internal', message: 'Something went wrong.' });
 }
 

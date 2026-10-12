@@ -1,0 +1,1 @@
+ALTER TABLE "domains" ADD COLUMN "unlisted" boolean DEFAULT false NOT NULL;

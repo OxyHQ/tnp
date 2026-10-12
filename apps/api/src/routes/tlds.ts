@@ -6,6 +6,7 @@ import { isReservedTld, validateNativeTld } from '@tnp/namespace';
 import type { PublicTld, TldProposalEntry } from '@tnp/shared-types';
 import { listTldProposals } from '../registry/tlds.js';
 import { getDb } from '../db/postgres.js';
+import { logError } from '../utils/logError.js';
 import { tldProposals, tlds, users, votes } from '../db/schema/index.js';
 
 const router = Router();
@@ -47,7 +48,7 @@ router.get('/', async (_req, res) => {
       .map((t) => ({ ...t, createdAt: t.createdAt.toISOString() }));
     res.json(body);
   } catch (err) {
-    console.error('List TLDs error:', err);
+    logError('List TLDs error:', err);
     res.status(500).json({ error: 'Failed to list TLDs' });
   }
 });
@@ -103,7 +104,7 @@ router.post('/propose', requireOxyAuth, async (req, res) => {
 
     res.status(201).json(proposal);
   } catch (err) {
-    console.error('Propose TLD error:', err);
+    logError('Propose TLD error:', err);
     res.status(500).json({ error: 'Failed to propose TLD' });
   }
 });
@@ -114,7 +115,7 @@ router.get('/proposals', async (req, res) => {
     const body: TldProposalEntry[] = await listTldProposals(getDb(), getOxyUserId(req) ?? null);
     res.json(body);
   } catch (err) {
-    console.error('List proposals error:', err);
+    logError('List proposals error:', err);
     res.status(500).json({ error: 'Failed to list proposals' });
   }
 });
@@ -186,7 +187,7 @@ router.post('/proposals/:id/vote', requireOxyAuth, async (req: Request<{ id: str
 
     res.json({ score: await proposalScore(proposal.id), userVote: direction });
   } catch (err) {
-    console.error('Vote error:', err);
+    logError('Vote error:', err);
     res.status(500).json({ error: 'Failed to vote' });
   }
 });
@@ -218,7 +219,7 @@ router.delete('/proposals/:id/vote', requireOxyAuth, async (req: Request<{ id: s
 
     res.json({ score: await proposalScore(proposal.id), userVote: null });
   } catch (err) {
-    console.error('Remove vote error:', err);
+    logError('Remove vote error:', err);
     res.status(500).json({ error: 'Failed to remove vote' });
   }
 });

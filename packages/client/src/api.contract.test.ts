@@ -96,7 +96,6 @@ describe('relay registration', () => {
           {
             endpoint: 'wss://relay.example.test:8443',
             publicKey: 'Zm9vYmFyLXB1YmxpYy1rZXk=',
-            operator: 'community',
             capacity: { maxConnections: 100, bandwidth: 250 },
             location: 'eu-west',
           },
@@ -122,10 +121,12 @@ describe('relay registration', () => {
     expect(accepted).toEqual({
       endpoint: 'wss://relay.example.test:8443',
       publicKey: 'Zm9vYmFyLXB1YmxpYy1rZXk=',
-      operator: 'community',
       capacity: { maxConnections: 100, bandwidth: 250 },
       location: 'eu-west',
     });
+
+    // The client no longer claims an operator at all: the registry decides it.
+    expect(Object.keys(sent.body as object)).not.toContain('operator');
   });
 
   test('sendRelayHeartbeat sends a body POST /relays/heartbeat accepts', async () => {

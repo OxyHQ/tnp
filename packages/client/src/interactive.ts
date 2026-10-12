@@ -469,17 +469,20 @@ async function actionServe(): Promise<void> {
     const { TnpApiClient } = await import('./api');
     const apiClient = new TnpApiClient(config.apiBaseUrl);
 
-    const preference = config.relayPreference === 'any' ? undefined : config.relayPreference;
-    const relays = await apiClient.getRelays(preference as 'oxy' | 'community' | undefined);
-    if (relays.length === 0) {
-      addLine('No active relays found.', RED);
+    // Same rule as `tnp serve`: only an Oxy-operated relay is ever chosen
+    // automatically (relay-select.ts). To use a community relay, run
+    // `tnp serve --relay`.
+    const { selectAutomaticRelay } = await import('./relay-select');
+    const selection = selectAutomaticRelay(await apiClient.getRelays('oxy'));
+    if (!selection.ok) {
+      addLine(selection.message, RED);
       renderer.root.add(Text({ content: '\n  Press any key to continue...', fg: DIM }));
       await waitForKeypress();
       showMainMenu();
       return;
     }
 
-    const relay = relays[0].endpoint;
+    const relay = selection.endpoint;
     addKeyValue('Relay', relay);
 
     const { startServiceNode } = await import('./service-node');

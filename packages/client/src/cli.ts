@@ -628,23 +628,24 @@ async function cmdServe() {
     process.exit(1);
   }
 
-  // Auto-discover relay if not specified
+  // Without --relay, only an Oxy-operated relay is chosen. A community relay
+  // is never picked silently, whatever `relayPreference` says: see
+  // relay-select.ts for why that is the operator's decision to make.
   let relay = relayEndpoint;
   if (!relay) {
-    console.log('[tnp] auto-discovering relay...');
+    console.log('[tnp] looking for an Oxy-operated relay...');
     const { TnpApiClient } = await import('./api');
+    const { selectAutomaticRelay } = await import('./relay-select');
     const apiClient = new TnpApiClient(config.apiBaseUrl);
 
-    const preference = config.relayPreference === 'any' ? undefined : config.relayPreference;
-    const relays = await apiClient.getRelays(preference as 'oxy' | 'community' | undefined);
-
-    if (relays.length === 0) {
-      console.error('[tnp] no active relays found. Specify one with --relay <wss://url>');
+    const selection = selectAutomaticRelay(await apiClient.getRelays('oxy'));
+    if (!selection.ok) {
+      console.error(`[tnp] ${selection.message}`);
       process.exit(1);
     }
 
-    relay = relays[0].endpoint;
-    console.log(`[tnp] selected relay: ${relay}`);
+    relay = selection.endpoint;
+    console.log(`[tnp] selected Oxy-operated relay: ${relay}`);
   }
 
   console.log(`[tnp] v${VERSION} service node starting...`);

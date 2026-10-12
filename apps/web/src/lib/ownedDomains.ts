@@ -19,6 +19,8 @@ export interface InventoryDomain {
   createdAt: string;
   expiresAt: string | null;
   expiryState?: NativeExpiryStateDto;
+  /** Absent from API images older than the unlisted setting; the control is hidden then. */
+  unlisted?: boolean;
   recordCount: number;
 }
 

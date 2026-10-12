@@ -86,13 +86,48 @@ describe('POST /relays/register', () => {
     const request: RegisterRelayRequest = {
       endpoint: 'wss://relay.example.test:8443',
       publicKey: 'Zm9vYmFyLXB1YmxpYy1rZXk=',
-      operator: 'community',
       capacity: { maxConnections: 100, bandwidth: 250 },
       location: 'eu-west',
     };
 
     // Past validation and into the handler, where the absent database stops it.
     expect(await postPastValidation('/relays/register', request)).toBe(REACHED_HANDLER);
+  });
+
+  test('still accepts a relay released when operator was a request field', async () => {
+    // Those relays send `operator`. They keep registering; what they claim is
+    // ignored (the registry decides — test-db/relays.test.ts proves the row).
+    for (const operator of ['community', 'oxy']) {
+      expect(
+        await postPastValidation('/relays/register', {
+          endpoint: 'wss://relay.example.test:8443',
+          publicKey: 'Zm9vYmFyLXB1YmxpYy1rZXk=',
+          operator,
+          capacity: { maxConnections: 100, bandwidth: 250 },
+          location: 'eu-west',
+        }),
+      ).toBe(REACHED_HANDLER);
+    }
+  });
+
+  test('refuses a ws:// endpoint and a private host before any query', async () => {
+    const base = {
+      publicKey: 'Zm9vYmFyLXB1YmxpYy1rZXk=',
+      capacity: { maxConnections: 100, bandwidth: 250 },
+    };
+    expect(
+      await post('/relays/register', { ...base, endpoint: 'ws://relay.example.test' }),
+    ).toEqual({
+      status: 400,
+      error: 'endpoint must use wss://; plain ws:// relays are not published',
+    });
+    for (const endpoint of ['wss://127.0.0.1:8443', 'wss://10.0.0.5', 'wss://[::1]']) {
+      expect(await post('/relays/register', { ...base, endpoint })).toEqual({
+        status: 400,
+        error:
+          'endpoint must be a publicly reachable host, not a private, loopback or local address',
+      });
+    }
   });
 
   test('rejects the body the client sent before @tnp/shared-types existed', async () => {
@@ -106,7 +141,6 @@ describe('POST /relays/register', () => {
   test('rejects a registration missing any field the directory depends on', async () => {
     const cases: Array<[Record<string, unknown>, string]> = [
       [{ publicKey: undefined }, 'publicKey is required'],
-      [{ operator: 'someone-else' }, "operator must be 'oxy' or 'community'"],
       [{ capacity: undefined }, 'capacity with maxConnections and bandwidth is required'],
       [
         { capacity: { maxConnections: Number.NaN, bandwidth: 0 } },
@@ -114,7 +148,7 @@ describe('POST /relays/register', () => {
       ],
       [
         { endpoint: 'https://relay.example.test' },
-        'endpoint must be a ws:// or wss:// URL with no credentials, query or fragment',
+        'endpoint must be a wss:// URL with no credentials, query or fragment',
       ],
     ];
 
@@ -122,7 +156,6 @@ describe('POST /relays/register', () => {
       const response = await post('/relays/register', {
         endpoint: 'wss://relay.example.test:8443',
         publicKey: 'Zm9vYmFyLXB1YmxpYy1rZXk=',
-        operator: 'community',
         capacity: { maxConnections: 100, bandwidth: 250 },
         location: 'eu-west',
         ...override,
@@ -137,6 +170,13 @@ describe('POST /relays/heartbeat', () => {
     const request: RelayHeartbeatRequest = { endpoint: 'wss://relay.example.test:8443' };
 
     expect(await postPastValidation('/relays/heartbeat', request)).toBe(REACHED_HANDLER);
+  });
+
+  test('refuses a ws:// endpoint: such a relay can no longer be listed', async () => {
+    expect(await post('/relays/heartbeat', { endpoint: 'ws://relay.example.test' })).toEqual({
+      status: 400,
+      error: 'endpoint must use wss://; plain ws:// relays are not published',
+    });
   });
 
   test('rejects the body the client sent before @tnp/shared-types existed', async () => {
@@ -174,7 +214,6 @@ describe('the gate itself', () => {
         body: JSON.stringify({
           endpoint: 'wss://relay.example.test:8443',
           publicKey: 'Zm9vYmFyLXB1YmxpYy1rZXk=',
-          operator: 'community',
           capacity: { maxConnections: 100, bandwidth: 250 },
           location: 'eu-west',
         }),
