@@ -21,7 +21,7 @@ const router = Router();
  * release exists with its signed SHA256SUMS: the installers fail closed
  * against a release without one.
  */
-export const CLIENT_VERSION = '0.5.1';
+export const CLIENT_VERSION = '0.5.2';
 if (!isStrictSemver(CLIENT_VERSION)) {
   throw new Error(`CLIENT_VERSION must be a strict x.y.z version, got ${CLIENT_VERSION}`);
 }
