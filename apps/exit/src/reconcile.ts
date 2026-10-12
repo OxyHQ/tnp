@@ -13,6 +13,7 @@ import type { ExitPeer } from '@tnp/shared-types';
 /** A WireGuard public key as `wg` prints it. Base64 has no `-`, so none can read as an option. */
 const KEY_RE = /^[A-Za-z0-9+/]{43}=$/;
 const IFACE_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,14}$/;
+const PREFIX_RE = /^[0-9a-f.:]+\/[0-9]{1,3}$/;
 /** Peers per `wg set` invocation: bounds the argument list. */
 export const PEERS_PER_COMMAND = 100;
 
@@ -39,12 +40,17 @@ export function parseWgAllowedIps(output: string): ActualPeers {
   const peers: ActualPeers = new Map();
   for (const line of output.split('\n')) {
     if (line.trim() === '') continue;
-    const [key, rest, extra] = line.split('\t');
-    if (!KEY_RE.test(key ?? '') || rest === undefined || extra !== undefined) {
+    // `wg` prints a tab after the key and spaces between prefixes; any run of
+    // whitespace is accepted so a formatting change cannot stall every sync.
+    const match = /^([A-Za-z0-9+/]{43}=)\s+(\S.*)$/.exec(line.trimEnd());
+    if (!match || peers.has(match[1])) {
       throw new WgOutputError('unexpected line in wg allowed-ips output');
     }
-    const ips = rest.trim() === '(none)' ? [] : rest.trim().split(/\s+/).filter(Boolean);
-    peers.set(key, [...ips].sort());
+    const ips = match[2] === '(none)' ? [] : match[2].split(/\s+/);
+    if (!ips.every((ip) => PREFIX_RE.test(ip))) {
+      throw new WgOutputError('unexpected prefix in wg allowed-ips output');
+    }
+    peers.set(match[1], ips.sort());
   }
   return peers;
 }
@@ -91,7 +97,7 @@ export function wgSetCommands(iface: string, changes: readonly PeerChange[]): st
       } else {
         if (
           change.allowedIps.length === 0 ||
-          !change.allowedIps.every((ip) => /^[0-9a-f.:]+\/[0-9]{1,3}$/.test(ip))
+          !change.allowedIps.every((ip) => PREFIX_RE.test(ip))
         ) {
           throw new RangeError('invalid allowed IPs');
         }

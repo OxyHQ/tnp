@@ -30,14 +30,20 @@ describe('parseWgAllowedIps', () => {
   });
 
   test('anything unexpected is an error, so the round changes nothing', () => {
+    const key = peer(2).publicKey;
     for (const bad of [
       'garbage',
       'abc\t10.77.0.2/32',
-      `${peer(2).publicKey} 10.77.0.2/32`,
-      `${peer(2).publicKey}\ta\tb`,
+      `${key}\t`,
+      `${key}\tnot-a-prefix`,
+      `${key}\t10.77.0.2/32\n${key}\t10.77.0.3/32`,
     ]) {
       expect(() => parseWgAllowedIps(bad)).toThrow(WgOutputError);
     }
+    // Whitespace variations in wg's formatting are tolerated.
+    expect(parseWgAllowedIps(`${key}\t10.77.0.2/32\tfd85:d596:af02::a4d:2/128  \n`)).toEqual(
+      new Map([[key, ['10.77.0.2/32', 'fd85:d596:af02::a4d:2/128']]]),
+    );
   });
 });
 
