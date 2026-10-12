@@ -1,0 +1,125 @@
+{
+  "meta": {
+    "title": "Règles DNS personnelles -- TNP"
+  },
+  "tabs": {
+    "domains": "Domaines",
+    "serviceNodes": "Nœuds de service",
+    "dnsRules": "Règles DNS"
+  },
+  "heading": "Règles DNS personnelles",
+  "subtitle": "Bloquez des domaines ou dirigez-les vers un autre serveur sur vos propres appareils et votre routeur. Vos règles sont chiffrées dans ce navigateur avant d'être enregistrées ; TNP ne stocke que du texte chiffré et ne les applique jamais sur son résolveur public.",
+  "noUser": "Impossible de lire votre compte Oxy. Déconnectez-vous puis reconnectez-vous.",
+  "loading": "Chargement de vos règles chiffrées...",
+  "loadError": "Impossible de charger vos règles.",
+  "version": "Version {{version}} de l'ensemble de règles",
+  "lock": "verrouiller",
+  "setup": {
+    "heading": "Créez une phrase de synchronisation",
+    "intro": "La phrase chiffre vos règles dans ce navigateur. Vous la saisirez ici pour les modifier, et une fois sur chaque appareil que vous synchronisez.",
+    "warning": "TNP ne peut pas récupérer cette phrase. Si vous la perdez, personne ne pourra déchiffrer vos règles enregistrées, pas même vous ; vous pourrez seulement les supprimer et recommencer.",
+    "passphrase": "Phrase de synchronisation",
+    "confirm": "Répétez la phrase",
+    "tooShort": "Utilisez au moins {{min}} caractères. Quelques mots sans rapport entre eux conviennent bien.",
+    "mismatch": "Les deux phrases ne correspondent pas.",
+    "create": "Créer l'ensemble de règles chiffré",
+    "creating": "Chiffrement..."
+  },
+  "unlock": {
+    "heading": "Déverrouillez vos règles",
+    "intro": "Vos règles sont stockées chiffrées. Saisissez votre phrase de synchronisation pour les déchiffrer dans ce navigateur.",
+    "passphrase": "Phrase de synchronisation",
+    "submit": "Déverrouiller",
+    "deriving": "Dérivation de la clé...",
+    "wrong": "Cette phrase ne déverrouille pas vos règles.",
+    "tampered": "L'ensemble de règles enregistré ne se déchiffre pas. Il a peut-être été modifié ou recréé sur un autre appareil.",
+    "forgot": "Phrase oubliée ? Personne ne peut la récupérer. Vous pouvez supprimer les règles enregistrées ci-dessous et créer un nouvel ensemble."
+  },
+  "editor": {
+    "heading": "Règles",
+    "empty": "Aucune règle pour l'instant. Ajoutez-en une ci-dessous.",
+    "type": "Règle",
+    "typeBlock": "Bloquer",
+    "typeRedirect": "Rediriger",
+    "name": "Domaine",
+    "namePlaceholder": "ads.example.com",
+    "subdomains": "Bloquer aussi tous les sous-domaines",
+    "target": "Envoyer vers",
+    "targetPlaceholder": "192.168.1.10, 2001:db8::10 ou nas.home.arpa",
+    "targetHelp": "Une adresse IPv4 ou IPv6, ou un autre nom de domaine (répondu comme alias). Seul ce nom exact est redirigé, jamais ses sous-domaines.",
+    "add": "Ajouter la règle",
+    "update": "Mettre à jour la règle",
+    "cancel": "annuler",
+    "edit": "modifier",
+    "remove": "retirer",
+    "blockLabel": "bloquer",
+    "redirectLabel": "rediriger",
+    "andSubdomains": "et sous-domaines",
+    "localNote": "Les modifications restent dans ce navigateur jusqu'à l'enregistrement. Enregistrer chiffre à nouveau tout l'ensemble de règles."
+  },
+  "save": {
+    "save": "Chiffrer et enregistrer",
+    "saving": "Enregistrement...",
+    "saved": "Règles chiffrées et enregistrées.",
+    "unsaved": "modifications non enregistrées",
+    "failed": "Impossible d'enregistrer vos règles.",
+    "conflict": "Vos règles ont été modifiées sur un autre appareil depuis que vous les avez déverrouillées. Rechargez pour voir la version la plus récente ; vos modifications non enregistrées ici seront perdues.",
+    "reload": "recharger la version récente"
+  },
+  "rejected": {
+    "heading": "Certaines règles enregistrées sont inutilisables et seront retirées au prochain enregistrement :",
+    "item": "Règle n° {{index}} : {{reason}}"
+  },
+  "errors": {
+    "body_invalid": "Cette règle est mal formée.",
+    "too_many": "Un ensemble peut contenir au plus 2000 règles.",
+    "type_invalid": "Choisissez bloquer ou rediriger.",
+    "name_required": "Saisissez un nom de domaine.",
+    "name_invalid": "Ce n'est pas un nom de domaine valide.",
+    "name_single_label": "Une règle doit désigner un domaine, jamais un domaine de premier niveau entier comme .com.",
+    "name_ip": "Saisissez un nom de domaine, pas une adresse IP.",
+    "target_required": "Indiquez où le nom doit pointer.",
+    "target_invalid": "Saisissez une adresse IPv4 ou IPv6 ou un nom de domaine.",
+    "target_self": "Un nom ne peut pas pointer vers lui-même.",
+    "redirect_native": "Les noms TNP (.ox) ne peuvent pas être redirigés : le registre TNP fait autorité pour eux. Vous pouvez toujours en bloquer un.",
+    "duplicate": "Une règle existe déjà pour ce nom. Modifiez plutôt celle-ci."
+  },
+  "export": {
+    "heading": "Exporter pour le routeur",
+    "intro": "Généré dans ce navigateur à partir des règles ci-dessus. Copiez-le sur votre routeur ; il n'est jamais envoyé à TNP.",
+    "tabs": {
+      "dnsmasq": "dnsmasq",
+      "uci": "OpenWrt (uci)",
+      "adguard": "AdGuard Home",
+      "hosts": "Pi-hole / hosts"
+    },
+    "notes": {
+      "dnsmasq": "Pour un fichier de configuration dnsmasq (OpenWrt : /etc/dnsmasq.d/ ou un conf-dir). dnsmasq applique address= au nom et à tous ses sous-domaines, et ne répond aux redirections CNAME que pour les noms qu'il connaît localement ; elles sont donc commentées.",
+      "uci": "Collez-le dans une session SSH sur un routeur OpenWrt en root. Mêmes règles que l'onglet dnsmasq ; l'exécuter deux fois ajoute chaque entrée deux fois.",
+      "adguard": "Collez-le dans AdGuard Home sous Filtres, Règles de filtrage personnalisées. Les blocages répondent NXDOMAIN ; les redirections utilisent $dnsrewrite.",
+      "hosts": "Pour les enregistrements DNS locaux de Pi-hole ou tout fichier hosts. Les entrées hosts couvrent un seul nom exact et répondent 0.0.0.0 aux blocages ; les blocages de sous-domaines et les CNAME figurent en commentaires indiquant où les ajouter."
+    }
+  },
+  "apply": {
+    "heading": "Utiliser les règles sur vos appareils",
+    "intro": "Les règles ne s'appliquent que là où vous les installez. Chaque appareil les déchiffre lui-même avec votre phrase.",
+    "step1": "Installez le client TNP, puis lancez <code>sudo TNP_TOKEN=... tnp rules pull</code> et saisissez votre phrase de synchronisation. Les téléchargements suivants ne la redemandent pas.",
+    "step2": "Les règles de blocage s'appliquent immédiatement. Les redirections attendent que vous approuviez chacune d'elles sur cet appareil avec <code>sudo tnp rules approve</code>.",
+    "step3": "Vérifiez ce qui est actif avec <code>tnp status</code> ou <code>tnp rules status</code>.",
+    "scope": "Le client applique les règles aux requêtes auxquelles répond son propre résolveur. Par défaut, votre système ne lui envoie que les noms .ox ; pour les autres domaines, pointez l'appareil ou votre routeur vers lui, ou utilisez l'export pour routeur ci-dessus."
+  },
+  "privacy": {
+    "heading": "Ce que TNP peut voir",
+    "stored": "TNP stocke un bloc chiffré par compte : le texte chiffré, votre clé enveloppée par votre phrase, les paramètres de dérivation de clé, un numéro de version et la date du dernier enregistrement. Ni vos règles, ni leurs noms, ni leur nombre.",
+    "redirects": "Une redirection ne prend effet sur un appareil qu'après votre approbation sur celui-ci : même une personne qui détient votre phrase ne peut pas changer en silence ce que signifie un nom public sur vos appareils.",
+    "webCode": "Cette page déchiffre vos règles avec du code servi par tnp.network. Quelqu'un capable de modifier ce code pourrait capturer une phrase saisie ensuite. Le client en ligne de commande tnp est une version signée et ne dépend pas de cette page."
+  },
+  "danger": {
+    "heading": "Supprimer les règles",
+    "delete": "supprimer toutes les règles enregistrées",
+    "confirm": "Cela supprime votre ensemble de règles chiffré de TNP. Les appareils qui l'ont déjà téléchargé gardent leur copie jusqu'à ce que vous lanciez tnp rules forget sur eux.",
+    "confirmButton": "Supprimer les règles enregistrées",
+    "cancel": "annuler",
+    "deleted": "Vos règles enregistrées ont été supprimées."
+  }
+}

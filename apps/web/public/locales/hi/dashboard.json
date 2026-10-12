@@ -4,7 +4,8 @@
   },
   "tabs": {
     "domains": "डोमेन",
-    "serviceNodes": "सर्विस नोड"
+    "serviceNodes": "सर्विस नोड",
+    "dnsRules": "DNS नियम"
   },
   "heading": "आपके डोमेन",
   "emptyState": "आपने अभी तक कोई डोमेन पंजीकृत नहीं किया है।",

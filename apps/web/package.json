@@ -20,6 +20,8 @@
     "@tanstack/query-sync-storage-persister": "^5.101.2",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-query-persist-client": "^5.101.2",
+    "@tnp/crypto": "workspace:*",
+    "@tnp/namespace": "workspace:*",
     "@tnp/shared-types": "workspace:*",
     "color": "^5.0.3",
     "i18next": "^26.3.6",

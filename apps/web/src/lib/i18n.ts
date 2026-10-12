@@ -19,6 +19,7 @@ const NAMESPACES = [
   'install',
   'park',
   'services',
+  'dnsRules',
 ] as const;
 
 i18n

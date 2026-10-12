@@ -1,0 +1,125 @@
+{
+  "meta": {
+    "title": "Personal DNS rules -- TNP"
+  },
+  "tabs": {
+    "domains": "Domains",
+    "serviceNodes": "Service Nodes",
+    "dnsRules": "DNS Rules"
+  },
+  "heading": "Personal DNS rules",
+  "subtitle": "Block domains or point them at another server on your own devices and router. Your rules are encrypted in this browser before they are saved; TNP stores only ciphertext and never applies them on its public resolver.",
+  "noUser": "Your Oxy account could not be read. Sign out and sign in again.",
+  "loading": "Loading your encrypted rules...",
+  "loadError": "Your rules could not be loaded.",
+  "version": "Rule set version {{version}}",
+  "lock": "lock",
+  "setup": {
+    "heading": "Create a sync passphrase",
+    "intro": "The passphrase encrypts your rules in this browser. You will type it here to edit them and once on each device you sync them to.",
+    "warning": "TNP cannot recover this passphrase. If you lose it, your saved rules cannot be decrypted by anyone, including you; you can only delete them and start again.",
+    "passphrase": "Sync passphrase",
+    "confirm": "Repeat the passphrase",
+    "tooShort": "Use at least {{min}} characters. A few unrelated words work well.",
+    "mismatch": "The two passphrases do not match.",
+    "create": "Create encrypted rule set",
+    "creating": "Encrypting..."
+  },
+  "unlock": {
+    "heading": "Unlock your rules",
+    "intro": "Your rules are stored encrypted. Enter your sync passphrase to decrypt them in this browser.",
+    "passphrase": "Sync passphrase",
+    "submit": "Unlock",
+    "deriving": "Deriving key...",
+    "wrong": "That passphrase does not unlock your rules.",
+    "tampered": "The stored rule set does not decrypt. It may have been altered or re-created on another device.",
+    "forgot": "Forgot the passphrase? Nobody can recover it. You can delete the stored rules below and create a new rule set."
+  },
+  "editor": {
+    "heading": "Rules",
+    "empty": "No rules yet. Add one below.",
+    "type": "Rule",
+    "typeBlock": "Block",
+    "typeRedirect": "Redirect",
+    "name": "Domain",
+    "namePlaceholder": "ads.example.com",
+    "subdomains": "Also block every subdomain",
+    "target": "Send it to",
+    "targetPlaceholder": "192.168.1.10, 2001:db8::10 or nas.home.arpa",
+    "targetHelp": "An IPv4 or IPv6 address, or another domain name (answered as an alias). Only this exact name is redirected, never its subdomains.",
+    "add": "Add rule",
+    "update": "Update rule",
+    "cancel": "cancel",
+    "edit": "edit",
+    "remove": "remove",
+    "blockLabel": "block",
+    "redirectLabel": "redirect",
+    "andSubdomains": "and subdomains",
+    "localNote": "Changes stay in this browser until you save. Saving encrypts the whole rule set again."
+  },
+  "save": {
+    "save": "Encrypt and save",
+    "saving": "Saving...",
+    "saved": "Rules encrypted and saved.",
+    "unsaved": "unsaved changes",
+    "failed": "Your rules could not be saved.",
+    "conflict": "Your rules were changed on another device since you unlocked them. Reload to see the newer version; your unsaved changes here will be discarded.",
+    "reload": "reload newer version"
+  },
+  "rejected": {
+    "heading": "Some stored rules cannot be used and will be dropped on the next save:",
+    "item": "Rule #{{index}}: {{reason}}"
+  },
+  "errors": {
+    "body_invalid": "This rule is malformed.",
+    "too_many": "A rule set can hold at most 2000 rules.",
+    "type_invalid": "Choose block or redirect.",
+    "name_required": "Enter a domain name.",
+    "name_invalid": "That is not a valid domain name.",
+    "name_single_label": "A rule must name a domain, never a whole top-level domain like .com.",
+    "name_ip": "Enter a domain name, not an IP address.",
+    "target_required": "Enter where the name should point.",
+    "target_invalid": "Enter an IPv4 or IPv6 address or a domain name.",
+    "target_self": "A name cannot point to itself.",
+    "redirect_native": "TNP names (.ox) cannot be redirected: the TNP registry is authoritative for them. You can still block one.",
+    "duplicate": "There is already a rule for this name. Edit that one instead."
+  },
+  "export": {
+    "heading": "Export for router",
+    "intro": "Generated in this browser from the rules above. Copy it to your router; it is never sent to TNP.",
+    "tabs": {
+      "dnsmasq": "dnsmasq",
+      "uci": "OpenWrt (uci)",
+      "adguard": "AdGuard Home",
+      "hosts": "Pi-hole / hosts"
+    },
+    "notes": {
+      "dnsmasq": "For a dnsmasq conf file (OpenWrt: /etc/dnsmasq.d/ or a conf-dir). dnsmasq applies address= to the name and all its subdomains, and only answers CNAME redirects for names it knows locally, so those are commented out.",
+      "uci": "Paste into an SSH session on an OpenWrt router as root. Same rules as the dnsmasq tab; running it twice adds each entry twice.",
+      "adguard": "Paste into AdGuard Home under Filters, Custom filtering rules. Blocks answer NXDOMAIN; redirects use $dnsrewrite.",
+      "hosts": "For Pi-hole Local DNS records or any hosts file. Hosts entries cover one exact name and answer 0.0.0.0 for blocks; subdomain blocks and CNAMEs are listed as comments saying where to add them."
+    }
+  },
+  "apply": {
+    "heading": "Use the rules on your devices",
+    "intro": "Rules apply only where you install them. Each device decrypts them itself with your passphrase.",
+    "step1": "Install the TNP client, then run <code>sudo TNP_TOKEN=... tnp rules pull</code> and enter your sync passphrase. Later pulls do not ask again.",
+    "step2": "Block rules apply at once. Redirects wait until you approve each one on that device with <code>sudo tnp rules approve</code>.",
+    "step3": "Check what is active with <code>tnp status</code> or <code>tnp rules status</code>.",
+    "scope": "The client applies rules to lookups its own resolver answers. By default your system sends it only .ox names, so for other domains point the device or your router at it, or use the router export above."
+  },
+  "privacy": {
+    "heading": "What TNP can see",
+    "stored": "TNP stores one encrypted blob per account: the ciphertext, your key wrapped by your passphrase, the key-derivation settings, a version number and when you last saved. Not your rules, not their names, not how many there are.",
+    "redirects": "A redirect only takes effect on a device after you approve it there, so not even someone holding your passphrase can silently change what a public name means on your devices.",
+    "webCode": "This page decrypts your rules with code served by tnp.network. Someone able to change that code could capture a passphrase typed afterwards. The tnp command-line client is a signed release and does not depend on this page."
+  },
+  "danger": {
+    "heading": "Delete rules",
+    "delete": "delete all stored rules",
+    "confirm": "This deletes your encrypted rule set from TNP. Devices that already pulled it keep their copy until you run tnp rules forget on them.",
+    "confirmButton": "Delete stored rules",
+    "cancel": "cancel",
+    "deleted": "Your stored rules were deleted."
+  }
+}

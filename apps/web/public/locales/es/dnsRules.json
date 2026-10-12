@@ -1,0 +1,125 @@
+{
+  "meta": {
+    "title": "Reglas DNS personales -- TNP"
+  },
+  "tabs": {
+    "domains": "Dominios",
+    "serviceNodes": "Nodos de servicio",
+    "dnsRules": "Reglas DNS"
+  },
+  "heading": "Reglas DNS personales",
+  "subtitle": "Bloquea dominios o dirígelos a otro servidor en tus propios dispositivos y router. Tus reglas se cifran en este navegador antes de guardarse; TNP solo almacena texto cifrado y nunca las aplica en su resolutor público.",
+  "noUser": "No se pudo leer tu cuenta Oxy. Cierra sesión y vuelve a iniciarla.",
+  "loading": "Cargando tus reglas cifradas...",
+  "loadError": "No se pudieron cargar tus reglas.",
+  "version": "Versión {{version}} del conjunto de reglas",
+  "lock": "bloquear",
+  "setup": {
+    "heading": "Crea una frase de sincronización",
+    "intro": "La frase cifra tus reglas en este navegador. La escribirás aquí para editarlas y una vez en cada dispositivo con el que las sincronices.",
+    "warning": "TNP no puede recuperar esta frase. Si la pierdes, nadie podrá descifrar tus reglas guardadas, ni siquiera tú; solo podrás borrarlas y empezar de nuevo.",
+    "passphrase": "Frase de sincronización",
+    "confirm": "Repite la frase",
+    "tooShort": "Usa al menos {{min}} caracteres. Unas cuantas palabras sin relación funcionan bien.",
+    "mismatch": "Las dos frases no coinciden.",
+    "create": "Crear conjunto de reglas cifrado",
+    "creating": "Cifrando..."
+  },
+  "unlock": {
+    "heading": "Desbloquea tus reglas",
+    "intro": "Tus reglas se guardan cifradas. Escribe tu frase de sincronización para descifrarlas en este navegador.",
+    "passphrase": "Frase de sincronización",
+    "submit": "Desbloquear",
+    "deriving": "Derivando la clave...",
+    "wrong": "Esa frase no desbloquea tus reglas.",
+    "tampered": "El conjunto de reglas guardado no se puede descifrar. Puede que se haya alterado o recreado en otro dispositivo.",
+    "forgot": "¿Olvidaste la frase? Nadie puede recuperarla. Puedes borrar las reglas guardadas abajo y crear un conjunto nuevo."
+  },
+  "editor": {
+    "heading": "Reglas",
+    "empty": "Aún no hay reglas. Añade una abajo.",
+    "type": "Regla",
+    "typeBlock": "Bloquear",
+    "typeRedirect": "Redirigir",
+    "name": "Dominio",
+    "namePlaceholder": "ads.example.com",
+    "subdomains": "Bloquear también todos los subdominios",
+    "target": "Enviar a",
+    "targetPlaceholder": "192.168.1.10, 2001:db8::10 o nas.home.arpa",
+    "targetHelp": "Una dirección IPv4 o IPv6, u otro nombre de dominio (se responde como alias). Solo se redirige este nombre exacto, nunca sus subdominios.",
+    "add": "Añadir regla",
+    "update": "Actualizar regla",
+    "cancel": "cancelar",
+    "edit": "editar",
+    "remove": "quitar",
+    "blockLabel": "bloquear",
+    "redirectLabel": "redirigir",
+    "andSubdomains": "y subdominios",
+    "localNote": "Los cambios se quedan en este navegador hasta que guardes. Al guardar se vuelve a cifrar todo el conjunto de reglas."
+  },
+  "save": {
+    "save": "Cifrar y guardar",
+    "saving": "Guardando...",
+    "saved": "Reglas cifradas y guardadas.",
+    "unsaved": "cambios sin guardar",
+    "failed": "No se pudieron guardar tus reglas.",
+    "conflict": "Tus reglas cambiaron en otro dispositivo desde que las desbloqueaste. Recarga para ver la versión más reciente; se descartarán los cambios sin guardar de aquí.",
+    "reload": "recargar la versión más reciente"
+  },
+  "rejected": {
+    "heading": "Algunas reglas guardadas no se pueden usar y se eliminarán al guardar la próxima vez:",
+    "item": "Regla n.º {{index}}: {{reason}}"
+  },
+  "errors": {
+    "body_invalid": "Esta regla está mal formada.",
+    "too_many": "Un conjunto puede tener como máximo 2000 reglas.",
+    "type_invalid": "Elige bloquear o redirigir.",
+    "name_required": "Escribe un nombre de dominio.",
+    "name_invalid": "Ese no es un nombre de dominio válido.",
+    "name_single_label": "Una regla debe nombrar un dominio, nunca un dominio de nivel superior completo como .com.",
+    "name_ip": "Escribe un nombre de dominio, no una dirección IP.",
+    "target_required": "Escribe a dónde debe apuntar el nombre.",
+    "target_invalid": "Escribe una dirección IPv4 o IPv6 o un nombre de dominio.",
+    "target_self": "Un nombre no puede apuntar a sí mismo.",
+    "redirect_native": "Los nombres TNP (.ox) no se pueden redirigir: el registro de TNP tiene autoridad sobre ellos. Aun así puedes bloquear uno.",
+    "duplicate": "Ya existe una regla para este nombre. Edita esa."
+  },
+  "export": {
+    "heading": "Exportar para el router",
+    "intro": "Generado en este navegador a partir de las reglas de arriba. Cópialo en tu router; nunca se envía a TNP.",
+    "tabs": {
+      "dnsmasq": "dnsmasq",
+      "uci": "OpenWrt (uci)",
+      "adguard": "AdGuard Home",
+      "hosts": "Pi-hole / hosts"
+    },
+    "notes": {
+      "dnsmasq": "Para un archivo de configuración de dnsmasq (OpenWrt: /etc/dnsmasq.d/ o un conf-dir). dnsmasq aplica address= al nombre y a todos sus subdominios, y solo responde redirecciones CNAME para nombres que conoce localmente, por eso aparecen comentadas.",
+      "uci": "Pégalo en una sesión SSH de un router OpenWrt como root. Las mismas reglas que la pestaña dnsmasq; si lo ejecutas dos veces, cada entrada se añade dos veces.",
+      "adguard": "Pégalo en AdGuard Home en Filtros, Reglas de filtrado personalizadas. Los bloqueos responden NXDOMAIN; las redirecciones usan $dnsrewrite.",
+      "hosts": "Para los registros DNS locales de Pi-hole o cualquier archivo hosts. Las entradas hosts cubren un único nombre exacto y responden 0.0.0.0 a los bloqueos; los bloqueos de subdominios y los CNAME aparecen como comentarios que indican dónde añadirlos."
+    }
+  },
+  "apply": {
+    "heading": "Usa las reglas en tus dispositivos",
+    "intro": "Las reglas solo se aplican donde las instalas. Cada dispositivo las descifra por sí mismo con tu frase.",
+    "step1": "Instala el cliente TNP y ejecuta <code>sudo TNP_TOKEN=... tnp rules pull</code>; escribe tu frase de sincronización. Las siguientes descargas no la vuelven a pedir.",
+    "step2": "Las reglas de bloqueo se aplican de inmediato. Las redirecciones esperan a que apruebes cada una en ese dispositivo con <code>sudo tnp rules approve</code>.",
+    "step3": "Comprueba lo que está activo con <code>tnp status</code> o <code>tnp rules status</code>.",
+    "scope": "El cliente aplica las reglas a las consultas que responde su propio resolutor. Por defecto tu sistema solo le envía nombres .ox, así que para otros dominios apunta el dispositivo o tu router hacia él, o usa la exportación para router de arriba."
+  },
+  "privacy": {
+    "heading": "Qué puede ver TNP",
+    "stored": "TNP guarda un bloque cifrado por cuenta: el texto cifrado, tu clave envuelta con tu frase, los parámetros de derivación de clave, un número de versión y cuándo guardaste por última vez. No tus reglas, ni sus nombres, ni cuántas hay.",
+    "redirects": "Una redirección solo tiene efecto en un dispositivo después de que la apruebes allí, así que ni siquiera alguien con tu frase puede cambiar en silencio lo que significa un nombre público en tus dispositivos.",
+    "webCode": "Esta página descifra tus reglas con código servido por tnp.network. Alguien capaz de cambiar ese código podría capturar una frase escrita después. El cliente de línea de comandos tnp es una versión firmada y no depende de esta página."
+  },
+  "danger": {
+    "heading": "Borrar reglas",
+    "delete": "borrar todas las reglas guardadas",
+    "confirm": "Esto borra de TNP tu conjunto de reglas cifrado. Los dispositivos que ya lo descargaron conservan su copia hasta que ejecutes tnp rules forget en ellos.",
+    "confirmButton": "Borrar reglas guardadas",
+    "cancel": "cancelar",
+    "deleted": "Se borraron tus reglas guardadas."
+  }
+}

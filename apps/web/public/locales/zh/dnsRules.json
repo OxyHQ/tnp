@@ -1,0 +1,125 @@
+{
+  "meta": {
+    "title": "个人 DNS 规则 -- TNP"
+  },
+  "tabs": {
+    "domains": "域名",
+    "serviceNodes": "服务节点",
+    "dnsRules": "DNS 规则"
+  },
+  "heading": "个人 DNS 规则",
+  "subtitle": "在你自己的设备和路由器上屏蔽域名，或将其指向另一台服务器。规则在保存前就在此浏览器中加密；TNP 只存储密文，也绝不会在其公共解析器上应用这些规则。",
+  "noUser": "无法读取你的 Oxy 账户。请退出后重新登录。",
+  "loading": "正在加载你的加密规则...",
+  "loadError": "无法加载你的规则。",
+  "version": "规则集版本 {{version}}",
+  "lock": "锁定",
+  "setup": {
+    "heading": "创建同步口令",
+    "intro": "口令会在此浏览器中加密你的规则。编辑规则时需要在这里输入，并且在每台要同步的设备上输入一次。",
+    "warning": "TNP 无法找回此口令。如果你忘记了它，任何人（包括你自己）都无法解密已保存的规则；你只能删除它们并重新开始。",
+    "passphrase": "同步口令",
+    "confirm": "再次输入口令",
+    "tooShort": "请至少使用 {{min}} 个字符。几个互不相关的词语效果很好。",
+    "mismatch": "两次输入的口令不一致。",
+    "create": "创建加密规则集",
+    "creating": "正在加密..."
+  },
+  "unlock": {
+    "heading": "解锁你的规则",
+    "intro": "你的规则以加密形式存储。输入同步口令即可在此浏览器中解密。",
+    "passphrase": "同步口令",
+    "submit": "解锁",
+    "deriving": "正在派生密钥...",
+    "wrong": "该口令无法解锁你的规则。",
+    "tampered": "已存储的规则集无法解密。它可能已被篡改，或已在另一台设备上重新创建。",
+    "forgot": "忘记了口令？没有人能找回它。你可以在下方删除已存储的规则并创建新的规则集。"
+  },
+  "editor": {
+    "heading": "规则",
+    "empty": "还没有规则。请在下方添加。",
+    "type": "规则",
+    "typeBlock": "屏蔽",
+    "typeRedirect": "重定向",
+    "name": "域名",
+    "namePlaceholder": "ads.example.com",
+    "subdomains": "同时屏蔽所有子域名",
+    "target": "指向",
+    "targetPlaceholder": "192.168.1.10、2001:db8::10 或 nas.home.arpa",
+    "targetHelp": "IPv4 或 IPv6 地址，或另一个域名（以别名形式应答）。只重定向这个确切的名称，不会影响其子域名。",
+    "add": "添加规则",
+    "update": "更新规则",
+    "cancel": "取消",
+    "edit": "编辑",
+    "remove": "移除",
+    "blockLabel": "屏蔽",
+    "redirectLabel": "重定向",
+    "andSubdomains": "及子域名",
+    "localNote": "在保存之前，更改只保留在此浏览器中。保存时会重新加密整个规则集。"
+  },
+  "save": {
+    "save": "加密并保存",
+    "saving": "正在保存...",
+    "saved": "规则已加密并保存。",
+    "unsaved": "有未保存的更改",
+    "failed": "无法保存你的规则。",
+    "conflict": "自你解锁以来，你的规则已在另一台设备上被修改。请重新加载以查看较新的版本；此处未保存的更改将被丢弃。",
+    "reload": "重新加载较新版本"
+  },
+  "rejected": {
+    "heading": "部分已存储的规则无法使用，下次保存时将被删除：",
+    "item": "第 {{index}} 条规则：{{reason}}"
+  },
+  "errors": {
+    "body_invalid": "此规则格式错误。",
+    "too_many": "一个规则集最多可包含 2000 条规则。",
+    "type_invalid": "请选择屏蔽或重定向。",
+    "name_required": "请输入域名。",
+    "name_invalid": "这不是有效的域名。",
+    "name_single_label": "规则必须指定一个域名，绝不能是整个顶级域名（例如 .com）。",
+    "name_ip": "请输入域名，而不是 IP 地址。",
+    "target_required": "请输入该名称应指向的位置。",
+    "target_invalid": "请输入 IPv4 或 IPv6 地址或域名。",
+    "target_self": "名称不能指向其自身。",
+    "redirect_native": "TNP 名称（.ox）不能重定向：TNP 注册表对它们具有权威性。但你仍然可以屏蔽它们。",
+    "duplicate": "该名称已有一条规则。请编辑那条规则。"
+  },
+  "export": {
+    "heading": "导出到路由器",
+    "intro": "根据上方规则在此浏览器中生成。将其复制到你的路由器；它绝不会发送给 TNP。",
+    "tabs": {
+      "dnsmasq": "dnsmasq",
+      "uci": "OpenWrt (uci)",
+      "adguard": "AdGuard Home",
+      "hosts": "Pi-hole / hosts"
+    },
+    "notes": {
+      "dnsmasq": "用于 dnsmasq 配置文件（OpenWrt：/etc/dnsmasq.d/ 或 conf-dir）。dnsmasq 的 address= 会作用于该名称及其所有子域名，并且只为本地已知的名称应答 CNAME 重定向，因此这些行已被注释掉。",
+      "uci": "以 root 身份粘贴到 OpenWrt 路由器的 SSH 会话中。规则与 dnsmasq 标签页相同；运行两次会使每个条目被添加两次。",
+      "adguard": "粘贴到 AdGuard Home 的「过滤器 > 自定义过滤规则」中。屏蔽返回 NXDOMAIN；重定向使用 $dnsrewrite。",
+      "hosts": "用于 Pi-hole 的本地 DNS 记录或任何 hosts 文件。hosts 条目只覆盖一个确切名称，屏蔽时返回 0.0.0.0；子域名屏蔽和 CNAME 以注释形式列出，并说明应添加到哪里。"
+    }
+  },
+  "apply": {
+    "heading": "在你的设备上使用规则",
+    "intro": "规则只在你安装它们的地方生效。每台设备都用你的口令自行解密。",
+    "step1": "安装 TNP 客户端，然后运行 <code>sudo TNP_TOKEN=... tnp rules pull</code> 并输入同步口令。之后的拉取不会再次询问。",
+    "step2": "屏蔽规则立即生效。重定向需要你在该设备上用 <code>sudo tnp rules approve</code> 逐条批准后才会生效。",
+    "step3": "使用 <code>tnp status</code> 或 <code>tnp rules status</code> 查看哪些规则处于活动状态。",
+    "scope": "客户端只对其自身解析器应答的查询应用规则。默认情况下，系统只会将 .ox 名称发送给它；对于其他域名，请将设备或路由器指向它，或使用上方的路由器导出。"
+  },
+  "privacy": {
+    "heading": "TNP 能看到什么",
+    "stored": "TNP 为每个账户存储一个加密数据块：密文、由你的口令封装的密钥、密钥派生参数、版本号以及你最后一次保存的时间。不包括你的规则、规则中的名称，也不包括规则的数量。",
+    "redirects": "重定向只有在你于某台设备上批准后才会在该设备上生效，因此即使有人掌握了你的口令，也无法悄悄改变公共名称在你设备上的含义。",
+    "webCode": "此页面使用由 tnp.network 提供的代码解密你的规则。能够更改这些代码的人可能会截获之后输入的口令。tnp 命令行客户端是经过签名的发行版，不依赖此页面。"
+  },
+  "danger": {
+    "heading": "删除规则",
+    "delete": "删除所有已存储的规则",
+    "confirm": "这将从 TNP 删除你的加密规则集。已经拉取过的设备会保留其副本，直到你在这些设备上运行 tnp rules forget。",
+    "confirmButton": "删除已存储的规则",
+    "cancel": "取消",
+    "deleted": "你已存储的规则已被删除。"
+  }
+}
