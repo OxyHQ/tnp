@@ -116,6 +116,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The production image's build inputs (Dockerfile, context, target and
+      # both .dockerignore files) must match the reviewed pin in
+      # .github/scripts/reviewed-images.json. The publish refuses to build on a
+      # mismatch, so catching it here, on every pull request, is what stops a
+      # merge from stranding main unpublishable. The fixture tests run first so
+      # a green check means the gate can fail.
+      - name: Prove the reviewed-image gate can fail
+        run: python3 -B -m unittest discover -s .github/scripts -p test_reviewed_image.py
+      - name: Verify the production image's build inputs are reviewed
+        run: python3 -B .github/scripts/reviewed-image.py check
+
       - name: Build the API image
         run: docker build -f Dockerfile.api -t tnp-api:ci .
 
