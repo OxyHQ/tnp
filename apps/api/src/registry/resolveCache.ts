@@ -30,6 +30,7 @@ export interface ResolveCacheOptions {
 
 interface Entry {
   response: DnsResolveResponse;
+  storedAt: number;
   expiresAt: number;
 }
 
@@ -55,11 +56,23 @@ export class ResolveCache {
     if (key === null) return undefined;
     const entry = this.entries.get(key);
     if (!entry) return undefined;
-    if (entry.expiresAt <= this.now()) {
+    const now = this.now();
+    if (entry.expiresAt <= now) {
       this.entries.delete(key);
       return undefined;
     }
-    return entry.response;
+    // Answer TTLs count down while cached, rounded so they never grow: a
+    // resolver downstream must not keep a record longer than its owner asked
+    // because it happened to be served from here.
+    const elapsed = Math.ceil((now - entry.storedAt) / 1000);
+    if (elapsed <= 0) return entry.response;
+    return {
+      ...entry.response,
+      answers: entry.response.answers.map((answer) => ({
+        ...answer,
+        ttl: Math.max(0, answer.ttl - elapsed),
+      })),
+    };
   }
 
   /** Seconds `response` may be served from the cache; 0 means it is not cached. */
@@ -72,13 +85,23 @@ export class ResolveCache {
     return Math.max(0, Math.min(smallest, maxTtlSeconds));
   }
 
-  set(name: string, qtype: string, response: DnsResolveResponse): void {
+  /**
+   * Cache `response`. `notAfter` (epoch ms) caps the entry further: an answer
+   * that advertises a live service node must not outlive that node's
+   * liveness, or it would keep routing clients to a node the registry now
+   * counts as offline.
+   */
+  set(name: string, qtype: string, response: DnsResolveResponse, notAfter?: number): void {
     const key = ResolveCache.key(name, qtype);
     const ttl = this.ttlFor(response);
     if (key === null || ttl <= 0) return;
 
+    const now = this.now();
+    const expiresAt = Math.min(now + ttl * 1000, notAfter ?? Number.POSITIVE_INFINITY);
+    if (expiresAt <= now) return;
+
     this.entries.delete(key);
-    this.entries.set(key, { response, expiresAt: this.now() + ttl * 1000 });
+    this.entries.set(key, { response, storedAt: now, expiresAt });
     while (this.entries.size > this.options.maxEntries) {
       const oldest = this.entries.keys().next().value;
       if (oldest === undefined) break;

@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { getDb } from '../db/postgres.js';
 import { tlds } from '../db/schema/index.js';
 import { isReservedTld } from '@tnp/namespace';
+import { SERVICE_NODE_STALE_AFTER_MS } from '../registry/nodes.js';
 import { decideResolution, loadNameFacts } from '../registry/resolve.js';
 import { ResolveCache } from '../registry/resolveCache.js';
 import { logError } from '../utils/logError.js';
@@ -52,7 +53,11 @@ router.get('/resolve', async (req, res) => {
       expiryEnforced: config.nativeExpiryEnforced,
       now: new Date(),
     });
-    resolveCache.set(fqdn, qtype, answer);
+    // An overlay is only true while the node's heartbeat is fresh.
+    const node = facts.kind === 'native' ? facts.domain?.node : null;
+    const overlayNotAfter =
+      answer.overlay && node ? node.lastSeen.getTime() + SERVICE_NODE_STALE_AFTER_MS : undefined;
+    resolveCache.set(fqdn, qtype, answer, overlayNotAfter);
     res.json(answer);
   } catch (err) {
     logError('DNS resolve error:', err);

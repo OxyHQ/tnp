@@ -48,6 +48,36 @@ describe('ResolveCache', () => {
     expect(rc.get('nope.ox', 'A')).toBeUndefined();
   });
 
+  test('answer TTLs count down while cached, never up', () => {
+    const c = clock();
+    const rc = cache(c);
+    rc.set('nate.ox', 'A', answer(60));
+    c.advance(12_300);
+    expect(rc.get('nate.ox', 'A')?.answers[0]?.ttl).toBe(47);
+    // The stored answer is not mutated.
+    c.advance(1);
+    expect(rc.get('nate.ox', 'A')?.answers[0]?.ttl).toBe(47);
+  });
+
+  test('an answer advertising a live node expires with that node', () => {
+    const c = clock();
+    const rc = cache(c);
+    const withOverlay: DnsResolveResponse = {
+      ...answer(3600),
+      overlay: { serviceNodePubKey: 'k', relay: 'wss://relay.example.test', available: true },
+    };
+    // The node's heartbeat goes stale 5 s from now.
+    rc.set('nate.ox', 'A', withOverlay, c.now() + 5_000);
+    c.advance(4_999);
+    expect(rc.get('nate.ox', 'A')?.overlay?.available).toBe(true);
+    c.advance(2);
+    expect(rc.get('nate.ox', 'A')).toBeUndefined();
+
+    // Already stale: not cached at all.
+    rc.set('nate.ox', 'A', withOverlay, c.now() - 1);
+    expect(rc.get('nate.ox', 'A')).toBeUndefined();
+  });
+
   test('keys by type as well as name', () => {
     const rc = cache();
     rc.set('nate.ox', 'A', answer(60));

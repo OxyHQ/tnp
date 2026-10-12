@@ -437,8 +437,12 @@ router.delete('/:id', requireOxyAuth, async (req: Request<{ id: string }>, res) 
     }
 
     // Records and any service node go with it, by ON DELETE CASCADE, so no
-    // orphaned service_nodes are left behind.
-    await getDb().delete(domains).where(eq(domains.id, owned.domainId));
+    // orphaned service_nodes are left behind. The owner predicate repeats the
+    // check above inside the statement, so the delete can only ever remove a
+    // row the caller owns at the moment it runs.
+    await getDb()
+      .delete(domains)
+      .where(and(eq(domains.id, owned.domainId), eq(domains.oxyUserId, getRequiredOxyUserId(req))));
 
     res.json({ message: 'Domain released' });
   } catch (err) {
