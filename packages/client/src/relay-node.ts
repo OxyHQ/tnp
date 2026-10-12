@@ -207,10 +207,8 @@ export class RelayNode {
     const request: RegisterRelayRequest = {
       endpoint,
       publicKey: toBase64(identity.publicKey),
-      // A relay run from the `tnp` binary is community-operated by definition.
-      // The registry currently takes this claim on trust; authenticating it is
-      // relay authentication, which is Phase 3 work (docs/architecture/relays.md §2).
-      operator: 'community',
+      // No `operator`: the registry decides whether a relay is Oxy-operated,
+      // from the account that registers it, and never takes a relay's word.
       capacity: {
         maxConnections: this.config.maxConnections,
         bandwidth: this.config.bandwidth,

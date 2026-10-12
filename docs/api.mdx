@@ -11,9 +11,21 @@ Base URL (dev): `http://localhost:4170`
 
 The API is plain JSON over HTTPS, served by Bun + Express 5. Mutating endpoints require an Oxy access token in `Authorization: Bearer <token>`; the token is verified against `https://api.oxy.so` by `@oxy.so/core`'s `oxy.auth()` middleware. The local `User` document is created lazily on the first authenticated request, keyed by `oxyUserId`.
 
-CORS is enabled for `https://tnp.network`, `https://www.tnp.network`, the Cloudflare Pages preview origin, and `http://localhost:8170`.
+CORS is enabled for `https://tnp.network`, `https://www.tnp.network` and the Cloudflare Pages preview origin; `http://localhost:8170` is added only when `NODE_ENV` is not `production`.
 
 All responses follow `{ error: 'human readable message' }` on failure with the appropriate HTTP status. Successful responses return the resource directly (no envelope).
+
+### Rate limits, timeouts and headers
+
+Every route except `/health` is rate limited per client address, and writes are also limited per Oxy account (`apps/api/src/middleware/networkLimits.ts` has the classes and numbers). Over the limit the API answers `429 { error: 'rate_limited', limit, retryAfter }` with a `Retry-After` header. Buckets live in memory, per task, capped in size; nothing about them is logged.
+
+The client address is the peer the ALB saw: one `X-Forwarded-For` entry from the right per trusted hop (`TNP_TRUST_PROXY_HOPS`, 1 in production). Express's `trust proxy` stays off, so `X-Forwarded-Host` never reaches `req.hostname`. When that peer is inside Cloudflare's published ranges and `TNP_TRUST_CF_CONNECTING_IP` is on (the production default), `CF-Connecting-IP` is used instead; a client that reaches the ALB directly is keyed by its own address and cannot choose another. IPv6 clients are keyed by their /64.
+
+`/dns/resolve` answers are cached in memory for at most 30 s (positive, never longer than the smallest record TTL) or 10 s (NXDOMAIN, NODATA, parking). A statement running longer than `POSTGRES_STATEMENT_TIMEOUT_MS` is cancelled, and a request still running after `TNP_REQUEST_TIMEOUT_MS` is answered `503 { error: 'timeout' }`.
+
+Every response carries `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY` and `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'`. The parking page's CSP additionally allows its one inline stylesheet by hash.
+
+In production, errors are logged without query parameters or row values (`apps/api/src/utils/logError.ts`): class, SQLSTATE, constraint and stack frames only.
 
 ## Health
 
@@ -71,18 +83,19 @@ The full answer rules — CNAME at a name, NODATA, NXDOMAIN, parking synthesis f
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/domains?page=&limit=` | optional | Public directory. Default `page=1`, `limit=50`, max `limit=100`. Returns `{ domains, total, page, pages }` of `PublicDomain`. |
-| GET | `/domains/search?q=` | optional | Substring search by name. Max 50 results. |
+| GET | `/domains?page=&limit=` | optional | Public directory of listed names, ordered by name. Default `page=1`, `limit=50`, max `limit=100`. Returns `{ domains, total, page, pages }` of `PublicDomain`. |
+| GET | `/domains/search?q=` | optional | Substring search over listed names. Max 50 results. |
 | GET | `/domains/check/:name/:tld` | optional | Native availability under the full native policy. Returns `{ domain, available, reason?, detail?, namespace: "tnp-native" }`, `reason` ∈ `registered \| reserved \| tld_not_available \| invalid`. A subdomain such as `a.b.ox` is `invalid`. Never answers for public-DNS names. |
 | GET | `/domains/check/:domain` | optional | Same, but `:domain` is `name.tld`. |
 | GET | `/domains/lookup/:domain` | optional | Public detail view with records. 404 if not registered. |
 | POST | `/domains/register` | required | Register a domain. Body: `{ name, tld }`. Reserved TLDs are refused with `TLD_RESERVED`. |
 | GET | `/domains/owned?page=&limit=` | required | The caller's domains, newest first, default `limit=20`. Returns `{ domains, total, page, pages }`; each domain has `expiryState` and `recordCount`, no records. |
 | GET | `/domains/mine` | required | **Deprecated** — use `/domains/owned`. The caller's domains with every record embedded, unpaginated. |
+| PATCH | `/domains/:id` | required | Owner settings. Body: `{ unlisted: boolean }` (`UpdateDomainSettingsRequest`). An unlisted name is left out of `/domains` and `/domains/search` but still resolves and still answers `/domains/lookup`. Returns the `OwnedDomain`. |
 | POST | `/domains/:id/renew` | required | Renew a native registration by one year from the later of its expiry and now. Free, owner only, allowed when `expiryState` is `renewable`, `grace` or `expired`; otherwise `409` with a `code` (`not_renewable`, `no_expiry`, `not_native`, `conflict`). |
 | DELETE | `/domains/:id` | required | Release a native domain (must be owner). Irreversible: deletes the registration, its records and its service node, and the name becomes registrable by anyone. Never used by the services layer. |
 
-Public responses (`PublicDomain`) carry no owner identifier. Owner responses (`OwnedDomain`) add `expiryState` — `active`, `renewable` (within 90 days of expiry), `grace` (up to 30 days after, still resolves) or `expired` — defined in `@tnp/namespace` and specified in [`naming.md` §4](./architecture/naming.md).
+Public responses (`PublicDomain`) carry no owner identifier and no `createdAt`/`updatedAt`: when a name was registered and when its records last changed are the owner's to see. Owner responses (`OwnedDomain`) add `createdAt`, `updatedAt`, `unlisted` and `expiryState` — `active`, `renewable` (within 90 days of expiry), `grace` (up to 30 days after, still resolves) or `expired` — defined in `@tnp/namespace` and specified in [`naming.md` §4](./architecture/naming.md).
 
 ### DNS records (per-domain)
 
@@ -114,7 +127,7 @@ Service nodes register a domain in the overlay network so `tnp connect` clients 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | POST | `/nodes/register` | required | Register or update a service node. Body: `{ domainId, publicKey }`. Must own the domain. Upserts by `domainId`. |
-| GET | `/nodes/:domain` | none | Look up a service node by `name.tld`. Returns `{ publicKey, connectedRelay, status }` or 404. |
+| GET | `/nodes/:domain` | none | Look up a service node by `name.tld`. Returns `{ publicKey, connectedRelay, status, online }` or 404. `online` is computed from a 90 s heartbeat threshold; `connectedRelay` is `""` unless online. No timestamp is published. |
 | POST | `/nodes/heartbeat` | required | Mark online. Body: `{ domainId, connectedRelay }`. Updates `lastSeen`, sets `status: 'online'`. |
 
 The `serviceNodeId` is also written back onto the `Domain` document so a single resolve call can return both DNS records and overlay info without an extra round trip.
@@ -125,8 +138,8 @@ Relays are operated by Oxy or by the community and brokered by the API. Their en
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/relays?operator=` | none | List active relays. Optional `operator=oxy\|community` filter. Excludes `status: offline`. |
-| POST | `/relays/register` | required | Register or update a relay. Body: `{ endpoint, publicKey, operator: 'oxy' \| 'community', capacity: { maxConnections, bandwidth }, location? }`. Upserts by `endpoint`. |
+| GET | `/relays?operator=` | none | List live relays: heartbeat within 90 s, Oxy-operated first, then longest-registered. Optional `operator=oxy\|community` filter. |
+| POST | `/relays/register` | required | Register or update a relay. Body: `{ endpoint, publicKey, capacity: { maxConnections, bandwidth }, location? }`. `endpoint` must be `wss://` on a public host. Upserts by `endpoint`. |
 | POST | `/relays/heartbeat` | required | Mark active. Body: `{ endpoint }`. Must be the registered operator. |
 
 ## Client distribution (`/client`)
@@ -181,4 +194,11 @@ function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void 
 | `NODE_ENV` | `development` | Runtime environment. It does **not** select the database — that is `DATABASE_URL`'s job. |
 | `OXY_API_URL` | `https://api.oxy.so` | Oxy API base URL (token verification). |
 | `TNP_NATIVE_EXPIRY_ENFORCED` | `false` | Only exactly `true` enables it. When on, a native name past its 30-day grace period is withheld: `/dns/resolve` answers it like an unregistered name (parking only, no records, no overlay) and the parking page says "expired, held". It is never released for re-registration. Off by default because enforcing expiry retroactively needs an approved owner communication first (#62). |
+| `TNP_OXY_RELAY_OPERATORS` | *empty* | Comma-separated Oxy user ids whose relays the directory publishes as `oxy`. Everyone else is `community`; a relay's own claim is ignored. Empty means there are no Oxy-operated relays, and `tnp serve` then requires `--relay`. |
+| `TNP_TRUST_PROXY_HOPS` | `1` in production, else `0` | How many proxies' `X-Forwarded-For` appends the rate limiter believes. Production trusts only the ALB. |
+| `TNP_TRUST_CF_CONNECTING_IP` | `true` in production, else `false` | Use `CF-Connecting-IP` as the client address, for requests whose peer is a Cloudflare address. Off, every client behind one Cloudflare edge address shares a rate-limit bucket. |
+| `TNP_CLOUDFLARE_IP_RANGES` | built-in list | Overrides the Cloudflare ranges the previous setting checks against. |
+| `TNP_RATE_LIMIT_EXEMPT` | *empty* | Addresses or CIDRs exempt from per-address limits — TNP's own DNS server, which resolves every query through `/dns/resolve`. |
+| `POSTGRES_STATEMENT_TIMEOUT_MS` | `5000` | Server-side statement timeout on every pooled connection. `0` disables it. |
+| `TNP_REQUEST_TIMEOUT_MS` | `10000` | A request still running after this is answered `503`. `0` disables it. |
 | `TNP_PARKING_IP` | *none* | A-record value returned for unregistered names on custom TLDs and as a fallback for record-less registered domains. There is deliberately **no** fallback: a stale literal would route every TNP query at a dead or attacker-controlled host, so when this is unset parking answers are omitted instead. In production it is the Elastic IP fronting the `tnp-dns` NLB. |

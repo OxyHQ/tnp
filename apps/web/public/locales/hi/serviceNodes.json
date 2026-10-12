@@ -12,7 +12,6 @@
   "emptyState": "आपके पास अभी कोई डोमेन नहीं है।",
   "emptyStateRegister": "एक पंजीकृत करें",
   "emptyStateToGetStarted": "शुरू करने के लिए।",
-  "lastSeen": "अंतिम बार देखा {{time}}",
   "publicKey": "पब्लिक कुंजी:",
   "relay": "रिले:",
   "noNodeConfigured": "कोई सर्विस नोड कॉन्फ़िगर नहीं किया गया। नीचे सेटअप निर्देश देखें।",

@@ -40,6 +40,14 @@ export async function connectPostgres(): Promise<Database> {
     max: config.postgresMaxPoolSize,
     idle_timeout: 30,
     connect_timeout: 10,
+    // Sent as startup parameters, so they bind every connection in the pool
+    // and no statement can forget them. A query that outlives the statement
+    // timeout fails instead of holding one of the pool's few connections, and
+    // a transaction left open by a crashed handler is ended by the server.
+    connection: {
+      statement_timeout: config.postgresStatementTimeoutMs,
+      idle_in_transaction_session_timeout: config.postgresStatementTimeoutMs * 2,
+    },
   });
 
   // postgres.js connects lazily, so constructing the pool proves nothing. Issue

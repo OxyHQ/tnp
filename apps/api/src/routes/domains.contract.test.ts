@@ -15,7 +15,11 @@ import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 import express from 'express';
 import type { Server } from 'node:http';
 import type { OxyAuthRequest } from '@oxy.so/core/server';
-import type { CreateDnsRecordRequest, NativeAvailability } from '@tnp/shared-types';
+import type {
+  CreateDnsRecordRequest,
+  NativeAvailability,
+  UpdateDomainSettingsRequest,
+} from '@tnp/shared-types';
 import domainsRouter from './domains.js';
 import {
   serializeDnsRecord,
@@ -35,6 +39,7 @@ const domain = {
   ownerId: '6a893ae7-7b95-4e9e-99ef-989c4c1f256c',
   oxyUserId: 'oxy-user-under-test',
   status: 'active' as const,
+  unlisted: false,
   createdAt,
   updatedAt,
   expiresAt: null,
@@ -70,11 +75,20 @@ describe('public domain DTO', () => {
       name: 'example',
       tld: 'ox',
       status: 'active',
-      createdAt: '2026-09-12T20:00:00.000Z',
-      updatedAt: '2026-09-12T21:00:00.000Z',
       expiresAt: null,
     });
     expectNoOwnerKeys(dto);
+  });
+
+  test('publishes no registration or last-change time, and not the unlisted flag', () => {
+    // The directory used to stamp every name with when it was registered and
+    // when its records last changed: an activity log of every owner.
+    for (const dto of [toPublicDomain(domain), toPublicDomainWithRecords(domain, [record])]) {
+      for (const key of ['createdAt', 'updatedAt', 'unlisted']) {
+        expect(Object.keys(dto)).not.toContain(key);
+      }
+    }
+    expect(JSON.stringify(toPublicDomain(domain))).not.toContain('2026-09-12');
   });
 
   test('the lookup view with records carries no owner identifier either', () => {
@@ -99,8 +113,12 @@ describe('owner domain DTO', () => {
     const expiring = { ...domain, expiresAt: new Date('2026-10-01T00:00:00.000Z') };
     expect(toOwnedDomain(expiring, now)).toEqual({
       ...toPublicDomain(expiring),
+      createdAt: '2026-09-12T20:00:00.000Z',
+      updatedAt: '2026-09-12T21:00:00.000Z',
       expiryState: 'renewable',
+      unlisted: false,
     });
+    expect(toOwnedDomain({ ...domain, unlisted: true }, now).unlisted).toBe(true);
     expect(toOwnedDomain(domain, now).expiryState).toBe('active');
     expectNoOwnerKeys(toOwnedDomain(domain, now));
     expectNoOwnerKeys(toOwnedDomainSummary(domain, 3, now));
@@ -227,6 +245,16 @@ describe('routes, with no database', () => {
   test('renew: a malformed id is a 404 before any lookup', async () => {
     expect((await send('POST', '/domains/not-a-uuid/renew')).status).toBe(404);
     expect((await send('POST', `/domains/${domain.id}/renew`)).status).toBe(REACHED_HANDLER);
+  });
+
+  test('PATCH settings: the contract is checked before any lookup', async () => {
+    expect(await send('PATCH', `/domains/${domain.id}`, { unlisted: 'yes' })).toEqual({
+      status: 400,
+      body: { error: 'unlisted must be a boolean' },
+    });
+    expect((await send('PATCH', '/domains/not-a-uuid', { unlisted: true })).status).toBe(404);
+    const request: UpdateDomainSettingsRequest = { unlisted: true };
+    expect((await send('PATCH', `/domains/${domain.id}`, request)).status).toBe(REACHED_HANDLER);
   });
 
   test('owned and the deprecated mine both exist behind auth', async () => {

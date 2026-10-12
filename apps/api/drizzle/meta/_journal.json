@@ -15,6 +15,13 @@
       "when": 1789616781309,
       "tag": "0001_services_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791792662932,
+      "tag": "0002_domains_unlisted",
+      "breakpoints": true
     }
   ]
 }

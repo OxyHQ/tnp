@@ -19,9 +19,7 @@
     "status": "État",
     "tld": "TLD",
     "records": "Enregistrements",
-    "registered": "Enregistré",
-    "expires": "Expire",
-    "lastUpdated": "Dernière mise à jour"
+    "expires": "Expire"
   },
   "noDnsRecords": "Aucun enregistrement DNS configuré",
   "howToResolveDesc": "Pour résoudre <accent>{{domain}}</accent> sur votre appareil, installez le résolveur TNP. Il configure le DNS de votre système pour interroger les serveurs de noms TNP pour les domaines TNP tout en transférant le reste vers votre résolveur par défaut.",
@@ -31,5 +29,16 @@
     "description": "{{domain}} n'est pas enregistré sur TNP ou a peut-être été libéré.",
     "registerLink": "enregistrer ce domaine"
   },
-  "neverExpires": "--"
+  "neverExpires": "--",
+  "visibility": {
+    "heading": "Visibilité",
+    "listed": "Visible dans l'annuaire public et la recherche.",
+    "unlisted": "Non répertorié : masqué de l'annuaire public et de la recherche. Il est toujours résolu, et toute personne qui connaît le nom peut encore le consulter.",
+    "makeUnlisted": "Masquer de l'annuaire",
+    "makeListed": "Afficher dans l'annuaire",
+    "saving": "Enregistrement...",
+    "nowUnlisted": "{{domain}} n'est plus répertorié",
+    "nowListed": "{{domain}} est maintenant répertorié",
+    "failed": "Impossible de modifier la visibilité"
+  }
 }

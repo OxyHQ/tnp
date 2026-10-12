@@ -8,6 +8,8 @@ import type {
   DnsRecordField,
   DnsRecordInput,
   RenewDomainResponse,
+  UpdateDomainSettingsRequest,
+  UpdateDomainSettingsResponse,
 } from '@tnp/shared-types';
 import { apiFetch, errorBody, errorMessage, errorStatus } from '../lib/api';
 import {
@@ -53,7 +55,7 @@ function isRecordField(value: string | undefined): value is DnsRecordField {
 }
 
 export default function Dashboard() {
-  const { t } = useTranslation(['dashboard', 'common']);
+  const { t } = useTranslation(['dashboard', 'common', 'domainDetail']);
   const { formatDate } = useLocaleFormatter();
   const [page, setPage] = useState(1);
   const [inventory, setInventory] = useState<Inventory>({ status: 'loading' });
@@ -221,6 +223,28 @@ export default function Dashboard() {
       }
     });
 
+  const setUnlisted = (domain: InventoryDomain, unlisted: boolean) =>
+    track(`visibility:${domain._id}`, async () => {
+      try {
+        const request: UpdateDomainSettingsRequest = { unlisted };
+        const updated = await apiFetch<UpdateDomainSettingsResponse>(`/domains/${domain._id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(request),
+        });
+        patchDomain(domain._id, (current) => ({ ...current, unlisted: updated.unlisted }));
+        toast.success(
+          t(
+            updated.unlisted
+              ? 'domainDetail:visibility.nowUnlisted'
+              : 'domainDetail:visibility.nowListed',
+            { domain: `${domain.name}.${domain.tld}` },
+          ),
+        );
+      } catch (err) {
+        toast.error(errorMessage(err, t('domainDetail:visibility.failed')));
+      }
+    });
+
   const release = (domain: InventoryDomain) =>
     track(`release:${domain._id}`, async () => {
       try {
@@ -363,6 +387,36 @@ export default function Dashboard() {
                         </button>
                       )}
                     </div>
+
+                    {domain.unlisted !== undefined && (
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                        <div>
+                          <h2 className="mb-1 font-mono text-xs uppercase tracking-wider text-muted-foreground/70">
+                            {t('domainDetail:visibility.heading')}
+                          </h2>
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {domain.unlisted
+                              ? t('domainDetail:visibility.unlisted')
+                              : t('domainDetail:visibility.listed')}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={!domain.unlisted}
+                          onClick={() => void setUnlisted(domain, !domain.unlisted)}
+                          disabled={pending.has(`visibility:${domain._id}`)}
+                          aria-busy={pending.has(`visibility:${domain._id}`)}
+                          className="cursor-pointer rounded-md border border-border px-3 py-1.5 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {pending.has(`visibility:${domain._id}`)
+                            ? t('domainDetail:visibility.saving')
+                            : domain.unlisted
+                              ? t('domainDetail:visibility.makeListed')
+                              : t('domainDetail:visibility.makeUnlisted')}
+                        </button>
+                      </div>
+                    )}
 
                     {(!recordState || recordState.status === 'loading') && (
                       <p role="status" className="font-mono text-xs text-muted-foreground/70">

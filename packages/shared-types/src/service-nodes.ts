@@ -46,13 +46,25 @@ export interface ServiceNodeHeartbeatResponse {
   status: 'ok';
 }
 
-/** `GET /nodes/:domain` response. */
+/**
+ * `GET /nodes/:domain` response — public, unauthenticated.
+ *
+ * Liveness is a boolean, not a timestamp. The endpoint used to publish the
+ * exact time of a node's last heartbeat, which lets anyone build a minute-by-
+ * minute record of when a name's operator has their machine on. `online` is
+ * computed against the registry's staleness threshold; `status` carries the
+ * same fact for clients released before `online` existed.
+ */
 export interface ServiceNodeLookup {
   publicKey: string;
+  /**
+   * The relay a client dials to reach the node — `""` unless `online`. Which
+   * relay an offline node last used is history, not something a client can act
+   * on.
+   */
   connectedRelay: string;
   status: ServiceNodeStatus;
-  /** ISO 8601 timestamp of the last heartbeat. */
-  lastSeen: string;
+  online: boolean;
 }
 
 function domainIdField(record: Record<string, unknown>): ParseResult<string> {

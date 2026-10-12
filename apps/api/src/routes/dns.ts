@@ -5,8 +5,17 @@ import { getDb } from '../db/postgres.js';
 import { tlds } from '../db/schema/index.js';
 import { isReservedTld } from '@tnp/namespace';
 import { decideResolution, loadNameFacts } from '../registry/resolve.js';
+import { ResolveCache } from '../registry/resolveCache.js';
+import { logError } from '../utils/logError.js';
 
 const router = Router();
+
+/** registry/resolveCache.ts explains the numbers. */
+export const resolveCache = new ResolveCache({
+  maxEntries: 10_000,
+  maxTtlSeconds: 30,
+  negativeTtlSeconds: 10,
+});
 
 /**
  * GET /dns/resolve — the hot path. Every TNP name lookup lands here.
@@ -31,16 +40,22 @@ router.get('/resolve', async (req, res) => {
       return;
     }
 
+    const cached = resolveCache.get(fqdn, qtype);
+    if (cached) {
+      res.json(cached);
+      return;
+    }
+
     const facts = await loadNameFacts(getDb(), fqdn);
-    res.json(
-      decideResolution(facts, qtype, {
-        parkingIp: config.parkingIp,
-        expiryEnforced: config.nativeExpiryEnforced,
-        now: new Date(),
-      }),
-    );
+    const answer = decideResolution(facts, qtype, {
+      parkingIp: config.parkingIp,
+      expiryEnforced: config.nativeExpiryEnforced,
+      now: new Date(),
+    });
+    resolveCache.set(fqdn, qtype, answer);
+    res.json(answer);
   } catch (err) {
-    console.error('DNS resolve error:', err);
+    logError('DNS resolve error:', err);
     res.status(500).json({ error: 'Failed to resolve' });
   }
 });
@@ -63,7 +78,7 @@ router.get('/tlds', async (_req, res) => {
 
     res.json(rows.filter((t) => !isReservedTld(t.name)));
   } catch (err) {
-    console.error('DNS TLDs error:', err);
+    logError('DNS TLDs error:', err);
     res.status(500).json({ error: 'Failed to list TLDs' });
   }
 });

@@ -19,9 +19,7 @@
     "status": "状态",
     "tld": "TLD",
     "records": "记录",
-    "registered": "注册时间",
-    "expires": "过期时间",
-    "lastUpdated": "最后更新"
+    "expires": "过期时间"
   },
   "noDnsRecords": "未配置 DNS 记录",
   "howToResolveDesc": "要在你的设备上解析 <accent>{{domain}}</accent>，请安装 TNP 解析器。它会配置你的系统 DNS，使 TNP 域名查询 TNP 名称服务器，同时将其他查询转发到默认解析器。",
@@ -31,5 +29,16 @@
     "description": "{{domain}} 未在 TNP 上注册或可能已被释放。",
     "registerLink": "注册此域名"
   },
-  "neverExpires": "--"
+  "neverExpires": "--",
+  "visibility": {
+    "heading": "可见性",
+    "listed": "已列入公共目录和搜索。",
+    "unlisted": "未公开：不出现在公共目录和搜索中。该域名仍可解析，知道名称的人仍可查询。",
+    "makeUnlisted": "取消公开",
+    "makeListed": "公开列出",
+    "saving": "保存中...",
+    "nowUnlisted": "{{domain}} 已取消公开",
+    "nowListed": "{{domain}} 已公开列出",
+    "failed": "无法更改可见性"
+  }
 }

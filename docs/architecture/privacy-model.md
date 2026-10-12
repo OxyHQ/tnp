@@ -66,6 +66,27 @@ history, per-user domain lists.
 **IP addresses** are held only as long as a connection needs them, plus a short
 bounded window for abuse handling, and are never joined to identity in analytics.
 
+### What the API stores and publishes today
+
+Verified against `apps/api` (2026-10). Assume an operator can be compelled to
+hand over everything in the "stores" column.
+
+| | Stores | Publishes to anyone |
+|---|---|---|
+| Domains | Name, TLD, owner's Oxy user id, status, created/updated/expiry times, `unlisted` | Listed names only (`GET /domains`, search): name, TLD, status, expiry. No owner, no created/updated time, ordered by name rather than by registration. `unlisted` names are left out of both but still resolve and still answer a lookup by exact name. |
+| DNS records | Every record and its created/updated time | The records, to anyone who resolves or looks up the name — that is what DNS is. |
+| Service nodes | Owner's Oxy user id, public key, current relay, time of the **last** heartbeat (overwritten, not a history) | Public key and `online: true/false`; the relay only while online. No timestamp. |
+| Relays | Endpoint, key, registering account, capacity, location label, last heartbeat | Endpoint, key, `operator`, location label, status — for relays that heartbeated in the last 90 s. No account, no timestamp. |
+| TLD proposals and votes | Proposer and each voter's local user id | Scores, and to the caller only whether they proposed or voted. |
+| Rate-limit buckets | Client address (IPv6 as its /64) or Oxy user id, a token count, a time — in memory, size-capped, evicted, never written to disk or logs | Nothing |
+| `/dns/resolve` cache | Public answers, in memory, 30 s at most | Nothing beyond the answer itself |
+| Error logs (CloudWatch) | In production: error class, SQLSTATE, constraint, stack frames. No query parameters, no names, no user ids, no row values. | Nothing |
+
+Not addressed here: Cloudflare, and the load balancer if access logging is
+on, keep their own request logs (with client addresses and URLs, which for
+`/dns/resolve` include the name queried) under the infrastructure's
+retention, outside this repository.
+
 ## 5. Correlation resistance — what actually helps
 
 | Technique | Effect | Cost | Status |

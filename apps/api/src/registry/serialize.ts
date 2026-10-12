@@ -33,14 +33,17 @@ export function serializeDnsRecord(record: DnsRecordRow): DnsRecordDto {
   };
 }
 
+/**
+ * No `createdAt`/`updatedAt` and no `unlisted`: when a name was registered and
+ * when its records last changed are the owner's to see, not the public's, and
+ * whether a name is unlisted is a fact about its owner's choices.
+ */
 export function toPublicDomain(domain: DomainRow): PublicDomain {
   return {
     _id: domain.id,
     name: domain.name,
     tld: domain.tld,
     status: domain.status,
-    createdAt: domain.createdAt.toISOString(),
-    updatedAt: domain.updatedAt.toISOString(),
     expiresAt: domain.expiresAt ? domain.expiresAt.toISOString() : null,
   };
 }
@@ -58,7 +61,13 @@ export function toPublicDomainWithRecords(
 }
 
 export function toOwnedDomain(domain: DomainRow, now: Date): OwnedDomain {
-  return { ...toPublicDomain(domain), expiryState: nativeExpiryState(domain.expiresAt, now) };
+  return {
+    ...toPublicDomain(domain),
+    createdAt: domain.createdAt.toISOString(),
+    updatedAt: domain.updatedAt.toISOString(),
+    expiryState: nativeExpiryState(domain.expiresAt, now),
+    unlisted: domain.unlisted,
+  };
 }
 
 export function toOwnedDomainSummary(

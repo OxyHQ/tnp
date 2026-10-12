@@ -3,7 +3,8 @@
  * or a precise predicate: availability, renewal and the owner's inventory.
  */
 
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, sql } from 'drizzle-orm';
+import { likeContains } from '@oxy.so/utils/sql';
 import {
   isNativeRenewalAllowed,
   isReservedTld,
@@ -198,4 +199,74 @@ export async function listOwnedDomains(
   ]);
 
   return { rows, total };
+}
+
+/**
+ * What the public directory and search show: active names whose owner has not
+ * unlisted them.
+ */
+const publiclyListed = and(eq(domains.status, 'active'), eq(domains.unlisted, false));
+
+/**
+ * One page of the public directory, ordered by name. Not by registration
+ * time: a directory sorted newest-first publishes the order, and so roughly
+ * the time, in which every name was registered.
+ */
+export async function listPublicDomains(
+  db: Executor,
+  params: { page: number; limit: number },
+): Promise<{ rows: DomainRow[]; total: number }> {
+  const { page, limit } = params;
+  const [rows, [{ total }]] = await Promise.all([
+    db
+      .select()
+      .from(domains)
+      .where(publiclyListed)
+      .orderBy(asc(domains.name), asc(domains.tld))
+      .limit(limit)
+      .offset((page - 1) * limit),
+    db.select({ total: sql<number>`count(*)::int` }).from(domains).where(publiclyListed),
+  ]);
+  return { rows, total };
+}
+
+/** Listed names containing `query`, at most `limit`. */
+export async function searchPublicDomains(
+  db: Executor,
+  params: { query: string; limit: number },
+): Promise<DomainRow[]> {
+  // `ilike` with the pattern escaped: a raw `%` or `_` from the caller would
+  // otherwise be a wildcard, turning a search for "a_b" into "a<any>b".
+  return db
+    .select()
+    .from(domains)
+    .where(and(publiclyListed, ilike(domains.name, likeContains(params.query))))
+    .orderBy(asc(domains.name), asc(domains.tld))
+    .limit(params.limit);
+}
+
+export type DomainSettingsOutcome =
+  | { ok: true; domain: DomainRow }
+  | { ok: false; status: 403 | 404; error: string };
+
+/** Apply the owner's settings to a name. The ownership check is in the UPDATE. */
+export async function updateDomainSettings(
+  db: Executor,
+  params: { domainId: string; oxyUserId: string; unlisted: boolean },
+): Promise<DomainSettingsOutcome> {
+  const [updated] = await db
+    .update(domains)
+    .set({ unlisted: params.unlisted, updatedAt: sql`now()` })
+    .where(and(eq(domains.id, params.domainId), eq(domains.oxyUserId, params.oxyUserId)))
+    .returning();
+  if (updated) return { ok: true, domain: updated };
+
+  const [exists] = await db
+    .select({ id: domains.id })
+    .from(domains)
+    .where(eq(domains.id, params.domainId))
+    .limit(1);
+  return exists
+    ? { ok: false, status: 403, error: 'You do not own this domain' }
+    : { ok: false, status: 404, error: 'Domain not found' };
 }
