@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build && bun run build:edge",
     "typecheck": "tsc -b",
-    "test": "bun test",
+    "test": "bun test ./tests ../../scripts/web-worker.test.ts",
     "preview": "vite preview",
     "build:edge": "bun build worker/index.js --target=browser --format=esm --outfile=dist/_worker.js"
   },
