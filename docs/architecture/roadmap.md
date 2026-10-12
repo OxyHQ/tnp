@@ -65,6 +65,19 @@ tests pass; fuzz target for the DNS parser runs in CI.
 
 Closes issue #8. Depends on Phase 2.
 
+**Status: implemented in code, not deployed.** Done: protocol v1 across client,
+relay, service node and embedded relay (v0 deleted); connection-scoped CSPRNG
+circuit ids (S1); service-node authentication to relays with no eviction (S2);
+owner-held domain keys, grant chains, key-agreement certificates and client
+pinning (S3 for pinned names); Noise NK sessions with replay, reflection and
+truncation detection (S5); frame limits, bounded tables, end-to-end flow
+control and backpressure (S6); `@tnp/relay-core`; B2. Not done: the
+transcript-signed connection handshake and relay authentication to clients
+(need Phase 5's signed directory), reconnect with circuit resumption, two-level
+(per-stream) flow control — one stream per circuit made it unnecessary — fuzzing
+in CI, and the 24 h NAT exit test. The relay stays parked
+([`relays.md`](./relays.md) §8).
+
 - Implement protocol v1 ([`transport.md`](./transport.md)) as a clean cut across
   client, relay and service node.
 - Authenticated handshake with transcript signing; nothing processed before

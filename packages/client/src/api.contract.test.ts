@@ -24,8 +24,17 @@ import {
   parseRelayHeartbeatRequest,
   parseRegisterServiceNodeRequest,
   parseServiceNodeHeartbeatRequest,
+  parseRegisterDomainKeyRequest,
+  type RegisterDomainKeyRequest,
   type ParseResult,
 } from '@tnp/shared-types';
+import {
+  encodeBase64,
+  generateSigningKeyPair,
+  signDomainKeyRotation,
+  verifyKeyAgreementCertificate,
+} from '@tnp/crypto';
+import { makeTestCredentials } from '@tnp/crypto/testing';
 import { TnpApiClient } from './api';
 
 const BASE_URL = 'https://api.example.test';
@@ -162,9 +171,15 @@ describe('relay registration', () => {
 
 describe('service node registration', () => {
   test('registerServiceNode sends a body POST /nodes/register accepts', async () => {
+    const creds = makeTestCredentials('example.ox');
     const sent = await capture(
-      (client) => client.registerServiceNode(DOMAIN_ID, 'cHVibGljLWtleQ==', AUTH_TOKEN),
-      { domainId: DOMAIN_ID, publicKey: 'cHVibGljLWtleQ==', connectedRelay: '', status: 'offline' },
+      (client) => client.registerServiceNode(DOMAIN_ID, creds.chain, creds.kaCert, AUTH_TOKEN),
+      {
+        domainId: DOMAIN_ID,
+        publicKey: creds.kaCert.signer,
+        connectedRelay: '',
+        status: 'offline',
+      },
     );
 
     expect(sent.url).toBe(`${BASE_URL}/nodes/register`);
@@ -174,7 +189,21 @@ describe('service node registration', () => {
       parseRegisterServiceNodeRequest(sent.body),
       'POST /nodes/register',
     );
-    expect(accepted).toEqual({ domainId: DOMAIN_ID, publicKey: 'cHVibGljLWtleQ==' });
+    expect(accepted).toEqual({ domainId: DOMAIN_ID, chain: creds.chain, kaCert: creds.kaCert });
+    // What the registry receives is exactly what verifies, not a re-encoding of it.
+    const verified = verifyKeyAgreementCertificate(accepted.kaCert, accepted.chain, {
+      trustedRoots: [creds.domainKeyB64],
+      role: 'service-node',
+      name: 'example.ox',
+      now: Math.floor(Date.now() / 1000),
+    });
+    expect(verified.ok).toBe(true);
+  });
+
+  test('the pre-v1 bare-key body is rejected', () => {
+    expect(
+      parseRegisterServiceNodeRequest({ domainId: DOMAIN_ID, publicKey: 'cHVibGljLWtleQ==' }).ok,
+    ).toBe(false);
   });
 
   test('sendHeartbeat sends a body POST /nodes/heartbeat accepts', async () => {
@@ -194,6 +223,43 @@ describe('service node registration', () => {
       domainId: DOMAIN_ID,
       connectedRelay: 'wss://relay.example.test',
     });
+  });
+});
+
+describe('domain keys', () => {
+  test('registerDomainKey sends a body POST /domain-keys accepts (first key and rotation)', async () => {
+    const a = generateSigningKeyPair();
+    const b = generateSigningKeyPair();
+    const first: RegisterDomainKeyRequest = {
+      name: 'example.ox',
+      domainKey: encodeBase64(a.publicKey),
+    };
+    const record = { name: 'example.ox', domainKey: first.domainKey, rotations: [] };
+    const sent = await capture((client) => client.registerDomainKey(first, AUTH_TOKEN), record);
+    expect(sent.url).toBe(`${BASE_URL}/domain-keys`);
+    expect(sent.method).toBe('POST');
+    expect(expectAccepted(parseRegisterDomainKeyRequest(sent.body), 'POST /domain-keys')).toEqual(
+      first,
+    );
+
+    const rotation = signDomainKeyRotation(
+      {
+        name: 'example.ox',
+        previousKey: first.domainKey,
+        nextKey: encodeBase64(b.publicKey),
+        issuedAt: 1_800_000_000,
+      },
+      a.secretKey,
+    );
+    const rotate: RegisterDomainKeyRequest = {
+      name: 'example.ox',
+      domainKey: encodeBase64(b.publicKey),
+      rotation,
+    };
+    const sent2 = await capture((client) => client.registerDomainKey(rotate, AUTH_TOKEN), record);
+    expect(expectAccepted(parseRegisterDomainKeyRequest(sent2.body), 'POST /domain-keys')).toEqual(
+      rotate,
+    );
   });
 });
 

@@ -106,12 +106,31 @@ export type {
   UpdateDomainSettingsResponse,
 } from './domains.js';
 
-export type {
-  DnsResolveAnswer,
-  DnsResolveOverlay,
-  DnsResolveRcode,
-  DnsResolveResponse,
+export {
+  parseDnsResolveOverlay,
+  type DnsResolveAnswer,
+  type DnsResolveOverlay,
+  type DnsResolveRcode,
+  type DnsResolveResponse,
 } from './dns-resolve.js';
+
+export {
+  parseDomainKeyRecord,
+  parseRegisterDomainKeyRequest,
+  type DomainKeyRecord,
+  type RegisterDomainKeyRequest,
+} from './domain-keys.js';
+
+export {
+  type DomainKeyReset,
+  isCanonicalName,
+  MAX_CHAIN_LENGTH,
+  MAX_ROTATIONS,
+  parseChainShape,
+  parseKeyAgreementCertificateShape,
+  parseRotationShape,
+  parseRotationsShape,
+} from './key-material.js';
 
 export {
   compareSemver,

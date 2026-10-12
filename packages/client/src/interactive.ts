@@ -400,12 +400,18 @@ async function actionConnect(): Promise<void> {
     const { TunnelManager } = await import('./tunnel');
     const { SocksProxy } = await import('./socks');
 
-    const tunnelManager = new TunnelManager();
+    const { OverlayStore } = await import('./overlay/store');
+    const { PinStore } = await import('./overlay/pins');
+    const apiClient = proxy.getApiClient();
+    const tunnelManager = new TunnelManager({
+      pins: new PinStore(new OverlayStore()),
+      resolveOverlay: async (destination) =>
+        (await apiClient.resolveWithOverlay(destination, 'A')).overlay ?? null,
+    });
     const socksProxy = new SocksProxy({
       port: config.socksPort,
       host: config.listenAddr,
       tunnelManager,
-      apiClient: proxy.getApiClient(),
       getOverlayInfo: (domain: string) => proxy.getOverlayInfo(domain),
       classify: (domain: string) => proxy.classify(domain),
     });
@@ -494,7 +500,6 @@ async function actionServe(): Promise<void> {
         localTarget: target || 'localhost:80',
         apiBaseUrl: config.apiBaseUrl,
         relayEndpoint: relay,
-        identityKeyPath: config.identityKeyPath,
         authToken: token,
       },
       apiClient,
@@ -802,7 +807,7 @@ async function actionStartRelay(): Promise<void> {
 
     clearInterval(statsInterval);
     addLine('Stopping relay node...', DIM);
-    relay.stop();
+    await relay.stop();
     activeRelayNode = null;
     addLine('✓ Relay stopped.', GREEN);
   } catch (err) {

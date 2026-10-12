@@ -63,9 +63,11 @@ proxy mode or tunnel mode to actually carry an application's bytes.
 **Trusts:** the directory for where a service node is; the service node's key for
 end-to-end confidentiality.
 
-**Status: partial.** Single-hop circuits work. The service node's key is trusted
-because the API said so, with no signature chain (audit S3), and circuit IDs are
-not connection-scoped (audit S1). Phase 3.
+**Status: implemented, not deployed** (the relay is parked). Single-hop v1
+circuits with connection-scoped CSPRNG ids (S1) and a service-node key verified
+back to the name's domain key, which the client pins on first use (S3 closed
+for pinned names; first contact still trusts the registry). See
+[`transport.md`](./transport.md) §11 and [`security.md`](./security.md) §1.
 
 ---
 
@@ -95,9 +97,10 @@ outbound connections only, so it works behind NAT with no port forwarding.
 **Trusts:** the relay for availability (never for confidentiality); Oxy for
 proving the user owns the domain.
 
-**Status: partial.** The connect-out-and-reconnect model works. The relay accepts
-any unauthenticated socket claiming any domain and lets it evict the incumbent
-(audit S2). Phase 3. Detail: [`service-nodes.md`](./service-nodes.md).
+**Status: implemented for one relay per node, not deployed.** The node
+authenticates to the relay with a node key chained to the domain key, and a
+second node cannot evict the incumbent (S2 closed). Detail:
+[`service-nodes.md`](./service-nodes.md).
 
 ---
 
@@ -108,11 +111,10 @@ any unauthenticated socket claiming any domain and lets it evict the incumbent
 **Never:** decrypts payloads, stores traffic, or exits to the public internet.
 Exit is a separate mode with separate consent.
 
-**Status: broken.** The relay forwards correctly, but registration is
-non-functional (the client and API disagree on the request body for both
-`/relays/register` and `/relays/heartbeat` — audit B2), the upgrade path is
-unauthenticated, and there are no quotas or frame-size limits. Phases 3 and 5.
-Detail: [`relays.md`](./relays.md).
+**Status: implemented, parked.** One relay implementation (`@tnp/relay-core`)
+with service-node authentication, connection-scoped circuits and bounds;
+registration works (B2 fixed). Not authenticated to clients and not in a signed
+directory (Phase 5), so it is not deployed. Detail: [`relays.md`](./relays.md).
 
 ---
 

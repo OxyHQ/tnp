@@ -75,9 +75,22 @@ its own key material and its own lifetime, and carries many streams.
 - **Multi-hop circuit** — client → guard → middle(s) → exit or service relay.
   Specified in [`onion-routing.md`](./onion-routing.md), not implemented.
 
-A circuit ID is **scoped to one connection**, not global. Two peers may use the
-same numeric ID on different connections without interacting. (The current relay
-violates this; see finding S1 in the audit.)
+A circuit ID is **scoped to one connection**, not global, and drawn from a
+CSPRNG. Two peers may use the same numeric ID on different connections without
+interacting (audit S1, fixed in `@tnp/relay-core`). Today's single-hop overlay
+carries exactly one stream per circuit ([`transport.md`](./transport.md) §11).
+
+### Domain key
+
+The Ed25519 key, held only by a domain's owner, that is the root of every grant
+chain for that name's service nodes. Not chained to the Oxy identity, so the
+operator cannot mint one. See [`security.md`](./security.md) §1.
+
+### Pin
+
+A client's record of the domain key it first verified for a name (trust on
+first use). A different key is accepted later only through rotation statements
+signed by the pinned key. `tnp pins` lists them.
 
 ### Stream
 

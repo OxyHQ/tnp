@@ -1,14 +1,16 @@
 # Security architecture
 
-**Status: specification. Largely not implemented in the running system.** The
-deployed code uses correct primitives (NaCl via tweetnacl) but has no identity
-binding, no signatures, no replay defence, no rotation and no revocation.
-Findings S1–S3 and S5 in the [audit](./audit-2026-08-06.md) are the concrete
-gaps. Grant chains, key-agreement certificates (`@tnp/crypto`) and the
-end-to-end session ([`transport.md`](./transport.md) §9, `@tnp/protocol/v1`)
-are implemented as libraries, exactly as specified below, but **no component
-uses them yet** — none of their protection is in effect until the Phase 3
-cutover.
+**Status: partly implemented.** Since the Phase 3 transport cutover the
+overlay runs on what this document specifies: grant chains and key-agreement
+certificates (`@tnp/crypto`), the end-to-end session
+([`transport.md`](./transport.md) §9, `@tnp/protocol/v1`), service-node
+authentication to relays, and client-side pinning of each name's **domain
+key** (§1, "Domain keys and pinning"). That closes audit findings S1, S2, S3
+(for names a client has already used) and S5 in code. Not implemented: the Oxy
+identity → device key hierarchy (service nodes do not use it — see below), the
+connection handshake of transport.md §6 beyond service-node authentication,
+the signed directory, signed record sets, and directory-published revocation.
+None of it is deployed: the relay is parked ([`relays.md`](./relays.md) §8).
 
 ---
 
@@ -140,18 +142,147 @@ the verifier's high-water mark for that signer and key; and the X25519 key is
 canonically encoded and not of small order. The result is a
 `VerifiedKeyAgreementKey`, the only form of key the session handshake accepts.
 
-### What this replaces
+### Domain keys and pinning (implemented)
 
-Today a service node generates a fresh X25519 keypair at every start, `POST`s it
-to the API, and the API hands it to whoever asks. Nothing signs it, nothing binds
-it to the domain or its owner, and the client verifies nothing (audit S3). The
-API is an unaudited man-in-the-middle for every "end-to-end encrypted" tunnel.
-Under this hierarchy, the transport key is published inside a record set signed
-by the domain signing key, chained to the owner's Oxy identity, and the client
-verifies that chain before deriving anything.
+**This departs from the diagram above.** For service nodes the root of trust is
+not an Oxy identity and not a device key: it is a per-name **domain key** that
+only the domain owner holds. The reason is the adversary: an operator that can
+be compelled controls Oxy, and a hierarchy rooted at an Oxy-held key would let
+it mint a valid key for anyone's domain. The Oxy identity → device key
+hierarchy is not used by the overlay at all; it remains the target for relays,
+clients and record sets.
 
-The current code also generates an Ed25519 identity keypair, prints its public
-key, and **never uses it for anything**. That plumbing is replaced, not extended.
+```
+domain key (Ed25519)        generated on the owner's device, never sent anywhere
+     │ grant: purpose service-node, scope = the name, 30 days, serial = issue time
+     ▼
+node key (Ed25519)          one per service node per name, persistent
+     │ key-agreement certificate, ≤ 7 days
+     ▼
+X25519 key                  what clients run the Noise handshake against
+```
+
+**Creation and storage.** The first `tnp serve --domain <name>` on a device
+that has neither the domain key nor a registered one generates it, as does
+`tnp domain key init <name>`. Keys live in the **per-user** data directory of
+whoever runs the command — `<user data dir>/overlay/` (`~/.local/share/tnp` or
+`$XDG_DATA_HOME/tnp` on Linux, `~/Library/Application Support/tnp` on macOS,
+`%LOCALAPPDATA%\tnp` on Windows; `TNP_DATA_DIR` overrides) — never the
+sandboxed resolver daemon's directory: `domain-keys/<name>.json`,
+`node-keys/<name>.json`, `grants/<name>.json` and `pins.json`. Under `sudo`
+the directory is the **invoking** user's (`SUDO_USER`, home from the password
+database, `XDG_DATA_HOME` ignored) and files written there are handed back to
+that user, so `sudo tnp connect`, `tnp pins` and `tnp test` share one pin
+store. Files are written to an exclusive temp file, flushed and renamed, mode
+`0600` (an ACL on Windows), in a `0700` directory; a symlink at the target is
+refused, and a key file readable by others is tightened to `0600` with a
+warning.
+
+**Keep the domain key off the serving host.** A domain key on the machine that
+serves the name is on the machine most exposed to the internet: whoever takes
+that host takes the name and can sign rotations that pinned clients follow.
+`tnp serve` says so when it creates the key there. The safer arrangement is
+the domain key on an offline device, and each service node authorized from it
+with `tnp domain grant <name> --node-key <key>` (the node prints its key);
+nodes without the domain key cannot renew their own grant and warn before it
+expires.
+
+**Registration and rotation.** The owner registers the public half once with
+`POST /domain-keys` (Oxy-authenticated, owner only). After that the registry
+accepts a different key **only** with a rotation statement signed by the
+current key:
+
+```
+u32 len ‖ "tnp-domain-key-rotation-v1" ‖ u32 len ‖ name
+‖ previousKey (32) ‖ nextKey (32) ‖ u64 issuedAt
+```
+
+`issuedAt` must be later than the previous statement's and at most 300 s in
+the future; the registry keeps the last 32 statements and serves them with the
+key. `tnp domain key rotate <name>` writes the new key to `<name>.json.pending`
+first, then registers the rotation; once the registry accepts it the retired
+secret is overwritten and unlinked (never kept — it could still sign a rotation
+clients pinned to it would follow) and the pending key renamed into place. A
+refused rotation removes the pending key. A successful rotation clears the
+published chain and certificate of the name's service node in the same
+transaction (node registration locks the same row and re-checks the key, so it
+cannot land afterwards under the retired key), relays drop nodes chained under
+the old key at their next re-check (every 10 minutes), and clients that follow
+the rotation verify against the new key — so rotating is how an owner retires
+every node under a key.
+
+**Release, re-registration and resets — exactly what is guaranteed.** While a
+name is registered, its key changes only by a rotation signed by the current
+key; the owner's Oxy account alone cannot replace it. Releasing the name
+(`DELETE /domains/:id`) does not forget the key: it is kept, with its rotation
+history, in a tombstone that is never deleted. When the name is registered
+again — by anyone — its first key must be the released key, or come with a
+rotation signed by it; otherwise the registry accepts an unrelated key only
+after the **reset hold** (30 days after the release by default,
+`TNP_DOMAIN_KEY_RESET_HOLD_DAYS`), and then publishes it with `keyReset:
+{ previousKeyFingerprint, since }` (the SHA-256 of the key it replaced) in
+`/domain-keys` and the resolve overlay. A client that pinned the previous key
+keeps refusing and is told the name was released and registered again; a
+client meeting the name for the first time can see the key is not the
+original. So an Oxy session — or whoever compels one — can replace a name's
+key only by releasing it and waiting out the hold, visibly. A lost domain key
+has exactly this recovery path and no faster one. Whoever can write the
+registry's database directly is not bound by any of this; pinning is the
+defence there.
+
+**Node credentials.** On the owner's device the node grant is issued locally
+and renewed automatically when less than 7 days remain. A node on another
+device needs a grant from the owner: `tnp domain grant <name> --node-key
+<base64> [--days N]` on the owner's device, copied to
+`grants/<name>.json`. The node certifies a fresh X25519 key for at most 7 days
+(never past its grant) and replaces it when less than 4 days remain; the
+previous key keeps completing handshakes until its certificate expires, so a
+client holding a slightly stale certificate still connects. Every new
+certificate is published with `POST /nodes/register`, and the registry verifies
+it against the domain key before storing it.
+
+**Pinning (trust on first use).** The client verifies a name's chain and
+certificate against the domain key in the `/dns/resolve` overlay block
+([`transport.md`](./transport.md) §9.1), for the name it derived itself. After
+the first successful verification it pins that domain key for the name in
+`pins.json`, with rollback high-water marks for the grant and certificate
+serials it has seen (at most 256 per name, the least recently raised dropped
+first). Every change to the pin file is made under an exclusive lock file
+(stale locks broken after 10 s) against a fresh read and written atomically,
+and nothing is cached in memory, so concurrent processes never lose each
+other's pins and `tnp pins forget` is not undone by a running client. Afterwards it accepts a different
+domain key **only** if the overlay's rotation history leads from the pinned key
+to the presented one through statements each signed by the key it retires, in
+increasing `issuedAt` order. Otherwise it refuses, fail-closed, with a message
+that says the name may be being impersonated and how to override it after
+out-of-band confirmation. A corrupt pin file is an error, never "no pins".
+`tnp pins` lists pins, `tnp pins forget <name>` removes one, and `tnp status`
+reports how many there are.
+
+**What this does not protect.**
+
+- **First contact still trusts the registry.** A client that has never used a
+  name pins whatever domain key it is shown. A compelled or compromised
+  registry can substitute a key for a client's first connection to a name. A
+  key-transparency log, which does not exist yet, is what would close this.
+- **A stolen retired domain key** can sign a rotation that a client still
+  pinned to that key will follow, as long as the registry serves it.
+- **The registry can withhold.** It can omit statements (pinned clients then
+  fail closed) or refuse to publish a node; that is denial of service, not
+  substitution.
+- **Relays check nodes against the registry's copy** of the domain key
+  ([`relays.md`](./relays.md) §2), so a compromised registry can make a relay
+  route a name to an attacker's node. Clients that pinned the genuine key
+  refuse it.
+
+### What this replaced
+
+A service node used to generate a fresh, unsigned X25519 key at every start
+and `POST` it to the API, which handed it to whoever asked; the client derived
+its session key from it without checking anything, so the API was a
+man-in-the-middle for every tunnel (audit S3). An Ed25519 "identity" key was
+generated, printed, and never used; it is now only the relay's directory
+registration key.
 
 ## 2. Storage
 
@@ -209,8 +340,8 @@ Rules:
 
 | Party | Authenticates as | To |
 |---|---|---|
-| Client | Device identity (or anonymously, when the mode permits) | Guard relay |
-| Service node | Node key, chained to a device that the domain owner authorized | Relay, and to clients through the signed record set |
+| Client | Device identity (or anonymously, when the mode permits) | Guard relay. Today: no client authentication to relays; rate-limited per address |
+| Service node | Node key, chained by a grant to the name's domain key (implemented; no device key) | Relay, by a challenge signature (transport.md §6.1); clients, through the chain and certificate in the resolve overlay, checked against their pin |
 | Relay | Node key listed in the signed directory | Clients, service nodes, other relays |
 | Exit | Node key + published exit policy | Clients |
 | API caller | Oxy bearer token | API |
@@ -230,19 +361,23 @@ resolved before private mode ships — not after.
 |---|---|
 | Replay of a recorded frame | Per-direction 64-bit counter used as the AEAD nonce, strict in-order acceptance; a repeat is `REPLAY_DETECTED`, a gap or reordering `PROTOCOL_VIOLATION` ([`transport.md`](./transport.md) §9.3). |
 | Reflection of a frame to its sender | Separate keys per direction; the reflected record fails authentication (`DECRYPT_FAILED`). |
-| Truncation of a stream | Authenticated `CLOSE` record; an end without it is `TRUNCATED` (§9.4). |
+| Truncation of a stream | Authenticated `CLOSE` record; an end without it is `TRUNCATED` (§9.4). The overlay ends data only at a sealed `FIN` (transport.md §11.4). |
 | Replay of a connection handshake | 32-byte CSPRNG nonces from both peers, bound into the signed transcript. |
 | Replay of a session handshake | Fresh ephemerals on both sides; a replayed message 1 yields a session the replayer cannot use (§9.2). |
 | Downgrade of version or capabilities | The handshake signature covers the whole transcript, so any modification breaks it. The session handshake binds version, role and name in its prologue and has no negotiable suite. Security capabilities are never negotiable downward. |
-| Key substitution | Every key is used only via a verified grant chain to an Oxy identity. An unchained key is not usable: the session handshake accepts only a `VerifiedKeyAgreementKey`, checked at run time. |
+| Key substitution | Every key is used only via a verified grant chain to the name's domain key, which the client has pinned; a different domain key needs a rotation signed by the pinned one. An unchained key is not usable: the session handshake accepts only a `VerifiedKeyAgreementKey`, checked at run time. First contact still trusts the registry (§1). |
+| Rollback to an older grant or certificate | Per-pin high-water marks on grant and certificate serials; a lower serial for the same issuer and subject is refused (`rolled-back`). |
 | Directory substitution | The directory is signed; clients pin the directory signing key and reject an unsigned or stale directory rather than falling back. |
 | Rollback to an old signed record set | Monotonic serials; a client refuses a serial lower than the highest it has seen for that name. |
 
-None of these defences is in effect in the deployed system. The replay,
-reflection, truncation, session-handshake and key-substitution rows are
-implemented in `@tnp/crypto` and `@tnp/protocol/v1` and wait on the Phase 3
-cutover; the connection handshake, signed directory and signed record sets are
-not implemented.
+The replay, reflection, truncation, session-handshake, key-substitution and
+grant/certificate rollback rows are implemented and used by the overlay, and
+tested end to end against a hostile relay
+(`packages/client/src/overlay.adversarial.test.ts`); none is deployed while the
+relay is parked. The connection-handshake replay and downgrade rows apply to a
+handshake that is not implemented (only service-node authentication is, with a
+per-connection challenge). The signed directory and signed record sets are not
+implemented.
 
 ## 6. Rotation and revocation
 
@@ -257,6 +392,12 @@ not implemented.
   security-sensitive operations, rather than assuming it is fine.
 - Losing a device revokes its device identity and every node and domain key
   chained under it, in one operation.
+
+**Implemented today:** key-agreement certificates rotate on schedule with
+overlap (§1); node grants renew automatically where the domain key is local;
+rotating the domain key retires every node chained under the old one. There is
+no directory, so no published revocation: revoking one node key without
+rotating the domain key is not possible yet.
 
 ## 7. Update security
 
@@ -412,6 +553,13 @@ revocation mechanism yet.
 | CPU exhaustion via crypto | Rate-limit handshakes before doing the expensive part |
 | Sybil in the directory | Operator diversity requirements and registration cost — [`relays.md`](./relays.md) |
 
+Status: every row but the last is implemented in `@tnp/relay-core` for the
+overlay — frame cap enforced by the WebSocket binding, per-connection and
+global circuit caps, per-IP connection limits and connect and handshake rate
+limits, bounded pending opens, buffer limits that destroy a window-violating
+circuit instead of queueing, idle timeouts. "Per identity" limits do not exist
+because clients have no identity. Values: [`relays.md`](./relays.md) §3.
+
 ## 10. Security testing
 
 Required before any privacy claim is made publicly:
@@ -419,10 +567,13 @@ Required before any privacy claim is made publicly:
 - Fuzz targets for the frame parser, the DNS parser and the directory parser.
 - Integration tests for authentication failure, revoked keys, replayed frames,
   downgrade attempts and malformed input at every parser.
-- Dependency, secret and static analysis running in CI. **No CI currently runs
-  tests at all** (audit §1).
+- Dependency, secret and static analysis running in CI. CI runs typecheck,
+  lint and tests on every PR; dependency and static analysis do not run yet.
 - A reproducible environment that stands up a client, two relays, a service node
-  and an exit, including deliberately hostile variants of each.
+  and an exit, including deliberately hostile variants of each. Today: a
+  loopback client → relay → service node suite, standalone and embedded relay,
+  with a hostile relay wrapper (replay, reorder, reflection, tamper,
+  truncation, impersonation) — one relay, no exit.
 - External cryptographic review of the protocol before private mode ships.
 
 Detail and ownership: [`threat-model.md`](./threat-model.md).

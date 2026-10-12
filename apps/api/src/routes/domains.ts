@@ -16,6 +16,7 @@ import {
   type RenewDomainResponse,
   type UpdateDomainSettingsResponse,
 } from '@tnp/shared-types';
+import { tombstoneDomainKey } from '../registry/domainKeys.js';
 import { getDb } from '../db/postgres.js';
 import { dnsRecords, domains, tlds, users } from '../db/schema/index.js';
 import {
@@ -440,9 +441,16 @@ router.delete('/:id', requireOxyAuth, async (req: Request<{ id: string }>, res) 
     // orphaned service_nodes are left behind. The owner predicate repeats the
     // check above inside the statement, so the delete can only ever remove a
     // row the caller owns at the moment it runs.
-    await getDb()
-      .delete(domains)
-      .where(and(eq(domains.id, owned.domainId), eq(domains.oxyUserId, getRequiredOxyUserId(req))));
+    // The domain key is not forgotten with the row: it is kept as a tombstone
+    // so a later registration of the same name cannot take an unrelated key
+    // without a rotation from it or a visible reset (registry/domainKeys.ts).
+    const userId = getRequiredOxyUserId(req);
+    await getDb().transaction(async (tx) => {
+      await tombstoneDomainKey(tx, owned.domainId);
+      await tx
+        .delete(domains)
+        .where(and(eq(domains.id, owned.domainId), eq(domains.oxyUserId, userId)));
+    });
 
     res.json({ message: 'Domain released' });
   } catch (err) {

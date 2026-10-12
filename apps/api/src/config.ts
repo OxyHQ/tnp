@@ -95,6 +95,14 @@ export const config = {
   oxyApiUrl: process.env.OXY_API_URL || 'https://api.oxy.so',
   parkingIp,
   nativeExpiryEnforced: parseExpiryEnforced(process.env.TNP_NATIVE_EXPIRY_ENFORCED),
+  /**
+   * Days after a name with a domain key is released before a re-registration
+   * of it may take an unrelated key (published as `keyReset`). Until then a
+   * new key needs a rotation signed by the released one
+   * (registry/domainKeys.ts). `TNP_DOMAIN_KEY_RESET_HOLD_DAYS`, default 30.
+   */
+  domainKeyResetHoldSeconds:
+    parseNonNegativeInt(process.env.TNP_DOMAIN_KEY_RESET_HOLD_DAYS, 30) * 86_400,
   corsOrigins: corsOriginsFor(production),
   /**
    * Oxy user ids whose relays the directory publishes as `oxy`. Everyone else

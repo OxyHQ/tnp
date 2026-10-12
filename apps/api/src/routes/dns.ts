@@ -53,10 +53,16 @@ router.get('/resolve', async (req, res) => {
       expiryEnforced: config.nativeExpiryEnforced,
       now: new Date(),
     });
-    // An overlay is only true while the node's heartbeat is fresh.
+    // An overlay is only true while the node's heartbeat is fresh and its
+    // key-agreement certificate unexpired.
     const node = facts.kind === 'native' ? facts.domain?.node : null;
     const overlayNotAfter =
-      answer.overlay && node ? node.lastSeen.getTime() + SERVICE_NODE_STALE_AFTER_MS : undefined;
+      answer.overlay && node
+        ? Math.min(
+            node.lastSeen.getTime() + SERVICE_NODE_STALE_AFTER_MS,
+            answer.overlay.kaCert.notAfter * 1000,
+          )
+        : undefined;
     resolveCache.set(fqdn, qtype, answer, overlayNotAfter);
     res.json(answer);
   } catch (err) {

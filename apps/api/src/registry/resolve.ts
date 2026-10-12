@@ -19,7 +19,8 @@ import {
   nativeExpiryState,
   normalizeName,
 } from '@tnp/namespace';
-import type { DnsResolveAnswer, DnsResolveResponse } from '@tnp/shared-types';
+import type { DomainKeyRotation, Grant, KeyAgreementCertificate } from '@tnp/crypto';
+import type { DnsResolveAnswer, DnsResolveOverlay, DnsResolveResponse } from '@tnp/shared-types';
 import { dnsRecords, domains, serviceNodes, tlds } from '../db/schema/index.js';
 import type { Executor } from './db.js';
 import { isServiceNodeOnline, type NodeLiveness } from './nodes.js';
@@ -29,8 +30,13 @@ import { escapeLikePattern } from '@oxy.so/utils/sql';
 export const PARKING_TTL_SECONDS = 300;
 
 export interface ServiceNodeFacts extends NodeLiveness {
+  /** The node key (Ed25519). */
   publicKey: string;
   connectedRelay: string;
+  /** Grant chain rooted at the domain key; empty for a node registered before transport v1. */
+  chain: Grant[];
+  /** Current key-agreement certificate; null for a node registered before transport v1. */
+  kaCert: KeyAgreementCertificate | null;
 }
 
 export type NameFacts =
@@ -44,6 +50,13 @@ export type NameFacts =
       /** Null when the second-level name is not registered. */
       domain: null | {
         expiresAt: Date | null;
+        /** The name's domain key, or null if the owner never registered one. */
+        domainKey: string | null;
+        /** Rotation statements for the domain key, oldest first. */
+        domainKeyRotations: DomainKeyRotation[];
+        /** Set when the key was reset after a release (registry/domainKeys.ts). */
+        domainKeyResetFrom?: string | null;
+        domainKeyResetAt?: Date | null;
         /** `@` for the registered name itself, otherwise the labels below it. */
         label: string;
         /** Every record stored at `label`, of every type. */
@@ -92,7 +105,14 @@ export async function loadNameFacts(db: Executor, name: string): Promise<NameFac
 
   const domainName = labels[labels.length - 2];
   const [domain] = await db
-    .select({ id: domains.id, expiresAt: domains.expiresAt })
+    .select({
+      id: domains.id,
+      expiresAt: domains.expiresAt,
+      domainKey: domains.domainKey,
+      domainKeyRotations: domains.domainKeyRotations,
+      domainKeyResetFrom: domains.domainKeyResetFrom,
+      domainKeyResetAt: domains.domainKeyResetAt,
+    })
     .from(domains)
     .where(and(eq(domains.name, domainName), eq(domains.tld, tld), eq(domains.status, 'active')))
     .limit(1);
@@ -130,6 +150,8 @@ export async function loadNameFacts(db: Executor, name: string): Promise<NameFac
         connectedRelay: serviceNodes.connectedRelay,
         status: serviceNodes.status,
         lastSeen: serviceNodes.lastSeen,
+        chain: serviceNodes.chain,
+        kaCert: serviceNodes.kaCert,
       })
       .from(serviceNodes)
       .where(eq(serviceNodes.domainId, domain.id))
@@ -142,11 +164,52 @@ export async function loadNameFacts(db: Executor, name: string): Promise<NameFac
     tldCustom: tldRow.custom,
     domain: {
       expiresAt: domain.expiresAt,
+      domainKey: domain.domainKey,
+      domainKeyRotations: domain.domainKeyRotations,
+      domainKeyResetFrom: domain.domainKeyResetFrom,
+      domainKeyResetAt: domain.domainKeyResetAt,
       label,
       records,
       hasDescendants: descendants?.present ?? false,
       node: node ?? null,
     },
+  };
+}
+
+/**
+ * The overlay block for an online node, or null when a client could not use
+ * it: no domain key to root the chain at, no certificate, or a certificate
+ * that has already expired. Nothing here is a trust decision — the client
+ * verifies all of it independently — it only avoids routing clients at a
+ * node whose key material is certain to be refused.
+ */
+function overlayFor(
+  domain: {
+    domainKey: string | null;
+    domainKeyRotations: DomainKeyRotation[];
+    domainKeyResetFrom?: string | null;
+    domainKeyResetAt?: Date | null;
+  },
+  node: ServiceNodeFacts,
+  now: Date,
+): DnsResolveOverlay | null {
+  if (!domain.domainKey || !node.kaCert || node.chain.length === 0) return null;
+  if (node.kaCert.notAfter <= Math.floor(now.getTime() / 1000)) return null;
+  return {
+    relay: node.connectedRelay,
+    available: true,
+    domainKey: domain.domainKey,
+    rotations: domain.domainKeyRotations,
+    chain: node.chain,
+    kaCert: node.kaCert,
+    ...(domain.domainKeyResetFrom && domain.domainKeyResetAt
+      ? {
+          keyReset: {
+            previousKeyFingerprint: domain.domainKeyResetFrom,
+            since: domain.domainKeyResetAt.toISOString(),
+          },
+        }
+      : {}),
   };
 }
 
@@ -168,7 +231,8 @@ function isHeld(expiresAt: Date | null, settings: ResolutionSettings): boolean {
  *   node → NODATA. Nothing at all at the label and no online node → parking for
  *   A/ANY if configured, otherwise NODATA for the registered name itself or an
  *   empty non-terminal, NXDOMAIN for any other label.
- * - The overlay block is attached only for a node whose heartbeat is fresh.
+ * - The overlay block is attached only for a node whose heartbeat is fresh, on
+ *   a name with a domain key, carrying a chain and an unexpired certificate.
  */
 export function decideResolution(
   facts: NameFacts,
@@ -191,16 +255,12 @@ export function decideResolution(
   }
 
   const nodeOnline = isServiceNodeOnline(domain.node, settings.now);
-  const overlay =
-    nodeOnline && domain.node
-      ? {
-          overlay: {
-            serviceNodePubKey: domain.node.publicKey,
-            relay: domain.node.connectedRelay,
-            available: true,
-          },
-        }
-      : {};
+  // Answers keep treating an online node as online (no parking) whatever its
+  // key material; only the overlay block is withheld when a client could not
+  // verify it.
+  const overlayBlock =
+    nodeOnline && domain.node ? overlayFor(domain, domain.node, settings.now) : null;
+  const overlay = overlayBlock ? { overlay: overlayBlock } : {};
 
   let matching =
     qtype === 'ANY' ? domain.records : domain.records.filter((record) => record.type === qtype);

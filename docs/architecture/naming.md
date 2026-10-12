@@ -190,12 +190,16 @@ Target design (Phase 2):
   answer, and rejects a serial lower than one it has already seen (rollback
   defence).
 - The service node's transport key is published **inside this signed record set**.
-  This is what closes audit finding S3: today the API can hand a client any key
-  it likes for any domain, and the client has no way to notice.
 
-Until this exists, `docs/` and every user-facing surface must say that TNP-native
-answers are trusted because the API served them over TLS, not because they are
-authenticated.
+**Implemented so far** (Phase 3 transport, [`security.md`](./security.md) §1):
+each native name has an owner-held **domain key** — not chained to the Oxy
+identity, deliberately, so a compelled operator cannot mint one — and the
+service node's transport key reaches the client as a grant chain and
+certificate rooted at it, which the client verifies against the domain key it
+pinned for the name on first use. That closes audit S3 for the transport key,
+for names a client has already used. **DNS records are still not signed**: a
+TNP-native answer is trusted because the API served it over TLS, not because
+it is authenticated, and `docs/` and every user-facing surface must say so.
 
 ---
 

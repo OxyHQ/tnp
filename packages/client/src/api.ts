@@ -1,14 +1,18 @@
-import type {
-  DnsResolveAnswer,
-  DnsResolveOverlay,
-  DnsResolveResponse,
-  RegisterRelayRequest,
-  RegisterServiceNodeRequest,
-  RelayDirectoryEntry,
-  RelayHeartbeatRequest,
-  RelayRegistration,
-  ServiceNodeHeartbeatRequest,
-  ServiceNodeLookup,
+import type { Grant, KeyAgreementCertificate } from '@tnp/crypto';
+import {
+  type DnsResolveAnswer,
+  type DnsResolveOverlay,
+  type DnsResolveResponse,
+  type DomainKeyRecord,
+  parseDomainKeyRecord,
+  type RegisterDomainKeyRequest,
+  type RegisterRelayRequest,
+  type RegisterServiceNodeRequest,
+  type RelayDirectoryEntry,
+  type RelayHeartbeatRequest,
+  type RelayRegistration,
+  type ServiceNodeHeartbeatRequest,
+  type ServiceNodeLookup,
 } from '@tnp/shared-types';
 
 // The `/dns/resolve` response is declared once, in @tnp/shared-types, next to
@@ -137,11 +141,58 @@ export class TnpApiClient {
   }
 
   /**
-   * Register a service node (auth required).
+   * Publish a service node's grant chain and key-agreement certificate (auth
+   * required). The registry verifies them against the domain key before
+   * storing; clients verify them again and do not rely on that.
    */
-  async registerServiceNode(domainId: string, publicKey: string, authToken: string): Promise<void> {
-    const request: RegisterServiceNodeRequest = { domainId, publicKey };
+  async registerServiceNode(
+    domainId: string,
+    chain: Grant[],
+    kaCert: KeyAgreementCertificate,
+    authToken: string,
+  ): Promise<void> {
+    const request: RegisterServiceNodeRequest = { domainId, chain, kaCert };
     await this.postContract('/nodes/register', request, authToken, WRITE_TIMEOUT_MS);
+  }
+
+  /** The domain key the registry publishes for `name`, or null when it has none. */
+  async getDomainKey(name: string): Promise<DomainKeyRecord | null> {
+    const res = await fetch(`${this.baseUrl}/domain-keys/${encodeURIComponent(name)}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`TNP API returned ${res.status}`);
+    const parsed = parseDomainKeyRecord(await res.json());
+    if (!parsed.ok || parsed.value.name !== name) {
+      throw new Error('the registry returned a malformed domain key record');
+    }
+    return parsed.value;
+  }
+
+  /** Register the first domain key for a name, or a rotation signed by the current one (owner only). */
+  async registerDomainKey(
+    request: RegisterDomainKeyRequest,
+    authToken: string,
+  ): Promise<DomainKeyRecord> {
+    return this.postContract<RegisterDomainKeyRequest, DomainKeyRecord>(
+      '/domain-keys',
+      request,
+      authToken,
+      WRITE_TIMEOUT_MS,
+    );
+  }
+
+  /** The registry id of a name the caller owns (`/nodes` endpoints are keyed by it). */
+  async lookupOwnedDomainId(name: string, authToken: string): Promise<string> {
+    const res = await fetch(`${this.baseUrl}/domains/lookup/${encodeURIComponent(name)}`, {
+      signal: AbortSignal.timeout(5000),
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    if (!res.ok) throw new Error(`could not look up ${name}: TNP API returned ${res.status}`);
+    const body = (await res.json()) as { _id?: unknown };
+    if (typeof body._id !== 'string')
+      throw new Error(`could not look up ${name}: malformed response`);
+    return body._id;
   }
 
   /**

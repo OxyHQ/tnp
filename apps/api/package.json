@@ -18,6 +18,7 @@
   "dependencies": {
     "@oxy.so/core": "4.2.0",
     "@oxy.so/utils": "^1.0.1",
+    "@tnp/crypto": "workspace:*",
     "@tnp/namespace": "workspace:*",
     "@tnp/shared-types": "workspace:*",
     "cors": "^2.8.6",

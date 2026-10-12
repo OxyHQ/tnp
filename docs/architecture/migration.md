@@ -81,10 +81,10 @@ change. No compatibility shims, no re-export barrels, no deprecated aliases.
 | 0 | `@tnp/namespace` | Phase 2 ✅ | Done. The namespace rule is one implementation shared by the registry and the resolver, so the two cannot drift on which names are TNP's. |
 | 1 | `@tnp/shared-types` | Phase 1 ✅ | Done, for the relay and service-node endpoints. The request and response shapes are declared once; `apps/api` parses incoming bodies with those declarations and the client builds outgoing ones from them, so the two can no longer disagree without failing typecheck. Fixes audit B2 and the class of bug behind it. The remaining endpoints (`/domains`, `/tlds`, `/dns`) move as they are touched. |
 | 2 | `@tnp/resolver` | Phase 2 | `apps/dns-server` stops reaching across the workspace by relative path (B1). |
-| 3 | `@tnp/protocol` grows | Phase 3 | Protocol v1: limits, error codes, state machines. |
-| 4 | `@tnp/crypto` | Phase 3 | Key hierarchy and grants, shared by every component. |
-| 5 | `@tnp/transport` | Phase 3 | Connections and circuits out of the client monolith. |
-| 6 | `@tnp/relay-core` | Phase 3 | Collapses the two duplicate relay implementations into one. |
+| 3 | `@tnp/protocol` grows | Phase 3 ✅ | Done. Protocol v1 is the package's default entry point; the v0 codec is deleted. |
+| 4 | `@tnp/crypto` | Phase 3 ✅ | Done. Grants, key-agreement certificates, domain keys and rotation statements, service-node relay auth. |
+| 5 | `@tnp/transport` | Phase 3 | Connections and circuits out of the client monolith. Not yet: they live in `packages/client/src/tunnel.ts` and `overlay/`. |
+| 6 | `@tnp/relay-core` | Phase 3 ✅ | Done. The two duplicate relay implementations are one; `apps/relay` and `relay-node.ts` bind it. |
 | 7 | `@tnp/service-node` | Phase 3 | |
 | 8 | `@tnp/api-client` | Phase 3 | |
 | 9 | `@tnp/proxy` | Phase 4 | Includes the routing-policy engine the VPN will reuse. |
@@ -138,8 +138,10 @@ promoted.
 ## 7. What gets deleted
 
 - The hand-rolled DNS wire serialization in `packages/client/src/proxy.ts`.
-- The duplicate relay implementation, once `@tnp/relay-core` exists.
-- The unused Ed25519 identity plumbing, once the key hierarchy replaces it.
+- ~~The duplicate relay implementation.~~ Done: `@tnp/relay-core`.
+- ~~The unused Ed25519 identity plumbing.~~ Done for service nodes; the key is
+  now only the relay's directory registration key.
+- ~~The v0 frame codec and the shared-key tunnel crypto.~~ Done.
 - `TnpConfig.upstreamDns` or the hardcoded DoH bypass — one of the two; a setting
   that is read and a setting that is ignored cannot both be right.
 - ~~`.com` and `.app` from the TLD seed.~~ Done.

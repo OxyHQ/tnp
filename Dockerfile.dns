@@ -22,6 +22,7 @@ COPY packages/client/package.json packages/client/
 COPY packages/crypto/package.json packages/crypto/
 COPY packages/namespace/package.json packages/namespace/
 COPY packages/protocol/package.json packages/protocol/
+COPY packages/relay-core/package.json packages/relay-core/
 COPY packages/shared-types/package.json packages/shared-types/
 
 RUN bun install --frozen-lockfile
@@ -30,6 +31,7 @@ RUN bun install --frozen-lockfile
 # still imports `packages/client` by relative path (audit B1), so the client's own
 # workspace dependencies have to be here too.
 COPY packages/client packages/client
+COPY packages/crypto packages/crypto
 COPY packages/namespace packages/namespace
 COPY packages/protocol packages/protocol
 COPY packages/shared-types packages/shared-types

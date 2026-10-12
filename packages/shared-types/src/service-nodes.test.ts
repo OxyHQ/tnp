@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { makeTestCredentials } from '@tnp/crypto/testing';
 import {
   parseRegisterServiceNodeRequest,
   parseServiceNodeHeartbeatRequest,
@@ -7,21 +8,27 @@ import {
 const DOMAIN_ID = '9f8d3b1c-2e4a-4d6b-8c7e-1a2b3c4d5e6f';
 
 describe('parseRegisterServiceNodeRequest', () => {
+  const creds = makeTestCredentials('example.ox');
+
   test('accepts the contract shape', () => {
-    expect(
-      parseRegisterServiceNodeRequest({ domainId: DOMAIN_ID, publicKey: 'cHVibGljLWtleQ==' }),
-    ).toEqual({
-      ok: true,
-      value: { domainId: DOMAIN_ID, publicKey: 'cHVibGljLWtleQ==' },
-    });
+    const request = { domainId: DOMAIN_ID, chain: creds.chain, kaCert: creds.kaCert };
+    expect(parseRegisterServiceNodeRequest(request)).toEqual({ ok: true, value: request });
   });
 
   test('names the field for every rejection', () => {
+    const good = { domainId: DOMAIN_ID, chain: creds.chain, kaCert: creds.kaCert };
     const cases: Array<[unknown, string]> = [
-      [{ publicKey: 'cHVibGljLWtleQ==' }, 'domainId is required'],
-      [{ domainId: 'not-a-uuid', publicKey: 'cHVibGljLWtleQ==' }, 'domainId must be a uuid'],
-      [{ domainId: DOMAIN_ID }, 'publicKey is required'],
-      [{ domainId: DOMAIN_ID, publicKey: '   ' }, 'publicKey is required'],
+      [{ ...good, domainId: undefined }, 'domainId is required'],
+      [{ ...good, domainId: 'not-a-uuid' }, 'domainId must be a uuid'],
+      [{ ...good, chain: [] }, 'chain must be an array of 1 to 4 grants'],
+      [{ ...good, chain: [{ ...creds.chain[0], extra: 1 }] }, 'chain[0] has an unexpected field'],
+      [{ ...good, kaCert: undefined }, 'kaCert must be an object'],
+      [{ ...good, kaCert: { ...creds.kaCert, role: 'exit' } }, 'kaCert role is unknown'],
+      // The pre-v1 body: a bare, unsigned X25519 key.
+      [
+        { domainId: DOMAIN_ID, publicKey: 'cHVibGljLWtleQ==' },
+        'chain must be an array of 1 to 4 grants',
+      ],
       ['domainId', 'request body must be an object'],
     ];
 

@@ -39,9 +39,11 @@ This table is the honest state of the code. Full evidence:
 | Mobile apps | ❌ Not implemented |
 | Services: public domains, DNS, hosting | 🧭 Foundation only, optional and off by default — nothing can be bought until the Peable payment integration lands ([services](docs/architecture/services.md)) |
 
-**TNP does not provide anonymity.** It currently provides single-hop encrypted
-transport plus name resolution, and the API is presently able to substitute a
-service node's key. See [privacy model](docs/architecture/privacy-model.md).
+**TNP does not provide anonymity.** It provides single-hop encrypted transport
+plus name resolution. Clients pin each name's domain key on first use, so the
+API cannot substitute a service node's key for a name a client has used
+before — but it still can on first contact. The relay sees your IP and the
+name you reach. See [privacy model](docs/architecture/privacy-model.md).
 
 ## Architecture
 

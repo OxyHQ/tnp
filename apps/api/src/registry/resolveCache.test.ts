@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import type { DnsResolveResponse } from '@tnp/shared-types';
+import { makeTestCredentials } from '@tnp/crypto/testing';
 import { ResolveCache } from './resolveCache.js';
+
+const creds = makeTestCredentials('nate.ox');
 
 function clock() {
   let t = 1_000_000;
@@ -64,7 +67,14 @@ describe('ResolveCache', () => {
     const rc = cache(c);
     const withOverlay: DnsResolveResponse = {
       ...answer(3600),
-      overlay: { serviceNodePubKey: 'k', relay: 'wss://relay.example.test', available: true },
+      overlay: {
+        relay: 'wss://relay.example.test',
+        available: true,
+        domainKey: creds.domainKeyB64,
+        rotations: [],
+        chain: creds.chain,
+        kaCert: creds.kaCert,
+      },
     };
     // The node's heartbeat goes stale 5 s from now.
     rc.set('nate.ox', 'A', withOverlay, c.now() + 5_000);

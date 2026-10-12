@@ -11,12 +11,18 @@ import {
 } from '@tnp/shared-types';
 import { getDb } from '../db/postgres.js';
 import { domains, serviceNodes, tlds } from '../db/schema/index.js';
-import { toServiceNodeLookup } from '../registry/nodes.js';
+import { registerServiceNode, toServiceNodeLookup } from '../registry/nodes.js';
 import { logError } from '../utils/logError.js';
 
 const router = Router();
 
 // POST /nodes/register -- register a service node for a domain (auth required)
+//
+// The body carries the node's grant chain and key-agreement certificate. They
+// are verified here against the domain key the owner registered — defence in
+// depth only: clients verify the same material themselves against the key
+// they pinned, so a registry that skipped this check (or lied about it) still
+// could not make a client accept a key the domain key never authorized.
 router.post('/register', requireOxyAuth, async (req, res) => {
   try {
     const userId = getRequiredOxyUserId(req);
@@ -26,35 +32,23 @@ router.post('/register', requireOxyAuth, async (req, res) => {
       res.status(400).json({ error: parsed.error });
       return;
     }
-    const { domainId, publicKey } = parsed.value;
+    const { domainId, chain, kaCert } = parsed.value;
 
-    const db = getDb();
+    // Verified against the CURRENT domain key, in one transaction with the
+    // domain row locked (registry/nodes.ts, registerServiceNode).
+    const outcome = await registerServiceNode(getDb(), {
+      userId,
+      domainId,
+      chain,
+      kaCert,
+      now: Math.floor(Date.now() / 1000),
+    });
 
-    const [domain] = await db
-      .select({ id: domains.id, oxyUserId: domains.oxyUserId })
-      .from(domains)
-      .where(eq(domains.id, domainId))
-      .limit(1);
-
-    if (!domain) {
-      res.status(404).json({ error: 'Domain not found' });
+    if ('error' in outcome) {
+      res.status(outcome.status).json({ error: outcome.error });
       return;
     }
-    if (domain.oxyUserId !== userId) {
-      res.status(403).json({ error: 'You do not own this domain' });
-      return;
-    }
-
-    // One node per domain, enforced by a unique index rather than by convention.
-    const [node] = await db
-      .insert(serviceNodes)
-      .values({ domainId: domain.id, oxyUserId: userId, publicKey })
-      .onConflictDoUpdate({
-        target: serviceNodes.domainId,
-        set: { publicKey, oxyUserId: userId, lastSeen: sql`now()`, updatedAt: sql`now()` },
-      })
-      .returning();
-
+    const node = outcome.node;
     if (!node) {
       res.status(500).json({ error: 'Failed to register service node' });
       return;

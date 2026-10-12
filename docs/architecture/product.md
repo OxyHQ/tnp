@@ -164,16 +164,18 @@ baseline these points moved from.
 
 - The production API answers `/health`, and API/DNS images are published only
   after CI passes (#29 is historical).
-- `tnp relay` registration works (audit B2 is fixed), but the relay stays
-  **parked**: it still accepts an unauthenticated socket claiming any domain
-  (audit S2), and the blockers in [`relays.md`](./relays.md) are open.
-- The API can still substitute a service node's key, so the end-to-end
-  guarantee the standard tier depends on is not yet real (audit S3).
-- There is one relay implementation, duplicated, with no limits and no circuit
-  isolation.
+- `tnp relay` registration works (audit B2 is fixed), and the transport is
+  rebuilt in code (Phase 3: authenticated service nodes, isolated circuits,
+  limits, one relay core), but the relay stays **parked** until the remaining
+  gate items in [`relays.md`](./relays.md) §8 close — above all the signed
+  directory.
+- The API can no longer substitute a service node's key for a name a client
+  has pinned, but it still can on a client's first contact with a name (trust
+  on first use), so the end-to-end guarantee carries that caveat.
 - Services has its foundation (contracts, outbox, reconciliation, DNS apply)
   and is off by default; no sale is possible until the Peable payment integration
   lands ([`services.md`](./services.md) §8–9).
 
-The namespace works and DNS is now correct. The edge is a prototype with a
-critical authentication gap. The secure connection does not exist.
+The namespace works and DNS is now correct. The secure single-hop connection
+exists in code and is tested against a hostile relay, but it is not deployed:
+the relay has no signed directory and is not authenticated to clients.

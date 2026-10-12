@@ -12,12 +12,20 @@ Single-hop encrypted transport to TNP service nodes, plus name resolution.
 
 Concretely, right now:
 
-- The relay cannot read tunnel payloads.
-- The relay **can** see your IP, which service node you are talking to, when, and
-  how much.
-- The TNP API **can** transparently decrypt your traffic by substituting the
-  service node's public key, because nothing signs it and the client verifies
-  nothing (audit S3).
+(The overlay below is the code since the Phase 3 transport cutover. It is not
+deployed while the relay is parked, [`relays.md`](./relays.md) §8.)
+
+- The relay cannot read tunnel payloads, the port you connect to, or why a
+  connection failed: all of it travels inside the end-to-end session.
+- The relay **can** see your IP, the name you are reaching (the routing name
+  in every circuit), which service node serves it, when each connection opens
+  and closes, and how much is sent each way.
+- The TNP API **cannot** substitute the service node's key for a name your
+  client has used before: the client pinned that name's domain key and refuses
+  a different one unless the pinned key signed the change.
+- The TNP API **can** substitute the key the **first** time your client
+  reaches a name, because the first key seen is the one pinned (trust on first
+  use). Nothing yet lets a client check a first-seen key independently.
 - With `tnp install` or `tnp connect`, the operating system sends TNP only
   TNP-native names (`.ox`). Public names keep going to whatever resolver you
   already use; TNP does not see them and does not change how private they are.
@@ -32,12 +40,16 @@ Concretely, right now:
 - Using TNP's **public resolver** directly sends every lookup to Oxy in
   plaintext DNS: your network and ISP can read and forge all of it.
 - Neither the resolver nor the SOCKS proxy logs the names you look up, and
-  the SOCKS proxy never asks the API about non-TNP destinations.
+  the SOCKS proxy never asks the API about non-TNP destinations. The one
+  exception is a security warning: when a name's key fails verification, the
+  SOCKS proxy prints the refusal, with the name, to the local console.
 - Multi-hop routing does not exist. `--privacy private` is rejected rather than
   silently downgraded to single-hop, which is what it used to do (audit B5).
 
 **TNP does not provide anonymity today.** It provides confidentiality against the
-relay and against a passive network observer, conditional on the API behaving.
+relay and against a passive network observer — for names the client has
+pinned, also against a misbehaving API; for a first contact, conditional on the
+API behaving.
 
 ## 2. What TNP will provide (Phase 6+)
 
@@ -79,6 +91,13 @@ history, per-user domain lists.
 **IP addresses** are held only as long as a connection needs them, plus a short
 bounded window for abuse handling, and are never joined to identity in analytics.
 
+**Relays, as implemented** (`@tnp/relay-core`): aggregate counters only
+(connections, circuits opened and rejected, frames and bytes forwarded,
+drops, violations), no per-circuit log line, no name or address in any log.
+A client address lives only in memory, in its per-IP rate-limit entry, which
+is discarded once the address has no open connection and its buckets have
+refilled (seconds to a minute).
+
 ### What the API stores and publishes today
 
 Verified against `apps/api` (2026-10). Assume an operator can be compelled to
@@ -88,7 +107,8 @@ hand over everything in the "stores" column.
 |---|---|---|
 | Domains | Name, TLD, owner's Oxy user id, status, created/updated/expiry times, `unlisted` | Listed names only (`GET /domains`, search): name, TLD, status, expiry. No owner, no created/updated time, ordered by name rather than by registration. `unlisted` names are left out of both but still resolve and still answer a lookup by exact name. |
 | DNS records | Every record and its created/updated time | The records, to anyone who resolves or looks up the name — that is what DNS is. |
-| Service nodes | Owner's Oxy user id, public key, current relay, time of the **last** heartbeat (overwritten, not a history) | Public key and `online: true/false`; the relay only while online. No timestamp. |
+| Domain keys | Each name's domain key (public) and its signed rotation history (at most 32 statements) | Both (`GET /domain-keys/:name`, and the resolve overlay). The registry never holds a domain, node or session secret. |
+| Service nodes | Owner's Oxy user id, node key, grant chain and current key-agreement certificate (public), current relay, time of the **last** heartbeat (overwritten, not a history) | Node key and `online: true/false`; the relay only while online. While online, `/dns/resolve` also publishes the chain, certificate and domain key. No timestamp. |
 | Relays | Endpoint, key, registering account, capacity, location label, last heartbeat | Endpoint, key, `operator`, location label, status — for relays that heartbeated in the last 90 s. No account, no timestamp. |
 | TLD proposals and votes | Proposer and each voter's local user id | Scores, and to the caller only whether they proposed or voted. |
 | Rate-limit buckets | Client address (IPv6 as its /64) or Oxy user id, a token count, a time — in memory, size-capped, evicted, never written to disk or logs | Nothing |

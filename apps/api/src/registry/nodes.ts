@@ -8,7 +8,16 @@
  * recent enough to have been one of the last three.
  */
 
+import {
+  type Grant,
+  type KeyAgreementCertificate,
+  KeyAgreementRole,
+  verifyKeyAgreementCertificate,
+} from '@tnp/crypto';
 import type { ServiceNodeLookup, ServiceNodeStatus } from '@tnp/shared-types';
+import { eq, sql } from 'drizzle-orm';
+import { domains, serviceNodes } from '../db/schema/index.js';
+import type { Executor } from './db.js';
 
 /** Three missed 30-second heartbeats. */
 export const SERVICE_NODE_STALE_AFTER_MS = 90_000;
@@ -42,4 +51,84 @@ export function toServiceNodeLookup(
     status: online ? 'online' : 'offline',
     online,
   };
+}
+
+/**
+ * Store a service node's chain and certificate after verifying them against
+ * the name's CURRENT domain key.
+ *
+ * One transaction with the domain row locked: the key the material is
+ * verified against is still the domain key when it is stored. A rotation
+ * (which locks the same row and clears node material) therefore either
+ * happens before — and this registration is verified against the new key —
+ * or after, and clears what this stored. It can never land after a rotation
+ * with a chain under the retired key.
+ */
+export async function registerServiceNode(
+  db: Executor,
+  params: {
+    userId: string;
+    domainId: string;
+    chain: Grant[];
+    kaCert: KeyAgreementCertificate;
+    now: number;
+  },
+) {
+  return db.transaction(async (tx) => {
+    const [domain] = await tx
+      .select({
+        id: domains.id,
+        oxyUserId: domains.oxyUserId,
+        name: domains.name,
+        tld: domains.tld,
+        domainKey: domains.domainKey,
+      })
+      .from(domains)
+      .where(eq(domains.id, params.domainId))
+      .for('update')
+      .limit(1);
+
+    if (!domain) return { status: 404, error: 'Domain not found' } as const;
+    if (domain.oxyUserId !== params.userId) {
+      return { status: 403, error: 'You do not own this domain' } as const;
+    }
+    if (!domain.domainKey) {
+      return {
+        status: 409,
+        error: 'Register a domain key first: tnp domain key init <name>',
+      } as const;
+    }
+
+    const verified = verifyKeyAgreementCertificate(params.kaCert, params.chain, {
+      trustedRoots: [domain.domainKey],
+      role: KeyAgreementRole.SERVICE_NODE,
+      name: `${domain.name}.${domain.tld}`,
+      now: params.now,
+    });
+    if (!verified.ok) {
+      // The reason enum only: the detail can describe attacker-supplied input.
+      return { status: 422, error: `Key material does not verify: ${verified.reason}` } as const;
+    }
+    const publicKey = params.kaCert.signer;
+    const { chain, kaCert } = params;
+    const userId = params.userId;
+
+    // One node per domain, enforced by a unique index rather than by convention.
+    const [row] = await tx
+      .insert(serviceNodes)
+      .values({ domainId: domain.id, oxyUserId: userId, publicKey, chain, kaCert })
+      .onConflictDoUpdate({
+        target: serviceNodes.domainId,
+        set: {
+          publicKey,
+          chain,
+          kaCert,
+          oxyUserId: userId,
+          lastSeen: sql`now()`,
+          updatedAt: sql`now()`,
+        },
+      })
+      .returning();
+    return { status: 201, node: row } as const;
+  });
 }
