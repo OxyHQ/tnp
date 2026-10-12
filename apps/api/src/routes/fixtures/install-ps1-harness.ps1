@@ -3,8 +3,10 @@
 # releases in $Dir/good, $Dir/tampered, $Dir/forged and $Dir/short-sig, and its
 # Ed25519 verifier against the vectors in $Dir/vectors.json. Run by
 # client.test.ts when pwsh is on PATH (GitHub's Ubuntu runners have it, and CI
-# fails if it does not). Nothing here uses OpenSSL: PATH is emptied first, so
-# the verifier can only be the script's own.
+# fails if it does not), and on Windows also under Windows PowerShell 5.1.
+# Nothing here uses OpenSSL: PATH is emptied first, so the verifier can only be
+# the script's own. ASCII only: Windows PowerShell reads a script without a BOM
+# in the ANSI code page.
 param([string]$Dir)
 $ErrorActionPreference = "Stop"
 $env:PATH = "/nonexistent"
@@ -37,7 +39,7 @@ function Check {
     Test-Checksum -Asset "tnp-windows-x64.exe" -BinaryPath (Join-Path $d "tnp-windows-x64.exe") -SumsPath (Join-Path $d "SHA256SUMS")
 }
 
-# 2. The verifier itself: every vector (RFC 8032 §7.1 and random ones made by
+# 2. The verifier itself: every vector (RFC 8032 section 7.1 and random ones made by
 #    node:crypto) must give exactly the expected answer.
 $watch = [Diagnostics.Stopwatch]::StartNew()
 $vectors = Get-Content -Raw -LiteralPath (Join-Path $Dir "vectors.json") | ConvertFrom-Json
