@@ -285,6 +285,12 @@ describe('dns.apply', () => {
   });
 });
 
+/** Wait until at least five seconds remain in the current wall-clock minute. */
+async function awayFromMinuteBoundary(): Promise<void> {
+  const remaining = 60_000 - (Date.now() % 60_000);
+  if (remaining < 5_000) await Bun.sleep(remaining + 100);
+}
+
 describe('shared provider quota', () => {
   const limits = { memory: { perMinute: 10, perHour: 100, perDay: 1000, criticalReserve: 0.2 } };
 
@@ -304,6 +310,10 @@ describe('shared provider quota', () => {
   });
 
   test('replicas contending for the last slots admit exactly the capacity', async () => {
+    // The per-minute window is `date_trunc('minute', now())`, and `now()` is
+    // each transaction's start time. A run that straddles a minute boundary
+    // legitimately admits into two windows, so start clear of one.
+    await awayFromMinuteBoundary();
     const account = await createAccount(db);
     // Separate gates over separate pools model separate replicas.
     const replicas = [createPostgresQuotaGate(db, limits), createPostgresQuotaGate(db, limits)];
@@ -315,5 +325,5 @@ describe('shared provider quota', () => {
     );
     const admitted = (await Promise.all(attempts)).filter(Boolean).length;
     expect(admitted).toBe(10);
-  });
+  }, 15_000);
 });
