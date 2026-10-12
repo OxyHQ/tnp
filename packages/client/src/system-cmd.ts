@@ -33,6 +33,31 @@ export interface CmdResult {
 
 export type CmdRunner = (cmd: Cmd) => CmdResult;
 
+/**
+ * The environment a child process gets: this one, except that on Windows
+ * `PSModulePath` is left out.
+ *
+ * Every PowerShell command here runs in Windows PowerShell 5.1
+ * (`powershell.exe`). A tnp started from PowerShell 7 inherits pwsh's module
+ * path, and powershell.exe then tries to load pwsh's copies of its own
+ * modules and fails: "Get-Acl: The 'Get-Acl' command was found in the module
+ * 'Microsoft.PowerShell.Security', but the module could not be loaded". So
+ * from an elevated pwsh prompt every ACL check failed, and with it
+ * `tnp install`. Without the variable powershell.exe builds its default.
+ * Found by running the unit tests on a Windows runner, whose shell is pwsh.
+ */
+export function childEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): NodeJS.ProcessEnv {
+  if (platform !== 'win32') return env;
+  const out: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (key.toLowerCase() !== 'psmodulepath') out[key] = value;
+  }
+  return out;
+}
+
 export const runCmd: CmdRunner = (cmd) => {
   const res = spawnSync(cmd.file, cmd.args, {
     input: cmd.input,
@@ -40,6 +65,7 @@ export const runCmd: CmdRunner = (cmd) => {
     stdio: 'pipe',
     shell: false,
     windowsHide: true,
+    env: childEnv(),
   });
   if (res.error) {
     return { status: -1, stdout: '', stderr: res.error.message };

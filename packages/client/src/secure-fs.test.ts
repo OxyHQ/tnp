@@ -522,7 +522,9 @@ describe('settlePlainFile', () => {
       writeFileSync(path, '{}', { mode: 0o644 });
       const self = { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 };
       expect(settlePlainFile(path, self, 0o600)).toBe(true);
-      expect(statSync(path).mode & 0o777).toBe(0o600);
+      // Windows has no POSIX modes (Node reports 0o666/0o444); there the ACL
+      // is the permission, tested through restrictWindowsAcl.
+      if (process.platform !== 'win32') expect(statSync(path).mode & 0o777).toBe(0o600);
       expect(settlePlainFile(join(dir, 'absent'), self, 0o600)).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -564,7 +566,7 @@ describe('writeFileAtomic', () => {
       writeFileSync(path, 'old', { mode: 0o644 });
       writeFileAtomic(path, 'new', { mode: 0o600 });
       expect(readFileSync(path, 'utf-8')).toBe('new');
-      expect(statSync(path).mode & 0o777).toBe(0o600);
+      if (process.platform !== 'win32') expect(statSync(path).mode & 0o777).toBe(0o600);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

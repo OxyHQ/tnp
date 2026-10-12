@@ -16,7 +16,7 @@
 import { execFileSync } from 'node:child_process';
 import { lstatSync, rmdirSync, rmSync, unlinkSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
-import { join, win32 } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import { type AutoConnectUser, removeAutoConnect } from './autoconnect';
 import { dataDir, logPath, RESOLVER_STATE_DIR } from './config';
 import {
@@ -150,7 +150,8 @@ export function tnpTraces(ctx: TraceContext): Trace[] {
         what: 'kill-switch record and personal DNS rules key',
       },
       ...ctx.homes.map((home) => ({
-        path: join(home, 'Library', 'Application Support', 'tnp'),
+        // posix: these are macOS paths whatever OS computes them (tests).
+        path: posix.join(home, 'Library', 'Application Support', 'tnp'),
         what: 'identity key, DNS routing records and TLD cache',
         files: DATA_DIR_FILES,
       })),

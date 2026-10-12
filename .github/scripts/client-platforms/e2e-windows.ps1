@@ -290,7 +290,7 @@ try {
     $rules = Get-TnpFirewallRules
     foreach ($ruleName in $FirewallRules) {
         $rule = @($rules | Where-Object { $_.DisplayName -eq $ruleName })
-        if ($rule.Count -ne 1) { Fail "firewall rule $ruleName: found $($rule.Count)" }
+        if ($rule.Count -ne 1) { Fail "firewall rule ${ruleName}: found $($rule.Count)" }
         $r = $rule[0]
         if ($r.Direction -ne 'Outbound' -or $r.Action -ne 'Block' -or $r.Enabled -ne 'True') { Fail "$ruleName is $($r.Direction) $($r.Action) enabled=$($r.Enabled)" }
         $ports = $r | Get-NetFirewallPortFilter

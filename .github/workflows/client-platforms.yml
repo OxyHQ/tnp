@@ -131,6 +131,7 @@ jobs:
       - name: End-to-end on macOS
         if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
         run: |
+          mkdir -p "$E2E_LOG_DIR"
           sudo env \
             TNP_BIN="$RUNNER_TEMP/tnp-e2e/tnp" \
             BUN="$(command -v bun)" \

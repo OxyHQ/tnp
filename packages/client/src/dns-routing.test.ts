@@ -4,8 +4,9 @@
  *
  * Commands and files are captured through injected deps; nothing here touches
  * the machine. What these tests cannot show is how each OS actually behaves
- * with the generated configuration — that is verified by hand per platform
- * (see the PR). The resolved routing model below encodes the algorithm in
+ * with the generated configuration: on Windows and macOS that is exercised by
+ * .github/workflows/client-platforms.yml, which installs the compiled client
+ * on real runners and resolves through the system resolver. The resolved routing model below encodes the algorithm in
  * systemd-resolved.service(8), "Protocols and Routing", to show why the
  * global section cannot be used.
  */
@@ -19,6 +20,7 @@ import {
   macResolverFile,
   ownerNames,
   parseSystemdVersion,
+  powershellCommand,
   removeNativeRouting,
   repairLegacyWindowsAdapters,
   resolvedLinkCommands,
@@ -263,6 +265,20 @@ function fake(
   };
   return { deps, files, commands, warnings };
 }
+
+test('PowerShell is run by its System32 path, not whatever PATH finds', () => {
+  expect(
+    powershellCommand(
+      'Get-DnsClientNrptRule',
+      'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+    ),
+  ).toStartWith(
+    '"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ',
+  );
+  expect(powershellCommand('x')).toMatch(
+    /^"[A-Za-z]:\\.+\\System32\\WindowsPowerShell\\v1\.0\\powershell\.exe" /,
+  );
+});
 
 function decodePowershell(cmd: string): string {
   const encoded = /-EncodedCommand (\S+)$/.exec(cmd)?.[1];

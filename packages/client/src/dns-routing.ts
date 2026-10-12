@@ -55,8 +55,9 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
-import { dirname, join } from 'node:path';
+import { dirname, join, win32 } from 'node:path';
 import { BUILTIN_NATIVE_TLDS, isReservedTld } from '@tnp/namespace';
+import { childEnv, windowsSystem32 } from './system-cmd';
 
 /** The TLDs the OS routes to TNP. One source of truth: `@tnp/namespace`. */
 export const ROUTED_TLDS: readonly string[] = BUILTIN_NATIVE_TLDS;
@@ -257,10 +258,17 @@ export function windowsLegacyAdapterRepairScript(address: string): string {
   ].join('\n');
 }
 
-/** `powershell -EncodedCommand`: no cmd.exe quoting of `$`, `'` or `"` to get wrong. */
-export function powershellCommand(script: string): string {
+/**
+ * `powershell -EncodedCommand`: no cmd.exe quoting of `$`, `'` or `"` to get
+ * wrong. Windows PowerShell by its System32 path, never whatever `powershell`
+ * the elevated caller's PATH finds first (system-cmd.ts).
+ */
+export function powershellCommand(
+  script: string,
+  powershell: string = win32.join(windowsSystem32(), 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+): string {
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
-  return `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encoded}`;
+  return `"${powershell}" -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encoded}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -311,7 +319,7 @@ export interface RoutingDeps {
 
 export const systemDeps: RoutingDeps = {
   platform: process.platform,
-  run: (cmd) => execSync(cmd, { encoding: 'utf-8', stdio: 'pipe' }),
+  run: (cmd) => execSync(cmd, { encoding: 'utf-8', stdio: 'pipe', env: childEnv() }),
   exists: (path) => existsSync(path),
   read: (path) => readFileSync(path, 'utf-8'),
   write: (path, content) => {

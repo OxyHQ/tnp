@@ -60,6 +60,8 @@ cleanup() {
     echo "::error::macOS end-to-end failed (exit $status); see the uploaded logs"
   fi
   chmod -R a+rX "$LOG" 2>/dev/null || true
+  # Hand the logs back to the runner user, so later steps can add to them.
+  [ -n "${SUDO_UID:-}" ] && chown -R "$SUDO_UID:${SUDO_GID:-0}" "$LOG" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -114,6 +116,9 @@ system_resolves_e2e() {
 }
 
 file_mode() { stat -f '%Su:%Sg %Lp' "$1"; }
+# Owner and mode only: a new directory takes its parent's group on macOS (admin
+# under /Library), which a 0700/0600 mode makes irrelevant.
+owner_mode() { stat -f '%Su %Lp' "$1"; }
 
 set_listen_port() {
   python3 -I -c 'import json,sys; p=sys.argv[1]; c=json.load(open(p)); c["listenPort"]=int(sys.argv[2]); json.dump(c, open(p,"w"), indent=2)' \
@@ -235,12 +240,12 @@ endgroup
 
 group "Config and state are root-only"
 echo "$CONFIG_DIR: $(file_mode "$CONFIG_DIR")"
-[ "$(file_mode "$CONFIG_DIR/config.json")" = "root:wheel 600" ] ||
-  fail "config.json is $(file_mode "$CONFIG_DIR/config.json"), expected root:wheel 600"
+[ "$(owner_mode "$CONFIG_DIR/config.json")" = "root 600" ] ||
+  fail "config.json is $(file_mode "$CONFIG_DIR/config.json"), expected root-owned 0600"
 mode="$(stat -f '%Lp' "$CONFIG_DIR")"
 [ $((8#$mode & 8#007)) -eq 0 ] || fail "$CONFIG_DIR is mode $mode: other users can enter it"
 [ "$(stat -f '%Su' "$CONFIG_DIR")" = root ] || fail "$CONFIG_DIR is not root-owned"
-[ "$(file_mode "$STATE_DIR")" = "root:wheel 700" ] || fail "$STATE_DIR is $(file_mode "$STATE_DIR"), expected root:wheel 700"
+[ "$(owner_mode "$STATE_DIR")" = "root 700" ] || fail "$STATE_DIR is $(file_mode "$STATE_DIR"), expected root-owned 0700"
 pass "config.json root 0600, $CONFIG_DIR mode $mode, state dir root 0700"
 endgroup
 
@@ -278,7 +283,7 @@ printf '%s\n' "$rules" | grep -q 'block drop out quick proto udp from any to any
 printf '%s\n' "$rules" | grep -q 'pass out quick inet6 proto udp from any to ::1 port = 53' || fail "no IPv6 loopback pass rule"
 [ "$(pf_status)" = "Enabled" ] || fail "pf is not enabled while the kill switch is on"
 pfctl -s References 2>/dev/null || true
-[ "$(file_mode "$STATE_DIR/killswitch.json")" = "root:wheel 600" ] || fail "kill-switch record is not root 0600"
+[ "$(owner_mode "$STATE_DIR/killswitch.json")" = "root 600" ] || fail "kill-switch record is $(file_mode "$STATE_DIR/killswitch.json"), not root 0600"
 grep -q '"pfToken"' "$STATE_DIR/killswitch.json" || fail "the kill-switch record holds no pf token"
 if public_dns_works; then fail "plain UDP DNS to 1.1.1.1 still works with the kill switch on"; fi
 if public_dns_works +tcp; then fail "plain TCP DNS to 1.1.1.1 still works with the kill switch on"; fi
