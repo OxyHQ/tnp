@@ -93,6 +93,18 @@ describe('security headers', () => {
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
   });
 
+  test('get.tnp.network serves the installers through the app assembly', async () => {
+    const base = await serve();
+    const sh = await fetch(`${base}/`, { headers: { Host: 'get.tnp.network' } });
+    expect(sh.status).toBe(200);
+    expect(sh.headers.get('content-type')).toStartWith('text/plain');
+    expect(sh.headers.get('x-content-type-options')).toBe('nosniff');
+    const ps = await fetch(`${base}/ps`, { headers: { Host: 'get.tnp.network' } });
+    expect(ps.status).toBe(200);
+    expect(ps.headers.get('content-type')).toStartWith('text/plain');
+    expect(await ps.text()).not.toBe(await sh.text());
+  });
+
   test('X-Forwarded-Host cannot steer host-based routing', async () => {
     // `trust proxy` would make req.hostname read this client-supplied header.
     const base = await serve();
