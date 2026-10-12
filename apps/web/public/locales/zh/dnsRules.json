@@ -5,7 +5,8 @@
   "tabs": {
     "domains": "域名",
     "serviceNodes": "服务节点",
-    "dnsRules": "DNS 规则"
+    "dnsRules": "DNS 规则",
+    "vpn": "VPN"
   },
   "heading": "个人 DNS 规则",
   "subtitle": "在你自己的设备和路由器上屏蔽域名，或将其指向另一台服务器。规则在保存前就在此浏览器中加密；TNP 只存储密文，也绝不会在其公共解析器上应用这些规则。",

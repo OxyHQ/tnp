@@ -31,7 +31,7 @@ import {
 } from './dns/upstream';
 import { DnsCache } from './dns/cache';
 import { encodeTruncated, inspectQuery } from './dns/guard';
-import { isLoopback, SourceRateLimiter } from './dns/rate-limit';
+import { admitUdpSource, SourceRateLimiter, SourceSet } from './dns/rate-limit';
 import { answerFromPersonalRules, PersonalRulesFile } from './dns-rules';
 import dgram from 'node:dgram';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -107,6 +107,7 @@ export class DnsProxy {
   private tcpServer: net.Server | null = null;
   private config: DnsProxyConfig;
   private readonly rateLimiter: SourceRateLimiter | null;
+  private readonly rateLimitExempt: SourceSet;
   private readonly maxInflight: number;
   private readonly maxTcpConnections: number;
   private inflight = 0;
@@ -141,6 +142,8 @@ export class DnsProxy {
     this.upstreams = parseUpstreams(config.upstreamDns);
     const rateLimit = config.rateLimit === undefined ? DEFAULT_RATE_LIMIT : config.rateLimit;
     this.rateLimiter = rateLimit ? new SourceRateLimiter(rateLimit) : null;
+    // Throws on an invalid entry: the caller (apps/dns-server) validates first.
+    this.rateLimitExempt = new SourceSet(config.rateLimitExempt ?? []);
     this.maxInflight = config.maxInflight ?? DEFAULT_MAX_INFLIGHT;
     this.maxTcpConnections = config.maxTcpConnections ?? DEFAULT_MAX_TCP_CONNECTIONS;
     this.personalRules = config.personalRulesPath
@@ -539,11 +542,7 @@ export class DnsProxy {
       this.observeTraffic('inbound');
       const query = Buffer.from(msg);
 
-      if (
-        this.rateLimiter &&
-        !isLoopback(rinfo.address) &&
-        !this.rateLimiter.allow(rinfo.address)
-      ) {
+      if (!admitUdpSource(rinfo.address, this.rateLimiter, this.rateLimitExempt)) {
         // Over the limit: drop, except that every second refused query gets a
         // TC reply no bigger than the query (RRL "slip"), so a real client
         // sharing an address with a flood can still get through over TCP.

@@ -1,0 +1,123 @@
+{
+  "meta": {
+    "title": "VPN -- TNP"
+  },
+  "tabs": {
+    "domains": "Domaines",
+    "serviceNodes": "Nœuds de service",
+    "dnsRules": "Règles DNS",
+    "vpn": "VPN"
+  },
+  "heading": "VPN",
+  "subtitle": "Un VPN WireGuard vers une sortie exploitée par TNP. Utilisez-le sur votre routeur, pour couvrir tous les appareils de la maison, ou sur un téléphone ou un ordinateur avec l'application officielle WireGuard. Les clés sont créées dans ce navigateur ; TNP ne reçoit jamais que la clé publique.",
+  "loading": "Chargement de vos appareils...",
+  "loadError": "Impossible de charger vos appareils VPN.",
+  "unavailable": {
+    "heading": "Pas encore disponible",
+    "body": "TNP n'a pas encore mis en service sa première sortie : aucun appareil ne peut donc être ajouté. Cette page vous le permettra dès que ce sera fait. Rien n'a été enregistré pour votre compte."
+  },
+  "honesty": {
+    "heading": "Ce que ce VPN protège, et ce qu'il ne protège pas",
+    "protectsHeading": "Il protège",
+    "protects1": "Vis-à-vis de votre réseau local (Wi-Fi public, autres personnes sur votre routeur) et de votre fournisseur d'accès : ils voient une connexion WireGuard chiffrée vers une sortie TNP, pas les sites que vous visitez, vos requêtes DNS ni ce que vous envoyez.",
+    "protects2": "Votre adresse IP vis-à-vis des sites que vous visitez : ils voient l'adresse de la sortie à la place.",
+    "notHeading": "Il ne protège pas",
+    "not1": "Vis-à-vis de TNP. Oxy exploite la sortie : elle peut donc techniquement voir à quelles adresses et quels ports vous vous connectez, ainsi que le contenu de tout ce que le site lui-même ne chiffre pas. HTTPS cache le contenu, pas le site que vous joignez. Les sorties ne conservent que des totaux, jamais d'enregistrement par connexion, mais sur ce point vous nous faites confiance.",
+    "not2": "Votre identité. Ce n'est pas de l'anonymat : une seule entreprise exploite la sortie et sait à quel compte appartient chaque appareil, et quelqu'un capable d'observer à la fois votre connexion et la sortie peut les relier par leur synchronisation.",
+    "not3": "Ce que vous dites à un site. Vous connecter à un compte vous identifie, avec ou sans VPN.",
+    "not4": "Vis-à-vis de l'hébergeur (AWS), qui peut observer le trafic de la sortie comme n'importe quel opérateur réseau.",
+    "tor": "Si votre sécurité dépend du fait de ne pas être identifié, par exemple en tant que militant ou journaliste face à un gouvernement, utilisez <link>Tor Browser</link> plutôt que ce VPN. Le niveau privé et multi-saut de TNP n'existe pas encore.",
+    "stored": "Ce que TNP enregistre pour chaque appareil : le nom que vous lui donnez, sa clé publique et son adresse dans le tunnel. Jamais sa clé privée, jamais quand il se connecte, depuis quelle adresse IP ni combien il envoie.",
+    "ipv6": "L'IPv6 n'est pas encore transporté. Le tunnel le capture pour qu'il ne puisse pas contourner le VPN, et la sortie le refuse : vos applications utilisent donc l'IPv4."
+  },
+  "add": {
+    "heading": "Ajouter un appareil",
+    "intro": "Donnez à l'appareil un nom que vous reconnaîtrez. Une paire de clés WireGuard est générée dans ce navigateur ; seule la clé publique est envoyée à TNP.",
+    "name": "Nom de l'appareil",
+    "namePlaceholder": "Routeur de la maison",
+    "submit": "Ajouter l'appareil",
+    "adding": "Génération des clés...",
+    "limit": "Vous avez {{max}} appareils, le maximum pour un compte. Révoquez-en un pour en ajouter un autre.",
+    "failed": "Impossible d'ajouter l'appareil."
+  },
+  "config": {
+    "heading": "Configurer {{name}}",
+    "done": "Terminé",
+    "once": "C'est la seule fois que la clé privée est affichée. TNP ne l'a jamais reçue et ne peut pas la montrer à nouveau. Téléchargez la configuration ou scannez le code maintenant ; si vous la perdez, révoquez l'appareil et ajoutez-en un nouveau.",
+    "clipboard": "Copier place la clé privée dans votre presse-papiers, où l'historique ou la synchronisation du presse-papiers peut la conserver. Préférez le téléchargement ou le code QR. Si vous copiez quand même, cette page écrase le presse-papiers après 60 secondes lorsque le navigateur le permet.",
+    "exit": "Sortie",
+    "exitOption": "{{id}} ({{region}})",
+    "file": "Configuration WireGuard ({{file}})",
+    "download": "Télécharger {{file}}",
+    "qr": "Scanner avec l'application WireGuard",
+    "qrLabel": "Configuration WireGuard de {{name}} sous forme de code QR",
+    "qrHelp": "Le code contient la clé privée. Ne le photographiez pas et ne partagez pas votre écran tant qu'il est visible."
+  },
+  "guide": {
+    "heading": "L'installer",
+    "tabs": {
+      "phone": "Android / iOS",
+      "desktop": "Windows / macOS",
+      "linux": "Linux",
+      "openwrt": "Routeur OpenWrt"
+    },
+    "phone": {
+      "step1": "Installez l'application officielle WireGuard, publiée par WireGuard Development Team, depuis Google Play, F-Droid ou l'App Store.",
+      "step2": "Touchez <code>+</code>, choisissez Scanner depuis un code QR et scannez le code ci-dessus. Nommez le tunnel, par exemple <code>tnp</code>.",
+      "step3": "Activez le tunnel.",
+      "android": "Coupe-circuit sur Android : Paramètres, Réseau, VPN, l'engrenage à côté de WireGuard, puis activez VPN permanent et Bloquer les connexions sans VPN.",
+      "ios": "iOS : dans les réglages du tunnel, activez l'activation à la demande pour qu'il se reconnecte tout seul."
+    },
+    "desktop": {
+      "step1": "Installez WireGuard depuis <code>wireguard.com/install</code> (sur macOS, depuis le Mac App Store).",
+      "step2": "Téléchargez la configuration ci-dessus, puis choisissez Importer un ou des tunnels depuis un fichier et sélectionnez-la.",
+      "step3": "Cliquez sur Activer.",
+      "windows": "Sous Windows, un tunnel complet comme celui-ci bloque tout le trafic hors du tunnel tant qu'il est actif : rien ne fuit si la connexion tombe."
+    },
+    "linux": {
+      "intro": "Téléchargez la configuration, puis, dans le dossier où vous l'avez enregistrée :",
+      "boot": "Pour le lancer à chaque démarrage : <code>sudo systemctl enable --now wg-quick@{{name}}</code>",
+      "dns": "wg-quick configure le DNS via <code>resolvconf</code> ou <code>systemd-resolved</code>. Si aucun des deux n'est installé, votre DNS ne change pas et les requêtes contournent le résolveur du tunnel."
+    },
+    "openwrt": {
+      "intro": "WireGuard est intégré à OpenWrt. Configurez-le une fois sur le routeur et tous les appareils de votre réseau utilisent le VPN sans rien installer.",
+      "packages": "Installez les paquets une fois : Système, Logiciels, ou en SSH <code>opkg update && opkg install luci-proto-wireguard</code> (OpenWrt 25 et suivants : <code>apk add luci-proto-wireguard</code>), puis redémarrez le routeur.",
+      "luciHeading": "Dans LuCI",
+      "luci1": "Réseau, Interfaces, Ajouter une nouvelle interface : nom <code>wg0</code>, protocole WireGuard VPN.",
+      "luci2": "Paramètres généraux : cliquez sur Load configuration… et collez la configuration du routeur ci-dessous (OpenWrt 23.05 et suivants). Elle joint la sortie par son adresse IP, car le routeur ne peut pas résoudre un nom avant que son tunnel soit actif. Sur les versions plus anciennes, collez la clé privée et ajoutez l'adresse <code>{{ipv4}}/32</code> à la main.",
+      "luci3": "Pairs : vérifiez que le pair de la sortie TNP a Route Allowed IPs coché et Persistent Keep Alive réglé sur <code>25</code>.",
+      "luci4": "Paramètres avancés : Utiliser des serveurs DNS personnalisés, <code>{{dns}}</code>. Modifiez ensuite l'interface wan et décochez Utiliser les serveurs DNS annoncés par le pair, pour que les requêtes n'aillent pas chez votre fournisseur.",
+      "luci5": "Paramètres du pare-feu : créez une nouvelle zone nommée <code>tnp</code>. Dans Réseau, Pare-feu, réglez la zone tnp sur entrée rejeter, transfert rejeter, avec le masquage et le MSS clamping activés, et autorisez la zone lan à transférer vers tnp.",
+      "luci6": "IPv6 : modifiez l'interface wan6 et, dans les paramètres avancés, décochez le routage IPv6 par source. Puis dans Réseau, Pare-feu, Règles de trafic, ajoutez une règle IPv6 de la zone lan vers les zones wan et tnp avec l'action rejeter. Sans cela, les appareils de votre réseau envoient leur IPv6 directement à votre fournisseur, hors du tunnel.",
+      "luci7": "Coupe-circuit : dans Réseau, Pare-feu, modifiez la zone lan et décochez wan sous Autoriser le transfert vers les zones de destination, pour que les appareils n'aient pas d'internet plutôt que de passer par votre fournisseur quand le tunnel est coupé.",
+      "luci8": "Enregistrer et appliquer. Statut, WireGuard doit afficher une poignée de main récente en moins d'une minute.",
+      "routerConfigHeading": "Configuration du routeur (joint la sortie par son adresse IP)",
+      "cliHeading": "Ou en SSH, en une seule fois",
+      "cliNote": "Ces commandes contiennent la clé privée de cet appareil. Collez-les dans le shell du routeur et ne les enregistrez nulle part ailleurs. La connexion peut couper quelques secondes pendant le redémarrage du réseau.",
+      "killHeading": "Coupe-circuit (activé par défaut)",
+      "killText": "Ces commandes suppriment le transfert de votre LAN vers votre fournisseur : si le tunnel est coupé, les appareils de votre réseau n'ont pas d'internet au lieu de passer discrètement par votre fournisseur. Le routeur lui-même continue d'utiliser wan, car il en a besoin pour joindre la sortie.",
+      "killToggle": "Garder un repli vers mon fournisseur quand le tunnel est coupé (déconseillé : le trafic part alors sans le VPN, sans que vous le remarquiez)",
+      "ipv6": "L'IPv6 n'est pas encore transporté. Les commandes désactivent le routage IPv6 par source et font refuser par le routeur l'IPv6 de votre LAN avec une erreur immédiate : rien ne sort hors du tunnel. Pour que les appareils n'essaient même plus l'IPv6, désactivez aussi les annonces de routeur sur le LAN (Réseau, Interfaces, lan, Serveur DHCP, Paramètres IPv6).",
+      "fallbackHeading": "Autoriser un repli plus tard",
+      "fallbackText": "Pour que les appareils puissent de nouveau passer par votre fournisseur quand le tunnel est coupé :",
+      "removeHeading": "Retirer TNP du routeur",
+      "removeText": "Supprime le tunnel et les règles de pare-feu, et rétablit le DNS de votre fournisseur, le routage IPv6 par source et le transfert :"
+    }
+  },
+  "devices": {
+    "heading": "Vos appareils",
+    "count": "{{count}} sur {{max}}",
+    "empty": "Aucun appareil pour l'instant.",
+    "lost": "Téléphone ou configuration perdu ? Révoquez l'appareil. Les sorties cessent d'accepter sa clé à leur prochaine synchronisation, normalement en moins d'une minute ; une sortie qui ne peut pas joindre TNP cesse d'accepter tous les appareils au bout de 10 minutes.",
+    "details": "{{address}}, ajouté le {{date}}",
+    "rename": "renommer",
+    "save": "Enregistrer",
+    "cancel": "annuler",
+    "renamed": "Appareil renommé.",
+    "failed": "Cela n'a pas fonctionné. Réessayez.",
+    "revoke": "révoquer",
+    "revokeConfirm": "Révoquer {{name}} ? Les sorties cessent de l'accepter à leur prochaine synchronisation (normalement en moins d'une minute, au plus une dizaine de minutes) et sa configuration ne pourra plus être utilisée.",
+    "revokeButton": "Révoquer l'appareil",
+    "revoked": "{{name}} a été révoqué."
+  }
+}

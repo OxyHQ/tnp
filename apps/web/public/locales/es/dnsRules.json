@@ -5,7 +5,8 @@
   "tabs": {
     "domains": "Dominios",
     "serviceNodes": "Nodos de servicio",
-    "dnsRules": "Reglas DNS"
+    "dnsRules": "Reglas DNS",
+    "vpn": "VPN"
   },
   "heading": "Reglas DNS personales",
   "subtitle": "Bloquea dominios o dirígelos a otro servidor en tus propios dispositivos y router. Tus reglas se cifran en este navegador antes de guardarse; TNP solo almacena texto cifrado y nunca las aplica en su resolutor público.",

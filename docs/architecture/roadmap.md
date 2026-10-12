@@ -151,6 +151,12 @@ review.
 
 Depends on Phase 5.
 
+The standard-tier VPN no longer waits for this phase or Phase 8: it runs
+WireGuard to TNP-operated exits ([`vpn.md`](./vpn.md) §10,
+[`exit-nodes.md`](./exit-nodes.md) §9 — implemented, off until an exit is
+deployed and the vpn.md §9 leak tests are documented). Phases 7–10 below are
+the path to the private tier.
+
 - TCP exit; UDP where the transport supports it; DNS at the exit.
 - Exit policy, published and enforced.
 - SSRF and private-range protection with rebinding defence.

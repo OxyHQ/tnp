@@ -28,6 +28,7 @@ import clientRouter, { installerRoute } from './routes/client.js';
 import dnsRouter from './routes/dns.js';
 import domainKeysRouter from './routes/domain-keys.js';
 import domainsRouter from './routes/domains.js';
+import { createExitRouter } from './routes/exit.js';
 import meRouter, { dnsRulesBodyParser } from './routes/me.js';
 import nodesRouter from './routes/nodes.js';
 import relaysRouter from './routes/relays.js';
@@ -60,6 +61,7 @@ export function createApp(options: AppOptions): express.Express {
       trustCloudflareHeader: config.trustCloudflareHeader,
       cloudflareIpRanges: config.cloudflareIpRanges,
       exempt: config.rateLimitExempt,
+      vpnExitAddresses: config.vpnExitAddresses,
     },
   );
   if (limits.invalidEntries.length > 0) {
@@ -112,6 +114,8 @@ export function createApp(options: AppOptions): express.Express {
   app.use('/dns', dnsRouter);
   app.use('/client', clientRouter);
   app.use('/health', createHealthRouter());
+  // TNP's WireGuard exits, authenticated by their own bearer secret, never Oxy.
+  app.use('/exit', createExitRouter({ vpn: () => config.vpn }));
 
   // Routes with mixed auth -- the optional auth resolves req.userId/req.user if
   // a token is present; individual write handlers enforce auth with

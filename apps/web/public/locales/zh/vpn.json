@@ -1,0 +1,123 @@
+{
+  "meta": {
+    "title": "VPN -- TNP"
+  },
+  "tabs": {
+    "domains": "域名",
+    "serviceNodes": "服务节点",
+    "dnsRules": "DNS 规则",
+    "vpn": "VPN"
+  },
+  "heading": "VPN",
+  "subtitle": "通往 TNP 运营的出口节点的 WireGuard VPN。可以装在路由器上，让家里所有设备都受保护；也可以在手机或电脑上使用官方 WireGuard 应用。密钥在本浏览器中生成；TNP 只会收到公钥。",
+  "loading": "正在加载你的设备...",
+  "loadError": "无法加载你的 VPN 设备。",
+  "unavailable": {
+    "heading": "暂未开放",
+    "body": "TNP 尚未启用第一个出口节点，因此还不能添加设备。启用后即可在此页面添加。你的账户目前没有保存任何数据。"
+  },
+  "honesty": {
+    "heading": "这个 VPN 能保护什么，不能保护什么",
+    "protectsHeading": "它能保护",
+    "protects1": "防范你的本地网络（公共 Wi-Fi、同一路由器上的其他人）和你的网络服务商：他们只能看到一条通往 TNP 出口节点的加密 WireGuard 连接，看不到你访问的网站、你的 DNS 查询或你发送的内容。",
+    "protects2": "对你访问的网站隐藏你的 IP 地址：网站看到的是出口节点的地址。",
+    "notHeading": "它不能保护",
+    "not1": "防范 TNP。出口节点由 Oxy 运营，因此在技术上可以看到你连接的地址和端口，以及网站本身未加密的任何内容。HTTPS 能隐藏内容，但不能隐藏你访问的是哪个网站。出口节点只保留总量统计，从不保留单个连接的记录，但这一点需要你信任我们。",
+    "not2": "你的身份。这不是匿名：出口节点由一家公司运营，并且知道每台设备属于哪个账户；能够同时观察你的连接和出口节点的人可以通过时间关联把两者对应起来。",
+    "not3": "你告诉网站的信息。登录账户就会暴露你的身份，无论是否使用 VPN。",
+    "not4": "防范托管服务商（AWS），它和任何网络运营商一样可以观察出口节点的流量。",
+    "tor": "如果你的人身安全取决于不被识别，例如你是面对政府压力的活动人士或记者，请使用 <link>Tor Browser</link>，而不是这个 VPN。TNP 的私密多跳模式目前尚不存在。",
+    "stored": "TNP 为每台设备保存的内容：你给它起的名字、它的公钥和隧道地址。从不保存私钥，从不记录它何时连接、来自哪个 IP 地址或发送了多少数据。",
+    "ipv6": "目前还不承载 IPv6。隧道会捕获 IPv6，使其无法绕过 VPN 泄漏，出口节点会拒绝它，因此你的应用会使用 IPv4。"
+  },
+  "add": {
+    "heading": "添加设备",
+    "intro": "给设备起一个你认得出的名字。WireGuard 密钥对在本浏览器中生成；只有公钥会发送给 TNP。",
+    "name": "设备名称",
+    "namePlaceholder": "家用路由器",
+    "submit": "添加设备",
+    "adding": "正在生成密钥...",
+    "limit": "你已有 {{max}} 台设备，达到每个账户的上限。请先撤销一台再添加。",
+    "failed": "无法添加设备。"
+  },
+  "config": {
+    "heading": "设置 {{name}}",
+    "done": "完成",
+    "once": "私钥只显示这一次。TNP 从未收到它，也无法再次显示。请现在下载配置或扫描二维码；如果丢失，请撤销该设备并重新添加。",
+    "clipboard": "复制会把私钥放进剪贴板，剪贴板历史或同步功能可能会保留它。建议使用下载或二维码。如果仍要复制，在浏览器允许的情况下，本页面会在 60 秒后覆盖剪贴板。",
+    "exit": "出口节点",
+    "exitOption": "{{id}}（{{region}}）",
+    "file": "WireGuard 配置（{{file}}）",
+    "download": "下载 {{file}}",
+    "qr": "用 WireGuard 应用扫描",
+    "qrLabel": "{{name}} 的 WireGuard 配置二维码",
+    "qrHelp": "二维码中包含私钥。显示期间请勿拍照或共享屏幕。"
+  },
+  "guide": {
+    "heading": "安装",
+    "tabs": {
+      "phone": "Android / iOS",
+      "desktop": "Windows / macOS",
+      "linux": "Linux",
+      "openwrt": "OpenWrt 路由器"
+    },
+    "phone": {
+      "step1": "从 Google Play、F-Droid 或 App Store 安装由 WireGuard Development Team 发布的官方 WireGuard 应用。",
+      "step2": "点击 <code>+</code>，选择“扫描二维码”，扫描上方的二维码。为隧道命名，例如 <code>tnp</code>。",
+      "step3": "打开隧道。",
+      "android": "Android 断网保护：设置、网络、VPN，点击 WireGuard 旁的齿轮，然后打开“始终开启的 VPN”和“屏蔽未使用 VPN 的连接”。",
+      "ios": "iOS：在隧道设置中打开“按需激活”，让它自动重新连接。"
+    },
+    "desktop": {
+      "step1": "从 <code>wireguard.com/install</code> 安装 WireGuard（macOS 上从 Mac App Store 安装）。",
+      "step2": "下载上方的配置，然后选择“从文件导入隧道”并选中它。",
+      "step3": "点击“连接”。",
+      "windows": "在 Windows 上，像这样的全隧道在连接期间会阻止隧道之外的所有流量，即使连接中断也不会泄漏。"
+    },
+    "linux": {
+      "intro": "下载配置，然后在保存它的文件夹中运行：",
+      "boot": "如需开机自动启动：<code>sudo systemctl enable --now wg-quick@{{name}}</code>",
+      "dns": "wg-quick 通过 <code>resolvconf</code> 或 <code>systemd-resolved</code> 设置 DNS。如果两者都没有安装，你的 DNS 不会改变，查询会绕过隧道的解析器。"
+    },
+    "openwrt": {
+      "intro": "OpenWrt 内置 WireGuard。在路由器上设置一次，网络中的所有设备无需安装任何东西即可使用 VPN。",
+      "packages": "先安装一次软件包：系统、软件包，或通过 SSH 运行 <code>opkg update && opkg install luci-proto-wireguard</code>（OpenWrt 25 及更高版本：<code>apk add luci-proto-wireguard</code>），然后重启路由器。",
+      "luciHeading": "在 LuCI 中",
+      "luci1": "网络、接口、添加新接口：名称 <code>wg0</code>，协议 WireGuard VPN。",
+      "luci2": "常规设置：点击 Load configuration… 并粘贴下方的路由器配置（OpenWrt 23.05 及更高版本）。它通过 IP 地址连接出口节点，因为路由器在隧道建立之前无法解析域名。在旧版本上，粘贴私钥并手动添加地址 <code>{{ipv4}}/32</code>。",
+      "luci3": "对端：确认 TNP 出口节点对端已勾选 Route Allowed IPs，并且 Persistent Keep Alive 设为 <code>25</code>。",
+      "luci4": "高级设置：使用自定义 DNS 服务器 <code>{{dns}}</code>。然后编辑 wan 接口，取消勾选“使用对端通告的 DNS 服务器”，这样查询就不会发往你的服务商。",
+      "luci5": "防火墙设置：新建一个名为 <code>tnp</code> 的区域。在网络、防火墙中，将 tnp 区域设为入站拒绝、转发拒绝，并开启 IP 动态伪装和 MSS 钳制，同时允许 lan 区域转发到 tnp。",
+      "luci6": "IPv6：编辑 wan6 接口，在高级设置中取消勾选 IPv6 源路由。然后在网络、防火墙、通信规则中添加一条规则：IPv6，从 lan 区域到 wan 和 tnp 区域，动作为拒绝。否则，你网络中的设备会把 IPv6 直接发给服务商，绕过隧道。",
+      "luci7": "断网保护：在网络、防火墙中编辑 lan 区域，在“允许转发到目标区域”中取消勾选 wan，这样隧道断开时设备会直接断网，而不是改用你的服务商。",
+      "luci8": "保存并应用。在状态、WireGuard 中，一分钟内应能看到最近一次握手。",
+      "routerConfigHeading": "路由器配置（通过 IP 地址连接出口节点）",
+      "cliHeading": "或者通过 SSH 一次完成",
+      "cliNote": "这些命令包含此设备的私钥。请粘贴到路由器的终端中运行，不要保存到其他任何地方。网络重启时连接可能会中断几秒钟。",
+      "killHeading": "断网保护（默认开启）",
+      "killText": "这些命令会删除从局域网到服务商的转发：隧道断开时，你网络中的设备会断网，而不是悄悄改用你的服务商。路由器本身仍使用 wan，因为它需要 wan 才能连接出口节点。",
+      "killToggle": "隧道断开时保留通过服务商上网的后备（不推荐：流量会在没有 VPN 的情况下发出，而你不会察觉）",
+      "ipv6": "目前还不承载 IPv6。这些命令会关闭 IPv6 源路由，并让路由器以立即返回的错误拒绝来自局域网的 IPv6，因此不会有任何 IPv6 绕过隧道。若要让设备根本不尝试 IPv6，还可以关闭局域网上的路由器通告（网络、接口、lan、DHCP 服务器、IPv6 设置）。",
+      "fallbackHeading": "以后允许后备",
+      "fallbackText": "如需在隧道断开时让设备重新通过服务商上网：",
+      "removeHeading": "从路由器上移除 TNP",
+      "removeText": "删除隧道和防火墙规则，并恢复服务商的 DNS、IPv6 源路由和转发："
+    }
+  },
+  "devices": {
+    "heading": "你的设备",
+    "count": "{{count}} / {{max}}",
+    "empty": "还没有设备。",
+    "lost": "丢了手机或配置？请撤销该设备。出口节点会在下一次同步时停止接受它的密钥，通常在一分钟内；无法连接 TNP 的出口节点会在 10 分钟后停止接受所有设备。",
+    "details": "{{address}}，添加于 {{date}}",
+    "rename": "重命名",
+    "save": "保存",
+    "cancel": "取消",
+    "renamed": "设备已重命名。",
+    "failed": "操作失败，请重试。",
+    "revoke": "撤销",
+    "revokeConfirm": "撤销 {{name}}？出口节点会在下一次同步时停止接受它（通常在一分钟内，最多约 10 分钟），其配置也将无法再使用。",
+    "revokeButton": "撤销设备",
+    "revoked": "{{name}} 已撤销。"
+  }
+}

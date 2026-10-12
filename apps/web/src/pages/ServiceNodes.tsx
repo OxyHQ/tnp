@@ -119,6 +119,12 @@ export default function ServiceNodes() {
         >
           {t('serviceNodes:tabs.dnsRules')}
         </Link>
+        <Link
+          to="/dashboard/vpn"
+          className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-border text-muted-foreground/70 hover:text-muted-foreground"
+        >
+          {t('serviceNodes:tabs.vpn')}
+        </Link>
       </div>
 
       <h1 className="mb-2 font-pixel text-xl text-primary-text">{t('serviceNodes:heading')}</h1>

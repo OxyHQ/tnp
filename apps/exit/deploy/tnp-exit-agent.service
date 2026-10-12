@@ -1,0 +1,49 @@
+[Unit]
+Description=TNP exit agent: keeps wg0's peers equal to the API's device list
+Documentation=https://github.com/OxyHQ/tnp/blob/main/docs/architecture/exit-nodes.md
+Requires=tnp-exit-wg.service
+After=tnp-exit-wg.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tnp-exit
+Group=tnp-exit
+EnvironmentFile=/etc/tnp-exit/agent.env
+# The API token, from /run (written by wg-up.sh from SSM), handed over as a
+# credential: only this service can read it, and it is in no environment block.
+LoadCredential=exit-token:/run/tnp-exit/agent-token
+Environment=PATH=/usr/bin:/usr/sbin
+Environment=BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
+ExecStart=/opt/tnp-exit/bin/bun --no-install /opt/tnp-exit/src/apps/exit/src/index.ts
+Restart=always
+RestartSec=5
+
+# `wg set` needs CAP_NET_ADMIN and nothing else.
+AmbientCapabilities=CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX
+# The agent needs the API (HTTPS) and wg0 over netlink. It never needs the
+# instance metadata service, which hands out the instance role's credentials.
+IPAddressDeny=169.254.169.254/32 fd00:ec2::254/128
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -20,6 +20,7 @@ const NAMESPACES = [
   'park',
   'services',
   'dnsRules',
+  'vpn',
 ] as const;
 
 i18n

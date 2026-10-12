@@ -16,6 +16,9 @@ import {
   type RelayRegistration,
   type ServiceNodeHeartbeatRequest,
   type ServiceNodeLookup,
+  type CreateVpnDeviceRequest,
+  type VpnDeviceList,
+  type VpnDeviceResponse,
 } from '@tnp/shared-types';
 
 // The `/dns/resolve` response is declared once, in @tnp/shared-types, next to
@@ -270,6 +273,44 @@ export class TnpApiClient {
     const parsed = parseDnsRulesRecord(await res.json());
     if (!parsed.ok) throw new Error(`the API returned a malformed rule set: ${parsed.error}`);
     return parsed.value;
+  }
+
+  /**
+   * Register a WireGuard device (`POST /me/vpn/devices`). The body is the
+   * contract type: a name and the PUBLIC key. The private key never reaches
+   * this method.
+   */
+  async registerVpnDevice(
+    request: CreateVpnDeviceRequest,
+    authToken: string,
+  ): Promise<VpnDeviceResponse> {
+    return this.postContract('/me/vpn/devices', request, authToken, REGISTER_TIMEOUT_MS);
+  }
+
+  /** The caller's WireGuard devices and the network settings (`GET /me/vpn/devices`). */
+  async listVpnDevices(authToken: string): Promise<VpnDeviceList> {
+    const res = await fetch(`${this.baseUrl}/me/vpn/devices`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+      signal: AbortSignal.timeout(REGISTER_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      const failure = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(failure.error ?? `TNP API returned ${res.status}`);
+    }
+    return (await res.json()) as VpnDeviceList;
+  }
+
+  /** Revoke one of the caller's WireGuard devices (`DELETE /me/vpn/devices/:id`). */
+  async revokeVpnDevice(id: string, authToken: string): Promise<void> {
+    const res = await fetch(`${this.baseUrl}/me/vpn/devices/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${authToken}` },
+      signal: AbortSignal.timeout(WRITE_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      const failure = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(failure.error ?? `TNP API returned ${res.status}`);
+    }
   }
 
   /**

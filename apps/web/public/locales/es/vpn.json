@@ -1,0 +1,123 @@
+{
+  "meta": {
+    "title": "VPN -- TNP"
+  },
+  "tabs": {
+    "domains": "Dominios",
+    "serviceNodes": "Nodos de servicio",
+    "dnsRules": "Reglas DNS",
+    "vpn": "VPN"
+  },
+  "heading": "VPN",
+  "subtitle": "Una VPN WireGuard hacia una salida operada por TNP. Úsala en tu router, para cubrir todos los dispositivos de casa, o en un teléfono u ordenador con la aplicación oficial de WireGuard. Las claves se crean en este navegador; TNP solo recibe la clave pública.",
+  "loading": "Cargando tus dispositivos...",
+  "loadError": "No se pudieron cargar tus dispositivos VPN.",
+  "unavailable": {
+    "heading": "Todavía no disponible",
+    "body": "TNP aún no ha activado su primera salida, así que no se pueden añadir dispositivos. Esta página te permitirá hacerlo en cuanto esté lista. No se ha guardado nada para tu cuenta."
+  },
+  "honesty": {
+    "heading": "Qué protege esta VPN y qué no",
+    "protectsHeading": "Protege",
+    "protects1": "Frente a tu red local (Wi-Fi público, otras personas en tu router) y tu proveedor de internet: ven una conexión WireGuard cifrada hacia una salida de TNP, no los sitios que visitas, tus consultas DNS ni lo que envías.",
+    "protects2": "Tu dirección IP frente a los sitios que visitas: ven la dirección de la salida en su lugar.",
+    "notHeading": "No protege",
+    "not1": "Frente a TNP. Oxy opera la salida, así que técnicamente puede ver a qué direcciones y puertos te conectas, y el contenido de todo lo que el propio sitio no cifre. HTTPS oculta el contenido, no qué sitio visitas. Las salidas solo guardan totales, nunca registros por conexión, pero en eso confías en nosotros.",
+    "not2": "Tu identidad. Esto no es anonimato: una sola empresa opera la salida y sabe a qué cuenta pertenece cada dispositivo, y alguien que pueda observar a la vez tu conexión y la salida puede relacionarlas por sus tiempos.",
+    "not3": "Lo que le dices a un sitio. Iniciar sesión en una cuenta te identifica, con o sin VPN.",
+    "not4": "Frente al proveedor de alojamiento (AWS), que puede observar el tráfico de la salida como cualquier operador de red.",
+    "tor": "Si tu seguridad depende de no ser identificado, por ejemplo como activista o periodista frente a un gobierno, usa <link>Tor Browser</link> en lugar de esta VPN. El nivel privado y multisalto de TNP todavía no existe.",
+    "stored": "Lo que TNP guarda de cada dispositivo: el nombre que le das, su clave pública y su dirección en el túnel. Nunca su clave privada, nunca cuándo se conecta, desde qué dirección IP ni cuánto envía.",
+    "ipv6": "IPv6 aún no se transporta. El túnel lo captura para que no pueda saltarse la VPN, y la salida lo rechaza, así que tus aplicaciones usan IPv4."
+  },
+  "add": {
+    "heading": "Añadir un dispositivo",
+    "intro": "Ponle al dispositivo un nombre que reconozcas. Se genera un par de claves WireGuard en este navegador; solo la clave pública se envía a TNP.",
+    "name": "Nombre del dispositivo",
+    "namePlaceholder": "Router de casa",
+    "submit": "Añadir dispositivo",
+    "adding": "Generando claves...",
+    "limit": "Tienes {{max}} dispositivos, el máximo por cuenta. Revoca uno para añadir otro.",
+    "failed": "No se pudo añadir el dispositivo."
+  },
+  "config": {
+    "heading": "Configurar {{name}}",
+    "done": "Listo",
+    "once": "Esta es la única vez que se muestra la clave privada. TNP nunca la recibió y no puede volver a mostrarla. Descarga la configuración o escanea el código ahora; si la pierdes, revoca el dispositivo y añade uno nuevo.",
+    "clipboard": "Copiar pone la clave privada en tu portapapeles, donde el historial o la sincronización del portapapeles pueden conservarla. Es mejor la descarga o el código QR. Si copias de todos modos, esta página sobrescribe el portapapeles a los 60 segundos cuando el navegador lo permite.",
+    "exit": "Salida",
+    "exitOption": "{{id}} ({{region}})",
+    "file": "Configuración de WireGuard ({{file}})",
+    "download": "Descargar {{file}}",
+    "qr": "Escanear con la aplicación WireGuard",
+    "qrLabel": "Configuración de WireGuard de {{name}} como código QR",
+    "qrHelp": "El código contiene la clave privada. No le hagas fotos ni compartas tu pantalla mientras esté visible."
+  },
+  "guide": {
+    "heading": "Instalarla",
+    "tabs": {
+      "phone": "Android / iOS",
+      "desktop": "Windows / macOS",
+      "linux": "Linux",
+      "openwrt": "Router OpenWrt"
+    },
+    "phone": {
+      "step1": "Instala la aplicación oficial de WireGuard, publicada por WireGuard Development Team, desde Google Play, F-Droid o la App Store.",
+      "step2": "Pulsa <code>+</code>, elige Escanear desde código QR y escanea el código de arriba. Ponle nombre al túnel, por ejemplo <code>tnp</code>.",
+      "step3": "Activa el túnel.",
+      "android": "Interruptor de emergencia en Android: Ajustes, Red, VPN, el engranaje junto a WireGuard, y activa VPN siempre activa y Bloquear conexiones sin VPN.",
+      "ios": "iOS: en los ajustes del túnel, activa la activación bajo demanda para que se reconecte solo."
+    },
+    "desktop": {
+      "step1": "Instala WireGuard desde <code>wireguard.com/install</code> (en macOS, desde la Mac App Store).",
+      "step2": "Descarga la configuración de arriba, elige Importar túnel(es) desde archivo y selecciónala.",
+      "step3": "Haz clic en Activar.",
+      "windows": "En Windows, un túnel completo como este bloquea todo el tráfico fuera del túnel mientras está activo, así que nada se filtra si la conexión se cae."
+    },
+    "linux": {
+      "intro": "Descarga la configuración y, en la carpeta donde la guardaste:",
+      "boot": "Para iniciarlo en cada arranque: <code>sudo systemctl enable --now wg-quick@{{name}}</code>",
+      "dns": "wg-quick configura el DNS mediante <code>resolvconf</code> o <code>systemd-resolved</code>. Si no tienes ninguno instalado, tu DNS no cambia y las consultas se saltan el resolvedor del túnel."
+    },
+    "openwrt": {
+      "intro": "WireGuard viene integrado en OpenWrt. Configúralo una vez en el router y todos los dispositivos de tu red usarán la VPN sin instalar nada.",
+      "packages": "Instala los paquetes una vez: Sistema, Software, o por SSH <code>opkg update && opkg install luci-proto-wireguard</code> (OpenWrt 25 y posteriores: <code>apk add luci-proto-wireguard</code>), y reinicia el router.",
+      "luciHeading": "En LuCI",
+      "luci1": "Red, Interfaces, Añadir nueva interfaz: nombre <code>wg0</code>, protocolo WireGuard VPN.",
+      "luci2": "Ajustes generales: pulsa Load configuration… y pega la configuración del router de abajo (OpenWrt 23.05 y posteriores). Contacta con la salida por su dirección IP, porque el router no puede resolver un nombre antes de que su túnel esté activo. En versiones anteriores, pega la clave privada y añade la dirección <code>{{ipv4}}/32</code> a mano.",
+      "luci3": "Pares: comprueba que el par de la salida de TNP tiene Route Allowed IPs marcado y Persistent Keep Alive en <code>25</code>.",
+      "luci4": "Ajustes avanzados: Usar servidores DNS personalizados, <code>{{dns}}</code>. Después edita la interfaz wan y desmarca Usar servidores DNS anunciados por el par, para que las consultas no vayan a tu proveedor.",
+      "luci5": "Ajustes del cortafuegos: crea una zona nueva llamada <code>tnp</code>. En Red, Cortafuegos, pon la zona tnp con entrada rechazar, reenvío rechazar, con enmascaramiento y MSS clamping activados, y permite que la zona lan reenvíe a tnp.",
+      "luci6": "IPv6: edita la interfaz wan6 y, en los ajustes avanzados, desmarca el enrutamiento IPv6 por origen. Después, en Red, Cortafuegos, Reglas de tráfico, añade una regla IPv6 de la zona lan a las zonas wan y tnp con la acción rechazar. Sin esto, los dispositivos de tu red envían IPv6 directamente a tu proveedor, fuera del túnel.",
+      "luci7": "Interruptor de emergencia: en Red, Cortafuegos, edita la zona lan y desmarca wan en Permitir reenvío a zonas de destino, para que los dispositivos se queden sin internet en lugar de usar tu proveedor cuando el túnel está caído.",
+      "luci8": "Guardar y aplicar. En Estado, WireGuard debería mostrar un handshake reciente en menos de un minuto.",
+      "routerConfigHeading": "Configuración del router (contacta con la salida por dirección IP)",
+      "cliHeading": "O por SSH, todo de una vez",
+      "cliNote": "Estos comandos contienen la clave privada de este dispositivo. Pégalos en la consola del router y no los guardes en ningún otro sitio. La conexión puede cortarse unos segundos mientras se reinicia la red.",
+      "killHeading": "Interruptor de emergencia (activado por defecto)",
+      "killText": "Estos comandos eliminan el reenvío de tu LAN a tu proveedor: si el túnel está caído, los dispositivos de tu red se quedan sin internet en lugar de usar tu proveedor sin que lo notes. El router sigue usando wan, porque lo necesita para llegar a la salida.",
+      "killToggle": "Mantener una alternativa a través de mi proveedor cuando el túnel está caído (no recomendado: el tráfico sale entonces sin la VPN y no lo notarás)",
+      "ipv6": "IPv6 aún no se transporta. Los comandos desactivan el enrutamiento IPv6 por origen y hacen que el router rechace el IPv6 de tu LAN con un error inmediato, así que nada sale fuera del túnel. Para que los dispositivos ni siquiera intenten IPv6, desactiva también los anuncios de router en la LAN (Red, Interfaces, lan, Servidor DHCP, Ajustes IPv6).",
+      "fallbackHeading": "Permitir una alternativa más adelante",
+      "fallbackText": "Para que los dispositivos vuelvan a usar tu proveedor cuando el túnel está caído:",
+      "removeHeading": "Quitar TNP del router",
+      "removeText": "Elimina el túnel y las reglas del cortafuegos, y restaura el DNS de tu proveedor, el enrutamiento IPv6 por origen y el reenvío:"
+    }
+  },
+  "devices": {
+    "heading": "Tus dispositivos",
+    "count": "{{count}} de {{max}}",
+    "empty": "Todavía no hay dispositivos.",
+    "lost": "¿Perdiste un teléfono o una configuración? Revoca el dispositivo. Las salidas dejan de aceptar su clave en su siguiente sincronización, normalmente en menos de un minuto; una salida que no puede contactar con TNP deja de aceptar todos los dispositivos a los 10 minutos.",
+    "details": "{{address}}, añadido el {{date}}",
+    "rename": "renombrar",
+    "save": "Guardar",
+    "cancel": "cancelar",
+    "renamed": "Dispositivo renombrado.",
+    "failed": "No funcionó. Inténtalo de nuevo.",
+    "revoke": "revocar",
+    "revokeConfirm": "¿Revocar {{name}}? Las salidas dejan de aceptarlo en su siguiente sincronización (normalmente en menos de un minuto, como mucho unos 10 minutos) y su configuración no podrá volver a usarse.",
+    "revokeButton": "Revocar dispositivo",
+    "revoked": "{{name}} ha sido revocado."
+  }
+}

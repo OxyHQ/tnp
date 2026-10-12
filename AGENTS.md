@@ -28,6 +28,8 @@ Rules that override convenience:
   (#62) live in `apps/api/src/services/`, are off by default, and nothing in the
   network path imports them. A `.com` is never a native name. `services.md` is
   normative.
+- **The WireGuard VPN is honest about its exit.** Oxy runs it and sees
+  destinations; never call it anonymous. `vpn.md` §10.
 
 ## Commands
 
@@ -52,6 +54,7 @@ apps/
   web/            @tnp/web          Vite 8 / React 19 / TailwindCSS 4.2 / React Router 7 / react-i18next
   dns-server/     @tnp/dns-server   Public DNS resolver (runs the client DnsProxy)
   relay/          @tnp/relay        Standalone relay: env config around @tnp/relay-core
+  exit/           @tnp/exit         WireGuard exit agent, nftables policy, bootstrap
 packages/
   client/         @tnp/client       Interactive CLI, DNS proxy, SOCKS5 proxy, tunnel manager,
                                     service node, embedded relay (compiles to standalone binary)
@@ -74,11 +77,11 @@ packages/
 
 ## i18n
 
-Web app: `react-i18next`, 5 languages (en, zh, es, hi, fr). Translation files: `apps/web/public/locales/{lng}/{ns}.json`. Namespaces: common, home, explore, register, domains, domainDetail, dashboard, serviceNodes, network, propose, install, park, services. Language detection: localStorage (`tnp-lang`) → browser → HTML tag.
+Web app: `react-i18next`, 5 languages (en, zh, es, hi, fr). Translation files: `apps/web/public/locales/{lng}/{ns}.json`. Namespaces: one per page, listed in `src/lib/i18n.ts`. Language detection: localStorage (`tnp-lang`) → browser → HTML tag.
 
 ## Models
 
-`users`, `domains`, `dns_records`, `tlds`, `tld_proposals`, `service_nodes`, `relays`, `votes`, `dns_rule_sets` (`apps/api/src/db/schema/`). DNS records are their own table, not a nested document: they are queried by `(domain_id, name, type)` on every resolve, and that is an index.
+`users`, `domains`, `dns_records`, `tlds`, `tld_proposals`, `service_nodes`, `relays`, `votes`, `dns_rule_sets`, `vpn_devices` (`apps/api/src/db/schema/`). DNS records are their own table, not a nested document: they are queried by `(domain_id, name, type)` on every resolve, and that is an index.
 
 ## Deployment
 
@@ -125,4 +128,4 @@ Key modules in `packages/client/src/`:
 - **The API is assembled in `apps/api/src/app.ts`** (headers, per-address then per-account rate limits, request timeout, auth); `index.ts` only builds the services router and starts it. Relay `operator` is decided by the API from `TNP_OXY_RELAY_OPERATORS`, never by the relay. API env vars: `docs/api.mdx`.
 - **Privileged client code never builds shell strings.** New system commands go through `system-cmd.ts` as argv with tools from system dirs (not `$PATH`); decide them in a pure function and unit-test it, since Windows/macOS paths cannot run in CI. The kill switch is DNS-only and fail-closed (`killswitch.ts`, `platforms.md` §4); services run an admin-only binary copy, never `process.argv[1]`.
 - **Personal DNS rules** (naming.md §3): `/me/dns-rules` holds one opaque envelope per user; never add a rule-shaped field.
-- **Key deps**: `tweetnacl`, `@noble/ciphers` + `@noble/hashes` (pinned, in `@tnp/crypto`), `dns-packet` (DNS wire format in client), `react-i18next` + `i18next` + `i18next-http-backend` + `i18next-browser-languagedetector` (web i18n).
+- **Key deps**: `tweetnacl`, `@noble/ciphers` + `@noble/hashes` (pinned, in `@tnp/crypto`), `dns-packet` (DNS wire format in client), the i18next family (web), `qrcode` (pinned, web VPN page).

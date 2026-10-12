@@ -9,6 +9,9 @@ import { getDb } from '../db/postgres.js';
 import type { Executor } from '../registry/db.js';
 import { deleteDnsRuleSet, getDnsRuleSet, putDnsRuleSet } from '../registry/dnsRules.js';
 import { logError } from '../utils/logError.js';
+import { config } from '../config.js';
+import type { VpnConfig } from '../vpn.js';
+import { createVpnRouter } from './vpn.js';
 
 /**
  * Body limit for `PUT /me/dns-rules`: the largest ciphertext as base64
@@ -32,7 +35,10 @@ export const dnsRulesBodyParser: RequestHandler = express.json({ limit: DNS_RULE
  * `db` is injectable so the real-PostgreSQL tests run this router against
  * their own database.
  */
-export function createMeRouter(db: () => Executor = getDb): Router {
+export function createMeRouter(
+  db: () => Executor = getDb,
+  vpn: () => VpnConfig | null = () => config.vpn,
+): Router {
   const router = Router();
 
   // Private, per-user data: no shared cache may keep it.
@@ -40,6 +46,9 @@ export function createMeRouter(db: () => Executor = getDb): Router {
     res.set('Cache-Control', 'no-store');
     next();
   });
+
+  // WireGuard devices (docs/architecture/vpn.md §10).
+  router.use('/vpn', createVpnRouter({ db, vpn }));
 
   router.get('/dns-rules', requireOxyAuth, async (req, res) => {
     try {

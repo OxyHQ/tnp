@@ -101,15 +101,23 @@ export function rateLimit(
     const k = key(req);
     if (k === null) return next();
 
-    const result = rule.limiter.take(k);
-    if (result.ok) return next();
-
-    res.setHeader('Retry-After', String(result.retryAfterSeconds));
-    res.status(429).json({
-      error: 'rate_limited',
-      limit: rule.name,
-      message: 'Too many requests. Try again later.',
-      retryAfter: result.retryAfterSeconds,
-    });
+    if (spend(rule, k, res)) next();
   };
+}
+
+/**
+ * Spend one token of `rule` for `key`. On refusal, answers 429 (with
+ * `Retry-After`) and returns false; the caller must then stop.
+ */
+export function spend(rule: RateLimitRule, key: string, res: Response): boolean {
+  const result = rule.limiter.take(key);
+  if (result.ok) return true;
+  res.setHeader('Retry-After', String(result.retryAfterSeconds));
+  res.status(429).json({
+    error: 'rate_limited',
+    limit: rule.name,
+    message: 'Too many requests. Try again later.',
+    retryAfter: result.retryAfterSeconds,
+  });
+  return false;
 }

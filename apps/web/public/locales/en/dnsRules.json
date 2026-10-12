@@ -5,7 +5,8 @@
   "tabs": {
     "domains": "Domains",
     "serviceNodes": "Service Nodes",
-    "dnsRules": "DNS Rules"
+    "dnsRules": "DNS Rules",
+    "vpn": "VPN"
   },
   "heading": "Personal DNS rules",
   "subtitle": "Block domains or point them at another server on your own devices and router. Your rules are encrypted in this browser before they are saved; TNP stores only ciphertext and never applies them on its public resolver.",

@@ -20,6 +20,7 @@ COPY package.json bun.lock ./
 # is to the API.
 COPY apps/api/package.json apps/api/
 COPY apps/dns-server/package.json apps/dns-server/
+COPY apps/exit/package.json apps/exit/
 COPY apps/relay/package.json apps/relay/
 COPY apps/web/package.json apps/web/
 COPY packages/client/package.json packages/client/
