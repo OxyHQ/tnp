@@ -4,6 +4,7 @@ import {
   macResolverFile,
   removeNativeRouting,
   type RoutingDeps,
+  routingStatePath,
 } from './dns-routing';
 import { formatUninstallReport, removeConnectRouting, tnpTraces } from './uninstall';
 
@@ -131,8 +132,8 @@ describe('removeConnectRouting', () => {
     current: '/Library/Application Support/tnp',
     legacy: '/Users/me/Library/Application Support/tnp',
   };
-  const STATE = `${DIRS.current}/dns-routing-connect.json`;
-  const LEGACY = `${DIRS.legacy}/dns-routing-connect.json`;
+  const STATE = routingStatePath(DIRS.current, 'connect');
+  const LEGACY = routingStatePath(DIRS.legacy, 'connect');
 
   function macDeps(): { deps: RoutingDeps; files: Map<string, string> } {
     const files = new Map<string, string>();

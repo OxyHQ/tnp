@@ -19,6 +19,8 @@ import {
 import { type DnsRule, type DnsRulesRecord, serializeDnsRuleSet } from '@tnp/shared-types';
 import { approveRedirects, acceptPulledRules, type RulesPaths } from './dns-rules-store';
 import { DnsProxy } from './proxy';
+import { probeWindowsAcl, windowsAclProblems } from './secure-fs';
+import { findSystemBinary, runCmd } from './system-cmd';
 
 const FAST: RulesKdfParams = { alg: 'argon2id', m: 19_456, t: 2, p: 1 };
 const USER = 'oxy-user-wire';
@@ -176,12 +178,21 @@ describe('after a pull', () => {
 
   test('the active file is private and lists only what applies', async () => {
     const { paths } = await pulled();
-    expect(statSync(paths.activeFile).mode & 0o077).toBe(0);
+    const key = join(paths.secretDir, 'key.json');
+    if (process.platform === 'win32') {
+      // The ACL is the permission: SYSTEM and Administrators only, as read back.
+      const host = { run: runCmd, powershell: findSystemBinary('powershell', 'win32') as string };
+      expect(
+        windowsAclProblems(probeWindowsAcl(host, [paths.activeFile, key], false), 'admin-only'),
+      ).toEqual([]);
+    } else {
+      expect(statSync(paths.activeFile).mode & 0o077).toBe(0);
+      expect(statSync(key).mode & 0o077).toBe(0);
+    }
     const text = readFileSync(paths.activeFile, 'utf-8');
     expect(text).toContain('block-subdomains ads.example.com');
     expect(text).toContain('pending 3');
     expect(text).not.toContain('google.com');
-    expect(statSync(join(paths.secretDir, 'key.json')).mode & 0o077).toBe(0);
   });
 });
 

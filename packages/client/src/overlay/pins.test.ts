@@ -44,16 +44,22 @@ describe('PinStore across processes', () => {
     expect(daemon.list().map((p) => p.name)).toEqual(['kept.ox', 'other.ox']);
   });
 
+  // On Windows each write also sets and verifies an ACL (icacls and Windows
+  // PowerShell, about a second), so fewer pins per process keep it in bounds.
+  const perWorker = process.platform === 'win32' ? 3 : 15;
   test('concurrent processes recording at once all land', async () => {
     const r = root();
     const script = join(import.meta.dir, 'pins.worker.ts');
     const procs = [0, 1, 2, 3].map((n) =>
-      Bun.spawn(['bun', script, r, String(n)], { stdout: 'ignore', stderr: 'inherit' }),
+      Bun.spawn(['bun', script, r, String(n), String(perWorker)], {
+        stdout: 'ignore',
+        stderr: 'inherit',
+      }),
     );
     const codes = await Promise.all(procs.map((p) => p.exited));
     expect(codes).toEqual([0, 0, 0, 0]);
-    expect(new PinStore(new OverlayStore(r)).list()).toHaveLength(4 * 15);
-  }, 30_000);
+    expect(new PinStore(new OverlayStore(r)).list()).toHaveLength(4 * perWorker);
+  }, 120_000);
 
   test('a stale lock left by a crashed process is broken', () => {
     const r = root();
