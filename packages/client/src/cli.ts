@@ -45,7 +45,7 @@ import {
 
 import { DOMAIN_USAGE } from './overlay/commands';
 
-const VERSION = '0.5.0';
+const VERSION = '0.5.1';
 
 function usage() {
   console.log(`
