@@ -19,30 +19,19 @@ It compiles to a single-file binary via `bun build --compile` and ships per-plat
 
 ## Install
 
-The shell installer handles platform detection, download, install, and optional DNS setup:
+The installer downloads the binary for your platform from the fixed GitHub release URL, verifies it, installs it, and optionally installs the local service:
 
 ```sh
 # Linux / macOS
 curl -fsSL https://get.tnp.network | sh
 
-# Windows (PowerShell as Administrator)
+# Windows (PowerShell)
 irm https://get.tnp.network/ps | iex
 ```
 
-Direct download links live at `GET https://api.tnp.network/client/latest`:
+Every release carries `SHA256SUMS` and `SHA256SUMS.sig`, an Ed25519 signature by the TNP release key. The shell installer checks the signature with OpenSSL 3 when it is available and the binary's SHA-256 always, before running or moving anything; when it cannot check the signature (macOS ships LibreSSL, PowerShell has no Ed25519) it says so. Set `TNP_REQUIRE_SIGNATURE=1` to refuse instead. `tnp update` always checks both, with the key built into the binary, and refuses any version that is not newer than the running one. To verify a download by hand, see [security.md §7](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/security.md).
 
-```json
-{
-  "version": "0.2.0",
-  "platforms": {
-    "darwin-arm64": "https://github.com/OxyHQ/tnp/releases/download/v0.2.0/tnp-darwin-arm64",
-    "darwin-x64":   "https://github.com/OxyHQ/tnp/releases/download/v0.2.0/tnp-darwin-x64",
-    "linux-x64":    "https://github.com/OxyHQ/tnp/releases/download/v0.2.0/tnp-linux-x64",
-    "linux-arm64":  "https://github.com/OxyHQ/tnp/releases/download/v0.2.0/tnp-linux-arm64",
-    "windows-x64":  "https://github.com/OxyHQ/tnp/releases/download/v0.2.0/tnp-windows-x64.exe"
-  }
-}
-```
+`GET https://api.tnp.network/client/latest` returns the current version (`{ "version": "x.y.z", ... }`). Clients read only the version; the download URL is always `https://github.com/OxyHQ/tnp/releases/download/v<version>/<asset>`.
 
 ## CLI commands
 
@@ -54,7 +43,7 @@ tnp serve   [flags]        Run a service node for a domain you own
 tnp relay   [flags]        Run a community relay node
 tnp install                Install as a system service + configure system DNS
 tnp uninstall              Remove the system service + restore DNS
-tnp update                 Self-update to the latest release
+tnp update                 Update to a newer signed release (verified, never a downgrade)
 tnp status                 Is the resolver service running?
 tnp test <domain>          Resolve a domain through the local proxy and print results
 tnp version                Print version

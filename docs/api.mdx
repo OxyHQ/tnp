@@ -133,11 +133,13 @@ Relays are operated by Oxy or by the community and brokered by the API. Their en
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/client/latest` | none | Latest TNP CLI release. Returns `{ version, platforms: { 'darwin-arm64', 'darwin-x64', 'linux-x64', 'linux-arm64', 'windows-x64' }, install: { unix, windows } }`. |
-| GET | `/client/install.sh` | none | The Unix installer script. Served as `text/plain`. |
-| GET | `/client/install.ps1` | none | The Windows installer script. Served as `text/plain`. |
+| GET | `/client/latest` | none | Latest TNP CLI release. Returns `{ version, dns, platforms: { 'darwin-arm64', 'darwin-x64', 'linux-x64', 'linux-arm64', 'windows-x64' }, checksums, signature, install: { unix, windows } }` (`ClientLatestResponse` in `@tnp/shared-types`). Clients act on `version` only and rebuild every URL from the fixed release scheme. |
+| GET | `/client/install.sh` | none | The Unix installer script. Served as `text/plain`, `no-store`. |
+| GET | `/client/install.ps1` | none | The Windows installer script. Served as `text/plain`, `no-store`. |
 
-In production the API also responds to `https://get.tnp.network` — when the `Host` header is `get.tnp.network`, the API rewrites `/` and `/install.sh` to `/client/install.sh`, and `/ps` and `/install.ps1` to `/client/install.ps1`. That's how `curl -fsSL https://get.tnp.network | sh` works.
+The installers are `apps/api/src/installers/install.{sh,ps1}`, filled in at startup with the version, repository and release signing key from `@tnp/shared-types`. They are the only installers: the web app's `get.tnp.network` branch redirects here.
+
+In production the API also responds to `https://get.tnp.network` — when the `Host` header is `get.tnp.network`, the API rewrites `/install.sh` to `/client/install.sh`, `/ps` and `/install.ps1` to `/client/install.ps1`, and `/` to whichever matches the user agent (PowerShell gets `install.ps1`). That's how `curl -fsSL https://get.tnp.network | sh` works.
 
 ## Parking middleware
 
