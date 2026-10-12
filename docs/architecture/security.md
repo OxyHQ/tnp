@@ -549,7 +549,9 @@ revocation mechanism yet.
   reads `resolver.json` — only its listen address, API URL, upstreams and cache
   size, no secret — root:tnp `0640` inside a root:tnp `0750` directory, so it
   can read its settings but never write them or see a token. On Windows the
-  config directory's ACL is SYSTEM and Administrators only.
+  config directory's ACL is SYSTEM and Administrators only, every file in it
+  is reset to inherit that, and the result is read back and verified
+  (platforms.md §4, "Windows permissions").
 - Anything root writes lives in a directory only root controls — never `/tmp`,
   and never a directory the unprivileged daemon user owns, where a planted
   symlink would redirect root's write. The kill-switch record is in the system

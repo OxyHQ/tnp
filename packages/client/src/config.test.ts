@@ -176,8 +176,19 @@ describe('systemStateDir', () => {
     expect(systemStateDir('linux')).toBe('/var/lib/tnp');
     expect(systemStateDir('darwin')).toBe('/Library/Application Support/tnp');
     for (const p of ['linux', 'darwin', 'win32'] as const) {
-      expect(systemStateDir(p).toLowerCase()).not.toContain('tmp');
-      expect(systemStateDir(p).toLowerCase()).not.toContain('temp');
+      expect(systemStateDir(p, () => 'C:\\ProgramData').toLowerCase()).not.toContain('tmp');
+      expect(systemStateDir(p, () => 'C:\\ProgramData').toLowerCase()).not.toContain('temp');
+    }
+  });
+
+  test('on Windows it comes from the registry ProgramData, never %PROGRAMDATA%', () => {
+    const saved = process.env.PROGRAMDATA;
+    process.env.PROGRAMDATA = 'C:\\Users\\mallory\\fake';
+    try {
+      expect(systemStateDir('win32', () => 'D:\\ProgramData')).toBe('D:\\ProgramData\\tnp');
+    } finally {
+      if (saved === undefined) delete process.env.PROGRAMDATA;
+      else process.env.PROGRAMDATA = saved;
     }
   });
 });

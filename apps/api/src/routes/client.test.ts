@@ -407,12 +407,23 @@ function flipBit(hex: string, bit: number): string {
 }
 
 /** Valid vectors, and for each a set of near-misses that must all be refused. */
-function ed25519Vectors(): Array<{ name: string; key: string; msg: string; sig: string; valid: boolean }> {
-  const valid: Array<{ name: string; key: string; msg: string; sig: string }> = [...RFC8032_VECTORS];
+function ed25519Vectors(): Array<{
+  name: string;
+  key: string;
+  msg: string;
+  sig: string;
+  valid: boolean;
+}> {
+  const valid: Array<{ name: string; key: string; msg: string; sig: string }> = [
+    ...RFC8032_VECTORS,
+  ];
   for (let i = 0; i < 6; i++) {
     const pair = generateKeyPairSync('ed25519');
     const raw = pair.publicKey.export({ format: 'der', type: 'spki' }).subarray(12);
-    const msg = createHash('sha256').update(`message ${i}`).digest().subarray(0, i * 5);
+    const msg = createHash('sha256')
+      .update(`message ${i}`)
+      .digest()
+      .subarray(0, i * 5);
     valid.push({
       name: `node-random-${i}`,
       key: raw.toString('hex'),

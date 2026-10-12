@@ -119,6 +119,26 @@ the relay token. **Follow-ups:** the macOS
 launchd job and the Windows task still run as root/SYSTEM; a dedicated macOS
 service account (`dscl`) and `LOCAL SERVICE` on Windows are next.
 
+**Windows permissions** (`secure-fs.ts`, `windows-paths.ts`). `%ProgramFiles%`,
+`%ProgramData%` and `%SystemRoot%` come from HKLM, never the environment an
+elevated process inherits from the user; an unreadable or non-local value is an
+error. Install refuses a program directory whose parents a non-administrator
+could rename, delete or re-permission. A directory TNP locks is changed on its
+own first (owner, `/reset`, inheritance cut), then probed: a junction, a
+symbolic link or a subdirectory owned by anyone but SYSTEM/Administrators
+anywhere in it stops the install. Each descendant is then reset one by one
+(`icacls ... /L`, never `/T`, which follows junctions), and the whole tree's
+ACLs are read back with `Get-Acl` and checked entry by entry against the
+profile. A private key file is reset before it is re-granted, so an explicit
+Users entry from an older build does not survive. **Residual:** the tools
+themselves (`reg.exe`, `icacls.exe`, `powershell.exe`) are found under
+`%SystemRoot%\System32` as the environment names it; a user who can set their
+own `SystemRoot` and then gets TNP run elevated could substitute them. Taking
+the system directory from `GetSystemDirectoryW` closes that and is next. None
+of the Windows paths are executed in CI; the plans, the probe's parsing and
+the checks are unit-tested, and the probe script runs under `pwsh` on Linux
+with `Get-Acl` stubbed.
+
 **Uninstall.** `tnp uninstall` removes the service, TNP's DNS routing,
 kill-switch rules and autoconnect units, then lists the data still on disk.
 `tnp uninstall --purge` also deletes config, identity key, log, binary and the
