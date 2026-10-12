@@ -56,22 +56,22 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.SOURCE_SHA }}
           persist-credentials: false
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: arn:aws:iam::237343248947:role/oxy-github-deploy
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Log in to ECR
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # `--cache-from/--cache-to type=gha` below need the Actions runtime token
       # and cache URL, which GitHub gives to JavaScript actions and NOT to `run:`
@@ -79,7 +79,7 @@ jobs:
       # publishes from refs/heads/main (see the preflight above), so
       # pull-request code never writes these cache scopes.
       - name: Expose the Actions cache to buildx
-        uses: crazy-max/ghaction-github-runtime@v4
+        uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
 
       # A full commit SHA is the only tag. There is intentionally no :latest:
       # existing ECS definitions still reference it, and moving that mutable
