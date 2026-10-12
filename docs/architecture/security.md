@@ -462,9 +462,14 @@ rotating the domain key is not possible yet.
   same fixed URLs into a `mktemp -d` directory and verify **before running or
   moving anything**, with no fallback URL. The shell installer verifies the
   signature when OpenSSL 3 or later is present and otherwise says that only the
-  checksum was checked (`TNP_REQUIRE_SIGNATURE=1` makes that fatal). PowerShell
-  has no Ed25519: the Windows installer uses OpenSSL 3 if it finds one (for
-  example Git for Windows') and otherwise states it checked the checksum only.
+  checksum was checked (`TNP_REQUIRE_SIGNATURE=1` makes that fatal). The
+  Windows installer **always** verifies the signature: PowerShell has no
+  Ed25519, so `install.ps1` carries its own RFC 8032 verifier (BigInteger and
+  SHA-512 from .NET, no external tool), which must pass an RFC 8032 test vector
+  and refuse a mutated one before its answer is believed. It has no unsigned
+  path. CI runs it under `pwsh` against the RFC 8032 vectors, random
+  `node:crypto` signatures and their near-misses (flipped bits, `S + L`, a key
+  off the curve), and fails if `pwsh` is missing.
   The installer option that pointed all system DNS at TNP's resolver over
   plaintext UDP is removed.
 
@@ -544,7 +549,9 @@ revocation mechanism yet.
   reads `resolver.json` — only its listen address, API URL, upstreams and cache
   size, no secret — root:tnp `0640` inside a root:tnp `0750` directory, so it
   can read its settings but never write them or see a token. On Windows the
-  config directory's ACL is SYSTEM and Administrators only.
+  config directory's ACL is SYSTEM and Administrators only, every file in it
+  is reset to inherit that, and the result is read back and verified
+  (platforms.md §4, "Windows permissions").
 - Anything root writes lives in a directory only root controls — never `/tmp`,
   and never a directory the unprivileged daemon user owns, where a planted
   symlink would redirect root's write. The kill-switch record is in the system

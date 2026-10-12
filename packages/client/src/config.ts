@@ -1,8 +1,9 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { isIP } from 'node:net';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { restrictWindowsAcl, writeFileAtomic } from './secure-fs';
+import { windowsProgramData } from './windows-paths';
 
 import { parseSourceList } from './dns/rate-limit';
 
@@ -246,7 +247,7 @@ export function configDir(): string {
     case 'darwin':
       return '/usr/local/etc/tnp';
     case 'win32':
-      return join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'tnp');
+      return win32.join(windowsProgramData(), 'tnp');
     default:
       return '/etc/tnp';
   }
@@ -276,12 +277,15 @@ export function dataDir(): string {
  * principal controls is a directory where a planted symlink redirects root's
  * write.
  */
-export function systemStateDir(platform: NodeJS.Platform = process.platform): string {
+export function systemStateDir(
+  platform: NodeJS.Platform = process.platform,
+  programData: () => string = windowsProgramData,
+): string {
   switch (platform) {
     case 'darwin':
       return '/Library/Application Support/tnp';
     case 'win32':
-      return join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'tnp');
+      return win32.join(programData(), 'tnp');
     default:
       return '/var/lib/tnp';
   }

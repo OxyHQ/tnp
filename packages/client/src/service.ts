@@ -8,7 +8,6 @@ import {
   mkdirSync,
   realpathSync,
   renameSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -27,13 +26,16 @@ import {
   type RoutingState,
 } from './dns-routing';
 import {
+  assertWindowsAncestorsSafe,
   ensurePrivateDir,
   findUntrustedComponent,
   restrictWindowsAcl,
+  settlePlainFile,
   writeFileAtomic,
 } from './secure-fs';
 import { findSystemBinary, isRoot, requireSystemBinary, runChecked, runCmd } from './system-cmd';
 import { isCompiledBinary } from './update';
+import { parseRegSz, windowsProgramFiles as readWindowsProgramFiles } from './windows-paths';
 
 export const LAUNCHD_LABEL = 'so.oxy.tnp.resolver';
 export const LAUNCHD_PLIST = `/Library/LaunchDaemons/${LAUNCHD_LABEL}.plist`;
@@ -109,40 +111,15 @@ function safeUnlink(path: string): void {
 // `process.execPath` is the Bun runtime, not TNP. Shared with `tnp update`.
 export { isCompiledBinary };
 
-/** Value of a `REG_SZ` line in `reg query` output, or null. */
-export function parseRegSz(output: string, name: string): string | null {
-  for (const line of output.split(/\r?\n/)) {
-    const m = /^\s*(\S+)\s+REG_(?:EXPAND_)?SZ\s+(.+?)\s*$/.exec(line);
-    if (m && m[1].toLowerCase() === name.toLowerCase()) return m[2];
-  }
-  return null;
-}
+export { parseRegSz };
 
 /**
  * `%ProgramFiles%`, read from HKLM rather than the environment: an elevated
  * process inherits the user's environment, and a user-level `ProgramFiles`
- * variable would otherwise choose where SYSTEM's binary lives.
+ * variable would otherwise choose where SYSTEM's binary lives. No fallback to
+ * the environment; unreadable or not a local absolute path is an error.
  */
-function windowsProgramFiles(): string {
-  const reg = findSystemBinary('reg', 'win32');
-  if (reg) {
-    const res = runCmd({
-      file: reg,
-      args: [
-        'query',
-        'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion',
-        '/v',
-        'ProgramFilesDir',
-      ],
-    });
-    const dir = res.status === 0 ? parseRegSz(res.stdout, 'ProgramFilesDir') : null;
-    if (dir) return dir;
-  }
-  // No fallback to %ProgramFiles%: that is exactly the value a user can forge.
-  throw new Error(
-    'could not read ProgramFilesDir from the registry; refusing to choose the service binary location from the environment',
-  );
-}
+const windowsProgramFiles = (): string => readWindowsProgramFiles();
 
 /**
  * Where the binary that system services and elevated tasks execute lives: a
@@ -173,8 +150,10 @@ function sameFile(a: string, b: string): boolean {
  *
  * POSIX: needs root, and refuses unless every component of the destination is
  * root-owned and not group/world-writable (a Homebrew-owned `/usr/local/bin` on
- * an Intel Mac fails this). Windows: the destination directory's ACL is set to
- * SYSTEM/Administrators (Users read/execute) before anything is copied in.
+ * an Intel Mac fails this). Windows: refuses unless no non-administrator can
+ * rename, delete or re-permission any directory above the destination; then
+ * the destination directory's ACL is set to SYSTEM/Administrators (Users
+ * read/execute), and verified, before anything is copied in.
  */
 export function installServiceBinary(): string {
   if (!isCompiledBinary()) {
@@ -187,6 +166,9 @@ export function installServiceBinary(): string {
   const self = process.execPath;
 
   if (platform === 'win32') {
+    // Locking down TNP's own directory is worth nothing if a user can rename
+    // %ProgramFiles% (or anything above it) and put another one in its place.
+    assertWindowsAncestorsSafe(dir);
     mkdirSync(dir, { recursive: true });
     restrictWindowsAcl(dir, 'program-dir');
     if (!sameFile(self, target)) {
@@ -477,24 +459,14 @@ function ensureServiceUser(): { uid: number; gid: number } {
   return { uid, gid };
 }
 
-/** lstat-based: true for a regular file, false if absent; throws on anything else. */
-function plainFileOrAbsent(path: string): boolean {
-  let st: ReturnType<typeof lstatSync>;
-  try {
-    st = lstatSync(path);
-  } catch {
-    return false;
-  }
-  if (!st.isFile()) throw new Error(`${path} is not a regular file; refusing to touch it`);
-  return true;
-}
-
 /**
  * Settle ownership so the sandboxed daemon can read its resolver settings and
  * nothing else of TNP's: `/etc/tnp` root:tnp 0750, `config.json` root 0600
  * (it can hold the relay token), `resolver.json` root:tnp 0640 (no secrets,
  * written by `saveConfig`), `/var/lib/tnp` root 0700 with the identity key
- * 0600. Every path is lstat-checked first: chown/chmod follow symlinks.
+ * 0600. chown/chmod follow symlinks, so files are changed only through an
+ * O_NOFOLLOW descriptor (`settlePlainFile`) and the directory only once lstat
+ * says it is a real one in root-only `/etc`.
  */
 function settleLinuxOwnership(gid: number, cfg: TnpConfig): void {
   const dir = configDir();
@@ -505,16 +477,12 @@ function settleLinuxOwnership(gid: number, cfg: TnpConfig): void {
   }
   chownSync(dir, 0, gid);
   chmodSync(dir, 0o750);
-  if (plainFileOrAbsent(configPath())) {
-    chownSync(configPath(), 0, 0);
-    chmodSync(configPath(), 0o600);
-  }
+  settlePlainFile(configPath(), { uid: 0, gid: 0 }, 0o600);
   // Rewrites config.json 0600 and writes resolver.json root:<gid> 0640.
   saveConfig(cfg);
 
   ensurePrivateDir(systemStateDir());
-  const key = join(systemStateDir(), 'identity.key');
-  if (plainFileOrAbsent(key) && (statSync(key).mode & 0o077) !== 0) chmodSync(key, 0o600);
+  settlePlainFile(join(systemStateDir(), 'identity.key'), { uid: 0, gid: 0 }, 0o600);
 }
 
 function installLinux(binaryPath: string, cfg: TnpConfig): void {

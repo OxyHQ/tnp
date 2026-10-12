@@ -5,8 +5,23 @@ import {
   parseFlag,
   parseList,
   parseNonNegativeInt,
+  parseParkingIp,
   relayDirectoryConfig,
 } from './config.js';
+
+describe('TNP_PARKING_IP', () => {
+  test('unset is empty; an IPv4 address is kept', () => {
+    expect(parseParkingIp(undefined)).toBe('');
+    expect(parseParkingIp('  ')).toBe('');
+    expect(parseParkingIp(' 198.51.100.10 ')).toBe('198.51.100.10');
+  });
+
+  test('anything else stops startup instead of reaching an A record or the install page', () => {
+    for (const value of [':::', '2001:db8::1', 'dns.tnp.network', '198.51.100', '1.2.3.4\n5']) {
+      expect(() => parseParkingIp(value)).toThrow(/IPv4/);
+    }
+  });
+});
 
 describe('TNP_NATIVE_EXPIRY_ENFORCED', () => {
   test('is off unless explicitly true', () => {

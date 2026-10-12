@@ -35,12 +35,41 @@ describe('tnpTraces', () => {
     );
   });
 
+  test('Windows takes ProgramData and SystemRoot from the registry, never the environment', () => {
+    const traces = tnpTraces({
+      platform: 'win32',
+      homes: [],
+      // A forged environment, as an elevated process inherits it from the user.
+      env: {
+        PROGRAMDATA: 'C:\\Users\\a\\planted',
+        SystemRoot: 'C:\\Users\\a\\planted',
+        LOCALAPPDATA: 'C:\\Users\\a\\AppData\\Local',
+      },
+      serviceBinary: 'C:\\Program Files\\TNP\\tnp.exe',
+      windowsFolders: { programData: 'C:\\ProgramData', systemRoot: 'C:\\Windows' },
+    });
+    expect(traces.map((t) => t.path).join('\n')).not.toContain('planted');
+    expect(traces.map((t) => t.path)).toContain('C:\\ProgramData\\tnp');
+  });
+
+  test('Windows with an unreadable registry leaves the machine-wide traces out', () => {
+    const paths = tnpTraces({
+      platform: 'win32',
+      homes: [],
+      env: { PROGRAMDATA: 'C:\\ProgramData', LOCALAPPDATA: 'C:\\Users\\a\\AppData\\Local' },
+      serviceBinary: null,
+      windowsFolders: null,
+    }).map((t) => t.path);
+    expect(paths).toEqual(['C:\\Users\\a\\AppData\\Local\\tnp']);
+  });
+
   test('Windows covers ProgramData, LocalAppData and the Program Files copy', () => {
     const traces = tnpTraces({
       platform: 'win32',
       homes: [],
-      env: { PROGRAMDATA: 'C:\\ProgramData', LOCALAPPDATA: 'C:\\Users\\a\\AppData\\Local' },
+      env: { LOCALAPPDATA: 'C:\\Users\\a\\AppData\\Local' },
       serviceBinary: 'C:\\Program Files\\TNP\\tnp.exe',
+      windowsFolders: { programData: 'C:\\ProgramData', systemRoot: 'C:\\Windows' },
     });
     // The environment of an elevated process is the user's: no Windows trace
     // may be a recursive delete of an environment-derived path.

@@ -231,6 +231,22 @@ describe('DoH transport', () => {
   });
 });
 
+describe('upstreamQuery RD', () => {
+  test("mirrors the client's RD: a non-recursive query stays non-recursive", () => {
+    const recursive = dnsPacket.decode(upstreamQuery(sampleQuery(), { pad: false }));
+    expect(recursive.flag_rd).toBe(true);
+    const plain = dnsPacket.decode(
+      dnsPacket.encode({
+        type: 'query',
+        id: 7,
+        flags: 0,
+        questions: [{ type: 'A', name: 'a.io' }],
+      }),
+    );
+    expect(dnsPacket.decode(upstreamQuery(plain, { pad: true })).flag_rd).toBe(false);
+  });
+});
+
 describe('isResponseTo', () => {
   const sent = upstreamQuery(sampleQuery('Example.COM', 0x1111), { pad: false });
 

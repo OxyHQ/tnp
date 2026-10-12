@@ -29,7 +29,7 @@ curl -fsSL https://get.tnp.network | sh
 irm https://get.tnp.network/ps | iex
 ```
 
-Every release carries `SHA256SUMS` and `SHA256SUMS.sig`, an Ed25519 signature by the TNP release key. The shell installer checks the signature with OpenSSL 3 when it is available and the binary's SHA-256 always, before running or moving anything; when it cannot check the signature (macOS ships LibreSSL, PowerShell has no Ed25519) it says so. Set `TNP_REQUIRE_SIGNATURE=1` to refuse instead. `tnp update` always checks both, with the key built into the binary, and refuses any version that is not newer than the running one. To verify a download by hand, see [security.md §7](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/security.md).
+Every release carries `SHA256SUMS` and `SHA256SUMS.sig`, an Ed25519 signature by the TNP release key. The shell installer checks the signature with OpenSSL 3 when it is available and the binary's SHA-256 always, before running or moving anything; when it cannot check the signature (macOS ships LibreSSL) it says so; set `TNP_REQUIRE_SIGNATURE=1` to refuse instead. The PowerShell installer always checks the signature, with its own built-in Ed25519 verifier. `tnp update` always checks both, with the key built into the binary, and refuses any version that is not newer than the running one. To verify a download by hand, see [security.md §7](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/security.md).
 
 `GET https://api.tnp.network/client/latest` returns the current version (`{ "version": "x.y.z", ... }`). Clients read only the version; the download URL is always `https://github.com/OxyHQ/tnp/releases/download/v<version>/<asset>`.
 

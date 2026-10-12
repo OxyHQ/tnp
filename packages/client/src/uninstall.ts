@@ -24,6 +24,7 @@ import { removeRulesRouting } from './rules-routing';
 import { disableKillSwitch } from './killswitch';
 import { SERVICE_USER, serviceBinaryPath, uninstallService } from './service';
 import { findSystemBinary, isRoot, runCmd } from './system-cmd';
+import { windowsProgramData, windowsSystemRoot } from './windows-paths';
 
 export interface Trace {
   path: string;
@@ -44,6 +45,12 @@ export interface TraceContext {
   env: Readonly<Record<string, string | undefined>>;
   /** Null when it could not be determined (Windows registry unreadable). */
   serviceBinary: string | null;
+  /**
+   * Windows only: %ProgramData% and %SystemRoot% as HKLM records them (never
+   * the environment). Null when the registry could not be read; the traces
+   * under them are then left out and the failure reported.
+   */
+  windowsFolders?: { programData: string; systemRoot: string } | null;
 }
 
 /** Files TNP keeps in a per-user (or per-service-account) data directory. */
@@ -58,25 +65,31 @@ const DATA_DIR_FILES = [
 /** Every place TNP leaves data, per platform. Pure: decides, does not look. */
 export function tnpTraces(ctx: TraceContext): Trace[] {
   if (ctx.platform === 'win32') {
-    // Every Windows trace is deleted file by file: the environment of an
-    // elevated process is the user's, so a forged %PROGRAMDATA%,
-    // %LOCALAPPDATA% or %SystemRoot% must not be able to aim a recursive
-    // delete anywhere.
+    // Every Windows trace is deleted file by file, and the machine-wide ones
+    // are located from HKLM: the environment of an elevated process is the
+    // user's, so a forged %PROGRAMDATA% or %SystemRoot% must neither aim the
+    // purge at another directory nor hide the real one (leaving the config
+    // and its token on disk behind a report saying it was purged).
+    // %LOCALAPPDATA% is the user's own folder either way.
     const localAppData = ctx.env.LOCALAPPDATA;
-    const systemRoot = ctx.env.SystemRoot || 'C:\\Windows';
-    const programData = win32.join(ctx.env.PROGRAMDATA || 'C:\\ProgramData', 'tnp');
+    const folders = ctx.windowsFolders ?? null;
+    const programData = folders ? win32.join(folders.programData, 'tnp') : null;
     return [
-      {
-        // Before its parent, which is removed only once empty.
-        path: win32.join(programData, 'dns-rules'),
-        what: 'personal DNS rules key and state',
-        files: ['key.json', 'state.json', 'envelope.json'],
-      },
-      {
-        path: programData,
-        what: 'configuration, kill-switch record and active personal DNS rules',
-        files: ['config.json', 'killswitch.json', 'dns-rules.conf'],
-      },
+      ...(programData
+        ? [
+            {
+              // Before its parent, which is removed only once empty.
+              path: win32.join(programData, 'dns-rules'),
+              what: 'personal DNS rules key and state',
+              files: ['key.json', 'state.json', 'envelope.json'],
+            },
+            {
+              path: programData,
+              what: 'configuration, kill-switch record and active personal DNS rules',
+              files: ['config.json', 'killswitch.json', 'dns-rules.conf'],
+            },
+          ]
+        : []),
       ...(localAppData
         ? [
             {
@@ -86,20 +99,24 @@ export function tnpTraces(ctx: TraceContext): Trace[] {
             },
           ]
         : []),
-      {
-        // The resolver task runs as SYSTEM, whose %LOCALAPPDATA% this is.
-        path: win32.join(
-          systemRoot,
-          'System32',
-          'config',
-          'systemprofile',
-          'AppData',
-          'Local',
-          'tnp',
-        ),
-        what: "the resolver service's log and TLD cache",
-        files: [...DATA_DIR_FILES, 'tnp-resolver.log'],
-      },
+      ...(folders
+        ? [
+            {
+              // The resolver task runs as SYSTEM, whose %LOCALAPPDATA% this is.
+              path: win32.join(
+                folders.systemRoot,
+                'System32',
+                'config',
+                'systemprofile',
+                'AppData',
+                'Local',
+                'tnp',
+              ),
+              what: "the resolver service's log and TLD cache",
+              files: [...DATA_DIR_FILES, 'tnp-resolver.log'],
+            },
+          ]
+        : []),
       ...(ctx.serviceBinary
         ? [
             {
@@ -285,11 +302,23 @@ export function performUninstall(opts: { purge: boolean; publicDnsIp: string }):
     report.failed.push(`locating the installed binary: ${errorMessage(err)}`);
   }
 
+  let windowsFolders: TraceContext['windowsFolders'] = null;
+  if (process.platform === 'win32') {
+    try {
+      windowsFolders = { programData: windowsProgramData(), systemRoot: windowsSystemRoot() };
+    } catch (err) {
+      report.failed.push(
+        `locating %ProgramData% and %SystemRoot% in the registry (so the configuration, kill-switch record and the resolver's data were not checked): ${errorMessage(err)}`,
+      );
+    }
+  }
+
   const traces = tnpTraces({
     platform: process.platform,
     homes: users.map((u) => u.home),
     env: process.env,
     serviceBinary,
+    windowsFolders,
   }).filter((t) => exists(t.path));
 
   if (!opts.purge) {
