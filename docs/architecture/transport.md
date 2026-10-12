@@ -1,13 +1,18 @@
 # Transport — TNP wire protocol v1
 
-**Status: specification; library implemented, not deployed.** The code today
-speaks an unversioned 5-byte-header protocol (`packages/protocol/src/frames.ts`)
-with none of the properties below. This document defines what replaces it in
-Phase 3, as a clean cut across the client, relay and service node together.
-The frame codec, limits, flow-control windows and the end-to-end session
-cryptography (§9) exist as a library under `@tnp/protocol/v1`, with the key
-material it trusts in `@tnp/crypto`; **no component uses them yet**. The
-connection handshake (§6) and resumption (§8) are not implemented at all.
+**Status: implemented for the single-hop overlay (Phase 3); not deployed.**
+The client (`packages/client/src/tunnel.ts`, `socks.ts`), the service node
+(`service-node.ts`), the standalone relay (`apps/relay`) and the relay in the
+`tnp` binary (`relay-node.ts`) all speak v1 and nothing else, through one relay
+implementation, `@tnp/relay-core`. The unversioned five-byte v0 codec was
+deleted, not deprecated: a v1 peer refuses a v0 peer at the version byte. What
+is implemented: the frame codec and limits (§3–§5), service-node
+authentication to a relay (§6, partially), end-to-end flow control (§7, §11),
+the session cryptography (§9) and the overlay framing (§11). Not implemented:
+the mutual, transcript-signed connection handshake of §6, relay authentication
+to clients (it needs the signed directory, Phase 5), capability negotiation
+(§10) and resumption (§8). The relay remains parked
+([`relays.md`](./relays.md) §8).
 
 ---
 
@@ -159,6 +164,7 @@ out-of-range field locally, before anything is sent.
 | `0x0011` | `AUTH_FAILED` | Signature or identity check failed |
 | `0x0012` | `AUTH_EXPIRED` | Credential expired mid-connection |
 | `0x0013` | `REVOKED` | The presented key is revoked |
+| `0x0014` | `ALREADY_REGISTERED` | A relay already serves this name from a different authenticated node key; the incumbent stays (§6) |
 | `0x0020` | `CIRCUIT_UNKNOWN` | |
 | `0x0021` | `CIRCUIT_LIMIT` | |
 | `0x0022` | `CIRCUIT_REJECTED` | Policy refusal |
@@ -199,8 +205,49 @@ initiator                                     responder
 - Both nonces are 32 CSPRNG bytes. A repeated nonce from a peer is
   `REPLAY_DETECTED`.
 - No frame other than `HELLO`/`HELLO_ACK`/`AUTH`/`AUTH_OK`/`ERROR` is processed
-  before `AUTH_OK`. This is what closes audit finding S2 — a relay currently
-  accepts an unauthenticated socket that claims any domain.
+  before `AUTH_OK`. This is what closes audit finding S2 — the prototype relay
+  accepted an unauthenticated socket that claimed any domain.
+
+### 6.1 What is implemented: service-node authentication
+
+The full handshake above — both sides with node identities, a signed
+transcript, frozen capabilities — is **not implemented**: authenticating the
+relay to its peers needs a key the peer can check, which is the signed
+directory (Phase 5). What runs today is the half that closes S2, on the
+relay's `/service` endpoint (`packages/relay-core/src/core.ts`):
+
+```
+service node                                   relay
+    │◀─── HELLO {challenge: 32 CSPRNG bytes} ──────│   sent on connect
+    │──── AUTH {name, chain, signature} ──────────▶│   JSON, strict fields
+    │◀─── AUTH_OK ─────────────────────────────────│   or ERROR, then close
+```
+
+- `signature` is the node key's Ed25519 signature over
+  `u32 len ‖ "tnp-relay-service-auth-v1" ‖ u32 len ‖ name ‖ u32 len ‖ relay
+  endpoint ‖ challenge (32) ‖ node key (32)` (`@tnp/crypto`
+  `signServiceAuth`). The endpoint is the normalized URL the node dialed and
+  must equal the relay's configured public endpoint, so a hostile relay cannot
+  relay its challenge from another relay; the challenge makes a recorded proof
+  useless.
+- `chain` must verify with `verifyChain` to the **domain key** the registry
+  publishes for `name` (`GET /domain-keys/:name`), with the `service-node`
+  purpose and a leaf scoped to exactly `name`, and its leaf subject must be the
+  key that signed. No registered key, a registry error, a bad chain or a bad
+  signature: `ERROR` (`AUTH_FAILED`, `AUTH_EXPIRED` or `REVOKED`) and close.
+- Nothing but `AUTH` is processed before `AUTH_OK` (`AUTH_REQUIRED`), and a
+  node that has not authenticated within `HANDSHAKE_TIMEOUT` (10 s) is closed.
+- A second node for a name with a **different** node key is refused with
+  `ALREADY_REGISTERED`; the incumbent is not evicted. The **same** node key
+  reconnecting replaces its own older connection (only the holder of that key
+  can do this).
+- The relay re-reads the domain key every 10 minutes and drops a node whose
+  name's key has changed (`REVOKED`), and drops it when its grant expires
+  (`AUTH_EXPIRED`).
+
+Clients connecting to `/tunnel` do not authenticate: there is no client
+identity and no client handshake. They are rate-limited per address instead
+([`relays.md`](./relays.md) §3).
 
 ## 7. Flow control
 
@@ -219,7 +266,13 @@ alone lets one stream starve the others.
   longer limits anything (`grant(NaN)` used to do exactly that).
 - The local socket pump **pauses** when the window is exhausted or when
   `transport.bufferedBytes` exceeds the high-water mark, and resumes on drain.
-  Today neither pump ever pauses (audit S6).
+
+**Implemented (§11):** one level only, per circuit, end to end, because a
+circuit carries exactly one stream. Both pumps — the SOCKS side and the
+service node's target side (`packages/client/src/overlay/pipe.ts`) — pause
+when credit runs out or the WebSocket's buffered amount exceeds 1 MiB, and
+resume below 256 KiB or on new credit. Credit is returned only once the local
+socket has flushed the bytes.
 
 ## 8. Reconnection and migration
 
@@ -233,12 +286,15 @@ alone lets one stream starve the others.
 - Reconnect uses exponential backoff with jitter and a cap. Thundering-herd
   reconnects after a relay restart are a self-inflicted denial of service.
 
+**Status:** resumption and migration are **not implemented**; a lost
+connection ends its circuits (the applications see a reset). The service node
+reconnects with exponential backoff (2 s doubling to 60 s) and ±50% jitter.
+
 ## 9. Session cryptography
 
-**Status: implemented as a library — `ClientHandshake`, `ServerHandshake` and
-`SessionCipher` in `@tnp/protocol/v1` (`src/noise.ts`, `src/session.ts`). No
-component uses it yet; the protocol in use today has no session crypto, no
-counter and no replay defence at all.**
+**Status: implemented and in use — `ClientHandshake`, `ServerHandshake` and
+`SessionCipher` in `@tnp/protocol/v1` (`src/noise.ts`, `src/session.ts`), run
+by the client and the service node for every circuit (§11).**
 
 This section is the end-to-end layer between a client and a service node,
 through a relay that is assumed hostile: it carries every byte and is trusted
@@ -262,9 +318,29 @@ look-alike object with the right fields is refused (`AUTH_FAILED`) — and
 refuses it again if `name` differs from the certified scope (`AUTH_FAILED`) or
 the certificate has expired by `now` (`AUTH_EXPIRED`).
 
-How the client obtains the certificate and chain (inside the domain's signed
-record set, [`naming.md`](./naming.md) §5) is **not yet specified**; it is a
-precondition of the Phase 3 cutover, not of this library.
+**Where the certificate and chain come from.** The `/dns/resolve` response for
+a name with an online service node carries an `overlay` block: `{ relay,
+available, domainKey, rotations, chain, kaCert }` (`DnsResolveOverlay` in
+`@tnp/shared-types`). The service node publishes `chain` and `kaCert` with
+`POST /nodes/register`, and the registry verifies them against the domain key
+before storing them — but the client trusts none of it
+(`packages/client/src/overlay/verify.ts`):
+
+1. It derives the service name itself from what it was asked to reach — the
+   last two labels (`www.example.ox` → `example.ox`) — and never takes a name
+   from the response, so a valid chain for `attacker.ox` cannot answer for
+   `victim.ox`.
+2. `domainKey` must equal the client's **pin** for that name, or be reached
+   from the pin through `rotations` each signed by the key it retires. A name
+   with no pin is pinned on its first successful verification (trust on first
+   use). A different key without such a path is refused, fail-closed, with a
+   message naming the risk.
+3. `kaCert` and `chain` are verified as above with `trustedRoots: [domainKey]`
+   and the pin's rollback high-water marks as `knownSerials`.
+
+Pinning is specified in [`security.md`](./security.md) §1 ("Domain keys and
+pinning"). The signed record set of [`naming.md`](./naming.md) §5 does not
+exist yet; until it does, the overlay block is the only path.
 
 ### 9.2 Handshake: `Noise_NK_25519_ChaChaPoly_SHA256`
 
@@ -370,10 +446,11 @@ turn `STREAM_DATA` into `STREAM_CLOSE`, or flip a half-close flag. The binding
 is not optional: `seal`, `close`, `updateKey` and `open` each take the frame
 header (`{ type, flags, streamId }` — a decoded `Frame` qualifies) and compute
 this AD themselves, so there is no call that produces an unbound record.
-**Which frame
-types carry sealed records end to end, and whether stream control
-(`STREAM_OPEN` and its target) travels inside them, is decided by the Phase 3
-cutover and is not yet specified.**
+**Every end-to-end record travels in a `STREAM_DATA` frame on stream
+`E2E_STREAM_ID` (1) with flags 0, and stream control — the target port, the
+open/opened exchange, credit, resets and the half-close — travels inside the
+records (§11).** A relay therefore sees one frame type for everything a
+circuit's two ends say to each other.
 
 **Receiving** is strictly in order. A record is accepted only if every check
 passes, in this order:
@@ -427,6 +504,9 @@ indistinguishable from the service finishing.
   node; a service that needs client identity authenticates it inside the
   session, bound to `handshakeHash`.
 - **No 0-RTT data and no resumption.** §8's resumption tokens are unspecified.
+- **Half-close is not `CLOSE`.** The overlay half-closes with a sealed `FIN`
+  message and sends the session `CLOSE` only once both sides have sent `FIN`
+  (§11.4).
 - **Single layer.** One relay between client and service node; multi-hop
   layering is Phase 6.
 
@@ -440,3 +520,121 @@ indistinguishable from the service finishing.
   refused with `UNSUPPORTED_CAPABILITY` rather than served a degraded path.
 - **Security capabilities can only be added, never removed by negotiation.** An
   attacker must not be able to negotiate away replay protection.
+
+## 11. Single-hop overlay (Phase 3)
+
+How a client reaches a service node through one relay with everything above.
+Code: `@tnp/protocol/v1` (`src/overlay.ts`), `@tnp/relay-core`,
+`packages/client/src/{tunnel,service-node,socks}.ts` and
+`packages/client/src/overlay/`.
+
+### 11.1 Circuits
+
+A circuit carries exactly **one stream**: one SOCKS connection is one circuit.
+A client connection to a relay holds at most `MAX_CIRCUITS_PER_CONNECTION` (64)
+circuits and `MAX_PENDING_OPENS` (32) unanswered ones; the client opens up to 8
+connections per relay, so at most 512 concurrent streams per relay.
+
+```
+client                       relay                         service node
+  │ CIRCUIT_CREATE(c)          │                                │
+  │  {name, Noise msg1} ──────▶│ CIRCUIT_CREATE(s) {same payload}│
+  │                            │───────────────────────────────▶│ ServerHandshake
+  │                            │ CIRCUIT_CREATED(s) {msg2}       │
+  │ CIRCUIT_CREATED(c) {msg2} ◀│◀───────────────────────────────│
+  │ STREAM_DATA(c, 1) sealed ─▶│ STREAM_DATA(s, 1) sealed ─────▶│
+```
+
+- **Circuit ids are connection-scoped and CSPRNG-chosen.** The client picks
+  `c` (64-bit, `generateCircuitId`) on its connection; the relay picks its own
+  `s` on the service node's connection. Each connection has its own
+  `CircuitTable`; a frame is looked up only in the table of the connection it
+  arrived on, so a frame naming another connection's circuit reaches nothing
+  and is dropped, never forwarded. Data or destroy frames for an unknown
+  circuit are dropped without penalty (frames in flight when the other side
+  tears a circuit down arrive like this on honest connections); frame types a
+  peer may not send at all are counted, and past 64 the connection is closed.
+  A colliding `CIRCUIT_CREATE` id is refused, never evicts (S1).
+- **`CIRCUIT_CREATE` payload** = `u8 nameLength ‖ name ‖ Noise message 1 (48)`.
+  `name` is a canonical lowercase name of 1–253 bytes. This routing prefix is
+  the only cleartext the relay reads from a client; it needs the name to pick
+  the service node. A payload whose length does not match exactly — including
+  the old v0 `domain\0base64key` — is refused for that circuit with
+  `CIRCUIT_DESTROY(PROTOCOL_VIOLATION)`.
+- **`CIRCUIT_CREATED`** (exactly 48 bytes, Noise message 2) comes only from the
+  service node; the relay never synthesizes it. A relay that answers on its own
+  cannot produce message 2's tag, and the client fails key confirmation
+  (`AUTH_FAILED`).
+- The service node checks that `name` is the name it serves and runs the NK
+  responder against each of its still-certified X25519 keys, newest first (at
+  most two during a certificate rotation). A message 1 that no key accepts is
+  answered with `CIRCUIT_DESTROY`.
+- A circuit not answered within `HANDSHAKE_TIMEOUT` (10 s) is destroyed by the
+  relay (`TARGET_UNREACHABLE`). `STREAM_DATA` from a client before
+  `CIRCUIT_CREATED` destroys the circuit (`PROTOCOL_VIOLATION`).
+- The relay forwards a frame by rewriting only its circuit id.
+
+### 11.2 Stream messages
+
+After the handshake every frame either end sends is a `STREAM_DATA` frame on
+stream 1, flags 0, whose payload is one sealed record (§9.3). The plaintext of
+each sealed `DATA` record is one stream message, each with an exact length:
+
+| Type | Name | Body | Direction, rule |
+|---|---|---|---|
+| `0x01` | `OPEN` | u16 port (≠ 0) | client → node, first message only |
+| `0x02` | `OPENED` | — | node → client, first message only |
+| `0x03` | `DATA` | 1 … 65509 bytes | both; the node sends none before `OPENED` |
+| `0x04` | `RESET` | u16 error code | either; aborts the stream |
+| `0x05` | `WINDOW` | u32 credit (≠ 0) | both |
+| `0x06` | `FIN` | — | either; no more `DATA` from the sender |
+
+Any other type or length, a second `OPEN`/`OPENED`, `DATA` before the first
+message or after `FIN` is `PROTOCOL_VIOLATION` and kills the session. The
+target port therefore travels sealed: the relay never sees it.
+
+### 11.3 Flow control
+
+Each direction has a credit window of `STREAM_WINDOW_INITIAL` (256 KiB). The
+sender may have at most that many `DATA` bytes unacknowledged; the receiver
+returns credit with `WINDOW` once the local socket has flushed the bytes,
+batched in grants of at least 64 KiB. A peer that sends more than it was
+granted is `FLOW_CONTROL`. Honest ends therefore never have more than 256 KiB
+per circuit per direction in flight, which is what the relay's buffer limits
+are sized on ([`relays.md`](./relays.md) §3).
+
+### 11.4 Half-close, close and teardown
+
+- `FIN` is the half-close. Application data ends **only** at an authenticated
+  `FIN`, in sequence, so a relay cannot make a cut stream look finished.
+- The session's `CLOSE` record (§9.4) is sent only once a side has both sent
+  and received `FIN`. It cannot carry the half-close itself: a side that has
+  finished sending must still be able to send `WINDOW` credit for the data it
+  is receiving, and nothing can be sealed after `CLOSE`.
+- A `CLOSE` received without the peer's `FIN` is `TRUNCATED`. So is a
+  `CIRCUIT_DESTROY` (or a lost connection) before the peer's `FIN`. After the
+  peer's `FIN` a teardown is a clean end. On any failure the local socket is
+  **reset** (`resetAndDestroy`), never ended, so the application sees an error
+  rather than a clean end of stream.
+- `RESET(code)` is followed by the sender's `CLOSE`; the receiver ends the
+  stream with that code. Codes are generic protocol codes — e.g.
+  `TARGET_REFUSED` or `TARGET_UNREACHABLE` from a service node whose target
+  failed — never an address or an error string.
+- On a clean finish **only the client** sends `CIRCUIT_DESTROY`, so the relay
+  sees one teardown per circuit. A service node sends one for a failure it
+  detected and after its own `RESET` (so relay state is released even if the
+  client never answers); a duplicate destroy is dropped by the relay at no
+  cost. A service node also resets a circuit whose client has not sent `OPEN`
+  within 10 s, so a silent client cannot hold its circuit slots. The ends always send reason `DESTROY_NORMAL` (0); whatever really
+  happened travelled sealed. The relay uses real codes only for what it decided
+  itself (`CIRCUIT_REJECTED`, `CIRCUIT_LIMIT`, `RATE_LIMIT`,
+  `RESOURCE_EXHAUSTED`, `TARGET_UNREACHABLE`, `PROTOCOL_VIOLATION`).
+
+### 11.5 What the relay sees
+
+The client's IP address; the destination **name** (the routing prefix); when
+each circuit is created and destroyed; the size and timing of every frame;
+which service node connection serves which name. Not the port, not any byte of
+data, not whether a record is data, credit, a half-close or a reset, and not
+why a stream failed. This is single-hop: the relay sees both who connects and
+which service they reach ([`privacy-model.md`](./privacy-model.md)).

@@ -53,17 +53,22 @@ These endpoints are public — anyone can ask the API to resolve a domain. They 
     { "name": "example.ox", "type": "A", "value": "203.0.113.10", "ttl": 3600 }
   ],
   "overlay": {
-    "serviceNodePubKey": "<base64>",
     "relay": "wss://relay1.tnp.network",
-    "available": true
+    "available": true,
+    "domainKey": "<base64 Ed25519>",
+    "rotations": [],
+    "chain": [{ "issuer": "<domain key>", "subject": "<node key>", "purposes": ["service-node"], "scope": "example.ox", "notBefore": 0, "notAfter": 0, "serial": 1, "signature": "<base64>" }],
+    "kaCert": { "signer": "<node key>", "key": "<base64 X25519>", "role": "service-node", "scope": "example.ox", "notBefore": 0, "notAfter": 0, "serial": 1, "signature": "<base64>" }
   },
   "rcode": "NOERROR"
 }
 ```
 
-The contract is `DnsResolveResponse` in `@tnp/shared-types`, and it only grows. `rcode` (`NOERROR` or `NXDOMAIN`) was added so a resolver can tell NODATA — the name exists, no records of that type — from a missing name; resolvers that predate it keep reading empty `answers` as they always did.
+The contract is `DnsResolveResponse` in `@tnp/shared-types`, and it only grows — with one deliberate exception: transport v1 replaced `overlay.serviceNodePubKey`, an unsigned key the client used as-is (audit S3), with the key material above. `rcode` (`NOERROR` or `NXDOMAIN`) was added so a resolver can tell NODATA — the name exists, no records of that type — from a missing name; resolvers that predate it keep reading empty `answers` as they always did.
 
-`overlay` is only present when the domain's service node is `online` **and** its last heartbeat is at most 90 seconds old (three missed 30-second heartbeats). The overlay-enabled client uses it to route through the encrypted tunnel.
+`overlay` is only present when the domain's service node is `online`, its last heartbeat is at most 90 seconds old (three missed 30-second heartbeats), the name has a registered domain key, and the node's key-agreement certificate has not expired. An online node without that key material still suppresses parking (NODATA), but gets no overlay.
+
+**The client does not trust any of it.** It pins `domainKey` per name on first use, accepts a different key only through `rotations` signed by the pinned key, and verifies `kaCert` and `chain` against that key — for the name it derived itself, never a name the response supplies — before it runs a session handshake. A registry that substitutes the key is refused by every client that has used the name before. See [`docs/architecture/security.md` §1](./architecture/security.md).
 
 The full answer rules — CNAME at a name, NODATA, NXDOMAIN, parking synthesis for unregistered native names and for registered labels with nothing at them, expiry enforcement — are specified in [`docs/architecture/resolution.md` §9](./architecture/resolution.md).
 
@@ -120,17 +125,26 @@ Validation is `parseCreateDnsRecordRequest` / `parseUpdateDnsRecordRequest` in `
 
 Cross-record rules answer `409 { error, code }`: a CNAME cannot share its name with any other record (`cname_conflict`), exact duplicates are refused (`duplicate`), and a domain holds at most 100 records (`record_limit`). Mutations for one domain run one at a time behind `SELECT … FOR UPDATE` on the domain row, so two concurrent writers cannot both pass these checks.
 
+## Domain keys (`/domain-keys`)
+
+Each native name's **domain key** (Ed25519) is generated on the owner's device (`tnp domain key init <name>`) and is the root of every grant chain for that name. The registry publishes it; it is not the authority for it.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/domain-keys/:name` | none | `{ name, domainKey, rotations }` for an active `label.tld`, or 404 (no key, reserved TLD, not two labels). Relays check service nodes against this. |
+| POST | `/domain-keys` | required, owner | Body `{ name, domainKey, rotation? }`. First key: `201`. Same key again: `200`. A different key requires `rotation`, a statement signed by the **current** key retiring it in favour of `domainKey` with `issuedAt` later than the previous rotation and at most 300 s in the future: `200`, otherwise `403`. `400` for a malformed body, a non-canonical key, or a rotation when no key exists; `404` unknown name; `409` lost a concurrent write. |
+
+There is deliberately no reset. A lost domain key cannot be replaced in-band, because a reset is indistinguishable — to a client that pinned the old key — from the takeover pinning exists to refuse. The last 32 rotation statements are kept.
+
 ## Service nodes (`/nodes`)
 
 Service nodes register a domain in the overlay network so `tnp connect` clients can reach it through encrypted tunnels.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/nodes/register` | required | Register or update a service node. Body: `{ domainId, publicKey }`. Must own the domain. Upserts by `domainId`. |
+| POST | `/nodes/register` | required | Register or update a service node. Body: `{ domainId, chain, kaCert }` — the grant chain (leaf first, rooted at the domain key) and the node's key-agreement certificate. Must own the domain. `409` if the name has no domain key yet; `422` if the material does not verify against it (defence in depth — clients verify independently). Upserts by `domainId`; `publicKey` becomes the node key. Nodes re-register with a fresh certificate before the current one expires (at most 7 days). |
 | GET | `/nodes/:domain` | none | Look up a service node by `name.tld`. Returns `{ publicKey, connectedRelay, status, online }` or 404. `online` is computed from a 90 s heartbeat threshold; `connectedRelay` is `""` unless online. No timestamp is published. |
 | POST | `/nodes/heartbeat` | required | Mark online. Body: `{ domainId, connectedRelay }`. Updates `lastSeen`, sets `status: 'online'`. |
-
-The `serviceNodeId` is also written back onto the `Domain` document so a single resolve call can return both DNS records and overlay info without an extra round trip.
 
 ## Relays (`/relays`)
 

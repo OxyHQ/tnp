@@ -1,4 +1,4 @@
-import { TnpApiClient, type DnsAnswer } from './api';
+import { TnpApiClient, type DnsAnswer, type OverlayInfo as DnsResolveOverlay } from './api';
 import type { DnsProxyConfig } from './config';
 import {
   BUILTIN_NATIVE_TLDS,
@@ -88,6 +88,9 @@ type NativeResult =
   | { kind: 'nodata' }
   | { kind: 'nxdomain' };
 
+/** Most overlay blocks kept for the SOCKS proxy. */
+const MAX_OVERLAY_CACHE = 1024;
+
 export class DnsProxy {
   private apiClient: TnpApiClient;
   /**
@@ -111,10 +114,12 @@ export class DnsProxy {
 
   /**
    * Overlay info cache. When a domain has an active service node, the DNS proxy
-   * returns 127.0.0.1 so traffic goes through the local SOCKS5 proxy.
-   * The SOCKS5 proxy reads from this cache to find the relay + pubkey.
+   * returns 127.0.0.1 so traffic goes through the local SOCKS5 proxy, which
+   * reads the cached overlay block from here. It is UNVERIFIED registry data:
+   * the tunnel manager verifies it (pin, chain, certificate) before use.
+   * Bounded like the answer cache.
    */
-  private overlayCache = new Map<string, { pubKey: string; relay: string }>();
+  private overlayCache = new Map<string, DnsResolveOverlay>();
 
   /** Whether overlay routing is enabled (set when SOCKS5 proxy is running) */
   private overlayEnabled = false;
@@ -182,7 +187,7 @@ export class DnsProxy {
   /**
    * Get overlay info for a domain. Used by the SOCKS5 proxy.
    */
-  getOverlayInfo(domain: string): { pubKey: string; relay: string } | undefined {
+  getOverlayInfo(domain: string): DnsResolveOverlay | undefined {
     return this.overlayCache.get(normalizeName(domain));
   }
 
@@ -322,10 +327,11 @@ export class DnsProxy {
     // the overlay info and answer with 127.0.0.1 so the connection is picked up
     // by the local SOCKS5 proxy.
     if (this.overlayEnabled && response.overlay?.available) {
-      this.overlayCache.set(clean, {
-        pubKey: response.overlay.serviceNodePubKey,
-        relay: response.overlay.relay,
-      });
+      this.overlayCache.delete(clean);
+      if (this.overlayCache.size >= MAX_OVERLAY_CACHE) {
+        this.overlayCache.delete(this.overlayCache.keys().next().value as string);
+      }
+      this.overlayCache.set(clean, response.overlay);
 
       if (type === 'A' || type === 'ANY') {
         const synthetic: DnsAnswer[] = [

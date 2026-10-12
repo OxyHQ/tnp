@@ -19,8 +19,10 @@
 
 import net from 'node:net';
 import { BUILTIN_NATIVE_TLDS, classifyName, type NamespaceType } from '@tnp/namespace';
-import type { TunnelManager } from './tunnel';
-import type { TnpApiClient } from './api';
+import { ErrorCode } from '@tnp/protocol/v1';
+import { pipeSocket } from './overlay/pipe';
+import { OverlayVerificationError } from './overlay/verify';
+import { type TunnelManager, TunnelError } from './tunnel';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,10 +32,13 @@ export interface SocksProxyConfig {
   port: number;
   /** Bind address. Defaults to loopback; anything else exposes the proxy. */
   host?: string;
-  tunnelManager: TunnelManager;
-  apiClient: Pick<TnpApiClient, 'getServiceNode'>;
-  /** Cached overlay info lookup (from DnsProxy) */
-  getOverlayInfo?: (domain: string) => { pubKey: string; relay: string } | undefined;
+  /** Opens verified end-to-end streams; resolves overlay info itself when no hint is given. */
+  tunnelManager: Pick<TunnelManager, 'openStream'>;
+  /**
+   * The overlay block the DNS proxy already fetched for a name, if any. A hint
+   * only: the tunnel manager verifies it exactly as if it came from the API.
+   */
+  getOverlayInfo?: (domain: string) => unknown | undefined;
   /**
    * Local, offline classification of a destination name. Defaults to the
    * built-in native TLD list; `tnp connect` passes the resolver's live table so
@@ -129,23 +134,21 @@ export function parseRequest(buf: Buffer): ParsedRequest {
 
 export class SocksProxy {
   private server: net.Server;
-  private tunnelManager: TunnelManager;
-  private apiClient: Pick<TnpApiClient, 'getServiceNode'>;
-  private getOverlayInfo:
-    | ((domain: string) => { pubKey: string; relay: string } | undefined)
-    | null;
+  private tunnelManager: Pick<TunnelManager, 'openStream'>;
+  private getOverlayInfo: ((domain: string) => unknown | undefined) | null;
   private classify: (name: string) => NamespaceType;
   /** Resolves once the listener is bound. */
   readonly ready: Promise<void>;
 
   constructor(config: SocksProxyConfig) {
     this.tunnelManager = config.tunnelManager;
-    this.apiClient = config.apiClient;
     this.getOverlayInfo = config.getOverlayInfo ?? null;
     this.classify = config.classify ?? ((name) => classifyName(name, BUILTIN_NATIVE_TLDS));
     const host = config.host ?? '127.0.0.1';
 
-    this.server = net.createServer((socket) => {
+    // Half-open, so an application that finishes sending can still receive the
+    // whole response: its FIN becomes the circuit's FIN, not a teardown.
+    this.server = net.createServer({ allowHalfOpen: true }, (socket) => {
       this.handleConnection(socket);
     });
 
@@ -263,7 +266,7 @@ export class SocksProxy {
   private async handleConnect(
     socket: net.Socket,
     domain: string,
-    _port: number,
+    port: number,
     early: Buffer,
   ): Promise<void> {
     if (!HOSTNAME_RE.test(domain) || this.classify(domain) !== 'tnp-native') {
@@ -272,73 +275,40 @@ export class SocksProxy {
     }
 
     try {
-      // Check overlay cache first (populated by DnsProxy)
-      let overlayInfo = this.getOverlayInfo?.(domain);
-
-      // Not cached: ask the registry — about this native name only.
-      if (!overlayInfo) {
-        const nodeInfo = await this.apiClient.getServiceNode(domain);
-        if (nodeInfo?.connectedRelay) {
-          overlayInfo = {
-            pubKey: nodeInfo.publicKey,
-            relay: nodeInfo.connectedRelay,
-          };
-        }
-      }
-
-      if (socket.destroyed) return;
-      if (!overlayInfo) {
-        // Not logged with the name: a proxy log is a browsing history.
-        console.error('[socks] no overlay route for a requested TNP name');
-        this.refuse(socket, REP_HOST_UNREACHABLE);
-        return;
-      }
-
-      // Open a tunnel through the relay
-      const circuit = await this.tunnelManager.openTunnel(
-        overlayInfo.relay,
+      const circuit = await this.tunnelManager.openStream(
         domain,
-        overlayInfo.pubKey,
+        port,
+        this.getOverlayInfo?.(domain),
       );
       if (socket.destroyed) {
-        circuit.close();
+        circuit.abort();
         return;
       }
-
-      // Send SOCKS5 success reply
       this.sendReply(socket, REP_SUCCESS);
-
-      const toTunnel = (chunk: Buffer) =>
-        circuit.send(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
-
-      if (early.byteLength > 0) toTunnel(early);
-
-      // Pipe: socket -> tunnel (encrypt & send)
-      socket.on('data', toTunnel);
-
-      // Pipe: tunnel -> socket (receive & decrypt)
-      circuit.onData((data: Uint8Array) => {
-        if (!socket.destroyed) {
-          socket.write(Buffer.from(data));
-        }
-      });
-
-      // Clean up on close from either side
-      socket.on('close', () => {
-        circuit.close();
-      });
-
-      circuit.onClose(() => {
-        if (!socket.destroyed) {
-          socket.end();
-        }
-      });
-
-      socket.resume();
+      // Backpressure both ways; a failed circuit destroys the socket rather
+      // than ending it, so the application never mistakes truncation for EOF.
+      pipeSocket(socket, circuit, { early, abortCode: 0 });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[socks] tunnel error: ${msg}`);
-      if (!socket.destroyed) this.refuse(socket, REP_GENERAL_FAILURE);
+      if (socket.destroyed) return;
+      if (err instanceof OverlayVerificationError) {
+        if (err.reason === 'no-overlay' || err.reason === 'not-native') {
+          // Not logged with the name: a proxy log is a browsing history.
+          this.refuse(socket, REP_HOST_UNREACHABLE);
+        } else {
+          // A key that does not verify is a security event the user must see,
+          // so this one does name the name.
+          console.error(`[socks] ${err.message}`);
+          this.refuse(socket, REP_NOT_ALLOWED);
+        }
+        return;
+      }
+      const unreachable =
+        err instanceof TunnelError &&
+        (err.code === ErrorCode.CIRCUIT_REJECTED ||
+          err.code === ErrorCode.TARGET_UNREACHABLE ||
+          err.code === ErrorCode.TARGET_REFUSED);
+      console.error(`[socks] tunnel error: ${err instanceof Error ? err.message : 'error'}`);
+      this.refuse(socket, unreachable ? REP_HOST_UNREACHABLE : REP_GENERAL_FAILURE);
     }
   }
 

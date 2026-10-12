@@ -13,11 +13,13 @@ import express from 'express';
 import type { Server } from 'node:http';
 import type { OxyAuthRequest } from '@oxy.so/core/server';
 import type { RegisterServiceNodeRequest, ServiceNodeHeartbeatRequest } from '@tnp/shared-types';
+import { makeTestCredentials } from '@tnp/crypto/testing';
 import nodesRouter from './nodes.js';
 
 /** Status the handler returns once a body is past validation and hits the absent database. */
 const REACHED_HANDLER = 500;
 const DOMAIN_ID = '9f8d3b1c-2e4a-4d6b-8c7e-1a2b3c4d5e6f';
+const creds = makeTestCredentials('example.ox');
 
 let server: Server;
 let baseUrl: string;
@@ -70,17 +72,25 @@ describe('POST /nodes/register', () => {
   test('accepts the contract shape', async () => {
     const request: RegisterServiceNodeRequest = {
       domainId: DOMAIN_ID,
-      publicKey: 'cHVibGljLWtleQ==',
+      chain: creds.chain,
+      kaCert: creds.kaCert,
     };
 
     expect(await postPastValidation('/nodes/register', request)).toBe(REACHED_HANDLER);
   });
 
   test('names the field it rejects', async () => {
+    const good = { domainId: DOMAIN_ID, chain: creds.chain, kaCert: creds.kaCert };
     const cases: Array<[unknown, string]> = [
-      [{ publicKey: 'cHVibGljLWtleQ==' }, 'domainId is required'],
-      [{ domainId: 'not-a-uuid', publicKey: 'cHVibGljLWtleQ==' }, 'domainId must be a uuid'],
-      [{ domainId: DOMAIN_ID }, 'publicKey is required'],
+      [{ chain: creds.chain, kaCert: creds.kaCert }, 'domainId is required'],
+      [{ ...good, domainId: 'not-a-uuid' }, 'domainId must be a uuid'],
+      [{ ...good, chain: undefined }, 'chain must be an array of 1 to 4 grants'],
+      [{ ...good, kaCert: undefined }, 'kaCert must be an object'],
+      // The pre-v1 body — a bare, unsigned key — is refused at the contract.
+      [
+        { domainId: DOMAIN_ID, publicKey: 'cHVibGljLWtleQ==' },
+        'chain must be an array of 1 to 4 grants',
+      ],
     ];
 
     for (const [body, error] of cases) {

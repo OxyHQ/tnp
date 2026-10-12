@@ -4,8 +4,9 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { sql } from 'drizzle-orm';
-import { dnsRecords, serviceNodes, tlds } from '../src/db/schema/index.js';
+import { makeTestCredentials } from '@tnp/crypto/testing';
+import { eq, sql } from 'drizzle-orm';
+import { dnsRecords, domains, serviceNodes, tlds } from '../src/db/schema/index.js';
 import {
   decideParkingPage,
   decideResolution,
@@ -16,6 +17,7 @@ import { daysFrom, seedDomain, seedTld } from './fixtures.js';
 import { createTestDatabase, type TestDatabase } from './harness.js';
 
 const PARKING = '203.0.113.10';
+const creds = makeTestCredentials('live.ox');
 
 let t: TestDatabase;
 
@@ -56,10 +58,23 @@ beforeAll(async () => {
   });
 
   const live = await seedDomain(t.db, { name: 'live' });
+  await t.db.update(domains).set({ domainKey: creds.domainKeyB64 }).where(eq(domains.id, live.id));
   await t.db.insert(serviceNodes).values({
     domainId: live.id,
     oxyUserId: live.oxyUserId,
-    publicKey: 'bGl2ZQ==',
+    publicKey: creds.kaCert.signer,
+    chain: creds.chain,
+    kaCert: creds.kaCert,
+    connectedRelay: 'wss://relay.example.test',
+    status: 'online',
+  });
+
+  // Online, but registered before transport v1: no domain key, no chain.
+  const keyless = await seedDomain(t.db, { name: 'keyless' });
+  await t.db.insert(serviceNodes).values({
+    domainId: keyless.id,
+    oxyUserId: keyless.oxyUserId,
+    publicKey: 'a2V5bGVzcw==',
     connectedRelay: 'wss://relay.example.test',
     status: 'online',
   });
@@ -151,12 +166,20 @@ describe('registry answers', () => {
       answers: [],
       rcode: 'NOERROR',
       overlay: {
-        serviceNodePubKey: 'bGl2ZQ==',
         relay: 'wss://relay.example.test',
         available: true,
+        domainKey: creds.domainKeyB64,
+        rotations: [],
+        chain: creds.chain,
+        kaCert: creds.kaCert,
       },
     });
     expect(decideParkingPage(await loadNameFacts(t.db, 'live.ox'), settings())).toBeNull();
+  });
+
+  test('online node without verifiable key material: NODATA, no overlay', async () => {
+    const response = await resolve('keyless.ox', 'A');
+    expect(response).toEqual({ name: 'keyless.ox', type: 'A', answers: [], rcode: 'NOERROR' });
   });
 
   test('expiry: served while enforcement is off, held when it is on', async () => {

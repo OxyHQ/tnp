@@ -152,7 +152,7 @@ describe('RelayNode.start', () => {
       await relay.start(new TnpApiClient('https://api.example.test'));
       expect(relay.isRunning).toBe(true);
     } finally {
-      relay.stop();
+      await relay.stop();
       globalThis.fetch = realFetch;
     }
   });

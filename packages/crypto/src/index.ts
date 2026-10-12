@@ -29,3 +29,5 @@ export {
 } from './grants.js';
 export * from './key-agreement.js';
 export * from './scope.js';
+export * from './domain-key.js';
+export * from './service-auth.js';

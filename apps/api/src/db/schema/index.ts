@@ -9,10 +9,12 @@
  */
 
 import { relations, sql } from 'drizzle-orm';
+import type { DomainKeyRotation, Grant, KeyAgreementCertificate } from '@tnp/crypto';
 import {
   boolean,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -102,6 +104,20 @@ export const domains = pgTable(
      * not from anyone who already knows it.
      */
     unlisted: boolean('unlisted').notNull().default(false),
+    /**
+     * The domain key (Ed25519, canonical base64): the root of every grant
+     * chain for this name. Generated on the owner's device; the registry only
+     * publishes it. Set once by the owner, and replaced afterwards only by a
+     * rotation statement signed by the current key (routes/domain-keys.ts) —
+     * there is no reset, so a compelled registry that overwrites it here is
+     * refused by every client that pinned the old one.
+     */
+    domainKey: text('domain_key'),
+    /** Rotation statements, oldest first, at most MAX_DOMAIN_KEY_ROTATIONS. */
+    domainKeyRotations: jsonb('domain_key_rotations')
+      .$type<DomainKeyRotation[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
@@ -163,7 +179,12 @@ export const serviceNodes = pgTable(
       .notNull()
       .references(() => domains.id, { onDelete: 'cascade' }),
     oxyUserId: text('oxy_user_id').notNull(),
+    /** The node key (Ed25519, base64): the subject of the chain's leaf grant. */
     publicKey: text('public_key').notNull(),
+    /** Grant chain, leaf first, rooted at the domain key. Verified before it is stored. */
+    chain: jsonb('chain').$type<Grant[]>().notNull().default(sql`'[]'::jsonb`),
+    /** The node's current key-agreement certificate (X25519, at most 7 days). */
+    kaCert: jsonb('ka_cert').$type<KeyAgreementCertificate>(),
     connectedRelay: text('connected_relay').notNull().default(''),
     status: nodeStatus('status').notNull().default('offline'),
     lastSeen: timestamp('last_seen', { withTimezone: true }).notNull().defaultNow(),

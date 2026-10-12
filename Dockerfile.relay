@@ -1,14 +1,39 @@
+# PARKED: the relay image is not built or published by any workflow, and its
+# ECS service stays at desired_count = 0 (docs/architecture/relays.md §8).
+# This file is kept buildable so the gate is the only thing standing in the way.
 FROM oven/bun:1.4.3
 WORKDIR /app
 
+# The hoisted linker, or bun nests dependencies under each workspace and the
+# runtime cannot resolve them from the root.
+COPY bunfig.toml ./
 COPY package.json bun.lock ./
-COPY apps/relay/package.json apps/relay/
-RUN bun install --production
 
-COPY apps/relay/src apps/relay/src
+# Every workspace manifest: bun resolves the whole workspace graph before
+# installing anything, so one missing package.json fails the install.
+COPY apps/api/package.json apps/api/
+COPY apps/dns-server/package.json apps/dns-server/
+COPY apps/relay/package.json apps/relay/
+COPY apps/web/package.json apps/web/
+COPY packages/client/package.json packages/client/
+COPY packages/crypto/package.json packages/crypto/
+COPY packages/namespace/package.json packages/namespace/
+COPY packages/protocol/package.json packages/protocol/
+COPY packages/relay-core/package.json packages/relay-core/
+COPY packages/shared-types/package.json packages/shared-types/
+
+RUN bun install --frozen-lockfile
+
+# The relay and every workspace package it imports at runtime.
+COPY apps/relay apps/relay
+COPY packages/crypto packages/crypto
+COPY packages/protocol packages/protocol
+COPY packages/relay-core packages/relay-core
+COPY packages/shared-types packages/shared-types
 
 ENV NODE_ENV=production
 ENV RELAY_PORT=8080
 EXPOSE 8080
 
+# RELAY_ENDPOINT (the public wss:// URL) is required at run time.
 CMD ["bun", "apps/relay/src/index.ts"]

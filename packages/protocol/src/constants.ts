@@ -154,6 +154,8 @@ export const ErrorCode = {
   AUTH_FAILED: 0x0011,
   AUTH_EXPIRED: 0x0012,
   REVOKED: 0x0013,
+  /** A relay already serves this name from a different authenticated node; the incumbent stays. */
+  ALREADY_REGISTERED: 0x0014,
 
   CIRCUIT_UNKNOWN: 0x0020,
   CIRCUIT_LIMIT: 0x0021,

@@ -18,10 +18,10 @@ Public DNS keeps working. A public name resolves identically with TNP installed 
 
 Domains are tied to your Oxy account. Register at [tnp.network](https://tnp.network), manage your DNS records from the web dashboard, and propose new TLDs to the community.
 
-Alongside resolution, TNP ships an **encrypted overlay** built around the same domains: register a service node, run `tnp serve` on a port, and clients connect through relays without your IP being exposed to them. Overlay traffic is multiplexed over WebSockets and encrypted with NaCl (X25519 + XSalsa20-Poly1305).
+Alongside resolution, TNP ships an **encrypted overlay** built around the same domains: register a service node, run `tnp serve` on a port, and clients connect through relays without your IP being exposed to them. Each connection is its own circuit over a WebSocket to the relay, with a Noise NK handshake (X25519, ChaCha20-Poly1305) against a key the client verifies back to the domain owner's domain key.
 
 <Callout type="warning">
-**Current limits, stated plainly.** The overlay is a prototype. Payloads are encrypted against the relay, but the service node's public key is served by the API with no signature chain, so the API is presently able to substitute it — the tunnel is not end-to-end authenticated yet. Onion routing, exit nodes and VPN mode are **not implemented**; `tnp connect --privacy private` is rejected as unavailable. TNP does not provide anonymity. See the [Phase 0 audit](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/audit-2026-08-06.md) and the [privacy model](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/privacy-model.md).
+**Current limits, stated plainly.** The overlay relay is not deployed yet. The relay cannot read traffic, but it sees your IP, the name you reach, and timing and volume. A client pins each name's domain key the first time it connects, so the API cannot substitute a service node's key for a name the client has used before — on first contact it still can. Onion routing, exit nodes and VPN mode are **not implemented**; `tnp connect --privacy private` is rejected as unavailable. TNP does not provide anonymity. See the [Phase 0 audit](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/audit-2026-08-06.md) and the [privacy model](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/privacy-model.md).
 </Callout>
 
 A local proxy is **not** a VPN, and TNP does not describe it as one.
@@ -148,7 +148,7 @@ New TLDs come from the community: `POST /tlds/propose` creates a proposal, `POST
 3. Look up the domain. If not registered:
    - Return the configured parking A record when parking is enabled; otherwise return no answers.
 4. Filter the domain's stored records by `type` and matching subdomain (`@` or full FQDN).
-5. If the domain has an active service node, attach `overlay: { serviceNodePubKey, relay, available: true }` to the response — the overlay-enabled client uses this to route through the encrypted tunnel.
+5. If the domain has an online service node with a domain key and a current certificate, attach `overlay: { relay, available, domainKey, rotations, chain, kaCert }`. The client verifies all of it against its pin for the name before it opens a circuit ([security model](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/security.md)).
 
 ### Caching
 
@@ -172,5 +172,5 @@ The API uses **Oxy authentication** (device-first, zero-cookie). Every protected
 | API | Bun, Express 5, drizzle-orm over postgres.js, PostgreSQL, `@oxy.so/core` for Oxy auth |
 | DNS | Bun runtime, `dns-packet` for the wire format, raw UDP + TCP sockets, DoH upstreams |
 | Relay | Bun's native WebSocket server, binary frame protocol, in-memory connection registry |
-| Client | Bun (compiled to single-file binary per platform: linux-x64/arm64, darwin-x64/arm64, windows-x64), `tweetnacl` for X25519 + XSalsa20-Poly1305 |
+| Client | Bun (compiled to single-file binary per platform: linux-x64/arm64, darwin-x64/arm64, windows-x64), `@tnp/crypto` (tweetnacl Ed25519/X25519, `@noble` ChaCha20-Poly1305 and SHA-256) for the Noise NK overlay session |
 | Auth | Device-first Oxy sign-in (`@oxy.so/services`), tokens verified by `@oxy.so/core` |

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { and, eq, sql } from 'drizzle-orm';
 import { requireOxyAuth, getRequiredOxyUserId } from '@oxy.so/core/server';
+import { KeyAgreementRole, verifyKeyAgreementCertificate } from '@tnp/crypto';
 import { isReservedTld } from '@tnp/namespace';
 import {
   parseRegisterServiceNodeRequest,
@@ -17,6 +18,12 @@ import { logError } from '../utils/logError.js';
 const router = Router();
 
 // POST /nodes/register -- register a service node for a domain (auth required)
+//
+// The body carries the node's grant chain and key-agreement certificate. They
+// are verified here against the domain key the owner registered — defence in
+// depth only: clients verify the same material themselves against the key
+// they pinned, so a registry that skipped this check (or lied about it) still
+// could not make a client accept a key the domain key never authorized.
 router.post('/register', requireOxyAuth, async (req, res) => {
   try {
     const userId = getRequiredOxyUserId(req);
@@ -26,12 +33,18 @@ router.post('/register', requireOxyAuth, async (req, res) => {
       res.status(400).json({ error: parsed.error });
       return;
     }
-    const { domainId, publicKey } = parsed.value;
+    const { domainId, chain, kaCert } = parsed.value;
 
     const db = getDb();
 
     const [domain] = await db
-      .select({ id: domains.id, oxyUserId: domains.oxyUserId })
+      .select({
+        id: domains.id,
+        oxyUserId: domains.oxyUserId,
+        name: domains.name,
+        tld: domains.tld,
+        domainKey: domains.domainKey,
+      })
       .from(domains)
       .where(eq(domains.id, domainId))
       .limit(1);
@@ -45,13 +58,38 @@ router.post('/register', requireOxyAuth, async (req, res) => {
       return;
     }
 
+    if (!domain.domainKey) {
+      res.status(409).json({ error: 'Register a domain key first: tnp domain key init <name>' });
+      return;
+    }
+
+    const verified = verifyKeyAgreementCertificate(kaCert, chain, {
+      trustedRoots: [domain.domainKey],
+      role: KeyAgreementRole.SERVICE_NODE,
+      name: `${domain.name}.${domain.tld}`,
+      now: Math.floor(Date.now() / 1000),
+    });
+    if (!verified.ok) {
+      // The reason enum only: the detail can describe attacker-supplied input.
+      res.status(422).json({ error: `Key material does not verify: ${verified.reason}` });
+      return;
+    }
+    const publicKey = kaCert.signer;
+
     // One node per domain, enforced by a unique index rather than by convention.
     const [node] = await db
       .insert(serviceNodes)
-      .values({ domainId: domain.id, oxyUserId: userId, publicKey })
+      .values({ domainId: domain.id, oxyUserId: userId, publicKey, chain, kaCert })
       .onConflictDoUpdate({
         target: serviceNodes.domainId,
-        set: { publicKey, oxyUserId: userId, lastSeen: sql`now()`, updatedAt: sql`now()` },
+        set: {
+          publicKey,
+          chain,
+          kaCert,
+          oxyUserId: userId,
+          lastSeen: sql`now()`,
+          updatedAt: sql`now()`,
+        },
       })
       .returning();
 

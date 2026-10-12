@@ -46,14 +46,17 @@ for them the local observer sees, and can forge, every name.
 
 | Party | Sees |
 |---|---|
-| Service relay | Client IP, service node identity, timing, byte volumes. **Not** content. |
+| Service relay | Client IP, the destination name (the circuit's routing prefix), service node identity, circuit open/close times, timing, byte volumes. **Not** content, the target port, or why a stream failed. |
 | TNP API | Which domain was resolved and which relay was handed out. |
 | Service node | Client's circuit, content, and the client's request contents. Not the client's IP (the relay is between them). |
 | Local observer | A TLS connection to a relay. Not the destination. |
-| **TNP API (as an attacker)** | **Everything** — it can substitute the service node key and transparently decrypt (audit S3). |
+| **TNP API (as an attacker)**, name the client has used before | It cannot substitute the service node's key: the client pinned the name's domain key and refuses a different one unless the pinned key signed a rotation (security.md §1). It can deny service, see which names are resolved, and steer relays (relays.md §2). |
+| **TNP API (as an attacker)**, first contact with a name | **Everything for that name** — the client pins whatever domain key it is shown first (trust on first use), so a substituted key at first contact goes unnoticed until the genuine key is seen. |
 
-That last row is the current reality and is why "end-to-end encrypted" is not an
-honest description of the deployed system.
+This is the state of the code since the Phase 3 transport cutover (audit S3
+closed for pinned names); it is not deployed while the relay is parked. Until a
+key-transparency log exists, "end-to-end encrypted" is honest only with the
+first-contact caveat attached.
 
 ### Private mode (Phase 6, not implemented)
 
@@ -79,24 +82,24 @@ in the exit picker and in the operator consent flow.
 
 | # | Adversary | Can do | Defence | Status |
 |---|---|---|---|---|
-| 1 | Malicious client | Flood a relay, exhaust memory, abuse an exit | Authenticated circuits, quotas, frame limits, exit policy | **None today** (S2, S6) |
+| 1 | Malicious client | Flood a relay, exhaust memory, abuse an exit | Authenticated circuits, quotas, frame limits, exit policy | **Partial** — relay frame, circuit, connection, rate and buffer limits (relays.md §3); clients are unauthenticated by design; no exits exist |
 | 2 | Malicious service node | Serve hostile content under its own domain | Out of scope — it owns the name. Users trust names, not TNP. | By design |
-| 3 | Malicious relay | Drop, delay, reorder, count, correlate; today: hijack a domain, inject into another client's circuit | Authenticated registration, per-connection circuit scoping, E2E crypto, multi-hop | **None today** (S1, S2) |
+| 3 | Malicious relay | Drop, delay, reorder, count, correlate; hijack a domain; inject into another client's circuit | Authenticated registration, per-connection circuit scoping, E2E crypto, multi-hop | **Partial** — circuit scoping and service-node authentication (S1, S2 closed in code); replay, reorder, reflection, tampering, truncation and impersonation are detected end to end (transport.md §11). It can still drop, delay, count and correlate; it is not authenticated to clients; no multi-hop |
 | 4 | Malicious exit | Read and modify unencrypted traffic; log destinations | Published policy, TLS end to end, reputation, user selection | Not implemented |
 | 5 | Compromised directory | Steer every client onto attacker relays | Signed directory, pinned key, diversity constraints, stale-rejection | **None today** — directory is unsigned |
-| 6 | Compromised API | Substitute keys → transparent MITM; rewrite records | Signed record sets chained to owner identity (naming.md §5) | **None today** (S3) — this is the single largest gap |
+| 6 | Compromised API | Substitute keys → transparent MITM; rewrite records | Owner-held domain keys pinned by clients (security.md §1); signed record sets (naming.md §5); key transparency | **Partial** — key substitution refused for names a client has pinned; first contact still trusts the API; DNS records are not signed (S8) |
 | 7 | Compromised Oxy account | Take over the user's domains and devices | Oxy 2FA; device revocation; per-domain key custody | Partial (Oxy side) |
-| 8 | Stolen node key | Impersonate a node until noticed | Rotation, revocation, short-lived grants | Not implemented |
+| 8 | Stolen node key | Impersonate a node until noticed | Rotation, revocation, short-lived grants | **Partial** — X25519 certificates last ≤ 7 days, node grants 30 days; retiring a node requires rotating the domain key; no per-key revocation |
 | 9 | Timing correlation | Deanonymize by matching flows at both ends | Padding, batching — **partial mitigation only** | Not implemented |
 | 10 | Global passive adversary | Observe everything; correlate at will | **Out of scope. TNP does not defend against this and must never claim to.** | Explicitly out of scope |
 | 11 | Sybil | Flood the directory with attacker relays to own whole paths | Operator diversity, registration cost, path constraints | Not implemented |
-| 12 | Replay | Re-inject recorded frames | Counter inside the AEAD envelope | **None today** (S5) |
-| 13 | Downgrade | Force a weaker version or capability set | Transcript signature; security capabilities non-negotiable downward | **None today** (S5) |
-| 14 | Key substitution | Swap a key mid-flight | Grant chains; no unchained key is usable | **None today** (S3) |
+| 12 | Replay | Re-inject recorded frames | Counter inside the AEAD envelope | **Implemented in the Phase 3 transport** — `REPLAY_DETECTED`, tested against a hostile relay (S5) |
+| 13 | Downgrade | Force a weaker version or capability set | Transcript signature; security capabilities non-negotiable downward | **Partial** — the session has no negotiable suite and binds version, role and name in its prologue; there is no capability negotiation to downgrade, and the connection handshake that would carry one is not implemented |
+| 14 | Key substitution | Swap a key mid-flight | Grant chains; no unchained key is usable | **Implemented** for pinned names — the handshake accepts only a key verified against the pinned domain key; first contact trusts the registry (S3) |
 | 15 | DNS poisoning / impersonation | Answer with attacker records | DNSSEC for public; signed record sets for native | Partial — DoH upstream by default; classic answers must match a random ID, the question and the connected source. No DNSSEC validation (S8), no signed native records |
-| 16 | Malformed input | Crash or corrupt a parser | Bounds, fuzzing, structured errors | Partial — the resolver vets raw DNS packets before decoding; frame decode has a minimum, no maximum (S6) |
-| 17 | Memory exhaustion | Unbounded frames, queues, caches | Hard limits everywhere | Partial — resolver cache, rate-limit table, TCP buffers and in-flight work are bounded; relay frames are not (S6) |
-| 18 | Connection exhaustion | Open connections until the relay dies | Per-IP and per-identity limits | Partial — resolver caps TCP connections with an absolute deadline; the relay has none |
+| 16 | Malformed input | Crash or corrupt a parser | Bounds, fuzzing, structured errors | Partial — the resolver vets raw DNS packets before decoding; v1 frames have exact length checks and a 65 535-byte payload cap, every overlay codec is exact-length, and malformed input costs a circuit or a connection, never the process (tested); no fuzzing |
+| 17 | Memory exhaustion | Unbounded frames, queues, caches | Hard limits everywhere | Partial — resolver cache, rate-limit table, TCP buffers and in-flight work are bounded; relay frames, tables and buffers are bounded and end-to-end windows bound each circuit (relays.md §3) |
+| 18 | Connection exhaustion | Open connections until the relay dies | Per-IP and per-identity limits | Partial — resolver caps TCP connections with an absolute deadline; the relay caps connections per IP and overall and rate-limits new ones per IP; no per-identity limits (clients have none), and behind a load balancer per-IP limits need `RELAY_TRUST_FORWARDED_FOR` |
 | 19 | Exit abuse | Use TNP to attack third parties; expose the operator legally | Port policy, rate limits, private-range blocking, abuse handling | Not implemented |
 | 20 | Update compromise | Ship malicious code to every device | Signed artefacts, channel separation, downgrade protection | **Partial** — releases are Ed25519-signed; `tnp update` verifies and refuses downgrades; installers verify (the signature only where OpenSSL 3 exists); the key is an online CI secret; no channels or signed metadata ([security.md §7](./security.md#7-update-security)) |
 | 21 | Local privilege attack | Unprivileged local process reconfigures the daemon | Authenticated owner-only IPC; `0600` config | Partial |
@@ -133,7 +136,7 @@ that a compromised API cannot rewrite what the client acts on.
 | Mode | Must be trusted |
 |---|---|
 | Resolver | The device; the TNP registry (for native names); the chosen upstream (for public names) |
-| Access | Above, plus the service node's key chain |
+| Access | Above, plus the service node's key chain — rooted at the domain key the client pinned, so the registry is trusted for the first contact with each name only |
 | Proxy | Above, plus the local daemon |
 | Service | The device; Oxy for ownership; the relay for availability only |
 | Relay | The device; the directory |

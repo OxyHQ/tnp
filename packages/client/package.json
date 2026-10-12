@@ -21,8 +21,10 @@
   },
   "dependencies": {
     "@opentui/core": "^0.4.3",
+    "@tnp/crypto": "workspace:*",
     "@tnp/namespace": "workspace:*",
     "@tnp/protocol": "workspace:*",
+    "@tnp/relay-core": "workspace:*",
     "@tnp/shared-types": "workspace:*",
     "dns-packet": "^5.6.1",
     "tweetnacl": "^1.0.3"

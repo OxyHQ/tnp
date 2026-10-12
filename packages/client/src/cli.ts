@@ -41,6 +41,8 @@ import {
   ReleaseVerificationError,
 } from './update';
 
+import { DOMAIN_USAGE } from './overlay/commands';
+
 const VERSION = '0.3.0';
 
 function usage() {
@@ -60,6 +62,9 @@ Usage:
   tnp update           Update to the latest version
   tnp status           Check if the resolver service is running
   tnp test <domain>    Test resolving a TNP domain
+  tnp domain ...       Manage domain keys and node grants (tnp domain help)
+  tnp pins [forget <name>]
+                       List or forget the domain keys this client has pinned
   tnp version          Print version
   tnp help             Show this help
 
@@ -69,6 +74,8 @@ Overlay commands:
     service nodes are routed through encrypted tunnels via relay nodes.
     Privacy level "access" means one relay hop: the relay cannot read your
     traffic, but it sees your IP and which service you reach.
+    The first connection to a name pins its domain key (like SSH known_hosts);
+    a later different key is refused unless the pinned key signed the change.
     Multi-hop "private" routing is not implemented yet and is rejected.
 
   tnp connect --killswitch
@@ -80,6 +87,9 @@ Overlay commands:
   TNP_TOKEN=<token> tnp serve --domain <domain> [--target <host:port>] [--relay <wss://url>]
     Registers this machine as a service node for the given domain.
     Incoming connections are forwarded to the local target (default localhost:80).
+    The first run on the owner's device creates the domain key (back it up);
+    a node on another device needs a grant: tnp domain grant.
+
 
   TNP_TOKEN=<token> tnp relay --endpoint <wss://url> [--port N] [--host addr]
             [--location label] [--max-connections N] [--bandwidth mbps]
@@ -92,6 +102,8 @@ Overlay commands:
   Auth tokens: set TNP_TOKEN, or pipe the token to --token-stdin.
   --token <token> still works but is deprecated: other local users can read it
   from the process list, and it lands in shell history.
+
+Domain keys:${DOMAIN_USAGE}
 
 Config: /etc/tnp/config.json (or /usr/local/etc/tnp/config.json on macOS)
 Docs:   https://tnp.network/install
@@ -256,12 +268,19 @@ async function cmdConnect() {
   const { TunnelManager } = await import('./tunnel');
   const { SocksProxy } = await import('./socks');
 
-  const tunnelManager = new TunnelManager();
+  const { OverlayStore } = await import('./overlay/store');
+  const { PinStore } = await import('./overlay/pins');
+  const apiClient = proxy.getApiClient();
+  const tunnelManager = new TunnelManager({
+    // Pins live in the data directory of the user running `tnp connect`.
+    pins: new PinStore(new OverlayStore()),
+    resolveOverlay: async (destination) =>
+      (await apiClient.resolveWithOverlay(destination, 'A')).overlay ?? null,
+  });
   const socksProxy = new SocksProxy({
     port: config.socksPort,
     host: config.listenAddr,
     tunnelManager,
-    apiClient: proxy.getApiClient(),
     getOverlayInfo: (domain: string) => proxy.getOverlayInfo(domain),
     classify: (domain: string) => proxy.classify(domain),
   });
@@ -501,11 +520,13 @@ async function cmdServe() {
       localTarget: target,
       apiBaseUrl: config.apiBaseUrl,
       relayEndpoint: relay,
-      identityKeyPath: config.identityKeyPath,
       authToken,
     },
     apiClient,
-  );
+  ).catch((err: unknown) => {
+    console.error(`[tnp] ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  });
 }
 
 async function cmdRelay() {
@@ -562,8 +583,7 @@ async function cmdRelay() {
 
   const shutdown = () => {
     console.log('\n[tnp] shutting down relay node...');
-    relay.stop();
-    process.exit(0);
+    void relay.stop().finally(() => process.exit(0));
   };
 
   process.on('SIGINT', shutdown);
@@ -695,13 +715,15 @@ function cmdUninstall() {
   }
 }
 
-function cmdStatus() {
+async function cmdStatus() {
   const running = serviceStatus();
   if (running) {
     console.log('[tnp] resolver is running');
   } else {
     console.log('[tnp] resolver is not running');
   }
+  const { pinsSummary } = await import('./overlay/commands');
+  console.log(`[tnp] overlay: ${pinsSummary()}`);
   process.exit(running ? 0 : 1);
 }
 
@@ -731,14 +753,21 @@ async function cmdTest(domain: string) {
     console.log(`  (no records found for ${domain})`);
   }
 
-  // Also check overlay status
-  const nodeInfo = await client.getServiceNode(domain);
-  if (nodeInfo) {
-    console.log(`  [overlay] status: ${nodeInfo.status}`);
-    console.log(`  [overlay] relay: ${nodeInfo.connectedRelay || '(none)'}`);
-    console.log(`  [overlay] pubkey: ${nodeInfo.publicKey}`);
+  // Also check overlay status, and whether its key material verifies against
+  // this user's pin (without recording a new pin: a test is not a contact).
+  const { overlay } = await client.resolveWithOverlay(domain, 'A');
+  if (overlay) {
+    console.log(`  [overlay] relay: ${overlay.relay || '(none)'}`);
+    console.log(`  [overlay] domain key: ${overlay.domainKey}`);
+    const { OverlayStore } = await import('./overlay/store');
+    const { PinStore } = await import('./overlay/pins');
+    const { serviceNameFor } = await import('./overlay/verify');
+    const pin = new PinStore(new OverlayStore()).get(serviceNameFor(domain));
+    console.log(
+      `  [overlay] pin: ${!pin ? 'none (first connection will pin this key)' : pin.domainKey === overlay.domainKey ? 'matches' : 'DIFFERS — a connection will be refused unless a signed rotation links them'}`,
+    );
   } else {
-    console.log(`  [overlay] no service node registered`);
+    console.log(`  [overlay] no service node online`);
   }
 }
 
@@ -787,8 +816,33 @@ switch (command) {
     await cmdUpdate();
     break;
   case 'status':
-    cmdStatus();
+    await cmdStatus();
     break;
+  case 'domain': {
+    const { cmdDomain } = await import('./overlay/commands');
+    const { TnpApiClient } = await import('./api');
+    try {
+      await cmdDomain(
+        process.argv.slice(3),
+        new TnpApiClient(loadConfig().apiBaseUrl),
+        readTokenOrExit,
+      );
+    } catch (err) {
+      console.error(`[tnp] ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
+    break;
+  }
+  case 'pins': {
+    const { cmdPins } = await import('./overlay/commands');
+    try {
+      cmdPins(process.argv.slice(3));
+    } catch (err) {
+      console.error(`[tnp] ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
+    break;
+  }
   case 'test':
     await cmdTest(arg || '');
     break;

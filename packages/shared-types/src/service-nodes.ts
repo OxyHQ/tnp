@@ -7,6 +7,8 @@
  * endpoints were on right up until they did not.
  */
 
+import type { Grant, KeyAgreementCertificate } from '@tnp/crypto';
+import { parseChainShape, parseKeyAgreementCertificateShape } from './key-material.js';
 import { asRecord, stringField, type ParseResult } from './parse.js';
 
 export type ServiceNodeStatus = 'online' | 'offline';
@@ -23,13 +25,23 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /** `POST /nodes/register` request. */
 export interface RegisterServiceNodeRequest {
   domainId: string;
-  /** Base64 X25519 public key the client uses for circuit key exchange. */
-  publicKey: string;
+  /**
+   * Grant chain, leaf first, rooted at the domain's registered DOMAIN KEY. The
+   * leaf authorizes the node key for `service-node` on exactly this name.
+   */
+  chain: Grant[];
+  /**
+   * Key-agreement certificate signed by the node key: the X25519 key clients
+   * run the session handshake against (at most 7 days). The node re-registers
+   * with a fresh one before it expires.
+   */
+  kaCert: KeyAgreementCertificate;
 }
 
 /** `POST /nodes/register` response. */
 export interface ServiceNodeRegistration {
   domainId: string;
+  /** The node key (Ed25519, base64) — the chain's leaf subject. */
   publicKey: string;
   connectedRelay: string;
   status: ServiceNodeStatus;
@@ -56,6 +68,7 @@ export interface ServiceNodeHeartbeatResponse {
  * same fact for clients released before `online` existed.
  */
 export interface ServiceNodeLookup {
+  /** The node key (Ed25519, base64). Informational: clients verify the chain in `/dns/resolve`. */
   publicKey: string;
   /**
    * The relay a client dials to reach the node — `""` unless `online`. Which
@@ -86,10 +99,16 @@ export function parseRegisterServiceNodeRequest(
   const domainId = domainIdField(record);
   if (!domainId.ok) return domainId;
 
-  const publicKey = stringField(record, 'publicKey');
-  if (!publicKey.ok) return publicKey;
+  const chain = parseChainShape(record.chain);
+  if (!chain.ok) return chain;
 
-  return { ok: true, value: { domainId: domainId.value, publicKey: publicKey.value } };
+  const kaCert = parseKeyAgreementCertificateShape(record.kaCert);
+  if (!kaCert.ok) return kaCert;
+
+  return {
+    ok: true,
+    value: { domainId: domainId.value, chain: chain.value, kaCert: kaCert.value },
+  };
 }
 
 export function parseServiceNodeHeartbeatRequest(

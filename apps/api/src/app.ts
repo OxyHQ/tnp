@@ -26,6 +26,7 @@ import { PARKING_CSP, renderParkingPage } from './parking.js';
 import { decideParkingPage, loadNameFacts, type NameFacts } from './registry/resolve.js';
 import clientRouter, { installerRoute } from './routes/client.js';
 import dnsRouter from './routes/dns.js';
+import domainKeysRouter from './routes/domain-keys.js';
 import domainsRouter from './routes/domains.js';
 import nodesRouter from './routes/nodes.js';
 import relaysRouter from './routes/relays.js';
@@ -114,6 +115,7 @@ export function createApp(options: AppOptions): express.Express {
   // `perUser` meters writes per account once the account is known.
   app.use('/tlds', auth, limits.perUser, tldsRouter);
   app.use('/domains', auth, limits.perUser, domainsRouter);
+  app.use('/domain-keys', auth, limits.perUser, domainKeysRouter);
   app.use('/nodes', auth, limits.perUser, nodesRouter);
   app.use('/relays', auth, limits.perUser, relaysRouter);
 

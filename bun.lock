@@ -15,6 +15,7 @@
       "dependencies": {
         "@oxy.so/core": "4.2.0",
         "@oxy.so/utils": "^1.0.1",
+        "@tnp/crypto": "workspace:*",
         "@tnp/namespace": "workspace:*",
         "@tnp/shared-types": "workspace:*",
         "cors": "^2.8.6",
@@ -48,7 +49,8 @@
       "dependencies": {
         "@oxy.so/core": "4.2.0",
         "@oxy.so/telemetry": "1.2.0",
-        "@tnp/protocol": "workspace:*",
+        "@tnp/relay-core": "workspace:*",
+        "@tnp/shared-types": "workspace:*",
       },
       "devDependencies": {
         "bun-types": "^1.4.3",
@@ -109,8 +111,10 @@
       },
       "dependencies": {
         "@opentui/core": "^0.4.3",
+        "@tnp/crypto": "workspace:*",
         "@tnp/namespace": "workspace:*",
         "@tnp/protocol": "workspace:*",
+        "@tnp/relay-core": "workspace:*",
         "@tnp/shared-types": "workspace:*",
         "dns-packet": "^5.6.1",
         "tweetnacl": "^1.0.3",
@@ -162,9 +166,25 @@
         "typescript": "~7.0.2",
       },
     },
+    "packages/relay-core": {
+      "name": "@tnp/relay-core",
+      "version": "0.1.0",
+      "dependencies": {
+        "@tnp/crypto": "workspace:*",
+        "@tnp/protocol": "workspace:*",
+        "@tnp/shared-types": "workspace:*",
+      },
+      "devDependencies": {
+        "bun-types": "^1.4.3",
+        "typescript": "~7.0.2",
+      },
+    },
     "packages/shared-types": {
       "name": "@tnp/shared-types",
       "version": "0.1.0",
+      "dependencies": {
+        "@tnp/crypto": "workspace:*",
+      },
       "devDependencies": {
         "bun-types": "^1.4.3",
         "typescript": "~7.0.2",
@@ -805,6 +825,8 @@
     "@tnp/protocol": ["@tnp/protocol@workspace:packages/protocol"],
 
     "@tnp/relay": ["@tnp/relay@workspace:apps/relay"],
+
+    "@tnp/relay-core": ["@tnp/relay-core@workspace:packages/relay-core"],
 
     "@tnp/shared-types": ["@tnp/shared-types@workspace:packages/shared-types"],
 

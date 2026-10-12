@@ -40,6 +40,8 @@ const domain = {
   oxyUserId: 'oxy-user-under-test',
   status: 'active' as const,
   unlisted: false,
+  domainKey: null,
+  domainKeyRotations: [],
   createdAt,
   updatedAt,
   expiresAt: null,

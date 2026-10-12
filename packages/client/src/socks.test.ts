@@ -10,43 +10,53 @@
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import net from 'node:net';
-import type { ServiceNodeLookup } from '@tnp/shared-types';
+import type { SecureCircuit, SecureCircuitEvents } from './overlay/secure-circuit';
+import { OverlayVerificationError } from './overlay/verify';
 import { parseRequest, SocksProxy } from './socks';
 import type { TunnelManager } from './tunnel';
 
-interface FakeCircuit {
-  sent: Buffer[];
-  dataHandler: ((data: Uint8Array) => void) | null;
-  closed: boolean;
+/** Enough of a SecureCircuit for pipeSocket: records what the socket wrote. */
+class FakeCircuit {
+  sent: Buffer[] = [];
+  closed = false;
+  events: SecureCircuitEvents | null = null;
+  bind(events: SecureCircuitEvents) {
+    this.events = events;
+    events.onWritable();
+  }
+  write(data: Uint8Array) {
+    this.sent.push(Buffer.from(data));
+    return data.length;
+  }
+  end() {}
+  consumed() {}
+  reset() {
+    this.closed = true;
+  }
+  abort() {
+    this.closed = true;
+  }
 }
 
-function fakes(node: ServiceNodeLookup | null = null) {
+/**
+ * `available` names have a service node; every openStream call is recorded,
+ * because that is the only path by which the proxy can reach the registry.
+ */
+function fakes(available: string[] = []) {
   const lookups: string[] = [];
-  const tunnels: Array<{ relay: string; domain: string; pubKey: string; circuit: FakeCircuit }> =
-    [];
-  const apiClient = {
-    async getServiceNode(domain: string) {
-      lookups.push(domain);
-      return node;
-    },
-  };
+  const tunnels: Array<{ domain: string; port: number; hint: unknown; circuit: FakeCircuit }> = [];
   const tunnelManager = {
-    async openTunnel(relay: string, domain: string, pubKey: string) {
-      const circuit: FakeCircuit = { sent: [], dataHandler: null, closed: false };
-      tunnels.push({ relay, domain, pubKey, circuit });
-      return {
-        send: (data: Uint8Array) => circuit.sent.push(Buffer.from(data)),
-        onData: (handler: (data: Uint8Array) => void) => {
-          circuit.dataHandler = handler;
-        },
-        onClose: () => {},
-        close: () => {
-          circuit.closed = true;
-        },
-      };
+    async openStream(domain: string, port: number, hint?: unknown) {
+      if (hint === undefined) lookups.push(domain);
+      if (hint === undefined && !available.includes(domain)) {
+        throw new OverlayVerificationError('no-overlay', 'no service node');
+      }
+      const circuit = new FakeCircuit();
+      tunnels.push({ domain, port, hint, circuit });
+      return circuit as unknown as SecureCircuit;
     },
   } as unknown as TunnelManager;
-  return { apiClient, tunnelManager, lookups, tunnels };
+  return { tunnelManager, lookups, tunnels };
 }
 
 const proxies: SocksProxy[] = [];
@@ -58,9 +68,8 @@ async function startSocks(f: ReturnType<typeof fakes>, extra: { overlay?: boolea
   const proxy = new SocksProxy({
     port: 0,
     tunnelManager: f.tunnelManager,
-    apiClient: f.apiClient,
     getOverlayInfo: extra.overlay
-      ? (domain) => (domain === 'cached.ox' ? { pubKey: 'pk', relay: 'wss://relay' } : undefined)
+      ? (domain) => (domain === 'cached.ox' ? { relay: 'wss://relay' } : undefined)
       : undefined,
   });
   proxies.push(proxy);
@@ -127,7 +136,7 @@ describe('SOCKS5 proxy', () => {
   });
 
   test('a native name is looked up, and unreachable without a service node', async () => {
-    const f = fakes(null);
+    const f = fakes();
     const proxy = await startSocks(f);
     const reply = await exchange(proxy.port, Buffer.concat([GREETING, connectDomain('hello.ox')]));
     expect(reply[3]).toBe(0x04);
@@ -135,12 +144,7 @@ describe('SOCKS5 proxy', () => {
   });
 
   test('a CONNECT pipelined with the greeting is served, and early data reaches the tunnel', async () => {
-    const f = fakes({
-      domain: 'hello.ox',
-      publicKey: 'pk',
-      connectedRelay: 'wss://relay.example',
-      status: 'online',
-    } as unknown as ServiceNodeLookup);
+    const f = fakes(['hello.ox']);
     const proxy = await startSocks(f);
     const early = Buffer.from('GET / HTTP/1.1\r\n\r\n');
     const reply = await exchange(
@@ -150,7 +154,7 @@ describe('SOCKS5 proxy', () => {
     );
     expect([...reply.subarray(0, 4)]).toEqual([0x05, 0x00, 0x05, 0x00]);
     expect(f.tunnels).toHaveLength(1);
-    expect(f.tunnels[0]).toMatchObject({ relay: 'wss://relay.example', domain: 'hello.ox' });
+    expect(f.tunnels[0]).toMatchObject({ domain: 'hello.ox', port: 80 });
     expect(Buffer.concat(f.tunnels[0].circuit.sent).toString()).toBe(early.toString());
   });
 

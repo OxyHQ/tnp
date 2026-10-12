@@ -22,6 +22,7 @@ COPY packages/client/package.json packages/client/
 COPY packages/crypto/package.json packages/crypto/
 COPY packages/namespace/package.json packages/namespace/
 COPY packages/protocol/package.json packages/protocol/
+COPY packages/relay-core/package.json packages/relay-core/
 COPY packages/shared-types/package.json packages/shared-types/
 
 RUN bun install --frozen-lockfile
@@ -30,6 +31,7 @@ RUN bun install --frozen-lockfile
 # the TypeScript directly, so the source is the artefact — a build step would
 # only add a way for the two to diverge.
 COPY apps/api apps/api
+COPY packages/crypto packages/crypto
 COPY packages/namespace packages/namespace
 COPY packages/shared-types packages/shared-types
 

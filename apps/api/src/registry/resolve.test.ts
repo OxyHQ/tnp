@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { makeTestCredentials } from '@tnp/crypto/testing';
 import {
   decideParkingPage,
   decideResolution,
@@ -11,6 +12,8 @@ import {
 const NOW = new Date('2026-09-17T12:00:00.000Z');
 const PARKING = '203.0.113.10';
 const DAY = 24 * 60 * 60 * 1000;
+const NOW_S = Math.floor(NOW.getTime() / 1000);
+const creds = makeTestCredentials('nate.ox', { now: NOW_S });
 
 const settings: ResolutionSettings = { parkingIp: PARKING, expiryEnforced: false, now: NOW };
 const noParking: ResolutionSettings = { ...settings, parkingIp: '' };
@@ -25,6 +28,8 @@ function registered(overrides: Partial<Registered> = {}, fqdn = 'nate.ox'): Name
     tldCustom: true,
     domain: {
       expiresAt: null,
+      domainKey: creds.domainKeyB64,
+      domainKeyRotations: [],
       label: '@',
       records: [],
       hasDescendants: false,
@@ -38,10 +43,12 @@ const unregistered: NameFacts = { kind: 'native', fqdn: 'free.ox', tldCustom: tr
 
 function node(overrides: Partial<ServiceNodeFacts> = {}): ServiceNodeFacts {
   return {
-    publicKey: 'cHVibGljLWtleQ==',
+    publicKey: creds.kaCert.signer,
     connectedRelay: 'wss://relay.example.test',
     status: 'online',
     lastSeen: new Date(NOW.getTime() - 10_000),
+    chain: creds.chain,
+    kaCert: creds.kaCert,
     ...overrides,
   };
 }
@@ -177,11 +184,31 @@ describe('service nodes', () => {
       answers: [],
       rcode: 'NOERROR',
       overlay: {
-        serviceNodePubKey: 'cHVibGljLWtleQ==',
         relay: 'wss://relay.example.test',
         available: true,
+        domainKey: creds.domainKeyB64,
+        rotations: [],
+        chain: creds.chain,
+        kaCert: creds.kaCert,
       },
     });
+  });
+
+  test('the overlay is withheld when a client could not verify it, but the node still counts', () => {
+    const cases: NameFacts[] = [
+      registered({ node: node(), domainKey: null }),
+      registered({ node: node({ kaCert: null }) }),
+      registered({ node: node({ chain: [] }) }),
+      registered({
+        node: node({ kaCert: { ...creds.kaCert, notAfter: NOW_S } }),
+      }),
+    ];
+    for (const facts of cases) {
+      const response = decideResolution(facts, 'A', settings);
+      expect(response.overlay).toBeUndefined();
+      // Still an online node: NODATA, not parking.
+      expect(response).toMatchObject({ answers: [], rcode: 'NOERROR' });
+    }
   });
 
   test('a node marked offline counts for nothing: the name parks', () => {
