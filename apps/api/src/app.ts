@@ -40,6 +40,8 @@ export interface AppOptions {
   auth?: RequestHandler;
   /** Defaults to the database; injectable so the parking page is testable without one. */
   loadParkingFacts?: (host: string) => Promise<NameFacts>;
+  /** Defaults to the process's ecosystem traffic publisher, when one was started. */
+  ecosystemActivity?: typeof getEcosystemActivity;
   limits?: NetworkLimitSettings;
   corsOrigins?: string[];
   requestTimeoutMs?: number;
@@ -71,7 +73,7 @@ export function createApp(options: AppOptions): express.Express {
   // (middleware/clientIp.ts).
 
   app.use((req, res, next) => {
-    const activity = getEcosystemActivity();
+    const activity = (options.ecosystemActivity ?? getEcosystemActivity)();
     if (activity) activity.observeHttp(req, res, next);
     else next();
   });

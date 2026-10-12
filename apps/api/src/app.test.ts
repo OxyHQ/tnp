@@ -47,6 +47,8 @@ async function serve(overrides: Partial<AppOptions> = {}): Promise<string> {
       res.json({ services: true });
     },
     auth: testAuth,
+    // The process-wide publisher is another suite's to start and stub.
+    ecosystemActivity: () => undefined,
     limits: generousLimits,
     requestTimeoutMs: 0,
     ...overrides,
