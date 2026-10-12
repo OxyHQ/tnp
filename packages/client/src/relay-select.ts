@@ -28,7 +28,16 @@ import type { RelayCandidate } from './service-node';
 export type { RelayCandidate } from './service-node';
 
 export type RelaySelection =
-  | { ok: true; candidates: RelayCandidate[] }
+  | {
+      ok: true;
+      candidates: RelayCandidate[];
+      /**
+       * Re-run the same selection against a fresh directory (the service node
+       * calls it periodically and leaves relays no longer listed). Absent when
+       * the relay did not come from the directory at all.
+       */
+      refresh?: () => Promise<RelayCandidate[]>;
+    }
   | { ok: false; message: string };
 
 export const NO_AUTOMATIC_RELAY_MESSAGE =
@@ -141,6 +150,13 @@ export function resolveExplicitRelay(
 export async function chooseServiceRelays(params: {
   relayFlag: string | null;
   relayKeyFlag: string | null;
+  /**
+   * `--allow-unverified-relay`: the operator accepts a relay whose identity
+   * cannot be checked at all (not in a verified directory, no `--relay-key`).
+   * Without it such a relay is refused — otherwise blocking the API would
+   * silently downgrade `--relay` to no relay authentication.
+   */
+  allowUnverified?: boolean;
   directory: () => Promise<VerifiedRelayDirectory>;
   probe: RelayProbe;
   warn: (message: string) => void;
@@ -157,8 +173,36 @@ export async function chooseServiceRelays(params: {
     if (directoryProblem) params.warn(directoryProblem);
     const explicit = resolveExplicitRelay(params.relayFlag, directory, params.relayKeyFlag);
     if (!explicit.ok) return explicit;
+    if (explicit.candidate.relayKey === null && !params.allowUnverified) {
+      return {
+        ok: false,
+        message:
+          `refusing ${explicit.candidate.endpoint}: its identity cannot be verified — it is not in a ` +
+          'verified signed relay directory' +
+          (directoryProblem ? ` (${directoryProblem})` : '') +
+          ' and no --relay-key was given. Pass --relay-key <base64> to require a key, or ' +
+          '--allow-unverified-relay to accept whoever answers at that URL.',
+      };
+    }
     if (explicit.warning) params.warn(`WARNING: ${explicit.warning}`);
-    return { ok: true, candidates: [explicit.candidate] };
+    const flag = params.relayFlag;
+    const fromDirectory = explicit.warning === null;
+    return {
+      ok: true,
+      candidates: [explicit.candidate],
+      ...(fromDirectory
+        ? {
+            refresh: async () => {
+              const again = resolveExplicitRelay(
+                flag,
+                await params.directory(),
+                params.relayKeyFlag,
+              );
+              return again.ok && again.warning === null ? [again.candidate] : [];
+            },
+          }
+        : {}),
+    };
   }
   if (!directory) {
     return {
@@ -166,5 +210,13 @@ export async function chooseServiceRelays(params: {
       message: `${directoryProblem ?? 'no verified relay directory'}. No relay is selected without a verified signed directory.`,
     };
   }
-  return selectAutomaticRelays(directory, params.probe);
+  const selected = await selectAutomaticRelays(directory, params.probe);
+  if (!selected.ok) return selected;
+  return {
+    ...selected,
+    refresh: async () => {
+      const again = await selectAutomaticRelays(await params.directory(), params.probe);
+      return again.ok ? again.candidates : [];
+    },
+  };
 }

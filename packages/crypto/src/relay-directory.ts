@@ -45,7 +45,21 @@
  *      relayKey (32)
  *      u64 issuedAt           Unix seconds; the registry accepts a small window
  *
- * Three distinct contexts, distinct from every other signed statement in TNP
+ * 4. **The service node's relay binding**: which relay a name's service node
+ *    is attached to, signed by the NODE KEY (which the client verifies through
+ *    the grant chain rooted at the name's domain key):
+ *
+ *      u32 len ‖ "tnp-service-relay-binding-v1"
+ *      u32 len ‖ name
+ *      u32 len ‖ endpoint
+ *      relayKey (32)
+ *      u64 issuedAt
+ *
+ *    The relay a resolve record names is registry data; with this, a client
+ *    reaches a name only through the relay its node chose, not one the
+ *    registry substituted.
+ *
+ * Four distinct contexts, distinct from every other signed statement in TNP
  * (grants, certificates, rotations, service-node auth), so no signature made
  * for one verifies as another.
  */
@@ -63,6 +77,7 @@ import {
   SIGNATURE_LENGTH,
 } from './encoding.js';
 import { assertSecretMatches } from './grants.js';
+import { isValidScope } from './scope.js';
 
 const DIRECTORY_CONTEXT = 'tnp-relay-directory-v1';
 const IDENTITY_CONTEXT = 'tnp-relay-identity-v1';
@@ -114,7 +129,10 @@ export interface DirectoryRelay {
 
 export interface UnsignedRelayDirectory {
   v: typeof RELAY_DIRECTORY_VERSION;
-  /** Monotonic. A client refuses a serial lower than the highest it has seen. */
+  /**
+   * Monotonic, and at most `issuedAt`. A client refuses a serial lower than the
+   * highest it has seen from the same signing key.
+   */
   serial: number;
   /** Unix seconds. */
   issuedAt: number;
@@ -226,6 +244,11 @@ function parseDirectory(value: unknown, allowSignature: boolean): ParsedDirector
   assertUint(value.issuedAt, 'issuedAt');
   assertUint(value.expiresAt, 'expiresAt');
   if (value.serial < 1) throw new EncodingError('serial must be at least 1');
+  // The serial may not run ahead of the document's own date. Without this a
+  // signer could sign serial 2^53 − 1 once and every client would refuse every
+  // later directory forever; with it, the mark can rise at most to `issuedAt`,
+  // which the verifier bounds by its own clock (MAX_DIRECTORY_CLOCK_SKEW_SECONDS).
+  if (value.serial > value.issuedAt) throw new EncodingError('serial must not exceed issuedAt');
   if (value.expiresAt <= value.issuedAt) throw new EncodingError('expiresAt must follow issuedAt');
   if (value.expiresAt - value.issuedAt > MAX_DIRECTORY_LIFETIME_SECONDS) {
     throw new EncodingError('directory validity window is too long');
@@ -516,4 +539,98 @@ export function sameRelayKey(a: string | Uint8Array, b: string | Uint8Array): bo
   } catch {
     return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Service-node relay binding (service node → clients, via the registry)
+// ---------------------------------------------------------------------------
+
+const BINDING_CONTEXT = 'tnp-service-relay-binding-v1';
+
+/** A client accepts a binding at most this old (seconds). Nodes re-sign every heartbeat. */
+export const MAX_RELAY_BINDING_AGE_SECONDS = 3600;
+
+/** Wire form, as the registry stores and serves it. The name is never on the wire. */
+export interface ServiceRelayBinding {
+  endpoint: string;
+  /** Canonical base64 of the relay's 32-byte key. */
+  relayKey: string;
+  issuedAt: number;
+  /** Canonical base64 of the node key's signature. */
+  signature: string;
+}
+
+function encodeBinding(
+  name: string,
+  binding: { endpoint: string; relayKey: string | Uint8Array; issuedAt: number },
+): Uint8Array {
+  if (!isValidScope(name)) throw new EncodingError('name is not a canonical name');
+  parseEndpoint(binding.endpoint);
+  return new CanonicalWriter()
+    .string(BINDING_CONTEXT)
+    .string(name)
+    .string(binding.endpoint)
+    .fixed(parsePublicKey(binding.relayKey), PUBLIC_KEY_LENGTH)
+    .uint(binding.issuedAt, 'issuedAt')
+    .finish();
+}
+
+/** Sign "`name`'s node is attached to `endpoint` (`relayKey`)" with the node key. */
+export function signServiceRelayBinding(
+  name: string,
+  binding: { endpoint: string; relayKey: Uint8Array; issuedAt: number },
+  nodeKey: { publicKey: Uint8Array; secretKey: Uint8Array },
+): ServiceRelayBinding {
+  const bytes = encodeBinding(name, binding);
+  assertSecretMatches(nodeKey.secretKey, nodeKey.publicKey);
+  return {
+    endpoint: binding.endpoint,
+    relayKey: encodeBase64(binding.relayKey),
+    issuedAt: binding.issuedAt,
+    signature: encodeBase64(nacl.sign.detached(bytes, nodeKey.secretKey)),
+  };
+}
+
+export type BindingVerifyResult =
+  | { ok: true; endpoint: string; relayKey: Uint8Array; issuedAt: number }
+  | { ok: false; reason: 'malformed' | 'bad-signature' | 'stale' | 'not-yet-valid' };
+
+/**
+ * Verify a binding for `name` against the node key a VERIFIED chain
+ * authorized. Never throws on remote input.
+ */
+export function verifyServiceRelayBinding(
+  name: string,
+  value: unknown,
+  nodeKey: Uint8Array,
+  now: number,
+): BindingVerifyResult {
+  let bytes: Uint8Array;
+  let sig: Uint8Array;
+  let b: ServiceRelayBinding;
+  try {
+    if (!isObject(value)) throw new EncodingError('binding must be an object');
+    for (const field of Object.keys(value)) {
+      if (!['endpoint', 'relayKey', 'issuedAt', 'signature'].includes(field)) {
+        throw new EncodingError('binding has an unexpected field');
+      }
+    }
+    b = value as unknown as ServiceRelayBinding;
+    assertUint(b.issuedAt, 'issuedAt');
+    bytes = encodeBinding(name, b);
+    sig = decodeBase64Strict(b.signature, SIGNATURE_LENGTH);
+  } catch {
+    return { ok: false, reason: 'malformed' };
+  }
+  if (!nacl.sign.detached.verify(bytes, sig, nodeKey))
+    return { ok: false, reason: 'bad-signature' };
+  if (b.issuedAt > now + MAX_DIRECTORY_CLOCK_SKEW_SECONDS)
+    return { ok: false, reason: 'not-yet-valid' };
+  if (now - b.issuedAt > MAX_RELAY_BINDING_AGE_SECONDS) return { ok: false, reason: 'stale' };
+  return {
+    ok: true,
+    endpoint: b.endpoint,
+    relayKey: parsePublicKey(b.relayKey),
+    issuedAt: b.issuedAt,
+  };
 }

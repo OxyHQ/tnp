@@ -259,9 +259,68 @@ describe('relay key proofs', () => {
     location: 'eu-west',
   };
 
-  test('a registration carrying a valid proof is accepted', async () => {
+  /** POST to a router built with `liveCheck` (and Oxy relays), past the auth stub. */
+  async function postTo(
+    liveCheck: (endpoint: string, publicKey: string) => Promise<boolean>,
+    path: string,
+    body: unknown,
+    oxyRelays: Array<{ endpoint: string; relayKey: string; region: string }> = [],
+  ): Promise<{ status: number; error?: string; checked: string[] }> {
+    const checked: string[] = [];
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      (req as OxyAuthRequest).userId = 'oxy-user-under-test';
+      next();
+    });
+    app.use(
+      '/relays',
+      createRelaysRouter(new Set(), { signer: null, oxyRelays }, async (endpoint, key) => {
+        checked.push(endpoint);
+        return liveCheck(endpoint, key);
+      }),
+    );
+    const listening = await new Promise<Server>((resolve) => {
+      const s = app.listen(0, () => resolve(s));
+    });
+    const address = listening.address();
+    if (address === null || typeof address === 'string') throw new Error('no TCP port');
+    const logged = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await fetch(`http://127.0.0.1:${address.port}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      return { status: res.status, error: payload.error, checked };
+    } finally {
+      logged.mockRestore();
+      await new Promise<void>((resolve) => listening.close(() => resolve()));
+    }
+  }
+
+  test('a registration carrying a valid proof is accepted once the registry has checked the endpoint itself', async () => {
     const request: RegisterRelayRequest = { ...registration, proof: proofFor('register') };
-    expect(await postPastValidation('/relays/register', request)).toBe(REACHED_HANDLER);
+    const ok = await postTo(async () => true, '/relays/register', request);
+    expect(ok.status).toBe(REACHED_HANDLER);
+    expect(ok.checked).toEqual([RELAY_ENDPOINT]);
+    // The endpoint not proving the key itself is a refusal, before any query.
+    const refused = await postTo(async () => false, '/relays/register', request);
+    expect(refused.status).toBe(400);
+    expect(refused.error).toContain('did not prove publicKey');
+  });
+
+  test("an Oxy relay's endpoint can never be registered as a community relay", async () => {
+    const request: RegisterRelayRequest = { ...registration, proof: proofFor('register') };
+    const res = await postTo(async () => true, '/relays/register', request, [
+      { endpoint: RELAY_ENDPOINT, relayKey: registration.publicKey, region: '' },
+    ]);
+    expect(res).toEqual({
+      status: 403,
+      error: 'This endpoint is reserved for an Oxy-operated relay',
+      checked: [],
+    });
   });
 
   test('a proof that does not verify is refused before any query', async () => {

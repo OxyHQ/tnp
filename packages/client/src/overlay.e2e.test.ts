@@ -166,7 +166,7 @@ describe('circuit-slot exhaustion', () => {
     const attacker = new TunnelManager({
       pins: h.pins,
       resolveOverlay: async () => h.overlay(),
-      relayKeys: directoryLookup(h.relayKeys),
+      directory: directoryLookup(h.relayKeys, h.oxyRelays),
       headers: { 'x-forwarded-for': '203.0.113.66' },
     });
     try {

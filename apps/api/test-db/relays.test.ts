@@ -50,7 +50,7 @@ async function live(endpoint: string, operatorUserId: string) {
     oxyOperators: OXY,
   });
   await recordRelayHeartbeat(t.db, { endpoint, operatorUserId });
-  return registration;
+  return registration.status === 'ok' ? registration.registration : null;
 }
 
 describe('operator', () => {
@@ -104,7 +104,39 @@ describe('operator', () => {
         operatorUserId: 'oxy-staff',
         oxyOperators: OXY,
       }),
-    ).toBeNull();
+    ).toEqual({ status: 'taken' });
+  });
+
+  test('an account may hold at most MAX_RELAYS_PER_ACCOUNT relays; re-registering one is not a new one', async () => {
+    for (const n of [1, 2, 3]) await live(`wss://r${n}.example.test`, 'squatter');
+    expect(
+      await registerRelay(t.db, {
+        request: request('wss://r4.example.test'),
+        operatorUserId: 'squatter',
+        oxyOperators: OXY,
+      }),
+    ).toEqual({ status: 'cap' });
+    expect(
+      (
+        await registerRelay(t.db, {
+          request: request('wss://r2.example.test'),
+          operatorUserId: 'squatter',
+          oxyOperators: OXY,
+        })
+      ).status,
+    ).toBe('ok');
+    // Concurrent registrations cannot all slip under the cap.
+    await t.db.delete(relays);
+    const results = await Promise.all(
+      [1, 2, 3, 4, 5, 6].map((n) =>
+        registerRelay(t.db, {
+          request: request(`wss://c${n}.example.test`),
+          operatorUserId: 'racer',
+          oxyOperators: OXY,
+        }),
+      ),
+    );
+    expect(results.filter((r) => r.status === 'ok')).toHaveLength(3);
   });
 });
 
@@ -182,6 +214,7 @@ describe('key proofs and the signed directory', () => {
       operatorUserId,
       oxyOperators: OXY,
       keyProven: true,
+      liveChecked: true,
     });
     return recordRelayHeartbeat(t.db, {
       endpoint,
@@ -198,6 +231,86 @@ describe('key proofs and the signed directory', () => {
     expect(listed[0]?.publicKey).toBe(publicKey);
     // The legacy listing still has both.
     expect(await listRelayDirectory(t.db, { oxyOperators: OXY, operator: null })).toHaveLength(2);
+  });
+
+  test("a key proof without the registry's own live check does not list a relay", async () => {
+    await registerRelay(t.db, {
+      request: { ...request('wss://squat.example.test'), publicKey },
+      operatorUserId: 'a',
+      oxyOperators: OXY,
+      keyProven: true,
+      liveChecked: false,
+    });
+    await recordRelayHeartbeat(t.db, {
+      endpoint: 'wss://squat.example.test',
+      operatorUserId: 'a',
+      proof: proof('heartbeat', 'wss://squat.example.test'),
+      liveCheck: async () => false,
+    });
+    expect(await listProvenCommunityRelays(t.db)).toEqual([]);
+    // A heartbeat whose live check passes lists it.
+    const checked: string[] = [];
+    await recordRelayHeartbeat(t.db, {
+      endpoint: 'wss://squat.example.test',
+      operatorUserId: 'a',
+      proof: proof('heartbeat', 'wss://squat.example.test'),
+      liveCheck: async (endpoint, key) => {
+        checked.push(`${endpoint} ${key}`);
+        return true;
+      },
+    });
+    expect(checked).toEqual([`wss://squat.example.test ${publicKey}`]);
+    expect((await listProvenCommunityRelays(t.db)).map((r) => r.endpoint)).toEqual([
+      'wss://squat.example.test',
+    ]);
+    // And it is not re-checked on every heartbeat.
+    await recordRelayHeartbeat(t.db, {
+      endpoint: 'wss://squat.example.test',
+      operatorUserId: 'a',
+      proof: proof('heartbeat', 'wss://squat.example.test'),
+      liveCheck: async () => {
+        throw new Error('must not re-check yet');
+      },
+    });
+    // A live check older than its validity drops it again.
+    await t.db
+      .update(relays)
+      .set({ liveCheckedAt: sql`now() - interval '2 hours'` })
+      .where(eq(relays.endpoint, 'wss://squat.example.test'));
+    expect(await listProvenCommunityRelays(t.db)).toEqual([]);
+  });
+
+  test('a heartbeat does not mark proven a key the row no longer holds (re-registration race)', async () => {
+    await proven('wss://race.example.test', 'a');
+    // Both marks old, so the heartbeat re-checks (and the check is where the
+    // test lands the concurrent re-registration).
+    await t.db
+      .update(relays)
+      .set({
+        keyProvenAt: sql`now() - interval '1 hour'`,
+        liveCheckedAt: sql`now() - interval '1 hour'`,
+      })
+      .where(eq(relays.endpoint, 'wss://race.example.test'));
+    const other = encodeBase64(generateSigningKeyPair().publicKey);
+    // The re-registration lands between the heartbeat's read and its write.
+    const outcome = await recordRelayHeartbeat(t.db, {
+      endpoint: 'wss://race.example.test',
+      operatorUserId: 'a',
+      proof: proof('heartbeat', 'wss://race.example.test'),
+      liveCheck: async () => {
+        await t.db
+          .update(relays)
+          .set({ publicKey: other })
+          .where(eq(relays.endpoint, 'wss://race.example.test'));
+        return true;
+      },
+    });
+    expect(outcome).toBe('not-found');
+    const [row] = await t.db
+      .select({ provenOld: sql<boolean>`${relays.keyProvenAt} < now() - interval '30 minutes'` })
+      .from(relays)
+      .where(eq(relays.endpoint, 'wss://race.example.test'));
+    expect(row?.provenOld).toBe(true);
   });
 
   test('a heartbeat proof that does not verify against the registered key changes nothing', async () => {

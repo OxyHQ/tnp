@@ -52,8 +52,15 @@ these specifics:
   `purpose ‖ endpoint ‖ key ‖ issuedAt` (`@tnp/crypto` `signRelayRegistryProof`),
   sent with every registration and heartbeat and accepted within ±5 min of
   the registry's clock. A registry relay is always `community` in the signed
-  directory; `oxy` comes only from the API's configuration. Oxy does not yet
-  verify reachability (step 4's "verifies reachability" is open).
+  directory; `oxy` comes only from the API's configuration, and an Oxy
+  endpoint can never be registered by an account.
+- **The registry verifies reachability itself** (`registry/relayLiveCheck.ts`):
+  before listing, the API connects to the endpoint and makes the relay prove
+  the registered key exactly as a client would (transport.md §6.2) — `wss://`
+  only, the host and every address it resolves to public, 5 s timeout. It
+  re-checks at most every 15 min on heartbeats; a relay whose last live check
+  is over an hour old leaves the directory. So a key proof alone cannot list
+  an endpoint someone else answers. An account may hold at most 3 relays.
 - **Relays prove their key to clients and service nodes** on every connection
   (transport.md §6.2). A client uses a relay only if the signed directory
   lists its endpoint, and only after the relay has signed the client's nonce
@@ -210,7 +217,10 @@ publisher never registers task definitions, rolls out or scales anything:
 **serving traffic is activated only by an oxy-infra change** that pins a
 reviewed digest, sets `RELAY_ENDPOINT` and `RELAY_KEY_SEED`, lists the relay
 in the API's `TNP_OXY_RELAYS`, gives the API `TNP_DIRECTORY_SIGNING_SEED`, and
-scales the service up.
+scales the service up. No load-balancer idle-timeout change is needed: the
+relay pings every connection every 25 s (`RELAY_PING_INTERVAL_MS`), under the
+shared ALB's 60 s and Cloudflare's 100 s idle timeouts. One task per endpoint:
+a relay's service-node registrations are per process.
 
 The blockers that kept it parked, each closed with tests:
 
@@ -235,24 +245,50 @@ The blockers that kept it parked, each closed with tests:
 
 - A client (or service node) uses a relay only if a directory signed by a
   pinned key (`RELAY_DIRECTORY_SIGNING_KEYS_BASE64` in `@tnp/shared-types`)
-  lists its endpoint, the directory is unexpired (24 h validity), and its
-  serial is no lower than the highest that device has accepted (persisted;
-  rollback refused). There is no unsigned fallback: a fetch that fails or is
-  refused uses only a previously verified, still-valid cached copy.
+  lists its endpoint, the directory is unexpired (6 h validity), its serial
+  is no greater than its own date and no lower than the highest that device
+  has accepted from the same signing key (persisted under a lock; an
+  unreadable state file is a refusal, never a reset). There is no unsigned
+  fallback: a fetch that fails or is refused uses only a previously verified,
+  still-valid cached copy. `tnp serve` and `tnp connect` re-read the
+  directory every 10 minutes and leave relays it no longer lists; with no
+  verified directory at all they use no relay.
 - The relay answering at that endpoint proves, per connection, that it holds
   the listed key. Forged, replayed and cross-endpoint proofs are refused
-  (`packages/client/src/relay-identity.test.ts`).
-- So network tampering (TLS interception, a hostile edge), registry/database
-  tampering (a forged row is not a signed entry) and stale or rolled-back
-  directories cannot steer a client onto a relay the directory signer did not
-  list.
+  (`packages/client/src/relay-identity.test.ts`); a service node treats any
+  frame before that proof — a spoofed refusal included — as a failed proof
+  and fails over.
+- **A client reaches a name only through the relay that name's service node
+  chose.** The node signs `name ‖ relay endpoint ‖ relay key ‖ issuedAt` with
+  its node key (whose authority the client verifies through the grant chain
+  rooted at the pinned domain key) and republishes it on every heartbeat; the
+  registry serves it in the resolve record. The client requires the resolve
+  record's relay to equal the signed one, with the directory's key for it, and
+  the statement to be at most an hour old
+  (`packages/client/src/relay-binding.test.ts`). For a node that publishes no
+  binding (released before it), only `oxy`-operated relays are used.
+- So network tampering, registry/database tampering and stale or rolled-back
+  directories cannot steer a client onto a relay that is not listed, and
+  registry tampering cannot steer it onto a listed relay its service node did
+  not choose (beyond a binding up to an hour old, i.e. a relay the node chose
+  recently).
 
 **What they do not guarantee:**
 
 - **The API holds the directory signing key** (`TNP_DIRECTORY_SIGNING_SEED`,
   SSM) and signs at request time. A compromised API, or anyone with that SSM
   parameter, can sign a directory listing any relay. Removing that needs
-  offline signing or a transparency log (discovery.md §3, open question).
+  offline signing or a transparency log (discovery.md §3, open question). Such
+  a signer can raise a client's rollback mark at most to its clock plus 10
+  minutes (serial ≤ issuedAt), never lock clients out.
+- **Community listing is open to any Oxy account** that controls a public
+  `wss://` endpoint and its key (up to 3 relays per account). Being listed
+  does not make a relay used: clients use a community relay for a name only
+  when that name's node signed it, and `tnp serve` never picks one on its own.
+- **Blocking the API** leaves clients on their cached directory for at most
+  its remaining validity (≤ 6 h), after which no relay is used.
+- The live check cannot fence DNS rebinding between its lookup and its
+  connection; the `wss://` certificate check is what makes that useless.
 - A relay's identity proof is not bound to the TLS channel: a party that can
   terminate TLS for the endpoint and forward to the genuine relay passes. It
   then sees what a network observer sees — circuits are end-to-end encrypted.
@@ -261,9 +297,10 @@ The blockers that kept it parked, each closed with tests:
   (transport.md §9.1); a listed relay, honest or not, reads no payload. What a
   relay sees is in transport.md §11.5 — a malicious *listed* relay can still
   observe and drop.
-- A `tnp serve --relay <url>` the directory does not list is the operator's
-  explicit choice, used with a loud warning and unauthenticated unless
-  `--relay-key` is given; clients refuse to reach a service through it.
+- A `tnp serve --relay <url>` the directory does not list is refused unless
+  the operator passes `--relay-key` (the relay must then prove that key) or
+  `--allow-unverified-relay` (whoever answers is accepted, with a loud
+  warning). Clients refuse to reach a service through an unlisted relay.
 - Directory key rotation is by pinning two keys (current and next) in a
   client release before switching the seed (`relay-directory.ts` in
   `@tnp/shared-types`); there is no in-band rotation statement yet.

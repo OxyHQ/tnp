@@ -206,8 +206,8 @@ export interface RelayDirectoryServiceOptions {
 /**
  * Signs the directory at request time, caching each document briefly.
  *
- * The serial is the signing time in Unix seconds, never below the previous
- * one this process signed. Several API tasks sign independently; their
+ * The serial is the signing time in Unix seconds (and equals `issuedAt`),
+ * never below the previous one this process signed. Several API tasks sign independently; their
  * clocks agree to well under the cache window, and a client that receives a
  * slightly older serial than one it already holds keeps the one it holds
  * (packages/client/src/relay-directory.ts) rather than failing.
@@ -244,8 +244,10 @@ export class RelayDirectoryService {
       this.options.onError?.(err);
     }
     const nowMs = this.clock();
-    const issuedAt = Math.floor(nowMs / 1000);
-    const serial = Math.max(issuedAt, this.lastSerial);
+    // serial == issuedAt (the verifier requires serial <= issuedAt), never
+    // below what this process signed before, even if the clock steps back.
+    const issuedAt = Math.max(Math.floor(nowMs / 1000), this.lastSerial);
+    const serial = issuedAt;
     this.lastSerial = serial;
     const document = this.options.signer.sign({
       v: 1,

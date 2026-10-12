@@ -1,6 +1,7 @@
 export type { ParseResult } from './parse.js';
 
 export {
+  isNonPublicAddress,
   normalizeRelayEndpoint,
   parseRegisterRelayRequest,
   parseRelayHeartbeatRequest,
@@ -13,6 +14,7 @@ export {
   type RelayHeartbeatRequest,
   type RelayHeartbeatResponse,
   type RelayKeyProof,
+  MAX_RELAYS_PER_ACCOUNT,
   RELAY_KEY_PROOF_WINDOW_SECONDS,
   type RelayOperator,
   type RelayRegistration,

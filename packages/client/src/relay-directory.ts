@@ -4,26 +4,28 @@
  * cached on disk with its validity window, and never replaced by an older one.
  *
  * - A document is used only after `verifySignedRelayDirectory` accepts it:
- *   pinned signature, not expired, endpoints canonical and public, and a
- *   serial no lower than the highest this device has accepted (rollback).
- * - The highest serial and the last verified document are persisted, so the
- *   rollback mark survives restarts and the cached copy is usable while the
- *   API is unreachable — until it expires.
+ *   pinned signature, not expired, endpoints canonical and public, serial no
+ *   greater than its own `issuedAt` (so a signer cannot raise the mark beyond
+ *   the clock), and no lower than the highest this device has accepted FROM
+ *   THE SAME SIGNING KEY (rollback). Marks are kept per key, so a rotation to
+ *   a new key is not held hostage by anything the old key ever signed.
+ * - The marks and the last verified document are persisted under a lock
+ *   (re-read, merge, atomic write), so concurrent processes never lower each
+ *   other's marks. A state file that exists but cannot be read is a refusal,
+ *   never a silent reset of the marks.
  * - When a fetch fails or is refused, the cached copy is used if it still
  *   verifies; it is verified data, so this is not an unverified fallback.
  *   Otherwise there is no directory, and no relay is selectable.
- *
- * A fetched document whose serial is lower than the cached one (another API
- * task signed it a moment earlier, or a cache served it) is "rolled back":
- * the cached one, which is newer, is kept.
  */
 
+import { lstatSync } from 'node:fs';
 import { join } from 'node:path';
-import type { SignedRelayDirectory, VerifiedRelayDirectory } from '@tnp/crypto';
+import { type SignedRelayDirectory, toHex, type VerifiedRelayDirectory } from '@tnp/crypto';
 import {
   describeDirectoryRejection,
   normalizeRelayEndpoint,
   RelayCapability,
+  type RelayDirectoryFailure,
   relayDirectorySigningKeys,
   verifySignedRelayDirectory,
 } from '@tnp/shared-types';
@@ -40,33 +42,44 @@ export class RelayDirectoryError extends Error {
 }
 
 export interface DirectoryState {
-  /** Highest serial ever accepted on this device. */
-  highestSerial: number;
+  /** Highest serial accepted on this device, per signing key (hex). */
+  marks: Record<string, number>;
   /** The last verified document, for use while the API is unreachable. */
   document: SignedRelayDirectory | null;
 }
 
 export interface DirectoryStateStore {
+  /** The state, null when there is none yet. THROWS when it exists but is unreadable. */
   load(): DirectoryState | null;
-  save(state: DirectoryState): void;
+  /** Merge `state` in: marks only ever rise; the newer document wins. */
+  merge(state: DirectoryState): void;
+}
+
+function mergeStates(current: DirectoryState | null, next: DirectoryState): DirectoryState {
+  const marks: Record<string, number> = { ...(current?.marks ?? {}) };
+  for (const [key, serial] of Object.entries(next.marks)) {
+    marks[key] = Math.max(marks[key] ?? 0, serial);
+  }
+  const a = current?.document ?? null;
+  const b = next.document;
+  const document = a && (!b || a.issuedAt > b.issuedAt) ? a : b;
+  return { marks, document };
 }
 
 /** Process-local state (tests, and callers that must not touch disk). */
 export class MemoryDirectoryStateStore implements DirectoryStateStore {
   private state: DirectoryState | null = null;
   load(): DirectoryState | null {
-    return this.state ? { ...this.state } : null;
+    return this.state ? { marks: { ...this.state.marks }, document: this.state.document } : null;
   }
-  save(state: DirectoryState): void {
-    this.state = { ...state };
+  merge(state: DirectoryState): void {
+    this.state = mergeStates(this.state, state);
   }
 }
 
-/**
- * `<overlay dir>/relay-directory.json`, 0600, written atomically. Several
- * processes may share it; each save re-reads and keeps the higher serial, so
- * one process cannot lower another's mark.
- */
+const HEX_KEY = /^[0-9a-f]{64}$/;
+
+/** `<overlay dir>/relay-directory.json`, 0600, changed only under its lock. */
 export class FileDirectoryStateStore implements DirectoryStateStore {
   readonly path: string;
 
@@ -74,37 +87,58 @@ export class FileDirectoryStateStore implements DirectoryStateStore {
     this.path = join(store.root, 'relay-directory.json');
   }
 
-  load(): DirectoryState | null {
-    let raw: string | null;
-    try {
-      raw = this.store.readPrivate(this.path);
-    } catch {
-      return null;
-    }
-    if (raw === null) return null;
-    try {
-      const value = JSON.parse(raw) as Partial<DirectoryState> & { version?: unknown };
-      if (value.version !== 1 || !Number.isSafeInteger(value.highestSerial)) return null;
-      return {
-        highestSerial: value.highestSerial as number,
-        document: (value.document as SignedRelayDirectory | null) ?? null,
-      };
-    } catch {
-      return null;
-    }
+  private corrupt(why: string): Error {
+    return new RelayDirectoryError(
+      `the relay directory state ${this.path} ${why}; refusing to continue without its rollback ` +
+        'marks. Check the file (someone may have replaced it), then delete it to start over.',
+    );
   }
 
-  save(state: DirectoryState): void {
-    const current = this.load();
-    const highestSerial = Math.max(state.highestSerial, current?.highestSerial ?? 0);
-    const document =
-      current?.document && current.document.serial > (state.document?.serial ?? 0)
-        ? current.document
-        : state.document;
-    this.store.writePrivate(
-      this.path,
-      `${JSON.stringify({ version: 1, highestSerial, document })}\n`,
-    );
+  load(): DirectoryState | null {
+    let isFile: boolean;
+    try {
+      isFile = lstatSync(this.path).isFile();
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw this.corrupt('cannot be read');
+    }
+    if (!isFile) throw this.corrupt('is not a regular file');
+    let value: unknown;
+    try {
+      value = JSON.parse(this.store.readPrivate(this.path) ?? '');
+    } catch {
+      throw this.corrupt('is corrupt');
+    }
+    const v = value as { version?: unknown; marks?: unknown; document?: unknown };
+    if (
+      typeof v !== 'object' ||
+      v === null ||
+      v.version !== 2 ||
+      typeof v.marks !== 'object' ||
+      v.marks === null ||
+      Array.isArray(v.marks)
+    ) {
+      throw this.corrupt('has an unknown format');
+    }
+    const marks: Record<string, number> = {};
+    for (const [key, serial] of Object.entries(v.marks)) {
+      if (!HEX_KEY.test(key) || !Number.isSafeInteger(serial) || (serial as number) < 0) {
+        throw this.corrupt('has a malformed mark');
+      }
+      marks[key] = serial as number;
+    }
+    const document = (v.document ?? null) as SignedRelayDirectory | null;
+    if (document !== null && (typeof document !== 'object' || Array.isArray(document))) {
+      throw this.corrupt('has a malformed document');
+    }
+    return { marks, document };
+  }
+
+  merge(state: DirectoryState): void {
+    this.store.withLock(this.path, () => {
+      const next = mergeStates(this.load(), state);
+      this.store.writePrivate(this.path, `${JSON.stringify({ version: 2, ...next })}\n`);
+    });
   }
 }
 
@@ -125,6 +159,16 @@ export interface RelayDirectoryClientOptions {
 
 const DEFAULT_REFRESH_SECONDS = 10 * 60;
 
+/** What the directory says about one endpoint. */
+export interface DirectoryRelayEntry {
+  key: Uint8Array;
+  operator: 'oxy' | 'community';
+}
+
+type Verdict =
+  | { ok: true; directory: VerifiedRelayDirectory }
+  | { ok: false; reason: RelayDirectoryFailure };
+
 export class RelayDirectoryClient {
   private held: { directory: VerifiedRelayDirectory; fetchedAt: number } | null = null;
   private refreshing: Promise<VerifiedRelayDirectory> | null = null;
@@ -134,6 +178,11 @@ export class RelayDirectoryClient {
   constructor(private readonly options: RelayDirectoryClientOptions) {
     this.now = options.now ?? (() => Math.floor(Date.now() / 1000));
     this.log = options.log ?? ((m) => console.warn(`[tnp] ${m}`));
+  }
+
+  /** The directory client `tnp serve` and `tnp connect` use: the API, persisted per user. */
+  static forUser(fetchDocument: () => Promise<unknown>, store: OverlayStore): RelayDirectoryClient {
+    return new RelayDirectoryClient({ fetchDocument, store: new FileDirectoryStateStore(store) });
   }
 
   /** A verified, unexpired directory, or `RelayDirectoryError`. */
@@ -156,45 +205,64 @@ export class RelayDirectoryClient {
   }
 
   /**
-   * The key the directory lists for `endpoint` (a relay that accepts client
-   * circuits), or null when it is not listed. Throws `RelayDirectoryError`
-   * when there is no verified directory at all.
+   * What the directory lists for `endpoint` (a relay with `capability`), or
+   * null when it is not listed. Throws `RelayDirectoryError` when there is no
+   * verified directory at all.
    */
-  async relayKeyFor(
+  async entryFor(
     endpoint: string,
     capability: string = RelayCapability.TUNNEL,
-  ): Promise<Uint8Array | null> {
+  ): Promise<DirectoryRelayEntry | null> {
     const normalized = normalizeRelayEndpoint(endpoint);
     if (!normalized) return null;
     const directory = await this.get();
     const entry = directory.relays.find(
       (r) => r.endpoint === normalized && r.capabilities.includes(capability),
     );
-    return entry ? entry.key : null;
+    return entry ? { key: entry.key, operator: entry.operator } : null;
   }
 
-  private verify(body: unknown, minSerial: number) {
-    return verifySignedRelayDirectory(body, {
+  /** The listed key for `endpoint`, or null. See {@link entryFor}. */
+  async relayKeyFor(
+    endpoint: string,
+    capability: string = RelayCapability.TUNNEL,
+  ): Promise<Uint8Array | null> {
+    return (await this.entryFor(endpoint, capability))?.key ?? null;
+  }
+
+  private verify(body: unknown, marks: Record<string, number>): Verdict {
+    const result = verifySignedRelayDirectory(body, {
       now: this.now(),
-      minSerial,
       trustedKeys: this.options.trustedKeys ?? relayDirectorySigningKeys(),
       allowNonPublicEndpoints: this.options.allowNonPublicEndpoints,
     });
+    if (!result.ok) return result;
+    // Rollback is judged against what THIS key has signed before.
+    const mark = marks[toHex(result.directory.signedBy)] ?? 0;
+    if (result.directory.serial < mark) return { ok: false, reason: 'rolled-back' };
+    return result;
   }
 
   private async refresh(): Promise<VerifiedRelayDirectory> {
-    let state: DirectoryState | null = null;
+    let state: DirectoryState | null;
     try {
       state = this.options.store.load();
-    } catch {
-      state = null;
+    } catch (err) {
+      // Fail closed: an unreadable state file must not reset the marks to 0.
+      throw err instanceof RelayDirectoryError
+        ? err
+        : new RelayDirectoryError(`the relay directory state cannot be read: ${String(err)}`);
     }
-    const highest = Math.max(state?.highestSerial ?? 0, this.held?.directory.serial ?? 0);
+    const marks: Record<string, number> = { ...(state?.marks ?? {}) };
+    if (this.held) {
+      const key = toHex(this.held.directory.signedBy);
+      marks[key] = Math.max(marks[key] ?? 0, this.held.directory.serial);
+    }
 
     let problem: string;
     try {
       const body = await this.options.fetchDocument();
-      const result = this.verify(body, highest);
+      const result = this.verify(body, marks);
       if (result.ok) {
         this.accept(result.directory);
         return result.directory;
@@ -207,7 +275,7 @@ export class RelayDirectoryClient {
     // The newest verified document we hold, re-verified now (it may have expired).
     for (const cached of [this.held?.directory.document ?? null, state?.document ?? null]) {
       if (!cached) continue;
-      const result = this.verify(cached, highest);
+      const result = this.verify(cached, marks);
       if (result.ok) {
         this.log(
           `${problem}; using the cached signed directory (serial ${result.directory.serial})`,
@@ -219,15 +287,13 @@ export class RelayDirectoryClient {
     throw new RelayDirectoryError(`no verified relay directory: ${problem}`);
   }
 
-  /** The directory client `tnp serve` and `tnp connect` use: the API, persisted per user. */
-  static forUser(fetchDocument: () => Promise<unknown>, store: OverlayStore): RelayDirectoryClient {
-    return new RelayDirectoryClient({ fetchDocument, store: new FileDirectoryStateStore(store) });
-  }
-
   private accept(directory: VerifiedRelayDirectory): void {
     this.held = { directory, fetchedAt: this.now() };
     try {
-      this.options.store.save({ highestSerial: directory.serial, document: directory.document });
+      this.options.store.merge({
+        marks: { [toHex(directory.signedBy)]: directory.serial },
+        document: directory.document,
+      });
     } catch (err) {
       // Still usable now; only rollback protection across restarts is lost.
       this.log(

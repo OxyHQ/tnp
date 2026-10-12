@@ -44,10 +44,13 @@ import {
   type SessionCipher,
 } from '@tnp/protocol/v1';
 import {
+  bytesEqual,
   encodeBase64,
   type Grant,
   type KeyAgreementCertificate,
+  type ServiceRelayBinding,
   signServiceAuth,
+  signServiceRelayBinding,
 } from '@tnp/crypto';
 import { normalizeRelayEndpoint, type RegisterDomainKeyRequest } from '@tnp/shared-types';
 import type { TnpApiClient } from './api';
@@ -85,6 +88,22 @@ const DEFAULT_STREAM_IDLE_MS = 10 * 60_000;
 const OPEN_TIMEOUT_MS = 10_000;
 
 const nowSeconds = () => Math.floor(Date.now() / 1000);
+/** How often `tnp serve` re-reads the signed directory and drops delisted relays. */
+const REFRESH_RELAYS_INTERVAL_MS = 10 * 60_000;
+
+function normalizeCandidates(relays: readonly RelayCandidate[]): RelayCandidate[] {
+  return relays.map((relay) => {
+    const endpoint = normalizeRelayEndpoint(relay.endpoint);
+    if (!endpoint) throw new Error('relay endpoint must be a ws:// or wss:// URL');
+    return { endpoint, relayKey: relay.relayKey };
+  });
+}
+
+function sameCandidate(a: RelayCandidate, b: RelayCandidate): boolean {
+  if (a.endpoint !== b.endpoint) return false;
+  if (a.relayKey === null || b.relayKey === null) return a.relayKey === b.relayKey;
+  return bytesEqual(a.relayKey, b.relayKey);
+}
 
 // ---------------------------------------------------------------------------
 // The node itself, independent of the registry and the CLI (tests drive it)
@@ -110,8 +129,22 @@ export interface ServiceNodeOptions {
   chain: Grant[];
   /** Publish the current chain and certificate (the registry). Called at start and on every rotation. */
   publish?: (chain: Grant[], kaCert: KeyAgreementCertificate) => Promise<void>;
-  /** Liveness to the registry while attached to a relay; receives that relay's endpoint. */
-  heartbeat?: (relayEndpoint: string) => Promise<void>;
+  /**
+   * Liveness to the registry while attached to a relay: that relay's
+   * endpoint, and this node's freshly signed binding to it (null for an
+   * unverified `--allow-unverified-relay` relay, whose key the node does not
+   * know). Clients reach the name only through the relay the binding names.
+   */
+  heartbeat?: (relayEndpoint: string, binding: ServiceRelayBinding | null) => Promise<void>;
+  /**
+   * Re-select the relays from the signed directory (`tnp serve`), every
+   * `refreshIntervalMs`. The node switches to the new list and leaves a relay
+   * that is no longer in it. A throw means there is no verified directory any
+   * more: the node detaches until one is verified again. Absent for an
+   * explicit `--relay`.
+   */
+  refreshRelays?: () => Promise<RelayCandidate[]>;
+  refreshIntervalMs?: number;
   /** Called when the chain nears expiry; return a renewed chain, or null when it cannot be renewed here. */
   renewChain?: () => Grant[] | null;
   now?: () => number;
@@ -131,7 +164,7 @@ export class ServiceNode {
   private state: ServiceNodeState = 'connecting';
   private readonly circuits: CircuitTable<SecureCircuit>;
   private readonly keys: KeyAgreementKeys;
-  private readonly relays: RelayCandidate[];
+  private relays: RelayCandidate[];
   private relayIndex = 0;
   private identity: RelayIdentityCheck | null = null;
   private relayVerified = false;
@@ -141,6 +174,9 @@ export class ServiceNode {
   private servedOnConnection = false;
   /** The relay said another node serves the name; failing over would split it. */
   private conflict = false;
+  /** No verified directory lists a usable relay right now: stay detached. */
+  private paused = false;
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private chain: Grant[];
   private stopped = false;
   private reconnectDelay = RECONNECT_MIN_MS;
@@ -157,11 +193,7 @@ export class ServiceNode {
 
   constructor(private readonly options: ServiceNodeOptions) {
     if (options.relays.length === 0) throw new Error('at least one relay is required');
-    this.relays = options.relays.map((relay) => {
-      const endpoint = normalizeRelayEndpoint(relay.endpoint);
-      if (!endpoint) throw new Error('relay endpoint must be a ws:// or wss:// URL');
-      return { endpoint, relayKey: relay.relayKey };
-    });
+    this.relays = normalizeCandidates(options.relays);
     this.now = options.now ?? nowSeconds;
     this.log = options.log ?? ((m) => console.log(`[service-node] ${m}`));
     this.chain = options.chain;
@@ -216,7 +248,61 @@ export class ServiceNode {
       Math.max(50, Math.min(30_000, Math.floor(idleMs / 2))),
     );
     this.idleTimer.unref?.();
+    if (this.options.refreshRelays) {
+      this.refreshTimer = setInterval(
+        () => void this.refreshRelays(),
+        this.options.refreshIntervalMs ?? REFRESH_RELAYS_INTERVAL_MS,
+      );
+      this.refreshTimer.unref?.();
+    }
     this.connect();
+  }
+
+  /**
+   * Re-select relays from the signed directory. A relay the directory no
+   * longer lists (or lists with another key) is left at once; no verified
+   * directory at all means no relay may be used, so the node detaches.
+   */
+  private async refreshRelays(): Promise<void> {
+    const refresh = this.options.refreshRelays;
+    if (!refresh || this.stopped) return;
+    let next: RelayCandidate[];
+    try {
+      next = normalizeCandidates(await refresh());
+    } catch (err) {
+      if (!this.paused) {
+        this.log(
+          `no verified relay directory (${err instanceof Error ? err.message : 'error'}); ` +
+            'detaching until one is verified again',
+        );
+      }
+      next = [];
+    }
+    if (this.stopped) return;
+    if (next.length === 0) {
+      this.paused = true;
+      this.socket?.close(1000, 'no listed relay');
+      return;
+    }
+    const current = this.relays[this.relayIndex];
+    const stillListed = next.findIndex((r) => sameCandidate(r, current));
+    this.relays = next;
+    const wasPaused = this.paused;
+    this.paused = false;
+    if (stillListed >= 0) {
+      this.relayIndex = stillListed;
+      if (wasPaused && !this.socket && !this.reconnectTimer) this.connect();
+      return;
+    }
+    this.log(`relay ${current.endpoint} is no longer in the signed directory; leaving it`);
+    this.relayIndex = 0;
+    this.nextDelayOverride = RECONNECT_MIN_MS / 4;
+    if (this.socket) {
+      this.servedOnConnection = true; // retry index 0 rather than advancing past it
+      this.socket.close(1000, 'relay delisted');
+    } else if (!this.reconnectTimer) {
+      this.connect();
+    }
   }
 
   /** Resolves once the relay has accepted this node. */
@@ -230,6 +316,7 @@ export class ServiceNode {
     this.state = 'stopped';
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
     if (this.maintenanceTimer) clearInterval(this.maintenanceTimer);
     if (this.idleTimer) clearInterval(this.idleTimer);
     for (const circuit of this.circuits.drain()) circuit.abort();
@@ -260,7 +347,8 @@ export class ServiceNode {
   }
 
   private connect(): void {
-    if (this.stopped) return;
+    this.reconnectTimer = null;
+    if (this.stopped || this.paused) return;
     this.state = 'connecting';
     const relay = this.relays[this.relayIndex];
     this.identity = relay.relayKey ? new RelayIdentityCheck(relay.endpoint, relay.relayKey) : null;
@@ -314,6 +402,7 @@ export class ServiceNode {
   private onRelayClosed(socket: FrameSocket | undefined): void {
     if (socket && this.socket !== socket) return; // an older connection
     this.socket = null;
+    if (!this.stopped) this.state = 'connecting';
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = null;
     for (const circuit of this.circuits.drain()) circuit.remoteDestroyed();
@@ -330,7 +419,7 @@ export class ServiceNode {
   }
 
   private scheduleReconnect(): void {
-    if (this.stopped) return;
+    if (this.stopped || this.paused) return;
     this.state = 'connecting';
     const base = this.nextDelayOverride ?? this.reconnectDelay;
     this.nextDelayOverride = null;
@@ -349,6 +438,23 @@ export class ServiceNode {
       this.send(encodeFrame({ type: FrameType.PONG, payload: frame.payload }));
       return;
     }
+    if (this.state === 'authenticating' && !this.relayVerified) {
+      // Until the relay has proved its directory key, it is nobody: its
+      // challenge (HELLO) is stored and its proof (HELLO_ACK) checked, and
+      // ANYTHING else — an ERROR claiming the name is taken included — is a
+      // failed proof. Otherwise an impostor could keep this node off every
+      // other relay by answering "ALREADY_REGISTERED".
+      if (frame.type === FrameType.HELLO && frame.circuitId === 0n) {
+        this.storeChallenge(frame);
+        return;
+      }
+      if (frame.type === FrameType.HELLO_ACK && this.identity) {
+        this.verifyRelay(frame);
+        return;
+      }
+      this.relayRefused('it sent something else before proving its identity');
+      return;
+    }
     if (frame.type === FrameType.ERROR) {
       let code = 0;
       try {
@@ -357,7 +463,8 @@ export class ServiceNode {
         // unreadable: treat as generic
       }
       this.lastRefusal = ERROR_CODE_NAMES[code] ?? 'ERROR';
-      if (code === ErrorCode.ALREADY_REGISTERED) {
+      // Only an answer to our AUTH can say the name is served by another node.
+      if (code === ErrorCode.ALREADY_REGISTERED && this.authSent && this.state !== 'serving') {
         this.log(
           `the relay is already serving ${this.options.name} from a DIFFERENT node key; ` +
             'it will not replace that node. Stop the other node, or use another relay.',
@@ -387,27 +494,41 @@ export class ServiceNode {
     }
   }
 
-  private onAuthFrame(frame: Frame): void {
-    if (frame.type === FrameType.HELLO) {
-      if (this.challenge) return;
+  private storeChallenge(frame: Frame): void {
+    if (this.challenge) return;
+    try {
       this.challenge = decodeServiceHello(frame.payload);
-      this.maybeAuthenticate();
+    } catch {
+      this.relayRefused('it sent a malformed challenge');
       return;
     }
-    if (frame.type === FrameType.HELLO_ACK && this.identity && !this.relayVerified) {
-      try {
-        this.identity.verify(frame);
-      } catch (err) {
-        this.lastRefusal = 'RELAY_IDENTITY';
-        this.log(
-          `REFUSING relay ${this.endpoint}: ${err instanceof Error ? err.message : 'identity not proven'}. ` +
-            'It is not the relay the signed directory lists; this node did not authenticate to it.',
-        );
-        this.socket?.close(1008, 'relay identity not proven');
-        return;
-      }
-      this.relayVerified = true;
-      this.maybeAuthenticate();
+    this.maybeAuthenticate();
+  }
+
+  private verifyRelay(frame: Frame): void {
+    try {
+      this.identity?.verify(frame);
+    } catch (err) {
+      this.relayRefused(err instanceof Error ? err.message : 'identity not proven');
+      return;
+    }
+    this.relayVerified = true;
+    this.maybeAuthenticate();
+  }
+
+  /** The relay failed its identity proof: close, and fail over (onRelayClosed). */
+  private relayRefused(why: string): void {
+    this.lastRefusal = 'RELAY_IDENTITY';
+    this.log(
+      `REFUSING relay ${this.endpoint}: ${why}. It is not the relay the signed directory ` +
+        'lists; this node did not authenticate to it.',
+    );
+    this.socket?.close(1008, 'relay identity not proven');
+  }
+
+  private onAuthFrame(frame: Frame): void {
+    if (frame.type === FrameType.HELLO && frame.circuitId === 0n) {
+      this.storeChallenge(frame);
       return;
     }
     if (frame.type === FrameType.AUTH_OK) {
@@ -419,15 +540,28 @@ export class ServiceNode {
       this.log(`serving ${this.options.name} via ${this.endpoint}`);
       for (const resolve of this.servingWaiters.splice(0)) resolve();
       if (this.options.heartbeat) {
-        const endpoint = this.endpoint;
+        const relay = this.relays[this.relayIndex];
         const beat = () =>
-          this.options.heartbeat?.(endpoint).catch((err: unknown) => {
+          this.options.heartbeat?.(relay.endpoint, this.bindingFor(relay)).catch((err: unknown) => {
             this.log(`heartbeat failed: ${err instanceof Error ? err.message : 'error'}`);
           });
         void beat();
         this.heartbeatTimer = setInterval(beat, HEARTBEAT_INTERVAL_MS);
       }
     }
+  }
+
+  /**
+   * This node's signed statement that it is attached to `relay`, fresh for
+   * every heartbeat. None for a relay whose key the node does not know.
+   */
+  private bindingFor(relay: RelayCandidate): ServiceRelayBinding | null {
+    if (!relay.relayKey) return null;
+    return signServiceRelayBinding(
+      this.options.name,
+      { endpoint: relay.endpoint, relayKey: relay.relayKey, issuedAt: this.now() },
+      this.options.nodeKey,
+    );
   }
 
   /**
@@ -577,6 +711,8 @@ export interface ServiceNodeConfig {
   apiBaseUrl: string;
   /** In order of preference (relay-select.ts). */
   relays: RelayCandidate[];
+  /** Re-select from the signed directory periodically (automatic selection only). */
+  refreshRelays?: () => Promise<RelayCandidate[]>;
   authToken: string;
   /** Overlay key directory; defaults to <data dir>/overlay. */
   storeRoot?: string;
@@ -696,8 +832,9 @@ export async function startServiceNode(
     renewChain: credentials.renewChain ?? undefined,
     publish: (chain, kaCert) =>
       apiClient.registerServiceNode(domainId, chain, kaCert, config.authToken),
-    heartbeat: (relayEndpoint) =>
-      apiClient.sendHeartbeat(domainId, relayEndpoint, config.authToken),
+    heartbeat: (relayEndpoint, binding) =>
+      apiClient.sendHeartbeat(domainId, relayEndpoint, binding, config.authToken),
+    refreshRelays: config.refreshRelays,
   });
   await node.start();
   console.log(`[service-node] forwarding to ${target.host}:${target.port}`);

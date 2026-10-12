@@ -53,7 +53,9 @@ whoever asked with nothing signed and nothing verified (audit S3).
    over in order — or `--relay` (a relay not in the directory only with a loud
    warning).
 6. Connect out to `<relay>/service`, make it prove its directory key
-   (transport.md §6.2), then answer its challenge
+   (transport.md §6.2) — anything else first is a failed proof — then answer
+   its challenge; every heartbeat carries a fresh relay binding signed by the
+   node key, the only relay clients will use for the name
    (transport.md §6.1).
 7. Serve circuits: Noise NK responder per `CIRCUIT_CREATE`, then sealed
    `OPEN` → connect to the target → sealed `OPENED` or `RESET`.

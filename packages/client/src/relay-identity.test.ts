@@ -26,7 +26,7 @@ import {
 import { RelayCore, serveRelay } from '@tnp/relay-core';
 import { probeRelay } from './overlay/relay-identity';
 import { ServiceNode } from './service-node';
-import { freePort, type Harness, startHarness } from './testing/overlay-harness';
+import { directoryLookup, freePort, type Harness, startHarness } from './testing/overlay-harness';
 import { TunnelError } from './tunnel';
 
 const harnesses: Harness[] = [];
@@ -118,7 +118,7 @@ describe('the client refuses a relay that is not in the signed directory', () =>
     const tunnels = new TunnelManager({
       pins: h.pins,
       resolveOverlay: async () => h.overlay(),
-      relayKeys: async () => {
+      directory: async () => {
         throw new Error('no verified relay directory: expired');
       },
     });
@@ -139,8 +139,12 @@ describe('relay identity proof to clients', () => {
     const overlay = h.overlay();
     const tunnels = new (await import('./tunnel')).TunnelManager({
       pins: h.pins,
-      resolveOverlay: async () => ({ ...overlay, relay: impostor.url }),
-      relayKeys: async (e) => h.relayKeys.get(e) ?? null,
+      resolveOverlay: async () => ({
+        ...overlay,
+        relay: impostor.url,
+        relayBinding: h.bindingFor(impostor.url, h.relayIdentity.publicKey),
+      }),
+      directory: directoryLookup(h.relayKeys),
     });
     cleanups.push(() => tunnels.shutdown());
     const err = await tunnels.openStream('example.ox', 80).then(
@@ -238,8 +242,12 @@ describe('relay identity proof to clients', () => {
     const overlay = h.overlay();
     const tunnels = new (await import('./tunnel')).TunnelManager({
       pins: h.pins,
-      resolveOverlay: async () => ({ ...overlay, relay: wrapperUrl }),
-      relayKeys: async (e) => h.relayKeys.get(e) ?? null,
+      resolveOverlay: async () => ({
+        ...overlay,
+        relay: wrapperUrl,
+        relayBinding: h.bindingFor(wrapperUrl, h.relayIdentity.publicKey),
+      }),
+      directory: directoryLookup(h.relayKeys),
     });
     cleanups.push(() => tunnels.shutdown());
     const err = await tunnels.openStream('example.ox', 80).then(

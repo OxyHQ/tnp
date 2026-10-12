@@ -413,7 +413,7 @@ async function actionConnect(): Promise<void> {
       pins: new PinStore(overlayStore),
       resolveOverlay: async (destination) =>
         (await apiClient.resolveWithOverlay(destination, 'A')).overlay ?? null,
-      relayKeys: (endpoint) => relayDirectory.relayKeyFor(endpoint),
+      directory: (endpoint) => relayDirectory.entryFor(endpoint),
     });
     const socksProxy = new SocksProxy({
       port: config.socksPort,
@@ -520,6 +520,7 @@ async function actionServe(): Promise<void> {
         localTarget: target || 'localhost:80',
         apiBaseUrl: config.apiBaseUrl,
         relays,
+        refreshRelays: selection.refresh,
         authToken: token,
       },
       apiClient,

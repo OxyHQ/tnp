@@ -131,7 +131,8 @@ describe('RelayDirectoryService', () => {
     now -= 5_000;
     const b = await sameProcess.current();
     expect(b.serial).toBe(a.serial);
-    expect(b.expiresAt - b.issuedAt).toBe(86_400);
+    expect(b.expiresAt - b.issuedAt).toBe(6 * 3600);
+    expect(b.serial).toBe(b.issuedAt);
   });
 
   test('a registry failure degrades to the Oxy relays and is not cached', async () => {

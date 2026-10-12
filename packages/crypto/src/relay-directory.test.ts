@@ -12,13 +12,16 @@ import {
   MAX_DIRECTORY_LIFETIME_SECONDS,
   MAX_DIRECTORY_RELAYS,
   type SignedRelayDirectory,
+  MAX_RELAY_BINDING_AGE_SECONDS,
   signRelayDirectory,
   signRelayIdentity,
+  signServiceRelayBinding,
   signRelayRegistryProof,
   type UnsignedRelayDirectory,
   verifyRelayDirectory,
   verifyRelayIdentity,
   verifyRelayRegistryProof,
+  verifyServiceRelayBinding,
 } from './relay-directory';
 
 const NOW = 1_800_000_000;
@@ -93,6 +96,23 @@ describe('signed relay directory', () => {
     ).toEqual({ ok: false, reason: 'not-yet-valid' });
   });
 
+  test('a serial beyond issuedAt is never signed nor accepted (no permanent lockout)', () => {
+    // A seed holder signing serial 2^53 - 1 would raise every client's mark
+    // past anything honest could ever reach. The serial is capped by the
+    // document's own date, which the verifier caps by its clock.
+    expect(() => signed({ serial: Number.MAX_SAFE_INTEGER })).toThrow('serial must not exceed');
+    expect(() => signed({ serial: NOW + 1 })).toThrow('serial must not exceed');
+    // And a future-dated document that tries the same within the skew window
+    // is refused once it is further ahead than the allowed skew.
+    const ahead = trust.now + MAX_DIRECTORY_CLOCK_SKEW_SECONDS + 1;
+    expect(
+      verifyRelayDirectory(
+        signed({ serial: ahead, issuedAt: ahead, expiresAt: ahead + 60 }),
+        trust,
+      ),
+    ).toEqual({ ok: false, reason: 'not-yet-valid' });
+  });
+
   test('a serial below the highest seen is rolled back; equal is accepted', () => {
     expect(verifyRelayDirectory(signed(), { ...trust, minSerial: NOW + 1 })).toEqual({
       ok: false,
@@ -114,7 +134,7 @@ describe('signed relay directory', () => {
   test('any change to a signed field breaks the signature', () => {
     const doc = signed();
     const tampered: SignedRelayDirectory[] = [
-      { ...doc, serial: doc.serial + 1 },
+      { ...doc, serial: doc.serial - 1 },
       { ...doc, expiresAt: doc.expiresAt + 1 },
       { ...doc, relays: [{ ...doc.relays[0], endpoint: 'wss://evil.example' }] },
       {
@@ -309,5 +329,66 @@ describe('seeds', () => {
     expect(
       Buffer.from(signingKeyPairFromSeed(new Uint8Array(seed)).publicKey).toString('hex'),
     ).toBe('d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a');
+  });
+});
+
+describe('service relay binding', () => {
+  const node = generateSigningKeyPair();
+  const binding = (overrides: { endpoint?: string; issuedAt?: number } = {}) =>
+    signServiceRelayBinding(
+      'example.ox',
+      {
+        endpoint: overrides.endpoint ?? 'wss://relay.tnp.network',
+        relayKey: relayKey.publicKey,
+        issuedAt: overrides.issuedAt ?? NOW,
+      },
+      node,
+    );
+
+  test('verifies for the name, under the node key, while fresh', () => {
+    const r = verifyServiceRelayBinding('example.ox', binding(), node.publicKey, NOW + 5);
+    expect(r.ok && r.endpoint).toBe('wss://relay.tnp.network');
+    expect(r.ok && r.relayKey).toEqual(relayKey.publicKey);
+  });
+
+  test('another name, another node key, tampering, staleness and future dating are refused', () => {
+    const b = binding();
+    expect(verifyServiceRelayBinding('other.ox', b, node.publicKey, NOW).ok).toBe(false);
+    expect(
+      verifyServiceRelayBinding('example.ox', b, generateSigningKeyPair().publicKey, NOW),
+    ).toEqual({ ok: false, reason: 'bad-signature' });
+    expect(
+      verifyServiceRelayBinding(
+        'example.ox',
+        { ...b, endpoint: 'wss://evil.example' },
+        node.publicKey,
+        NOW,
+      ),
+    ).toEqual({ ok: false, reason: 'bad-signature' });
+    expect(
+      verifyServiceRelayBinding(
+        'example.ox',
+        b,
+        node.publicKey,
+        NOW + MAX_RELAY_BINDING_AGE_SECONDS + 1,
+      ),
+    ).toEqual({ ok: false, reason: 'stale' });
+    expect(
+      verifyServiceRelayBinding(
+        'example.ox',
+        binding({ issuedAt: NOW + 3600 }),
+        node.publicKey,
+        NOW,
+      ),
+    ).toEqual({ ok: false, reason: 'not-yet-valid' });
+    for (const bad of [
+      null,
+      'x',
+      { ...b, extra: 1 },
+      { ...b, signature: 'AAAA' },
+      { ...b, issuedAt: -1 },
+    ]) {
+      expect(verifyServiceRelayBinding('example.ox', bad, node.publicKey, NOW).ok).toBe(false);
+    }
   });
 });

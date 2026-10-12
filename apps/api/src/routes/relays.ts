@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireOxyAuth, getRequiredOxyUserId } from '@oxy.so/core/server';
 import {
+  MAX_RELAYS_PER_ACCOUNT,
   parseRegisterRelayRequest,
   parseRelayHeartbeatRequest,
   type RelayDirectoryEntry,
@@ -22,6 +23,7 @@ import {
   registerRelay,
   relayKeyProofValid,
 } from '../registry/relays.js';
+import { type RelayLiveCheck, relayLiveCheck } from '../registry/relayLiveCheck.js';
 import { logError } from '../utils/logError.js';
 
 export interface RelayDirectoryRouteConfig {
@@ -30,15 +32,18 @@ export interface RelayDirectoryRouteConfig {
 }
 
 /**
- * `oxyOperators` and `directory` are injectable so the contract tests can run
- * the router with configuration of their choosing; production passes
- * `TNP_OXY_RELAY_OPERATORS`, `TNP_DIRECTORY_SIGNING_SEED` and `TNP_OXY_RELAYS`.
+ * `oxyOperators`, `directory` and `liveCheck` are injectable so the contract
+ * tests can run the router with configuration of their choosing; production
+ * passes `TNP_OXY_RELAY_OPERATORS`, `TNP_DIRECTORY_SIGNING_SEED`,
+ * `TNP_OXY_RELAYS` and the real outbound check.
  */
 export function createRelaysRouter(
   oxyOperators: ReadonlySet<string> = config.oxyRelayOperators,
   directory: RelayDirectoryRouteConfig = config.relayDirectory,
+  liveCheck: RelayLiveCheck = relayLiveCheck(),
 ): Router {
   const router = Router();
+  const oxyEndpoints = new Set(directory.oxyRelays.map((relay) => relay.endpoint));
 
   const directoryService = directory.signer
     ? new RelayDirectoryService({
@@ -102,6 +107,12 @@ export function createRelaysRouter(
         res.status(400).json({ error: parsed.error });
         return;
       }
+      // An Oxy relay's endpoint is Oxy's, whoever asks: no account may hold
+      // it in the registry as a community relay.
+      if (oxyEndpoints.has(parsed.value.endpoint)) {
+        res.status(403).json({ error: 'This endpoint is reserved for an Oxy-operated relay' });
+        return;
+      }
 
       // A proof that is sent must verify; one that is absent only keeps the
       // relay out of the signed directory (registry/relays.ts).
@@ -122,17 +133,38 @@ export function createRelaysRouter(
         return;
       }
 
-      const registration: RelayRegistration | null = await registerRelay(getDb(), {
+      // The registry checks for itself that the relay at the endpoint holds
+      // the key, before anything can list it (registry/relayLiveCheck.ts).
+      const liveChecked =
+        keyProven && (await liveCheck(parsed.value.endpoint, parsed.value.publicKey));
+      if (keyProven && !liveChecked) {
+        res.status(400).json({
+          error:
+            'the relay at this endpoint did not prove publicKey when the registry connected to it ' +
+            '(is it listening, on a public wss:// address, with this key?)',
+        });
+        return;
+      }
+
+      const outcome = await registerRelay(getDb(), {
         request: parsed.value,
         operatorUserId: getRequiredOxyUserId(req),
         oxyOperators,
         keyProven,
+        liveChecked,
       });
 
-      if (!registration) {
+      if (outcome.status === 'taken') {
         res.status(403).json({ error: 'This endpoint is registered to another operator' });
         return;
       }
+      if (outcome.status === 'cap') {
+        res.status(403).json({
+          error: `An account may register at most ${MAX_RELAYS_PER_ACCOUNT} relays`,
+        });
+        return;
+      }
+      const registration: RelayRegistration = outcome.registration;
       res.status(201).json(registration);
     } catch (err) {
       logError('Register relay error:', err);
@@ -153,6 +185,7 @@ export function createRelaysRouter(
         endpoint: parsed.value.endpoint,
         operatorUserId: getRequiredOxyUserId(req),
         proof: parsed.value.proof,
+        liveCheck,
       });
       if (outcome === 'not-found') {
         res.status(404).json({ error: 'Relay not found' });

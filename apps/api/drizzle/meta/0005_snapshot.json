@@ -1,5 +1,5 @@
 {
-  "id": "476af486-d384-4de7-b0a1-323b58805635",
+  "id": "056dbd12-d478-4468-80b5-661bf2718658",
   "prevId": "949e56e4-c89c-4387-b279-28820a07d4a0",
   "version": "7",
   "dialect": "postgresql",
@@ -501,6 +501,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "live_checked_at": {
+          "name": "live_checked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -603,6 +609,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "''"
+        },
+        "relay_binding": {
+          "name": "relay_binding",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "status": {
           "name": "status",

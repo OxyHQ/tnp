@@ -1,4 +1,4 @@
-import type { Grant, KeyAgreementCertificate } from '@tnp/crypto';
+import type { Grant, KeyAgreementCertificate, ServiceRelayBinding } from '@tnp/crypto';
 import {
   type DnsResolveAnswer,
   type DnsResolveOverlay,
@@ -155,11 +155,8 @@ export class TnpApiClient {
     });
     if (res.status === 503) throw new Error('the API serves no signed relay directory (503)');
     if (!res.ok) throw new Error(`TNP API returned ${res.status}`);
-    const text = await res.text();
-    if (text.length > MAX_RELAY_DIRECTORY_RESPONSE_BYTES) {
-      throw new Error('the relay directory response is too large');
-    }
-    return JSON.parse(text) as unknown;
+    const bytes = await readCapped(res, MAX_RELAY_DIRECTORY_RESPONSE_BYTES);
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
   }
 
   /**
@@ -220,8 +217,17 @@ export class TnpApiClient {
   /**
    * Send service node heartbeat (auth required).
    */
-  async sendHeartbeat(domainId: string, connectedRelay: string, authToken: string): Promise<void> {
-    const request: ServiceNodeHeartbeatRequest = { domainId, connectedRelay };
+  async sendHeartbeat(
+    domainId: string,
+    connectedRelay: string,
+    relayBinding: ServiceRelayBinding | null,
+    authToken: string,
+  ): Promise<void> {
+    const request: ServiceNodeHeartbeatRequest = {
+      domainId,
+      connectedRelay,
+      ...(relayBinding ? { relayBinding } : {}),
+    };
     await this.postContract('/nodes/heartbeat', request, authToken, WRITE_TIMEOUT_MS);
   }
 
@@ -278,4 +284,38 @@ export class TnpApiClient {
   async sendRelayHeartbeat(request: RelayHeartbeatRequest, authToken: string): Promise<void> {
     await this.postContract('/relays/heartbeat', request, authToken, WRITE_TIMEOUT_MS);
   }
+}
+
+/**
+ * A response body of at most `limit` BYTES, or an error — checked against
+ * Content-Length before reading and counted while streaming, so an oversized
+ * (or lying) response is never buffered whole.
+ */
+async function readCapped(res: Response, limit: number): Promise<Uint8Array> {
+  const declared = Number(res.headers.get('content-length') ?? Number.NaN);
+  if (Number.isFinite(declared) && declared > limit) {
+    await res.body?.cancel().catch(() => {});
+    throw new Error('the relay directory response is too large');
+  }
+  const reader = res.body?.getReader();
+  if (!reader) return new Uint8Array(0);
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel().catch(() => {});
+      throw new Error('the relay directory response is too large');
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
 }

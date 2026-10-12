@@ -157,19 +157,9 @@ export class RelayNode {
     const identity = this.config.identity ?? loadOrCreateIdentity(this.config.identityKeyPath);
     this.identity = identity;
 
-    // Register with the API before binding anything. A relay that cannot be
-    // published is not a relay anyone can reach, and failing here leaves the
-    // node stopped rather than listening-but-invisible.
-    if (this.config.authToken) {
-      const request = this.buildRegistration(identity);
-      try {
-        const registration = await apiClient.registerRelay(request, this.config.authToken);
-        this.registeredEndpoint = registration.endpoint;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`Failed to register relay: ${msg}`);
-      }
-    }
+    // Validated (and the proof signed) before anything binds: a value the
+    // registry would refuse is a local error naming the field.
+    const request = this.config.authToken ? this.buildRegistration(identity) : null;
 
     this.core = new RelayCore({
       endpoint: normalizeRelayEndpoint(endpoint) ?? endpoint,
@@ -183,6 +173,20 @@ export class RelayNode {
       port: this.config.port,
       serviceName: 'tnp-relay-node',
     });
+
+    // Then register: the registry connects to the endpoint and makes the relay
+    // prove its key before it lists it, so the relay must already be serving.
+    // A relay the registry refuses is stopped, not listening-but-invisible.
+    if (request) {
+      try {
+        const registration = await apiClient.registerRelay(request, this.config.authToken);
+        this.registeredEndpoint = registration.endpoint;
+      } catch (err) {
+        await this.stop();
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Failed to register relay: ${msg}`);
+      }
+    }
     this.startTime = Date.now();
     this.running = true;
 

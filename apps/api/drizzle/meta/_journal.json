@@ -40,8 +40,8 @@
     {
       "idx": 5,
       "version": "7",
-      "when": 1791808587142,
-      "tag": "0005_relay_key_proof",
+      "when": 1791811013337,
+      "tag": "0005_relay_directory",
       "breakpoints": true
     }
   ]

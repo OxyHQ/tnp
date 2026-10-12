@@ -149,11 +149,46 @@ describe('chooseServiceRelays', () => {
     );
   });
 
-  test('--relay without a directory warns and proceeds unverified (explicit operator choice)', async () => {
+  test('blocking the API does not downgrade --relay to no relay authentication', async () => {
+    const offline = async () => {
+      throw new Error('no verified relay directory: could not fetch');
+    };
+    const refused = await chooseServiceRelays({
+      relayFlag: 'wss://mine.example.test',
+      relayKeyFlag: null,
+      directory: offline,
+      probe: allFast,
+      warn: () => {},
+    });
+    expect(refused.ok).toBe(false);
+    expect(!refused.ok && refused.message).toContain('--allow-unverified-relay');
+    // With --relay-key the relay must prove that key: allowed.
+    const key = generateSigningKeyPair().publicKey;
+    const keyed = await chooseServiceRelays({
+      relayFlag: 'wss://mine.example.test',
+      relayKeyFlag: encodeBase64(key),
+      directory: offline,
+      probe: allFast,
+      warn: () => {},
+    });
+    expect(keyed.ok && keyed.candidates[0].relayKey).toEqual(key);
+    // An unlisted relay with a verified directory is refused the same way.
+    const unlisted = await chooseServiceRelays({
+      relayFlag: 'wss://unlisted.example.test',
+      relayKeyFlag: null,
+      directory: async () => directory([['wss://oxy.example.test', 'oxy']]),
+      probe: allFast,
+      warn: () => {},
+    });
+    expect(unlisted.ok).toBe(false);
+  });
+
+  test('--allow-unverified-relay: proceeds unverified, loudly (explicit operator choice)', async () => {
     const warnings: string[] = [];
     const s = await chooseServiceRelays({
       relayFlag: 'wss://mine.example.test',
       relayKeyFlag: null,
+      allowUnverified: true,
       directory: async () => {
         throw new Error('offline');
       },

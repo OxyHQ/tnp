@@ -10,7 +10,12 @@
  * client must not trust the API (docs/architecture/security.md §1).
  */
 
-import type { DomainKeyRotation, Grant, KeyAgreementCertificate } from '@tnp/crypto';
+import type {
+  DomainKeyRotation,
+  Grant,
+  KeyAgreementCertificate,
+  ServiceRelayBinding,
+} from '@tnp/crypto';
 import { asRecord, type ParseResult } from './parse.js';
 
 /** Longest grant chain a body may carry (`MAX_CHAIN_DEPTH` in `@tnp/crypto`). */
@@ -188,4 +193,40 @@ export function parseKeyResetShape(value: unknown): ParseResult<DomainKeyReset |
 export function parseKeyShape(value: unknown, field: string): ParseResult<string> {
   if (!isB64(value)) return fail(`${field} must be a base64 key`);
   return { ok: true, value };
+}
+
+/**
+ * An optional service-node relay binding (`@tnp/crypto` `ServiceRelayBinding`):
+ * shape only. Clients verify the signature against the node key their own
+ * chain verification produced.
+ */
+export function parseRelayBindingShape(
+  value: unknown,
+): ParseResult<ServiceRelayBinding | undefined> {
+  if (value === undefined || value === null) return { ok: true, value: undefined };
+  const r = asRecord(value);
+  if (!r) return fail('relayBinding must be an object');
+  const extra = onlyFields(r, ['endpoint', 'relayKey', 'issuedAt', 'signature']);
+  if (extra) return fail(`relayBinding has an unexpected field ${JSON.stringify(extra)}`);
+  if (typeof r.endpoint !== 'string' || r.endpoint.length === 0 || r.endpoint.length > 512) {
+    return fail('relayBinding.endpoint must be a URL');
+  }
+  if (typeof r.relayKey !== 'string' || r.relayKey.length !== 44) {
+    return fail('relayBinding.relayKey must be a base64 32-byte key');
+  }
+  if (typeof r.issuedAt !== 'number' || !Number.isSafeInteger(r.issuedAt) || r.issuedAt < 0) {
+    return fail('relayBinding.issuedAt must be a non-negative integer');
+  }
+  if (typeof r.signature !== 'string' || r.signature.length !== MAX_B64) {
+    return fail('relayBinding.signature must be a base64 signature');
+  }
+  return {
+    ok: true,
+    value: {
+      endpoint: r.endpoint,
+      relayKey: r.relayKey,
+      issuedAt: r.issuedAt,
+      signature: r.signature,
+    },
+  };
 }

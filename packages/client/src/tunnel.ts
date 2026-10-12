@@ -24,7 +24,7 @@
  * returned (S3, S5), and never looked at its send buffer (S6).
  */
 
-import { toHex, type VerifiedKeyAgreementKey } from '@tnp/crypto';
+import { bytesEqual, toHex, type VerifiedKeyAgreementKey } from '@tnp/crypto';
 import {
   CircuitTable,
   ClientHandshake,
@@ -48,11 +48,18 @@ import { FrameSocket } from './overlay/frame-socket';
 import type { PinStore } from './overlay/pins';
 import { RelayIdentityCheck, RelayIdentityError } from './overlay/relay-identity';
 import { SecureCircuit, type SecureCircuitHooks } from './overlay/secure-circuit';
-import { OverlayVerificationError, serviceNameFor, verifyOverlay } from './overlay/verify';
+import {
+  OverlayVerificationError,
+  serviceNameFor,
+  type VerifiedOverlay,
+  verifyOverlay,
+} from './overlay/verify';
 
 const RELAY_CONNECT_TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_LINKS_PER_RELAY = 8;
 const LINK_IDLE_MS = 60_000;
+/** How often open links are re-checked against the signed directory. */
+const DIRECTORY_RECHECK_MS = 10 * 60_000;
 
 /** A circuit could not be opened. `code` is a protocol error code where one applies. */
 export class TunnelError extends Error {
@@ -66,21 +73,30 @@ export class TunnelError extends Error {
 }
 
 /**
- * The relay key the signed directory lists for an endpoint, or null when the
- * endpoint is not listed. Throws when there is no verified directory.
+ * What the signed directory lists for an endpoint (its key and operator), or
+ * null when the endpoint is not listed. Throws when there is no verified
+ * directory.
  */
-export type RelayKeyLookup = (endpoint: string) => Promise<Uint8Array | null>;
+export type RelayEntryLookup = (
+  endpoint: string,
+) => Promise<{ key: Uint8Array; operator: 'oxy' | 'community' } | null>;
 
 export interface TunnelManagerOptions {
   pins: PinStore;
   /** Fetch the `/dns/resolve` overlay block for a destination; null when there is none. */
   resolveOverlay: (destination: string) => Promise<unknown | null>;
   /**
-   * The signed relay directory (relay-directory.ts `relayKeyFor`). A relay
-   * the resolve record names is used only if it is listed, and only after it
-   * proves the listed key.
+   * The signed relay directory (relay-directory.ts `entryFor`). A relay the
+   * resolve record names is used only if it is listed AND the service node
+   * signed that it is attached to it (or, for nodes that publish no binding,
+   * it is Oxy-operated), and only after it proves the listed key.
    */
-  relayKeys: RelayKeyLookup;
+  directory: RelayEntryLookup;
+  /**
+   * How often open relay links are re-checked against the directory; links
+   * to a relay no longer listed (or listed with another key) are closed.
+   */
+  recheckIntervalMs?: number;
   /** Unix seconds. */
   now?: () => number;
   openTimeoutMs?: number;
@@ -389,10 +405,37 @@ export class TunnelManager {
   private readonly openTimeoutMs: number;
   private readonly maxLinks: number;
 
+  private readonly recheckTimer: ReturnType<typeof setInterval>;
+
   constructor(private readonly options: TunnelManagerOptions) {
     this.now = options.now ?? (() => Math.floor(Date.now() / 1000));
     this.openTimeoutMs = options.openTimeoutMs ?? HANDSHAKE_TIMEOUT_MS;
     this.maxLinks = options.maxLinksPerRelay ?? DEFAULT_MAX_LINKS_PER_RELAY;
+    this.recheckTimer = setInterval(
+      () => void this.recheckLinks(),
+      options.recheckIntervalMs ?? DIRECTORY_RECHECK_MS,
+    );
+    this.recheckTimer.unref?.();
+  }
+
+  /**
+   * Close every link to a relay the directory no longer lists with the key
+   * the link was proven against. No verified directory at all closes them
+   * all: a relay is usable only while a verified directory lists it.
+   */
+  async recheckLinks(): Promise<void> {
+    for (const [slot, links] of [...this.links]) {
+      const [endpoint, keyHex] = slot.split(' ');
+      let entry: Awaited<ReturnType<RelayEntryLookup>> = null;
+      try {
+        entry = await this.options.directory(endpoint);
+      } catch {
+        entry = null;
+      }
+      if (entry && toHex(entry.key) === keyHex) continue;
+      for (const link of links) link.close();
+      this.links.delete(slot);
+    }
   }
 
   /**
@@ -413,7 +456,7 @@ export class TunnelManager {
     const verified = verifyOverlay(name, overlay, this.options.pins, this.now());
 
     const endpoint = this.checkEndpoint(verified.relay);
-    const relayKey = await this.directoryKey(endpoint);
+    const relayKey = await this.directoryKey(endpoint, verified.relayBinding);
     // Capacity is re-checked after every await and the circuit claimed in the
     // same synchronous step, so concurrent opens cannot overfill one link.
     let link = await this.linkFor(endpoint, relayKey);
@@ -454,6 +497,7 @@ export class TunnelManager {
   }
 
   shutdown(): void {
+    clearInterval(this.recheckTimer);
     for (const links of this.links.values()) for (const link of links) link.close();
     this.links.clear();
   }
@@ -474,27 +518,57 @@ export class TunnelManager {
   }
 
   /**
-   * The signed directory's key for `endpoint`. A relay that is not listed is
-   * never used: the resolve record that named it is registry data, and a
-   * relay is selectable only through the signed directory.
+   * The signed directory's key for `endpoint`, if this client may use it for
+   * this name. The resolve record's relay is registry data, so:
+   *
+   *  - it must be in the verified directory;
+   *  - if the service node signed which relay it is attached to, it must be
+   *    exactly that relay, with exactly the directory's key for it;
+   *  - if the node published no binding (released before them), only an
+   *    Oxy-operated relay is used.
    */
-  private async directoryKey(endpoint: string): Promise<Uint8Array> {
-    let key: Uint8Array | null;
+  private async directoryKey(
+    endpoint: string,
+    binding: VerifiedOverlay['relayBinding'],
+  ): Promise<Uint8Array> {
+    let entry: Awaited<ReturnType<RelayEntryLookup>>;
     try {
-      key = await this.options.relayKeys(endpoint);
+      entry = await this.options.directory(endpoint);
     } catch (err) {
       throw new TunnelError(
         `refusing the relay: ${err instanceof Error ? err.message : 'no verified relay directory'}`,
         ErrorCode.AUTH_FAILED,
       );
     }
-    if (!key) {
+    if (!entry) {
       throw new TunnelError(
         `refusing relay ${endpoint}: it is not in the signed relay directory`,
         ErrorCode.AUTH_FAILED,
       );
     }
-    return key;
+    if (binding) {
+      if (normalizeRelayEndpoint(binding.endpoint) !== endpoint) {
+        throw new TunnelError(
+          `refusing relay ${endpoint}: the service node signed that it is attached to ` +
+            `${binding.endpoint}, not the relay the registry named`,
+          ErrorCode.AUTH_FAILED,
+        );
+      }
+      if (!bytesEqual(binding.relayKey, entry.key)) {
+        throw new TunnelError(
+          `refusing relay ${endpoint}: the service node attached to it under a different key ` +
+            'than the signed directory lists',
+          ErrorCode.AUTH_FAILED,
+        );
+      }
+    } else if (entry.operator !== 'oxy') {
+      throw new TunnelError(
+        `refusing relay ${endpoint}: the service node published no signed relay binding, and ` +
+          'without one only Oxy-operated relays are used',
+        ErrorCode.AUTH_FAILED,
+      );
+    }
+    return entry.key;
   }
 
   private async linkFor(endpoint: string, relayKey: Uint8Array): Promise<RelayLink> {

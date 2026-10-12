@@ -16,14 +16,17 @@ afterEach(async () => {
   for (const s of servers.splice(0)) await s.stop();
 });
 
-function start(limits = {}): RelayServer {
+function start(
+  limits = {},
+  serve: { pingIntervalMs?: number; idleTimeoutSeconds?: number } = {},
+): RelayServer {
   const core = new RelayCore({
     endpoint: 'ws://127.0.0.1',
     identity: generateSigningKeyPair(),
     lookupDomainKey: async () => null,
     limits,
   });
-  const server = serveRelay({ core, hostname: '127.0.0.1', port: 0 });
+  const server = serveRelay({ core, hostname: '127.0.0.1', port: 0, ...serve });
   servers.push(server);
   return server;
 }
@@ -96,4 +99,107 @@ describe('the Bun binding', () => {
     >;
     for (const value of Object.values(stats)) expect(typeof value).toBe('number');
   });
+});
+
+/**
+ * A TCP proxy that behaves like a load balancer's idle timeout: it drops both
+ * sides after `idleMs` without a byte in either direction.
+ */
+function idleDroppingProxy(upstreamPort: number, idleMs: number) {
+  const net = require('node:net') as typeof import('node:net');
+  const server = net.createServer((client) => {
+    const upstream = net.connect(upstreamPort, '127.0.0.1');
+    let timer: ReturnType<typeof setTimeout>;
+    const touch = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        client.destroy();
+        upstream.destroy();
+      }, idleMs);
+    };
+    touch();
+    client.on('data', (d) => {
+      touch();
+      upstream.write(d);
+    });
+    upstream.on('data', (d) => {
+      touch();
+      client.write(d);
+    });
+    const end = () => {
+      clearTimeout(timer);
+      client.destroy();
+      upstream.destroy();
+    };
+    client.on('close', end);
+    upstream.on('close', end);
+    client.on('error', end);
+    upstream.on('error', end);
+  });
+  return new Promise<{ port: number; close(): void }>((resolve) =>
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      resolve({
+        port: typeof address === 'object' && address ? address.port : 0,
+        close: () => server.close(),
+      });
+    }),
+  );
+}
+
+describe('keepalive (a 60 s ALB idle timeout is not raised for the relay)', () => {
+  async function idleThroughProxy(pingIntervalMs: number): Promise<boolean> {
+    const server = start({}, { pingIntervalMs });
+    const proxy = await idleDroppingProxy(server.port, 600);
+    try {
+      const ws = await new Promise<WebSocket>((resolve, reject) => {
+        const w = new WebSocket(`ws://127.0.0.1:${proxy.port}/tunnel`);
+        w.binaryType = 'arraybuffer';
+        w.addEventListener('open', () => resolve(w), { once: true });
+        w.addEventListener('error', () => reject(new Error('connect failed')), { once: true });
+      });
+      let isClosed = false;
+      ws.addEventListener('close', () => {
+        isClosed = true;
+      });
+      // Idle — no application traffic — for well past the proxy's timeout.
+      await Bun.sleep(2000);
+      if (isClosed) return false;
+      // And still usable: the relay answers an identity HELLO through it.
+      const answered = await new Promise<boolean>((resolve) => {
+        const timer = setTimeout(() => resolve(false), 1000);
+        ws.addEventListener('message', () => {
+          clearTimeout(timer);
+          resolve(true);
+        });
+        ws.send(encodeFrame({ type: FrameType.HELLO, payload: new Uint8Array(32) }));
+      });
+      ws.close();
+      return answered;
+    } finally {
+      proxy.close();
+    }
+  }
+
+  test('relay pings keep an idle link open through an idle-dropping balancer', async () => {
+    expect(await idleThroughProxy(200)).toBe(true);
+  });
+
+  test('without them the same link is dropped (the test can fail)', async () => {
+    expect(await idleThroughProxy(0)).toBe(false);
+  });
+
+  test("pings also outlast the relay's own idle timeout", async () => {
+    // Bun closes a WebSocket idle for `idleTimeout` seconds; the pong each
+    // ping draws is traffic, so a quiet but live peer is kept.
+    const server = start({}, { pingIntervalMs: 500, idleTimeoutSeconds: 2 });
+    const ws = await open(server, '/tunnel');
+    let code: number | null = null;
+    ws.addEventListener('close', (e) => {
+      code = e.code;
+    });
+    await Bun.sleep(4500);
+    expect(code).toBeNull();
+    ws.close();
+  }, 10_000);
 });

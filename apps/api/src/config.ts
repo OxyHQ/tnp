@@ -68,7 +68,10 @@ const production = process.env.NODE_ENV === 'production';
  * The signed relay directory's key and Oxy relays (registry/relayDirectory.ts).
  * Problems are logged here, at startup, once — never the seed itself.
  */
-function relayDirectoryConfig(env: NodeJS.ProcessEnv): {
+export function relayDirectoryConfig(
+  env: Record<string, string | undefined>,
+  isProduction: boolean,
+): {
   signer: DirectorySigner | null;
   oxyRelays: OxyRelayConfig[];
 } {
@@ -83,6 +86,10 @@ function relayDirectoryConfig(env: NodeJS.ProcessEnv): {
   }
   const oxy = parseOxyRelays(env.TNP_OXY_RELAYS);
   if (!oxy.ok) {
+    // In production a malformed list is a refusal to start, not a directory
+    // that silently lists no Oxy relay: that would send every `tnp serve` to
+    // "no relay" — or an operator to `--relay` — on a typo.
+    if (isProduction) throw new Error(`[tnp-api] ${oxy.error}; refusing to start`);
     console.error(`[tnp-api] ${oxy.error}; no Oxy-operated relay is listed`);
   }
   return { signer: signed.signer, oxyRelays: oxy.ok ? oxy.relays : [] };
@@ -146,7 +153,7 @@ export const config = {
    * production) and `TNP_OXY_RELAYS` (JSON `[{endpoint, relayKey, region}]`).
    * Without the seed, `GET /relays/directory` answers 503.
    */
-  relayDirectory: relayDirectoryConfig(process.env),
+  relayDirectory: relayDirectoryConfig(process.env, production),
   /**
    * Proxy hop count: how many proxies in front of the API
    * append to `X-Forwarded-For`. Production is Cloudflare → ALB → task and only

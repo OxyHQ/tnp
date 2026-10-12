@@ -72,6 +72,9 @@ export interface RelayKeyProof {
   signature: string;
 }
 
+/** Relays one account may have registered. Bounds endpoint squatting and the registry's live checks. */
+export const MAX_RELAYS_PER_ACCOUNT = 3;
+
 /** How far `RelayKeyProof.issuedAt` may be from the registry's clock, seconds. */
 export const RELAY_KEY_PROOF_WINDOW_SECONDS = 300;
 
@@ -238,6 +241,22 @@ function isNonPublicIpv6(groups: number[]): boolean {
     (g0 === 0x0064 && g1 === 0xff9b && g2 === 0x0001) || // 64:ff9b:1::/48 local NAT64
     (g0 === 0x0100 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0) // 100::/64 discard
   );
+}
+
+/**
+ * Whether an IP address literal (IPv4 dotted-decimal, or IPv6 with or
+ * without brackets) is loopback, private, link-local, CGNAT, documentation,
+ * multicast or otherwise not publicly routable. Anything that is not an IP
+ * literal is reported non-public, so a caller checking resolved addresses
+ * fails closed on garbage.
+ */
+export function isNonPublicAddress(address: string): boolean {
+  const host = address.replace(/^\[|\]$/g, '').toLowerCase();
+  const v4 = ipv4Octets(host);
+  if (v4) return isNonPublicIpv4(v4);
+  const v6 = ipv6Groups(host);
+  if (v6) return isNonPublicIpv6(v6);
+  return true;
 }
 
 /**

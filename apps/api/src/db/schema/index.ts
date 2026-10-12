@@ -9,7 +9,12 @@
  */
 
 import { relations, sql } from 'drizzle-orm';
-import type { DomainKeyRotation, Grant, KeyAgreementCertificate } from '@tnp/crypto';
+import type {
+  DomainKeyRotation,
+  Grant,
+  KeyAgreementCertificate,
+  ServiceRelayBinding,
+} from '@tnp/crypto';
 import {
   boolean,
   index,
@@ -218,6 +223,12 @@ export const serviceNodes = pgTable(
     /** The node's current key-agreement certificate (X25519, at most 7 days). */
     kaCert: jsonb('ka_cert').$type<KeyAgreementCertificate>(),
     connectedRelay: text('connected_relay').notNull().default(''),
+    /**
+     * The node key's signed statement of which relay it is attached to
+     * (`@tnp/crypto` ServiceRelayBinding), from its latest heartbeat. Served in
+     * the resolve record; clients verify it. Null for nodes that send none.
+     */
+    relayBinding: jsonb('relay_binding').$type<ServiceRelayBinding>(),
     status: nodeStatus('status').notNull().default('offline'),
     lastSeen: timestamp('last_seen', { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -252,6 +263,13 @@ export const relays = pgTable(
      * relay only while this is fresh; null for relays that never proved it.
      */
     keyProvenAt: timestamp('key_proven_at', { withTimezone: true }),
+    /**
+     * When the registry last connected to `endpoint` itself and the relay
+     * there proved `publicKey` (registry/relayLiveCheck.ts). Without a recent
+     * one a community relay is not in the signed directory, so a key proof
+     * alone cannot list an endpoint someone else answers.
+     */
+    liveCheckedAt: timestamp('live_checked_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

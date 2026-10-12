@@ -89,12 +89,13 @@ Overlay commands:
     rules cannot be fully applied, connect refuses to start.
 
   TNP_TOKEN=<token> tnp serve --domain <domain> [--target <host:port>]
-            [--relay <wss://url> [--relay-key <base64>]]
+            [--relay <wss://url> [--relay-key <base64> | --allow-unverified-relay]]
     Registers this machine as a service node for the given domain.
     Incoming connections are forwarded to the local target (default localhost:80).
     Relays come only from the signed relay directory: Oxy-operated, fastest
     first, failed over in order, each proving its directory key. --relay names
-    one explicitly; one not in the directory is used only with a loud warning.
+    one explicitly; one whose key cannot be verified (not in the directory, no
+    --relay-key) is refused unless --allow-unverified-relay is given.
     The first run on the owner's device creates the domain key (back it up);
     a node on another device needs a grant: tnp domain grant.
 
@@ -293,7 +294,7 @@ async function cmdConnect() {
     pins: new PinStore(overlayStore),
     resolveOverlay: async (destination) =>
       (await apiClient.resolveWithOverlay(destination, 'A')).overlay ?? null,
-    relayKeys: (endpoint) => relayDirectory.relayKeyFor(endpoint),
+    directory: (endpoint) => relayDirectory.entryFor(endpoint),
   });
   const socksProxy = new SocksProxy({
     port: config.socksPort,
@@ -522,6 +523,7 @@ async function cmdServe() {
   const selection = await chooseServiceRelays({
     relayFlag,
     relayKeyFlag,
+    allowUnverified: process.argv.includes('--allow-unverified-relay'),
     directory: () => relayDirectory.get(),
     probe: (endpoint, key) => probeRelay(endpoint, key),
     warn: (message) => console.warn(`[tnp] ${message}`),
@@ -547,6 +549,7 @@ async function cmdServe() {
       localTarget: target,
       apiBaseUrl: config.apiBaseUrl,
       relays,
+      refreshRelays: selection.refresh,
       authToken,
     },
     apiClient,

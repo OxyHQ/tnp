@@ -52,8 +52,9 @@ documents, not against a compromised API.
 | Document | `{v: 1, serial, issuedAt, expiresAt, relays: [{endpoint, relayKey, operator, capabilities, region}], signature}`, JSON |
 | Signed bytes | length-prefixed canonical encoding under the context `tnp-relay-directory-v1` (no JSON canonicalization involved) |
 | Signature | Ed25519 by the directory signing key; clients pin one or two keys (`RELAY_DIRECTORY_SIGNING_KEYS_BASE64`) |
-| Validity | 24 h; at most 7 days accepted; `issuedAt` at most 10 min ahead of the client clock |
-| Serial | the signing time in seconds, never lowered by one API process; clients keep the highest accepted per device (`relay-directory.json`, 0600) and refuse lower |
+| Validity | 6 h; at most 7 days accepted; `issuedAt` at most 10 min ahead of the client clock |
+| Serial | equals the signing time (`serial ≤ issuedAt` is required, so no signer can push the mark beyond the clock), never lowered by one API process; clients keep the highest accepted **per signing key** per device (`relay-directory.json`, 0600, changed under a lock; unreadable = refusal) and refuse lower |
+| Freshness in use | clients refetch every 10 min and drop relays no longer listed; no verified directory, no relay |
 | Bounds | ≤ 256 relays, ≤ 128 KiB canonical, endpoints canonical `wss://` on a public host, unique; strict fields |
 | Key custody | the API signs at request time with `TNP_DIRECTORY_SIGNING_SEED` (base64 32-byte seed; SSM SecureString in production). Unset: `GET /relays/directory` answers **503** — never an unsigned listing |
 | Contents | Oxy relays from `TNP_OXY_RELAYS`; community relays from the registry only while heartbeat-fresh and key-proven (relays.md §2) |

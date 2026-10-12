@@ -12,11 +12,16 @@
  * What the directory protects against, and what it does not: the API signs at
  * request time with a key it holds (`TNP_DIRECTORY_SIGNING_SEED`), so a
  * compromised API can sign a directory. The signature defends against network
- * tampering (a TLS-intercepting middlebox, a hostile CDN edge), database
- * tampering (a forged registry row is not a signed entry unless the API signs
- * it), and stale or rolled-back directories (expiry plus a per-client serial
- * high-water mark). End-to-end confidentiality never depends on it: circuits
- * are keyed to each name's domain key, which no relay — listed or not — holds.
+ * tampering (a TLS-intercepting middlebox, a hostile CDN edge) and stale or
+ * rolled-back directories (expiry plus a per-client, per-signing-key serial
+ * high-water mark). It does NOT by itself stop the registry choosing among
+ * listed relays: which relay a name is reached through comes from the resolve
+ * record, and community relays are listed after a key proof and a live check
+ * that any Oxy account can pass for an endpoint it controls. What binds a
+ * name to its relay is the service node's signed relay binding (node key,
+ * rooted in the domain key) — see relays.md §8 for the exact guarantee.
+ * End-to-end confidentiality never depends on any of it: circuits are keyed
+ * to each name's domain key, which no relay — listed or not — holds.
  */
 
 import {
@@ -53,8 +58,13 @@ export function relayDirectorySigningKeys(): Uint8Array[] {
   return RELAY_DIRECTORY_SIGNING_KEYS_BASE64.map((key) => decodeBase64Strict(key, 32));
 }
 
-/** How long a directory the API signs stays valid. Clients refetch long before. */
-export const RELAY_DIRECTORY_LIFETIME_SECONDS = 24 * 3600;
+/**
+ * How long a directory the API signs stays valid. Short, because it is also
+ * the longest a client keeps using a cached copy while the API is blocked —
+ * the window in which a delisted relay can still be used. Clients refetch
+ * every 10 minutes and drop relays that are no longer listed.
+ */
+export const RELAY_DIRECTORY_LIFETIME_SECONDS = 6 * 3600;
 
 /** Capability tokens a listed relay may carry. Clients ignore tokens they do not know. */
 export const RelayCapability = {

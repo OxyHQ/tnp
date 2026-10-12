@@ -135,7 +135,7 @@ router.post('/heartbeat', requireOxyAuth, async (req, res) => {
       res.status(400).json({ error: parsed.error });
       return;
     }
-    const { domainId, connectedRelay } = parsed.value;
+    const { domainId, connectedRelay, relayBinding } = parsed.value;
 
     // The ownership predicate is in the UPDATE, so a node belonging to another
     // account cannot be touched even by guessing its domain id.
@@ -144,6 +144,9 @@ router.post('/heartbeat', requireOxyAuth, async (req, res) => {
       .set({
         lastSeen: sql`now()`,
         connectedRelay,
+        // Replaced on every heartbeat: a node that moved relays, or stopped
+        // sending a binding, never leaves an old one published.
+        relayBinding: relayBinding ?? null,
         status: 'online',
         updatedAt: sql`now()`,
       })

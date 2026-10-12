@@ -109,6 +109,16 @@ export function overlayDir(base?: string): string {
 
 export type StoreArea = 'domain-keys' | 'node-keys' | 'grants';
 
+/** A lock older than this is a crashed holder's and is broken. */
+const STALE_LOCK_MS = 10_000;
+/** How long to wait for another process's lock before giving up. */
+const LOCK_WAIT_MS = 5_000;
+
+const sleeper = new Int32Array(new SharedArrayBuffer(4));
+function sleepSync(ms: number): void {
+  Atomics.wait(sleeper, 0, 0, ms);
+}
+
 export class OverlayStore {
   private readonly owner: InvokingUser | null;
 
@@ -222,6 +232,54 @@ export class OverlayStore {
       closeSync(fd);
     }
     unlinkSync(path);
+  }
+
+  /**
+   * Run `fn` holding an exclusive lock file next to `path` (`<path>.lock`,
+   * O_EXCL, never followed through a symlink). Several processes share the
+   * pin file and the relay-directory state; each change is re-read, decided
+   * and written atomically under this lock, so one never overwrites another.
+   * A lock older than 10 s is a crashed holder's and is broken.
+   */
+  withLock<T>(path: string, fn: () => T): T {
+    const lockPath = `${path}.lock`;
+    this.ensureDir(dirname(path));
+    const deadline = Date.now() + LOCK_WAIT_MS;
+    let fd: number | null = null;
+    while (fd === null) {
+      try {
+        fd = openSync(
+          lockPath,
+          constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0),
+          0o600,
+        );
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+        try {
+          if (Date.now() - lstatSync(lockPath).mtimeMs > STALE_LOCK_MS) {
+            unlinkSync(lockPath); // a holder that crashed
+            continue;
+          }
+        } catch {
+          continue; // released between our open and stat
+        }
+        if (Date.now() > deadline) {
+          throw new Error(`the file ${path} is locked by another process`);
+        }
+        sleepSync(10);
+      }
+    }
+    try {
+      writeSync(fd, `${process.pid}\n`);
+      return fn();
+    } finally {
+      closeSync(fd);
+      try {
+        unlinkSync(lockPath);
+      } catch {
+        // already broken as stale by someone else
+      }
+    }
   }
 
   /** Move a file over another in the same directory (atomic). */
