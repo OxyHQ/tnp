@@ -1,6 +1,13 @@
 // `.env` is loaded by Bun itself (every entry point runs on Bun) before any
 // module runs; a variable the shell already set wins.
 
+import {
+  type DirectorySigner,
+  directorySignerFromSeed,
+  type OxyRelayConfig,
+  parseOxyRelays,
+} from './registry/relayDirectory.js';
+
 // Public DNS / parking IP for TNP domains. MUST be provided via TNP_PARKING_IP.
 // This is the address clients are pointed at and the A record we hand out for
 // parked/custom TLDs — i.e. a security-critical value for a DNS product. There
@@ -58,6 +65,37 @@ export function parseFlag(value: string | undefined, fallback: boolean): boolean
 const production = process.env.NODE_ENV === 'production';
 
 /**
+ * The signed relay directory's key and Oxy relays (registry/relayDirectory.ts).
+ * Problems are logged here, at startup, once — never the seed itself.
+ */
+export function relayDirectoryConfig(
+  env: Record<string, string | undefined>,
+  isProduction: boolean,
+): {
+  signer: DirectorySigner | null;
+  oxyRelays: OxyRelayConfig[];
+} {
+  const signed = directorySignerFromSeed(env.TNP_DIRECTORY_SIGNING_SEED);
+  if (!signed.signer) {
+    console.warn(`[tnp-api] ${signed.problem}`);
+  } else if (!signed.pinned) {
+    console.warn(
+      '[tnp-api] TNP_DIRECTORY_SIGNING_SEED is not one of the directory keys pinned in ' +
+        '@tnp/shared-types (RELAY_DIRECTORY_SIGNING_KEYS_BASE64): clients will refuse what it signs',
+    );
+  }
+  const oxy = parseOxyRelays(env.TNP_OXY_RELAYS);
+  if (!oxy.ok) {
+    // In production a malformed list is a refusal to start, not a directory
+    // that silently lists no Oxy relay: that would send every `tnp serve` to
+    // "no relay" — or an operator to `--relay` — on a typo.
+    if (isProduction) throw new Error(`[tnp-api] ${oxy.error}; refusing to start`);
+    console.error(`[tnp-api] ${oxy.error}; no Oxy-operated relay is listed`);
+  }
+  return { signer: signed.signer, oxyRelays: oxy.ok ? oxy.relays : [] };
+}
+
+/**
  * Browser origins allowed to call the API with credentials. The local web dev
  * server is allowed only outside production: in production it would let any
  * page served from a visitor's own `localhost:8170` — anything they happen to
@@ -110,6 +148,12 @@ export const config = {
    * is Oxy-operated until an operator is named here (docs/architecture/relays.md).
    */
   oxyRelayOperators: new Set(parseList(process.env.TNP_OXY_RELAY_OPERATORS)) as ReadonlySet<string>,
+  /**
+   * `TNP_DIRECTORY_SIGNING_SEED` (base64 32-byte Ed25519 seed, SSM in
+   * production) and `TNP_OXY_RELAYS` (JSON `[{endpoint, relayKey, region}]`).
+   * Without the seed, `GET /relays/directory` answers 503.
+   */
+  relayDirectory: relayDirectoryConfig(process.env, production),
   /**
    * Proxy hop count: how many proxies in front of the API
    * append to `X-Forwarded-For`. Production is Cloudflare → ALB → task and only

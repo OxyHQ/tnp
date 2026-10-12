@@ -250,3 +250,28 @@ export function signingKeyPairFromSecret(secretKey: Uint8Array): {
   }
   return { publicKey: kp.publicKey, secretKey: kp.secretKey };
 }
+
+/**
+ * The Ed25519 key pair for a raw 32-byte seed — the form a key is kept in when
+ * it comes from a secret store (`RELAY_KEY_SEED`, `TNP_DIRECTORY_SIGNING_SEED`)
+ * and the form `openssl genpkey -algorithm ed25519` holds (the last 32 bytes
+ * of its PKCS#8 DER).
+ */
+export function signingKeyPairFromSeed(seed: Uint8Array): {
+  publicKey: Uint8Array;
+  secretKey: Uint8Array;
+} {
+  if (!(seed instanceof Uint8Array) || seed.length !== nacl.sign.seedLength) {
+    throw new EncodingError('Ed25519 seed must be 32 bytes');
+  }
+  const kp = nacl.sign.keyPair.fromSeed(seed);
+  return { publicKey: kp.publicKey, secretKey: kp.secretKey };
+}
+
+/** {@link signingKeyPairFromSeed} from canonical base64. The message never echoes the input. */
+export function signingKeyPairFromSeedBase64(seed: string): {
+  publicKey: Uint8Array;
+  secretKey: Uint8Array;
+} {
+  return signingKeyPairFromSeed(decodeBase64Strict(seed.trim(), nacl.sign.seedLength));
+}

@@ -31,7 +31,7 @@ This table is the honest state of the code. Full evidence:
 | Forward public DNS to an upstream | ✅ Wire-format end to end, correct response codes, EDNS(0), TCP fallback, configurable upstreams |
 | Publish a service from behind NAT (`tnp serve`) | ⚠️ Prototype — the relay does not authenticate service nodes |
 | Reach a TNP service over SOCKS5 | ⚠️ Prototype — TNP destinations only, no IPv6, ignores the requested port |
-| Run a relay (`tnp relay`) | ⚠️ Registration works; the relay stays parked until its authentication and isolation blockers close |
+| Run a relay (`tnp relay`) | ⚠️ Registration works and is key-proven; Oxy's relay is publishable and awaits activation |
 | HTTP CONNECT proxy | ❌ Not implemented |
 | Onion routing / private mode | ❌ Not implemented — `--privacy private` is rejected rather than silently downgraded |
 | Exit nodes / public internet routing | ❌ Not implemented |
@@ -145,7 +145,7 @@ tnp                       # interactive menu
 tnp run                   # resolver daemon
 tnp connect               # resolver + SOCKS5 proxy
 tnp serve <domain> --target <url>
-tnp relay                 # registers; relay network stays parked, see relays.md
+tnp relay                 # registers (signed key proof); see relays.md
 tnp install / uninstall / status / test <domain>
 ```
 

@@ -8,9 +8,20 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import {
+  generateSigningKeyPair,
+  type ServiceRelayBinding,
+  signServiceRelayBinding,
+} from '@tnp/crypto';
 import { makeTestCredentials, type TestServiceCredentials } from '@tnp/crypto/testing';
-import { RelayCore, type RelayLimits, serveRelay, type RelayServer } from '@tnp/relay-core';
-import type { DnsResolveOverlay } from '@tnp/shared-types';
+import {
+  RelayCore,
+  type RelayIdentity,
+  type RelayLimits,
+  serveRelay,
+  type RelayServer,
+} from '@tnp/relay-core';
+import { type DnsResolveOverlay, normalizeRelayEndpoint } from '@tnp/shared-types';
 import { PinStore } from '../overlay/pins';
 import { OverlayStore } from '../overlay/store';
 import { ServiceNode } from '../service-node';
@@ -59,6 +70,18 @@ export function patternBytes(size: number, seed = 0): Buffer {
 export interface Harness {
   creds: TestServiceCredentials;
   relayEndpoint: string;
+  /** The relay's key (what the signed directory would list for it). */
+  relayIdentity: RelayIdentity;
+  /**
+   * The client's stand-in for the signed directory: endpoint → relay key.
+   * Tests add a hostile relay here to model a LISTED relay that misbehaves,
+   * or leave it out to model one that is not listed.
+   */
+  relayKeys: Map<string, Uint8Array>;
+  /** Endpoints the stand-in directory lists as Oxy-operated (the rest are community). */
+  oxyRelays: Set<string>;
+  /** A relay binding signed by the harness node's key. */
+  bindingFor(endpoint: string, relayKey: Uint8Array): ServiceRelayBinding;
   relay: RelayServer;
   core: RelayCore;
   node: ServiceNode;
@@ -77,11 +100,13 @@ export interface HarnessOptions {
   /** Point the client at a different relay URL (a hostile wrapper) than the node uses. */
   clientRelay?: (relayEndpoint: string) => string;
   /** Use an existing relay instead of starting one. */
-  externalRelay?: { endpoint: string; keys: Map<string, string> };
+  externalRelay?: { endpoint: string; keys: Map<string, string>; identity: RelayIdentity };
   target?: { port: number };
   /** Relay takes client addresses from X-Forwarded-For (lets one test act as several addresses). */
   relayTrustForwardedFor?: boolean;
   nodeStreamIdleMs?: number;
+  /** false: the overlay carries no relay binding (a node released before them). */
+  relayBinding?: boolean;
 }
 
 export async function startHarness(options: HarnessOptions = {}): Promise<Harness> {
@@ -93,6 +118,7 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
   let core: RelayCore | null = null;
   const keys = options.externalRelay?.keys ?? new Map<string, string>();
   keys.set(name, creds.domainKeyB64);
+  const relayIdentity = options.externalRelay?.identity ?? generateSigningKeyPair();
   if (options.externalRelay) {
     relayEndpoint = options.externalRelay.endpoint;
   } else {
@@ -100,6 +126,7 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
     relayEndpoint = `ws://127.0.0.1:${port}`;
     core = new RelayCore({
       endpoint: relayEndpoint,
+      identity: relayIdentity,
       lookupDomainKey: async (n) => keys.get(n) ?? null,
       limits: options.limits,
     });
@@ -114,7 +141,7 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
   const node = new ServiceNode({
     name,
     target: { host: '127.0.0.1', port: options.target?.port ?? target.port },
-    relayEndpoint,
+    relays: [{ endpoint: relayEndpoint, relayKey: relayIdentity.publicKey }],
     nodeKey: creds.nodeKey,
     chain: creds.chain,
     streamIdleMs: options.nodeStreamIdleMs,
@@ -125,10 +152,21 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
 
   const storeDir = mkdtempSync(join(tmpdir(), 'tnp-overlay-test-'));
   const pins = new PinStore(new OverlayStore(storeDir));
+  const relayKeys = new Map<string, Uint8Array>([[relayEndpoint, relayIdentity.publicKey]]);
+  const oxyRelays = new Set<string>();
+  const bindingFor = (endpoint: string, relayKey: Uint8Array): ServiceRelayBinding =>
+    signServiceRelayBinding(
+      name,
+      { endpoint, relayKey, issuedAt: Math.floor(Date.now() / 1000) },
+      creds.nodeKey,
+    );
   const overlay = (): DnsResolveOverlay => {
     const clientRelay = options.clientRelay?.(relayEndpoint) ?? relayEndpoint;
     const kaCert = node.kaCert;
     if (!kaCert) throw new Error('node has no certificate');
+    // Like a node that attached to `clientRelay`: it signs that relay, with
+    // the key the (stand-in) directory lists for it.
+    const listedKey = relayKeys.get(clientRelay);
     return {
       relay: clientRelay,
       available: true,
@@ -136,15 +174,26 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
       rotations: [],
       chain: creds.chain,
       kaCert,
+      ...(options.relayBinding !== false && listedKey
+        ? { relayBinding: bindingFor(clientRelay, listedKey) }
+        : {}),
     };
   };
-  const tunnels = new TunnelManager({ pins, resolveOverlay: async () => overlay() });
+  const tunnels = new TunnelManager({
+    pins,
+    resolveOverlay: async () => overlay(),
+    directory: directoryLookup(relayKeys, oxyRelays),
+  });
   const socks = new SocksProxy({ port: 0, tunnelManager: tunnels });
   await socks.ready;
 
   return {
     creds,
     relayEndpoint,
+    relayIdentity,
+    relayKeys,
+    oxyRelays,
+    bindingFor,
     relay: relay as RelayServer,
     core: core as RelayCore,
     node,
@@ -223,4 +272,15 @@ export function httpGet(size: number): string {
 export function splitHttp(body: Buffer): { head: string; payload: Buffer } {
   const end = body.indexOf('\r\n\r\n');
   return { head: body.subarray(0, end).toString('latin1'), payload: body.subarray(end + 4) };
+}
+
+/** A `TunnelManager.directory` over a map, keyed by normalized endpoint. */
+export function directoryLookup(map: Map<string, Uint8Array>, oxy: Set<string> = new Set()) {
+  return async (
+    endpoint: string,
+  ): Promise<{ key: Uint8Array; operator: 'oxy' | 'community' } | null> => {
+    const normalized = normalizeRelayEndpoint(endpoint) ?? endpoint;
+    const key = map.get(normalized);
+    return key ? { key, operator: oxy.has(normalized) ? 'oxy' : 'community' } : null;
+  };
 }

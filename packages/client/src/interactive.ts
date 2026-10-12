@@ -402,11 +402,18 @@ async function actionConnect(): Promise<void> {
 
     const { OverlayStore } = await import('./overlay/store');
     const { PinStore } = await import('./overlay/pins');
+    const { RelayDirectoryClient } = await import('./relay-directory');
     const apiClient = proxy.getApiClient();
+    const overlayStore = new OverlayStore();
+    const relayDirectory = RelayDirectoryClient.forUser(
+      () => apiClient.getRelayDirectory(),
+      overlayStore,
+    );
     const tunnelManager = new TunnelManager({
-      pins: new PinStore(new OverlayStore()),
+      pins: new PinStore(overlayStore),
       resolveOverlay: async (destination) =>
         (await apiClient.resolveWithOverlay(destination, 'A')).overlay ?? null,
+      directory: (endpoint) => relayDirectory.entryFor(endpoint),
     });
     const socksProxy = new SocksProxy({
       port: config.socksPort,
@@ -476,11 +483,24 @@ async function actionServe(): Promise<void> {
     const { TnpApiClient } = await import('./api');
     const apiClient = new TnpApiClient(config.apiBaseUrl);
 
-    // Same rule as `tnp serve`: only an Oxy-operated relay is ever chosen
-    // automatically (relay-select.ts). To use a community relay, run
-    // `tnp serve --relay`.
-    const { selectAutomaticRelay } = await import('./relay-select');
-    const selection = selectAutomaticRelay(await apiClient.getRelays('oxy'));
+    // Same rule as `tnp serve`: only Oxy-operated relays from the signed
+    // directory are chosen automatically (relay-select.ts). To use a
+    // community relay, run `tnp serve --relay`.
+    const { chooseServiceRelays } = await import('./relay-select');
+    const { RelayDirectoryClient } = await import('./relay-directory');
+    const { OverlayStore } = await import('./overlay/store');
+    const { probeRelay } = await import('./overlay/relay-identity');
+    const relayDirectory = RelayDirectoryClient.forUser(
+      () => apiClient.getRelayDirectory(),
+      new OverlayStore(),
+    );
+    const selection = await chooseServiceRelays({
+      relayFlag: null,
+      relayKeyFlag: null,
+      directory: () => relayDirectory.get(),
+      probe: (endpoint, key) => probeRelay(endpoint, key),
+      warn: (message) => addLine(message, RED),
+    });
     if (!selection.ok) {
       addLine(selection.message, RED);
       renderer.root.add(Text({ content: '\n  Press any key to continue...', fg: DIM }));
@@ -489,8 +509,8 @@ async function actionServe(): Promise<void> {
       return;
     }
 
-    const relay = selection.endpoint;
-    addKeyValue('Relay', relay);
+    const relays = selection.candidates;
+    addKeyValue('Relay', relays[0].endpoint);
 
     const { startServiceNode } = await import('./service-node');
 
@@ -499,7 +519,8 @@ async function actionServe(): Promise<void> {
         domain,
         localTarget: target || 'localhost:80',
         apiBaseUrl: config.apiBaseUrl,
-        relayEndpoint: relay,
+        relays,
+        refreshRelays: selection.refresh,
         authToken: token,
       },
       apiClient,
@@ -658,7 +679,7 @@ async function actionHelp(): Promise<void> {
     addLine('    service nodes are routed through encrypted tunnels via relay nodes.');
     addLine('');
     addLine(
-      '  TNP_TOKEN=<token> tnp serve --domain <domain> [--target <host:port>] [--relay <wss://url>]',
+      '  TNP_TOKEN=<token> tnp serve --domain <domain> [--target <host:port>] [--relay <wss://url> [--relay-key <base64>]]',
       CYAN,
     );
     addLine('    Registers this machine as a service node for the given domain.');

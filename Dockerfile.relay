@@ -1,6 +1,9 @@
-# PARKED: the relay image is not built or published by any workflow, and its
-# ECS service stays at desired_count = 0 (docs/architecture/relays.md §8).
-# This file is kept buildable so the gate is the only thing standing in the way.
+# The standalone relay. Built on every pull request and published by
+# deploy-aws.yml as an immutable SHA image under the reviewed-image pin; it
+# serves traffic only once an oxy-infra change pins a reviewed digest, sets its
+# secrets and scales the service up (docs/architecture/relays.md §8).
+#
+# The digest is what the build uses; the tag is for readers (see Dockerfile.api).
 FROM oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7b48be39c598
 WORKDIR /app
 
@@ -36,9 +39,16 @@ ENV NODE_ENV=production
 ENV RELAY_PORT=8080
 EXPOSE 8080
 
+# Lets the deploy target tell "the process is up" from "the process can answer".
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD bun -e "fetch('http://127.0.0.1:'+(process.env.RELAY_PORT||8080)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 # The base image's unprivileged `bun` user, as in Dockerfile.api: the relay binds
 # a high port, and its code and node_modules stay root-owned and read-only.
 USER bun
 
-# RELAY_ENDPOINT (the public wss:// URL) is required at run time.
+# Required at run time (apps/relay/src/config.ts): RELAY_ENDPOINT, the public
+# wss:// URL the signed directory lists, and RELAY_KEY_SEED, the relay key's
+# base64 32-byte Ed25519 seed (SSM SecureString via the task's `secrets`).
+# `--check-config` validates both without binding a port.
 CMD ["bun", "apps/relay/src/index.ts"]

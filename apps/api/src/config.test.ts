@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { parseExpiryEnforced, parseFlag, parseList, parseNonNegativeInt } from './config.js';
+import { spyOn } from 'bun:test';
+import {
+  parseExpiryEnforced,
+  parseFlag,
+  parseList,
+  parseNonNegativeInt,
+  relayDirectoryConfig,
+} from './config.js';
 
 describe('TNP_NATIVE_EXPIRY_ENFORCED', () => {
   test('is off unless explicitly true', () => {
@@ -37,5 +44,24 @@ describe('parseFlag', () => {
     expect(parseFlag(undefined, true)).toBe(true);
     expect(parseFlag('yes', false)).toBe(false);
     expect(parseFlag('', true)).toBe(true);
+  });
+});
+
+describe('relay directory configuration', () => {
+  test('a malformed TNP_OXY_RELAYS refuses to start in production', () => {
+    const quiet = spyOn(console, 'warn').mockImplementation(() => {});
+    const loud = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(() =>
+        relayDirectoryConfig({ TNP_OXY_RELAYS: '[{"endpoint":"ws://x"}]' }, true),
+      ).toThrow('refusing to start');
+      // Outside production it is logged and lists no Oxy relay.
+      expect(relayDirectoryConfig({ TNP_OXY_RELAYS: '{' }, false).oxyRelays).toEqual([]);
+      // Unset is fine everywhere.
+      expect(relayDirectoryConfig({}, true)).toEqual({ signer: null, oxyRelays: [] });
+    } finally {
+      quiet.mockRestore();
+      loud.mockRestore();
+    }
   });
 });

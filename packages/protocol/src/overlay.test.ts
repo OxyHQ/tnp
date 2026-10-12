@@ -5,11 +5,15 @@ import {
   decodeCircuitCreate,
   decodeCircuitCreated,
   decodeDestroy,
+  decodeRelayHello,
+  decodeRelayHelloAck,
   decodeServiceAuth,
   decodeServiceHello,
   decodeStreamMessage,
   encodeCircuitCreate,
   encodeDestroy,
+  encodeRelayHello,
+  encodeRelayHelloAck,
   encodeServiceAuth,
   encodeStreamMessage,
   MAX_STREAM_DATA,
@@ -124,5 +128,26 @@ describe('service registration', () => {
     violation(() => decodeServiceAuth(enc({ ...auth, name: 'NOPE' })));
     violation(() => decodeServiceAuth(new TextEncoder().encode('{')));
     violation(() => decodeServiceAuth(new Uint8Array([0xff, 0xfe])));
+  });
+});
+
+describe('relay identity', () => {
+  test('HELLO is exactly a 32-byte nonce', () => {
+    const nonce = new Uint8Array(32).fill(3);
+    expect(decodeRelayHello(encodeRelayHello(nonce))).toEqual(nonce);
+    violation(() => decodeRelayHello(new Uint8Array(33)));
+    expect(() => encodeRelayHello(new Uint8Array(31))).toThrow(RangeError);
+  });
+
+  test('HELLO_ACK is exactly key (32) and signature (64)', () => {
+    const key = new Uint8Array(32).fill(1);
+    const sig = new Uint8Array(64).fill(2);
+    expect(decodeRelayHelloAck(encodeRelayHelloAck(key, sig))).toEqual({
+      relayKey: key,
+      signature: sig,
+    });
+    violation(() => decodeRelayHelloAck(new Uint8Array(95)));
+    violation(() => decodeRelayHelloAck(new Uint8Array(97)));
+    expect(() => encodeRelayHelloAck(key, new Uint8Array(63))).toThrow(RangeError);
   });
 });

@@ -106,10 +106,9 @@ jobs:
           TEST_DATABASE_URL: postgres://tnp:tnp@127.0.0.1:5432/postgres
         run: bun run test:db
 
-  # Both AWS images consume the monorepo workspace graph. A missing manifest or
-  # source COPY is invisible to TypeScript and unit tests, so both Dockerfiles
-  # are built before either can be published. Relay is deliberately absent: its
-  # security blockers are recorded in docs/architecture/relays.md.
+  # Every AWS image consumes the monorepo workspace graph. A missing manifest or
+  # source COPY is invisible to TypeScript and unit tests, so every Dockerfile
+  # is built (and started) before any can be published.
   docker:
     name: AWS images build
     runs-on: ubuntu-latest
@@ -132,6 +131,64 @@ jobs:
 
       - name: Build the DNS image
         run: docker build -f Dockerfile.dns -t tnp-dns:ci .
+
+      - name: Build the relay image
+        run: docker build -f Dockerfile.relay -t tnp-relay:ci .
+
+      # The relay's identity is its key: start the image with a throwaway seed
+      # and prove, from inside the running container, that it answers a client
+      # HELLO with a proof over RELAY_ENDPOINT by that seed's public key — what
+      # every client checks against the signed directory. Also: it refuses to
+      # start without a seed, it is not root, and its code is not writable.
+      - name: Start the relay and check it proves its key
+        run: |
+          set -euo pipefail
+          seed=$(openssl rand -base64 32)
+          endpoint=wss://relay.ci.invalid
+
+          if docker run --rm -e RELAY_ENDPOINT="$endpoint" tnp-relay:ci \
+              bun apps/relay/src/index.ts --check-config >/dev/null 2>&1; then
+            echo "::error::The relay accepted a configuration without RELAY_KEY_SEED"
+            exit 1
+          fi
+          docker run --rm -e RELAY_ENDPOINT="$endpoint" -e RELAY_KEY_SEED="$seed" tnp-relay:ci \
+            bun apps/relay/src/index.ts --check-config
+
+          docker run -d --name relay -p 8081:8080 \
+            -e RELAY_ENDPOINT="$endpoint" -e RELAY_KEY_SEED="$seed" tnp-relay:ci
+          for i in $(seq 1 30); do
+            if curl -fsS -m 3 http://127.0.0.1:8081/health >/dev/null 2>&1; then
+              echo "Relay answered after ${i}s"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "::error::Relay did not answer /health within 30s"
+              docker logs relay
+              exit 1
+            fi
+            sleep 1
+          done
+
+          docker exec relay bun apps/relay/src/self-test.ts
+
+          uid=$(docker exec relay id -u)
+          echo "relay uid: $uid"
+          if [ "$uid" = "0" ]; then
+            echo "::error::The relay container runs as root"
+            exit 1
+          fi
+          for path in /app /app/apps/relay/src /app/apps/relay/src/index.ts /app/node_modules; do
+            if docker exec relay test -w "$path"; then
+              echo "::error::$path is writable by the relay process"
+              exit 1
+            fi
+          done
+          for pkg in typescript drizzle-kit @biomejs/biome bun-types react-native vite; do
+            if docker exec relay test -e "/app/node_modules/$pkg"; then
+              echo "::error::$pkg is installed in the relay image"
+              exit 1
+            fi
+          done
 
       - name: Start it against a throwaway PostgreSQL and check it answers
         run: |
@@ -254,7 +311,7 @@ jobs:
           fi
 
   # Publish only after EVERY gate passes, on a push to main. The reusable workflow
-  # only writes immutable API/DNS images; it cannot roll out or scale ECS.
+  # only writes immutable API/DNS/relay images; it cannot roll out or scale ECS.
   publish_aws_images:
     needs: [verify, database, docker]
     if: >-

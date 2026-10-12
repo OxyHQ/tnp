@@ -94,8 +94,8 @@ never *what to do* with what it captured.
 |---|---|---|
 | Naming | Registry works. `.com`/`.app` seeded as TNP TLDs, so public names can be shadowed. | 2 |
 | Resolution | TNP lookups work. Public forwarding re-encodes answers incorrectly, hardcodes one DoH endpoint, has no DNSSEC. | 2 |
-| Discovery | A relay/service-node directory exists in the API, unsigned. Relay registration works. Service-node key material is published with each name's domain key. | 5 |
-| Transport | Protocol v1 over one WebSocket hop: versioned 20-byte frames, connection-scoped CSPRNG circuit ids, Noise NK sessions, end-to-end flow control, one relay core. Not deployed (relay parked); no resumption, no relay authentication to clients. | 3 (done in code), 5 |
+| Discovery | Signed relay directory (`GET /relays/directory`), verified against a pinned key with rollback protection; relays prove their listed key per connection. No health measurement or exits. Service-node key material is published with each name's domain key. | 5 |
+| Transport | Protocol v1 over one WebSocket hop: versioned 20-byte frames, connection-scoped CSPRNG circuit ids, Noise NK sessions, end-to-end flow control, one relay core. Relay image publishable, not yet activated; relays authenticate to clients by their directory key; no resumption. | 3 (done in code), 5 |
 | Onion routing | **Not implemented.** `--privacy private` is parsed and ignored. | 6 |
 | Security | Grant chains from owner-held domain keys, clients pin each name's domain key (first contact trusts the registry), replay/reflection/truncation detected, certificates rotate. No device hierarchy, no directory revocation, no key transparency. | 5, 6 |
 | Proxy | SOCKS5 CONNECT to TNP names only. No IPv6, no auth, no public destinations, ignores the requested port. | 4 |

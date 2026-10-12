@@ -7,8 +7,12 @@
  * endpoints were on right up until they did not.
  */
 
-import type { Grant, KeyAgreementCertificate } from '@tnp/crypto';
-import { parseChainShape, parseKeyAgreementCertificateShape } from './key-material.js';
+import type { Grant, KeyAgreementCertificate, ServiceRelayBinding } from '@tnp/crypto';
+import {
+  parseChainShape,
+  parseKeyAgreementCertificateShape,
+  parseRelayBindingShape,
+} from './key-material.js';
 import { asRecord, stringField, type ParseResult } from './parse.js';
 
 export type ServiceNodeStatus = 'online' | 'offline';
@@ -52,6 +56,12 @@ export interface ServiceNodeHeartbeatRequest {
   domainId: string;
   /** Endpoint of the relay this node is currently attached to. */
   connectedRelay: string;
+  /**
+   * The node key's signed statement that it is attached to `connectedRelay`
+   * (whose `endpoint` must equal it). The registry publishes it in the
+   * resolve record; clients reach the name only through the relay it names.
+   */
+  relayBinding?: ServiceRelayBinding;
 }
 
 export interface ServiceNodeHeartbeatResponse {
@@ -123,8 +133,18 @@ export function parseServiceNodeHeartbeatRequest(
   const connectedRelay = stringField(record, 'connectedRelay');
   if (!connectedRelay.ok) return connectedRelay;
 
+  const relayBinding = parseRelayBindingShape(record.relayBinding);
+  if (!relayBinding.ok) return relayBinding;
+  if (relayBinding.value && relayBinding.value.endpoint !== connectedRelay.value) {
+    return { ok: false, error: 'relayBinding.endpoint must equal connectedRelay' };
+  }
+
   return {
     ok: true,
-    value: { domainId: domainId.value, connectedRelay: connectedRelay.value },
+    value: {
+      domainId: domainId.value,
+      connectedRelay: connectedRelay.value,
+      ...(relayBinding.value ? { relayBinding: relayBinding.value } : {}),
+    },
   };
 }

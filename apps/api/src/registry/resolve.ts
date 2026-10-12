@@ -19,7 +19,12 @@ import {
   nativeExpiryState,
   normalizeName,
 } from '@tnp/namespace';
-import type { DomainKeyRotation, Grant, KeyAgreementCertificate } from '@tnp/crypto';
+import type {
+  DomainKeyRotation,
+  Grant,
+  KeyAgreementCertificate,
+  ServiceRelayBinding,
+} from '@tnp/crypto';
 import type { DnsResolveAnswer, DnsResolveOverlay, DnsResolveResponse } from '@tnp/shared-types';
 import { dnsRecords, domains, serviceNodes, tlds } from '../db/schema/index.js';
 import type { Executor } from './db.js';
@@ -37,6 +42,8 @@ export interface ServiceNodeFacts extends NodeLiveness {
   chain: Grant[];
   /** Current key-agreement certificate; null for a node registered before transport v1. */
   kaCert: KeyAgreementCertificate | null;
+  /** The node's signed relay binding from its last heartbeat, if it sent one. */
+  relayBinding?: ServiceRelayBinding | null;
 }
 
 export type NameFacts =
@@ -152,6 +159,7 @@ export async function loadNameFacts(db: Executor, name: string): Promise<NameFac
         lastSeen: serviceNodes.lastSeen,
         chain: serviceNodes.chain,
         kaCert: serviceNodes.kaCert,
+        relayBinding: serviceNodes.relayBinding,
       })
       .from(serviceNodes)
       .where(eq(serviceNodes.domainId, domain.id))
@@ -202,6 +210,9 @@ function overlayFor(
     rotations: domain.domainKeyRotations,
     chain: node.chain,
     kaCert: node.kaCert,
+    ...(node.relayBinding && node.relayBinding.endpoint === node.connectedRelay
+      ? { relayBinding: node.relayBinding }
+      : {}),
     ...(domain.domainKeyResetFrom && domain.domainKeyResetAt
       ? {
           keyReset: {

@@ -149,7 +149,7 @@ exit that will actually accept their traffic.
 
 The signed list of relays, exits and their keys, capabilities, versions and
 health. Clients must be able to verify it without trusting the transport that
-delivered it. (Today's directory is unsigned — Phase 5.)
+delivered it. (Implemented for relays: [`discovery.md`](./discovery.md) §2.)
 
 ### Operating mode
 

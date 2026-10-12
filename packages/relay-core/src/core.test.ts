@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { encodeBase64, generateSigningKeyPair, signServiceAuth } from '@tnp/crypto';
+import {
+  encodeBase64,
+  generateSigningKeyPair,
+  signServiceAuth,
+  verifyRelayIdentity,
+} from '@tnp/crypto';
 import { makeTestCredentials, type TestServiceCredentials } from '@tnp/crypto/testing';
 import {
   decodeDestroy,
   decodeError,
   decodeFrame,
+  decodeRelayHelloAck,
   encodeCircuitCreate,
   encodeDestroy,
   encodeFrame,
@@ -19,6 +25,7 @@ import { type ConnectionHandle, RelayCore, type RelayCoreOptions } from './core'
 
 const ENDPOINT = 'wss://relay.example.test';
 const NAME = 'example.ox';
+const RELAY_KEY = generateSigningKeyPair();
 
 class FakeTransport {
   frames: Frame[] = [];
@@ -55,6 +62,7 @@ afterEach(() => {
 function makeCore(keys: Record<string, string>, options: Partial<RelayCoreOptions> = {}) {
   const core = new RelayCore({
     endpoint: ENDPOINT,
+    identity: RELAY_KEY,
     lookupDomainKey: async (name) => keys[name] ?? null,
     sweepIntervalMs: 60_000,
     ...options,
@@ -655,5 +663,85 @@ describe('bounds (S6)', () => {
     c.h.receive(null as unknown as Uint8Array);
     expect(c.t.closedWith).not.toBeNull();
     expect(core.stats().connections).toBeGreaterThan(0);
+  });
+});
+
+describe('relay identity proof (transport.md §6.2)', () => {
+  const hello = (nonce: Uint8Array) => encodeFrame({ type: FrameType.HELLO, payload: nonce });
+
+  test('a client HELLO is answered with a proof over the endpoint, its nonce and the relay key', () => {
+    const core = makeCore({});
+    const c = client(core);
+    const nonce = crypto.getRandomValues(new Uint8Array(32));
+    c.h.receive(hello(nonce));
+    const ack = c.t.last();
+    expect(ack.type).toBe(FrameType.HELLO_ACK);
+    const { relayKey, signature } = decodeRelayHelloAck(ack.payload);
+    expect(relayKey).toEqual(RELAY_KEY.publicKey);
+    expect(verifyRelayIdentity({ endpoint: ENDPOINT, nonce, relayKey }, signature)).toBe(true);
+    // Bound to this nonce and this endpoint.
+    const other = crypto.getRandomValues(new Uint8Array(32));
+    expect(verifyRelayIdentity({ endpoint: ENDPOINT, nonce: other, relayKey }, signature)).toBe(
+      false,
+    );
+    expect(
+      verifyRelayIdentity({ endpoint: 'wss://elsewhere.example', nonce, relayKey }, signature),
+    ).toBe(false);
+  });
+
+  test('one proof per connection; a malformed HELLO closes it', () => {
+    const core = makeCore({});
+    const c = client(core);
+    c.h.receive(hello(new Uint8Array(32)));
+    c.t.take();
+    c.h.receive(hello(new Uint8Array(32)));
+    expect(c.t.frames).toHaveLength(0);
+    expect(core.stats().framesDropped).toBe(1);
+
+    const d = client(core, '10.0.0.2');
+    d.h.receive(hello(new Uint8Array(31)));
+    expect(errorCode(d.t.last())).toBe(ErrorCode.PROTOCOL_VIOLATION);
+    expect(d.t.closedWith).not.toBeNull();
+  });
+
+  test('a service node may verify the relay before it authenticates', async () => {
+    const creds = makeTestCredentials(NAME);
+    const core = makeCore({ [NAME]: creds.domainKeyB64 });
+    expect(core.admit('10.9.9.9').ok).toBe(true);
+    const t = new FakeTransport();
+    const h = core.acceptService(t, '10.9.9.9');
+    const challenge = t.take()[0];
+    expect(challenge.type).toBe(FrameType.HELLO);
+    const nonce = crypto.getRandomValues(new Uint8Array(32));
+    h.receive(hello(nonce));
+    const ack = t.take()[0];
+    expect(ack.type).toBe(FrameType.HELLO_ACK);
+    const { relayKey, signature } = decodeRelayHelloAck(ack.payload);
+    expect(verifyRelayIdentity({ endpoint: ENDPOINT, nonce, relayKey }, signature)).toBe(true);
+    // And the connection is still awaiting AUTH, which then succeeds.
+    const sig = signServiceAuth(
+      {
+        name: NAME,
+        endpoint: ENDPOINT,
+        challenge: challenge.payload,
+        nodeKey: creds.nodeKey.publicKey,
+      },
+      creds.nodeKey.secretKey,
+    );
+    h.receive(
+      encodeFrame({
+        type: FrameType.AUTH,
+        payload: encodeServiceAuth({ name: NAME, chain: creds.chain, signature: sig }),
+      }),
+    );
+    await flush();
+    expect(t.last().type).toBe(FrameType.AUTH_OK);
+  });
+
+  test('a relay refuses to start with a key pair whose halves disagree', () => {
+    const other = generateSigningKeyPair();
+    expect(() =>
+      makeCore({}, { identity: { publicKey: other.publicKey, secretKey: RELAY_KEY.secretKey } }),
+    ).toThrow();
   });
 });

@@ -1,10 +1,11 @@
-import type { Grant, KeyAgreementCertificate } from '@tnp/crypto';
+import type { Grant, KeyAgreementCertificate, ServiceRelayBinding } from '@tnp/crypto';
 import {
   type DnsResolveAnswer,
   type DnsResolveOverlay,
   type DnsResolveResponse,
   type DnsRulesRecord,
   type DomainKeyRecord,
+  MAX_RELAY_DIRECTORY_RESPONSE_BYTES,
   parseDnsRulesRecord,
   parseDomainKeyRecord,
   type RegisterDomainKeyRequest,
@@ -143,6 +144,22 @@ export class TnpApiClient {
   }
 
   /**
+   * The raw `GET /relays/directory` body: a SIGNED document the caller must
+   * verify (relay-directory.ts) before using anything in it. Bounded before
+   * parsing. A 503 means the API has no signing key configured, and there is
+   * then no directory — never an unsigned one.
+   */
+  async getRelayDirectory(): Promise<unknown> {
+    const res = await fetch(`${this.baseUrl}/relays/directory`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.status === 503) throw new Error('the API serves no signed relay directory (503)');
+    if (!res.ok) throw new Error(`TNP API returned ${res.status}`);
+    const bytes = await readCapped(res, MAX_RELAY_DIRECTORY_RESPONSE_BYTES);
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
+  }
+
+  /**
    * Publish a service node's grant chain and key-agreement certificate (auth
    * required). The registry verifies them against the domain key before
    * storing; clients verify them again and do not rely on that.
@@ -200,8 +217,17 @@ export class TnpApiClient {
   /**
    * Send service node heartbeat (auth required).
    */
-  async sendHeartbeat(domainId: string, connectedRelay: string, authToken: string): Promise<void> {
-    const request: ServiceNodeHeartbeatRequest = { domainId, connectedRelay };
+  async sendHeartbeat(
+    domainId: string,
+    connectedRelay: string,
+    relayBinding: ServiceRelayBinding | null,
+    authToken: string,
+  ): Promise<void> {
+    const request: ServiceNodeHeartbeatRequest = {
+      domainId,
+      connectedRelay,
+      ...(relayBinding ? { relayBinding } : {}),
+    };
     await this.postContract('/nodes/heartbeat', request, authToken, WRITE_TIMEOUT_MS);
   }
 
@@ -251,10 +277,45 @@ export class TnpApiClient {
    *
    * A relay is identified in the directory by its endpoint, so that is what
    * the heartbeat carries. It used to send a relay id it had never been given
-   * along with traffic counters the registry does not accept.
+   * along with traffic counters the registry does not accept. It now also
+   * carries a fresh proof of the relay key, which keeps the relay in the
+   * signed directory.
    */
-  async sendRelayHeartbeat(endpoint: string, authToken: string): Promise<void> {
-    const request: RelayHeartbeatRequest = { endpoint };
+  async sendRelayHeartbeat(request: RelayHeartbeatRequest, authToken: string): Promise<void> {
     await this.postContract('/relays/heartbeat', request, authToken, WRITE_TIMEOUT_MS);
   }
+}
+
+/**
+ * A response body of at most `limit` BYTES, or an error — checked against
+ * Content-Length before reading and counted while streaming, so an oversized
+ * (or lying) response is never buffered whole.
+ */
+async function readCapped(res: Response, limit: number): Promise<Uint8Array> {
+  const declared = Number(res.headers.get('content-length') ?? Number.NaN);
+  if (Number.isFinite(declared) && declared > limit) {
+    await res.body?.cancel().catch(() => {});
+    throw new Error('the relay directory response is too large');
+  }
+  const reader = res.body?.getReader();
+  if (!reader) return new Uint8Array(0);
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel().catch(() => {});
+      throw new Error('the relay directory response is too large');
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
 }

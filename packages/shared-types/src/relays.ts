@@ -55,6 +55,30 @@ export const MAX_RELAY_CONNECTIONS = 1_000_000;
 export const MAX_RELAY_BANDWIDTH_MBPS = 1_000_000;
 
 /**
+ * Proof that the caller holds the private half of the relay key: an Ed25519
+ * signature by that key over the registry statement (`@tnp/crypto`
+ * `signRelayRegistryProof`: purpose, endpoint, relay key, `issuedAt`).
+ *
+ * The registry lists a community relay in the signed directory only while it
+ * has recently proved possession this way — on registration and on every
+ * heartbeat. Optional on the wire so relays released before it keep
+ * registering; such a relay is in the registry but never in the signed
+ * directory.
+ */
+export interface RelayKeyProof {
+  /** Unix seconds when the relay signed. The registry accepts a few minutes either way. */
+  issuedAt: number;
+  /** Canonical base64 of the 64-byte signature. */
+  signature: string;
+}
+
+/** Relays one account may have registered. Bounds endpoint squatting and the registry's live checks. */
+export const MAX_RELAYS_PER_ACCOUNT = 3;
+
+/** How far `RelayKeyProof.issuedAt` may be from the registry's clock, seconds. */
+export const RELAY_KEY_PROOF_WINDOW_SECONDS = 300;
+
+/**
  * `POST /relays/register` request.
  *
  * There is no `operator` field: the registry decides it (see `RelayOperator`).
@@ -73,6 +97,8 @@ export interface RegisterRelayRequest {
   capacity: RelayCapacity;
   /** Free-form operator label (a city, a region). `""` when unlabelled. */
   location: string;
+  /** Possession of `publicKey`, purpose `register`. */
+  proof?: RelayKeyProof;
 }
 
 /** `POST /relays/register` response. */
@@ -95,6 +121,8 @@ export interface RelayRegistration {
  */
 export interface RelayHeartbeatRequest {
   endpoint: string;
+  /** Possession of the registered key, purpose `heartbeat`. */
+  proof?: RelayKeyProof;
 }
 
 export interface RelayHeartbeatResponse {
@@ -216,6 +244,22 @@ function isNonPublicIpv6(groups: number[]): boolean {
 }
 
 /**
+ * Whether an IP address literal (IPv4 dotted-decimal, or IPv6 with or
+ * without brackets) is loopback, private, link-local, CGNAT, documentation,
+ * multicast or otherwise not publicly routable. Anything that is not an IP
+ * literal is reported non-public, so a caller checking resolved addresses
+ * fails closed on garbage.
+ */
+export function isNonPublicAddress(address: string): boolean {
+  const host = address.replace(/^\[|\]$/g, '').toLowerCase();
+  const v4 = ipv4Octets(host);
+  if (v4) return isNonPublicIpv4(v4);
+  const v6 = ipv6Groups(host);
+  if (v6) return isNonPublicIpv6(v6);
+  return true;
+}
+
+/**
  * Why `endpoint` cannot be published in the relay directory, or `null` if it
  * can. `endpoint` must already be canonical (`normalizeRelayEndpoint`).
  *
@@ -277,6 +321,28 @@ function relayEndpointField(record: Record<string, unknown>): ParseResult<string
   return { ok: true, value: endpoint };
 }
 
+/** An optional `proof` field: absent is fine, present must be well-formed. */
+function relayKeyProofField(
+  record: Record<string, unknown>,
+): ParseResult<RelayKeyProof | undefined> {
+  const raw = record.proof;
+  if (raw === undefined || raw === null) return { ok: true, value: undefined };
+  const proof = asRecord(raw);
+  if (!proof) return { ok: false, error: 'proof must be an object' };
+  for (const key of Object.keys(proof)) {
+    if (key !== 'issuedAt' && key !== 'signature') {
+      return { ok: false, error: 'proof has an unexpected field' };
+    }
+  }
+  const issuedAt = integerField(proof, 'issuedAt', 0, Number.MAX_SAFE_INTEGER);
+  if (!issuedAt.ok) return { ok: false, error: `proof.${issuedAt.error}` };
+  const signature = proof.signature;
+  if (typeof signature !== 'string' || signature.length !== 88) {
+    return { ok: false, error: 'proof.signature must be a base64 Ed25519 signature' };
+  }
+  return { ok: true, value: { issuedAt: issuedAt.value, signature } };
+}
+
 export function parseRegisterRelayRequest(body: unknown): ParseResult<RegisterRelayRequest> {
   const record = asRecord(body);
   if (!record) return { ok: false, error: 'request body must be an object' };
@@ -312,6 +378,9 @@ export function parseRegisterRelayRequest(body: unknown): ParseResult<RegisterRe
   const location = optionalStringField(record, 'location');
   if (!location.ok) return location;
 
+  const proof = relayKeyProofField(record);
+  if (!proof.ok) return proof;
+
   return {
     ok: true,
     value: {
@@ -319,6 +388,7 @@ export function parseRegisterRelayRequest(body: unknown): ParseResult<RegisterRe
       publicKey: publicKey.value,
       capacity: { maxConnections: maxConnections.value, bandwidth: bandwidth.value },
       location: location.value,
+      ...(proof.value ? { proof: proof.value } : {}),
     },
   };
 }
@@ -330,5 +400,11 @@ export function parseRelayHeartbeatRequest(body: unknown): ParseResult<RelayHear
   const endpoint = relayEndpointField(record);
   if (!endpoint.ok) return endpoint;
 
-  return { ok: true, value: { endpoint: endpoint.value } };
+  const proof = relayKeyProofField(record);
+  if (!proof.ok) return proof;
+
+  return {
+    ok: true,
+    value: { endpoint: endpoint.value, ...(proof.value ? { proof: proof.value } : {}) },
+  };
 }

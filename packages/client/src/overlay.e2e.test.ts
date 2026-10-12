@@ -9,8 +9,10 @@
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import net from 'node:net';
+import { encodeBase64, generateSigningKeyPair } from '@tnp/crypto';
 import { RelayNode } from './relay-node';
 import {
+  directoryLookup,
   freePort,
   type Harness,
   httpGet,
@@ -164,6 +166,7 @@ describe('circuit-slot exhaustion', () => {
     const attacker = new TunnelManager({
       pins: h.pins,
       resolveOverlay: async () => h.overlay(),
+      directory: directoryLookup(h.relayKeys, h.oxyRelays),
       headers: { 'x-forwarded-for': '203.0.113.66' },
     });
     try {
@@ -208,6 +211,7 @@ describe('the relay embedded in the tnp binary', () => {
     const port = await freePort();
     const endpoint = `ws://127.0.0.1:${port}`;
     const keys = new Map<string, string>();
+    const identity = generateSigningKeyPair();
     const relay = new RelayNode({
       port,
       host: '127.0.0.1',
@@ -218,11 +222,13 @@ describe('the relay embedded in the tnp binary', () => {
       location: '',
       apiBaseUrl: 'http://127.0.0.1:1',
       identityKeyPath: '/nonexistent',
+      identity,
       lookupDomainKey: async (name) => keys.get(name) ?? null,
     });
     await relay.start(new TnpApiClient('http://127.0.0.1:1'));
     try {
-      const h = await harness({ externalRelay: { endpoint, keys } });
+      expect(relay.relayKey).toBe(encodeBase64(identity.publicKey));
+      const h = await harness({ externalRelay: { endpoint, keys, identity } });
       const res = await socksFetch(h.socks.port, 'example.ox', 80, httpGet(70_000));
       expect(splitHttp(res.body).payload.equals(patternBytes(70_000))).toBe(true);
       expect(relay.getStats().activeCircuits).toBeGreaterThanOrEqual(0);

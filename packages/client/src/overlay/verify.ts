@@ -12,7 +12,10 @@
  *     name with no pin is pinned on first successful use (TOFU);
  *  2. the key-agreement certificate must verify against the grant chain rooted
  *     at that domain key, for exactly this name and the service-node role,
- *     within its validity window, not rolled back.
+ *     within its validity window, not rolled back;
+ *  3. a relay binding, when present, must be signed by the node key that
+ *     chain authorizes, for this name, and be fresh. The tunnel then uses
+ *     only the relay it names (tunnel.ts).
  *
  * Only then does the pin store learn anything, and only then is a
  * `VerifiedKeyAgreementKey` — the only key `ClientHandshake` accepts — returned.
@@ -24,6 +27,7 @@ import {
   KeyAgreementRole,
   type VerifiedKeyAgreementKey,
   verifyKeyAgreementCertificate,
+  verifyServiceRelayBinding,
 } from '@tnp/crypto';
 import {
   type DnsResolveOverlay,
@@ -38,7 +42,8 @@ export type OverlayRefusal =
   | 'no-overlay'
   | 'malformed'
   | 'pin-mismatch'
-  | 'bad-chain';
+  | 'bad-chain'
+  | 'bad-binding';
 
 export class OverlayVerificationError extends Error {
   constructor(
@@ -70,6 +75,11 @@ export function serviceNameFor(destination: string): string {
 export interface VerifiedOverlay {
   name: string;
   relay: string;
+  /**
+   * The relay the service node itself signed that it is attached to (node
+   * key, verified), or null when the node published no binding.
+   */
+  relayBinding: { endpoint: string; relayKey: Uint8Array } | null;
   key: VerifiedKeyAgreementKey;
   /** True when this verification created the pin (first contact). */
   firstContact: boolean;
@@ -135,6 +145,24 @@ export function verifyOverlay(
       );
     }
 
+    let relayBinding: VerifiedOverlay['relayBinding'] = null;
+    if (overlay.relayBinding) {
+      const bound = verifyServiceRelayBinding(
+        name,
+        overlay.relayBinding,
+        verified.chain.subject,
+        nowSeconds,
+      );
+      if (!bound.ok) {
+        throw new OverlayVerificationError(
+          'bad-binding',
+          `REFUSING ${name}: the relay binding in the registry's answer is not a fresh statement ` +
+            `by the service node's key (${bound.reason}). The registry may be routing you elsewhere.`,
+        );
+      }
+      relayBinding = { endpoint: bound.endpoint, relayKey: bound.relayKey };
+    }
+
     return {
       pin: PinStore.next(pin, overlay.domainKey, [
         ...verified.chain.serials,
@@ -143,6 +171,7 @@ export function verifyOverlay(
       result: {
         name,
         relay: overlay.relay,
+        relayBinding,
         key: verified.key,
         firstContact: !pin,
         ...(overlay.keyReset ? { keyReset: overlay.keyReset } : {}),

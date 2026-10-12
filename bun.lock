@@ -17,6 +17,7 @@
         "@oxy.so/utils": "^1.0.1",
         "@tnp/crypto": "workspace:*",
         "@tnp/namespace": "workspace:*",
+        "@tnp/protocol": "workspace:*",
         "@tnp/shared-types": "workspace:*",
         "cors": "^2.8.6",
         "drizzle-orm": "0.45.2",
@@ -49,6 +50,8 @@
       "dependencies": {
         "@oxy.so/core": "4.2.0",
         "@oxy.so/telemetry": "1.2.0",
+        "@tnp/crypto": "workspace:*",
+        "@tnp/protocol": "workspace:*",
         "@tnp/relay-core": "workspace:*",
         "@tnp/shared-types": "workspace:*",
       },

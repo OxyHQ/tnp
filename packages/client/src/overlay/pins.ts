@@ -22,7 +22,6 @@
  * by a running client.
  */
 
-import { closeSync, constants, lstatSync, openSync, unlinkSync, writeSync } from 'node:fs';
 import { parsePublicKey } from '@tnp/crypto';
 import { isCanonicalName } from '@tnp/shared-types';
 import type { OverlayStore } from './store';
@@ -42,16 +41,6 @@ interface PinFile {
 
 /** Serial marks kept per pin; the least recently raised are dropped past this. */
 export const MAX_SERIALS_PER_PIN = 256;
-
-/** A lock older than this is a crashed holder's and is broken. */
-const STALE_LOCK_MS = 10_000;
-/** How long to wait for another process's lock before giving up. */
-const LOCK_WAIT_MS = 5_000;
-
-const sleeper = new Int32Array(new SharedArrayBuffer(4));
-function sleepSync(ms: number): void {
-  Atomics.wait(sleeper, 0, 0, ms);
-}
 
 /** Raise the marks in `serials`, moving each raised key to the most-recent end. */
 export function raiseSerials(
@@ -99,44 +88,7 @@ export class PinStore {
   }
 
   private withLock<T>(fn: () => T): T {
-    const lockPath = `${this.store.pinsPath}.lock`;
-    this.store.ensureDir(this.store.root);
-    const deadline = Date.now() + LOCK_WAIT_MS;
-    let fd: number | null = null;
-    while (fd === null) {
-      try {
-        fd = openSync(
-          lockPath,
-          constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0),
-          0o600,
-        );
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
-        try {
-          if (Date.now() - lstatSync(lockPath).mtimeMs > STALE_LOCK_MS) {
-            unlinkSync(lockPath); // a holder that crashed
-            continue;
-          }
-        } catch {
-          continue; // released between our open and stat
-        }
-        if (Date.now() > deadline) {
-          throw new Error(`the pin file ${this.store.pinsPath} is locked by another process`);
-        }
-        sleepSync(10);
-      }
-    }
-    try {
-      writeSync(fd, `${process.pid}\n`);
-      return fn();
-    } finally {
-      closeSync(fd);
-      try {
-        unlinkSync(lockPath);
-      } catch {
-        // already broken as stale by someone else
-      }
-    }
+    return this.store.withLock(this.store.pinsPath, fn);
   }
 
   get(name: string): Pin | undefined {

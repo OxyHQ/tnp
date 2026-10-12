@@ -8,9 +8,15 @@
  * would only have kept the substitution path open.
  */
 
-import type { DomainKeyRotation, Grant, KeyAgreementCertificate } from '@tnp/crypto';
+import type {
+  DomainKeyRotation,
+  Grant,
+  KeyAgreementCertificate,
+  ServiceRelayBinding,
+} from '@tnp/crypto';
 import {
   type DomainKeyReset,
+  parseRelayBindingShape,
   parseKeyResetShape,
   parseChainShape,
   parseKeyAgreementCertificateShape,
@@ -51,6 +57,12 @@ export interface DnsResolveOverlay {
   kaCert: KeyAgreementCertificate;
   /** Present when the domain key was reset after a release, without a signed rotation. */
   keyReset?: DomainKeyReset;
+  /**
+   * The node's signed statement of which relay it is attached to (node key,
+   * `@tnp/crypto` `verifyServiceRelayBinding`). Absent from nodes released
+   * before it; clients then reach the name only through Oxy-operated relays.
+   */
+  relayBinding?: ServiceRelayBinding;
 }
 
 /**
@@ -76,6 +88,8 @@ export function parseDnsResolveOverlay(value: unknown): ParseResult<DnsResolveOv
   if (!kaCert.ok) return kaCert;
   const keyReset = parseKeyResetShape(r.keyReset);
   if (!keyReset.ok) return keyReset;
+  const relayBinding = parseRelayBindingShape(r.relayBinding);
+  if (!relayBinding.ok) return relayBinding;
   return {
     ok: true,
     value: {
@@ -86,6 +100,7 @@ export function parseDnsResolveOverlay(value: unknown): ParseResult<DnsResolveOv
       chain: chain.value,
       kaCert: kaCert.value,
       ...(keyReset.value ? { keyReset: keyReset.value } : {}),
+      ...(relayBinding.value ? { relayBinding: relayBinding.value } : {}),
     },
   };
 }

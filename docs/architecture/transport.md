@@ -211,10 +211,10 @@ initiator                                     responder
 ### 6.1 What is implemented: service-node authentication
 
 The full handshake above — both sides with node identities, a signed
-transcript, frozen capabilities — is **not implemented**: authenticating the
-relay to its peers needs a key the peer can check, which is the signed
-directory (Phase 5). What runs today is the half that closes S2, on the
-relay's `/service` endpoint (`packages/relay-core/src/core.ts`):
+transcript, frozen capabilities — is **not implemented**. What runs is two
+halves of it: the relay authenticating the service node (this section),
+which closes S2, and the relay authenticating itself to every peer (§6.2).
+On the relay's `/service` endpoint (`packages/relay-core/src/core.ts`):
 
 ```
 service node                                   relay
@@ -248,6 +248,41 @@ service node                                   relay
 Clients connecting to `/tunnel` do not authenticate: there is no client
 identity and no client handshake. They are rate-limited per address instead
 ([`relays.md`](./relays.md) §3).
+
+### 6.2 What is implemented: relay authentication to its peers
+
+A client's relay link and a service node both make the relay prove the key
+the **signed directory** ([`discovery.md`](./discovery.md) §2) lists for the
+endpoint they dialed, before they send anything else on the connection:
+
+```
+client / service node                          relay
+    │──── HELLO {nonce: 32 CSPRNG bytes} ─────────▶│   first frame, circuit 0
+    │◀─── HELLO_ACK {relayKey (32) ‖ sig (64)} ────│
+```
+
+- `sig` is the relay key's Ed25519 signature over
+  `u32 len ‖ "tnp-relay-identity-v1" ‖ u32 len ‖ endpoint ‖ nonce (32) ‖
+  relayKey (32)` (`@tnp/crypto` `signRelayIdentity`). `endpoint` is the
+  relay's configured public endpoint; the peer verifies with the normalized
+  URL it dialed, so a relay passing off another relay's proof — or its own
+  proof for another URL — fails. The peer's nonce makes a recorded proof
+  useless on any other connection.
+- The peer refuses unless `relayKey` equals the directory's key for that
+  endpoint and the signature verifies. Before that it processes only `PING`;
+  any other frame ends the connection. A client never sends `CIRCUIT_CREATE`
+  (and so never reveals a name) to an unproven relay; a service node never
+  sends its `AUTH` (grant chain and signature) to one, and fails over to its
+  next candidate relay.
+- On `/service` the relay's own challenge `HELLO` (§6.1) and the node's
+  identity `HELLO` cross; the node sends `AUTH` once it has the challenge and
+  the relay's proof verified.
+- The relay answers one `HELLO` per connection; a second is a violation. With
+  the per-address connection rate this bounds what signing costs it.
+- The proof is not bound to the TLS channel (§6's transcript would be): a
+  party that terminates TLS for the endpoint and forwards to the genuine relay
+  passes, and then sees what any network observer sees. Sessions are
+  end-to-end (§9), so it reads nothing.
 
 ## 7. Flow control
 

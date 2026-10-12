@@ -33,6 +33,8 @@ import {
   bytesEqual,
   type Grant,
   parsePublicKey,
+  signRelayIdentity,
+  signingKeyPairFromSecret,
   toHex,
   verifyChain,
   verifyServiceAuth,
@@ -43,10 +45,12 @@ import {
   DESTROY_NORMAL,
   decodeCircuitCreate,
   decodeFrame,
+  decodeRelayHello,
   decodeServiceAuth,
   encodeDestroy,
   encodeError,
   encodeFrame,
+  encodeRelayHelloAck,
   ErrorCode,
   type ErrorCodeValue,
   ErrorScope,
@@ -74,6 +78,13 @@ export interface RelayTransport {
 /** Resolves a name to the domain key the registry publishes for it, or null. */
 export type DomainKeyLookup = (name: string) => Promise<string | Uint8Array | null>;
 
+/** The relay key (Ed25519): what the signed directory publishes for this relay. */
+export interface RelayIdentity {
+  publicKey: Uint8Array;
+  /** tweetnacl's 64-byte secret form. */
+  secretKey: Uint8Array;
+}
+
 export interface RelayCoreOptions {
   /**
    * This relay's public endpoint, normalized. A service node signs the
@@ -81,6 +92,12 @@ export interface RelayCoreOptions {
    * relay cannot replay a node's proof here.
    */
   endpoint: string;
+  /**
+   * The relay key. On a peer's HELLO the relay signs the peer's nonce, the
+   * endpoint and this key (transport.md §6.2); the peer checks the key
+   * against the signed directory entry for the endpoint it dialed.
+   */
+  identity: RelayIdentity;
   lookupDomainKey: DomainKeyLookup;
   limits?: Partial<RelayLimits>;
   /** Milliseconds. Injected for tests. */
@@ -147,6 +164,8 @@ interface Connection {
   violations: number;
   closed: boolean;
   openedAt: number;
+  /** The peer asked for (and got) the relay's identity proof: once per connection. */
+  identityProven: boolean;
   // Service connections only.
   state?: ServiceState;
   challenge?: Uint8Array;
@@ -160,6 +179,7 @@ interface Connection {
 export class RelayCore {
   readonly limits: RelayLimits;
   private readonly endpoint: string;
+  private readonly identity: RelayIdentity;
   private readonly lookupDomainKey: DomainKeyLookup;
   private readonly clock: () => number;
   private readonly ips: IpTracker;
@@ -189,6 +209,12 @@ export class RelayCore {
   constructor(options: RelayCoreOptions) {
     if (!options.endpoint) throw new Error('relay endpoint is required');
     this.endpoint = options.endpoint;
+    // Checks the public half against the secret, so a mismatched pair (the
+    // directory lists one key, the relay signs with another) fails at start.
+    this.identity = signingKeyPairFromSecret(options.identity.secretKey);
+    if (!bytesEqual(this.identity.publicKey, options.identity.publicKey)) {
+      throw new Error('relay identity public key does not match its secret key');
+    }
     this.lookupDomainKey = options.lookupDomainKey;
     this.limits = { ...DEFAULT_LIMITS, ...options.limits };
     this.clock = options.clock ?? Date.now;
@@ -268,6 +294,7 @@ export class RelayCore {
       violations: 0,
       closed: false,
       openedAt: this.clock(),
+      identityProven: false,
     };
     this.connections.add(conn);
     return conn;
@@ -370,6 +397,10 @@ export class RelayCore {
       return;
     }
     if (frame.type === FrameType.PONG) return;
+    if (frame.type === FrameType.HELLO) {
+      this.proveIdentity(conn, frame);
+      return;
+    }
 
     if (conn.kind === 'service' && conn.state !== 'ready') {
       this.receiveUnauthenticated(conn, frame);
@@ -377,6 +408,37 @@ export class RelayCore {
     }
     if (conn.kind === 'client') this.receiveFromClient(conn, frame, data);
     else this.receiveFromService(conn, frame, data);
+  }
+
+  /**
+   * Answer a peer's HELLO with the relay's identity proof (transport.md §6.2):
+   * HELLO_ACK = relay key ‖ Ed25519(relay key, context ‖ endpoint ‖ nonce ‖
+   * relay key). One per connection, which with the per-address connection
+   * rate bounds what the signing costs; a second HELLO is a violation.
+   */
+  private proveIdentity(conn: Connection, frame: Frame): void {
+    if (frame.circuitId !== 0n || frame.streamId !== 0 || conn.identityProven) {
+      this.violation(conn);
+      return;
+    }
+    let nonce: Uint8Array;
+    try {
+      nonce = decodeRelayHello(frame.payload);
+    } catch {
+      this.fail(conn, ErrorCode.PROTOCOL_VIOLATION);
+      return;
+    }
+    conn.identityProven = true;
+    const signature = signRelayIdentity(
+      { endpoint: this.endpoint, nonce, relayKey: this.identity.publicKey },
+      this.identity.secretKey,
+    );
+    conn.transport.send(
+      encodeFrame({
+        type: FrameType.HELLO_ACK,
+        payload: encodeRelayHelloAck(this.identity.publicKey, signature),
+      }),
+    );
   }
 
   private receiveFromClient(conn: Connection, frame: Frame, raw: Uint8Array): void {

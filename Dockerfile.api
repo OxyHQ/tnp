@@ -45,6 +45,7 @@ RUN bun install --frozen-lockfile --production --omit=peer --filter @tnp/api
 COPY apps/api apps/api
 COPY packages/crypto packages/crypto
 COPY packages/namespace packages/namespace
+COPY packages/protocol packages/protocol
 COPY packages/shared-types packages/shared-types
 
 ENV NODE_ENV=production

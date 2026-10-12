@@ -35,8 +35,14 @@ import {
   encodeBase64,
   generateSigningKeyPair,
   signDomainKeyRotation,
+  signRelayDirectory,
+  signRelayRegistryProof,
+  signServiceRelayBinding,
   verifyKeyAgreementCertificate,
+  verifyRelayRegistryProof,
+  verifyServiceRelayBinding,
 } from '@tnp/crypto';
+import { verifySignedRelayDirectory } from '@tnp/shared-types';
 import { makeTestCredentials } from '@tnp/crypto/testing';
 import { TnpApiClient } from './api';
 
@@ -143,7 +149,8 @@ describe('relay registration', () => {
 
   test('sendRelayHeartbeat sends a body POST /relays/heartbeat accepts', async () => {
     const sent = await capture(
-      (client) => client.sendRelayHeartbeat('wss://relay.example.test:8443', AUTH_TOKEN),
+      (client) =>
+        client.sendRelayHeartbeat({ endpoint: 'wss://relay.example.test:8443' }, AUTH_TOKEN),
       { status: 'ok' },
     );
 
@@ -155,6 +162,48 @@ describe('relay registration', () => {
       'POST /relays/heartbeat',
     );
     expect(accepted).toEqual({ endpoint: 'wss://relay.example.test:8443' });
+  });
+
+  test('a key proof survives the trip on register and heartbeat, and still verifies', async () => {
+    const relayKey = generateSigningKeyPair();
+    const endpoint = 'wss://relay.example.test:8443';
+    const issuedAt = 1_800_000_000;
+    const proof = (purpose: 'register' | 'heartbeat') => ({
+      issuedAt,
+      signature: signRelayRegistryProof(
+        { purpose, endpoint, relayKey: relayKey.publicKey, issuedAt },
+        relayKey.secretKey,
+      ),
+    });
+    const register = await capture(
+      (client) =>
+        client.registerRelay(
+          {
+            endpoint,
+            publicKey: encodeBase64(relayKey.publicKey),
+            capacity: { maxConnections: 1, bandwidth: 0 },
+            location: '',
+            proof: proof('register'),
+          },
+          AUTH_TOKEN,
+        ),
+      {},
+    );
+    const reg = expectAccepted(parseRegisterRelayRequest(register.body), 'POST /relays/register');
+    expect(reg.proof).toEqual(proof('register'));
+    expect(
+      verifyRelayRegistryProof(
+        { purpose: 'register', endpoint: reg.endpoint, relayKey: reg.publicKey, issuedAt },
+        reg.proof?.signature ?? '',
+      ),
+    ).toBe(true);
+
+    const beat = await capture(
+      (client) => client.sendRelayHeartbeat({ endpoint, proof: proof('heartbeat') }, AUTH_TOKEN),
+      { status: 'ok' },
+    );
+    const hb = expectAccepted(parseRelayHeartbeatRequest(beat.body), 'POST /relays/heartbeat');
+    expect(hb.proof).toEqual(proof('heartbeat'));
   });
 
   test('the shapes the client used to send are still rejected', () => {
@@ -211,7 +260,7 @@ describe('service node registration', () => {
 
   test('sendHeartbeat sends a body POST /nodes/heartbeat accepts', async () => {
     const sent = await capture(
-      (client) => client.sendHeartbeat(DOMAIN_ID, 'wss://relay.example.test', AUTH_TOKEN),
+      (client) => client.sendHeartbeat(DOMAIN_ID, 'wss://relay.example.test', null, AUTH_TOKEN),
       { status: 'ok' },
     );
 
@@ -226,6 +275,38 @@ describe('service node registration', () => {
       domainId: DOMAIN_ID,
       connectedRelay: 'wss://relay.example.test',
     });
+  });
+
+  test('a signed relay binding survives the trip and still verifies under the node key', async () => {
+    const creds = makeTestCredentials('example.ox');
+    const relayKey = generateSigningKeyPair().publicKey;
+    const now = Math.floor(Date.now() / 1000);
+    const binding = signServiceRelayBinding(
+      'example.ox',
+      { endpoint: 'wss://relay.example.test', relayKey, issuedAt: now },
+      creds.nodeKey,
+    );
+    const sent = await capture(
+      (client) => client.sendHeartbeat(DOMAIN_ID, 'wss://relay.example.test', binding, AUTH_TOKEN),
+      { status: 'ok' },
+    );
+    const accepted = expectAccepted(
+      parseServiceNodeHeartbeatRequest(sent.body),
+      'POST /nodes/heartbeat',
+    );
+    expect(accepted.relayBinding).toEqual(binding);
+    expect(
+      verifyServiceRelayBinding('example.ox', accepted.relayBinding, creds.nodeKey.publicKey, now)
+        .ok,
+    ).toBe(true);
+    // A binding for another relay than connectedRelay is refused by the contract.
+    expect(
+      parseServiceNodeHeartbeatRequest({
+        domainId: DOMAIN_ID,
+        connectedRelay: 'wss://other.example.test',
+        relayBinding: binding,
+      }).ok,
+    ).toBe(false);
   });
 });
 
@@ -321,5 +402,92 @@ describe('the gate itself', () => {
     expect(() =>
       expectAccepted(parseRegisterRelayRequest({ port: 8080 }), 'POST /relays/register'),
     ).toThrow('endpoint is required');
+  });
+});
+
+describe('the signed relay directory', () => {
+  const signer = generateSigningKeyPair();
+  const now = Math.floor(Date.now() / 1000);
+  const document = signRelayDirectory(
+    {
+      v: 1,
+      serial: now,
+      issuedAt: now,
+      expiresAt: now + 3600,
+      relays: [
+        {
+          endpoint: 'wss://relay.tnp.network',
+          relayKey: encodeBase64(generateSigningKeyPair().publicKey),
+          operator: 'oxy',
+          capabilities: ['service', 'tunnel'],
+          region: 'us-west-2',
+        },
+      ],
+    },
+    signer.secretKey,
+  );
+
+  async function serve(status: number, body: string) {
+    const realFetch = globalThis.fetch;
+    let url = '';
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      url = typeof input === 'string' ? input : input.toString();
+      return new Response(body, { status, headers: { 'Content-Type': 'application/json' } });
+    }) as typeof fetch;
+    try {
+      return { url, result: await new TnpApiClient(BASE_URL).getRelayDirectory() };
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  }
+
+  test('getRelayDirectory reads GET /relays/directory into something the verifier accepts', async () => {
+    const realFetch = globalThis.fetch;
+    let requested = '';
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      requested = typeof input === 'string' ? input : input.toString();
+      return new Response(JSON.stringify(document), { status: 200 });
+    }) as typeof fetch;
+    let body: unknown;
+    try {
+      body = await new TnpApiClient(BASE_URL).getRelayDirectory();
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    expect(requested).toBe(`${BASE_URL}/relays/directory`);
+    const verified = verifySignedRelayDirectory(body, { now, trustedKeys: [signer.publicKey] });
+    expect(verified.ok).toBe(true);
+  });
+
+  test('a 503 (no signing key) is an error, never an empty or unsigned directory', async () => {
+    await expect(serve(503, '{"error":"x"}')).rejects.toThrow('no signed relay directory');
+  });
+
+  test('an oversized body is refused before it is parsed', async () => {
+    await expect(serve(200, `"${'a'.repeat(600_000)}"`)).rejects.toThrow('too large');
+  });
+
+  test('the cap counts bytes, not UTF-16 units, and holds without a Content-Length', async () => {
+    // 300 000 'é' is under the cap in UTF-16 units and over it in bytes.
+    await expect(serve(200, `"${'é'.repeat(300_000)}"`)).rejects.toThrow('too large');
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      const chunk = new TextEncoder().encode('a'.repeat(64 * 1024));
+      let sent = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          // An endless stream: the reader must stop at the cap.
+          sent++;
+          controller.enqueue(chunk);
+          if (sent > 1000) controller.close();
+        },
+      });
+      return new Response(body, { status: 200 });
+    }) as unknown as typeof fetch;
+    try {
+      await expect(new TnpApiClient(BASE_URL).getRelayDirectory()).rejects.toThrow('too large');
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 });

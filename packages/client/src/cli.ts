@@ -88,9 +88,14 @@ Overlay commands:
     it is not a full-traffic kill switch. Needs root/Administrator; if the
     rules cannot be fully applied, connect refuses to start.
 
-  TNP_TOKEN=<token> tnp serve --domain <domain> [--target <host:port>] [--relay <wss://url>]
+  TNP_TOKEN=<token> tnp serve --domain <domain> [--target <host:port>]
+            [--relay <wss://url> [--relay-key <base64> | --allow-unverified-relay]]
     Registers this machine as a service node for the given domain.
     Incoming connections are forwarded to the local target (default localhost:80).
+    Relays come only from the signed relay directory: Oxy-operated, fastest
+    first, failed over in order, each proving its directory key. --relay names
+    one explicitly; one whose key cannot be verified (not in the directory, no
+    --relay-key) is refused unless --allow-unverified-relay is given.
     The first run on the owner's device creates the domain key (back it up);
     a node on another device needs a grant: tnp domain grant.
 
@@ -276,12 +281,20 @@ async function cmdConnect() {
 
   const { OverlayStore } = await import('./overlay/store');
   const { PinStore } = await import('./overlay/pins');
+  const { RelayDirectoryClient } = await import('./relay-directory');
   const apiClient = proxy.getApiClient();
+  // Pins and the signed relay directory live in the data directory of the
+  // user running `tnp connect`.
+  const overlayStore = new OverlayStore();
+  const relayDirectory = RelayDirectoryClient.forUser(
+    () => apiClient.getRelayDirectory(),
+    overlayStore,
+  );
   const tunnelManager = new TunnelManager({
-    // Pins live in the data directory of the user running `tnp connect`.
-    pins: new PinStore(new OverlayStore()),
+    pins: new PinStore(overlayStore),
     resolveOverlay: async (destination) =>
       (await apiClient.resolveWithOverlay(destination, 'A')).overlay ?? null,
+    directory: (endpoint) => relayDirectory.entryFor(endpoint),
   });
   const socksProxy = new SocksProxy({
     port: config.socksPort,
@@ -468,7 +481,8 @@ async function cmdServe() {
   // Parse flags
   const domain = getFlag('--domain');
   const target = getFlag('--target') || 'localhost:80';
-  const relayEndpoint = getFlag('--relay');
+  const relayFlag = getFlag('--relay') ?? null;
+  const relayKeyFlag = getFlag('--relay-key') ?? null;
   const authToken = await readTokenOrExit();
 
   if (!domain) {
@@ -491,41 +505,51 @@ async function cmdServe() {
     process.exit(1);
   }
 
-  // Without --relay, only an Oxy-operated relay is chosen. A community relay
-  // is never picked silently, whatever `relayPreference` says: see
-  // relay-select.ts for why that is the operator's decision to make.
-  let relay = relayEndpoint;
-  if (!relay) {
-    console.log('[tnp] looking for an Oxy-operated relay...');
-    const { TnpApiClient } = await import('./api');
-    const { selectAutomaticRelay } = await import('./relay-select');
-    const apiClient = new TnpApiClient(config.apiBaseUrl);
+  // Relays come only from the signed directory (relay-select.ts). Without
+  // --relay, only Oxy-operated relays are chosen; a community relay is never
+  // picked silently, whatever `relayPreference` says.
+  const { TnpApiClient } = await import('./api');
+  const { chooseServiceRelays } = await import('./relay-select');
+  const { RelayDirectoryClient } = await import('./relay-directory');
+  const { OverlayStore } = await import('./overlay/store');
+  const { probeRelay } = await import('./overlay/relay-identity');
+  const apiClient = new TnpApiClient(config.apiBaseUrl);
+  const relayDirectory = RelayDirectoryClient.forUser(
+    () => apiClient.getRelayDirectory(),
+    new OverlayStore(),
+  );
 
-    const selection = selectAutomaticRelay(await apiClient.getRelays('oxy'));
-    if (!selection.ok) {
-      console.error(`[tnp] ${selection.message}`);
-      process.exit(1);
-    }
-
-    relay = selection.endpoint;
-    console.log(`[tnp] selected Oxy-operated relay: ${relay}`);
+  console.log('[tnp] reading the signed relay directory...');
+  const selection = await chooseServiceRelays({
+    relayFlag,
+    relayKeyFlag,
+    allowUnverified: process.argv.includes('--allow-unverified-relay'),
+    directory: () => relayDirectory.get(),
+    probe: (endpoint, key) => probeRelay(endpoint, key),
+    warn: (message) => console.warn(`[tnp] ${message}`),
+  });
+  if (!selection.ok) {
+    console.error(`[tnp] ${selection.message}`);
+    process.exit(1);
   }
+  const relays = selection.candidates;
 
   console.log(`[tnp] v${VERSION} service node starting...`);
   console.log(`[tnp] domain: ${domain}`);
   console.log(`[tnp] target: ${target}`);
-  console.log(`[tnp] relay: ${relay}`);
+  console.log(
+    `[tnp] relay: ${relays[0].endpoint}${relays.length > 1 ? ` (+${relays.length - 1} fail-over)` : ''}`,
+  );
 
   const { startServiceNode } = await import('./service-node');
-  const { TnpApiClient } = await import('./api');
-  const apiClient = new TnpApiClient(config.apiBaseUrl);
 
   await startServiceNode(
     {
       domain,
       localTarget: target,
       apiBaseUrl: config.apiBaseUrl,
-      relayEndpoint: relay,
+      relays,
+      refreshRelays: selection.refresh,
       authToken,
     },
     apiClient,

@@ -11,9 +11,15 @@ export {
   type DomainKeyLookup,
   RelayCore,
   type RelayCoreOptions,
+  type RelayIdentity,
   type RelayStats,
   type RelayTransport,
 } from './core.js';
 export { type ApiDomainKeyLookupOptions, apiDomainKeyLookup } from './domain-keys.js';
 export { DEFAULT_LIMITS, type RelayLimits } from './limits.js';
-export { type RelayServer, type ServeRelayOptions, serveRelay } from './serve.js';
+export {
+  RELAY_PING_INTERVAL_MS,
+  type RelayServer,
+  type ServeRelayOptions,
+  serveRelay,
+} from './serve.js';

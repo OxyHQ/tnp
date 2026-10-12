@@ -43,7 +43,21 @@ export interface ServeRelayOptions {
    * client could pick its own address and walk around the per-IP limits.
    */
   trustForwardedFor?: boolean;
+  /**
+   * How often the relay sends a WebSocket ping to EVERY connection (default
+   * 25 s). Idle overlay links are normal — a service node waiting for
+   * clients, a client between requests — and the load balancer in front of a
+   * production relay drops a connection after 60 s without a byte either way
+   * (Cloudflare after 100 s). A ping, and the pong every WebSocket client
+   * answers with automatically, keeps both legs of the path active. 0 disables.
+   */
+  pingIntervalMs?: number;
+  /** Override the relay's own idle timeout (seconds; tests). */
+  idleTimeoutSeconds?: number;
 }
+
+/** Default keepalive: under every idle timeout on the path (ALB 60 s, Cloudflare 100 s). */
+export const RELAY_PING_INTERVAL_MS = 25_000;
 
 function clientIp(req: Request, srv: Server<SocketData>, trustForwardedFor: boolean): string {
   if (trustForwardedFor) {
@@ -68,6 +82,7 @@ function toBytes(message: string | Buffer | ArrayBuffer | Uint8Array): Uint8Arra
 
 export function serveRelay(options: ServeRelayOptions): RelayServer {
   const { core } = options;
+  const open = new Set<ServerWebSocket<SocketData>>();
   const backstop = 2 * Math.max(core.limits.clientBufferLimit, core.limits.serviceBufferLimit);
 
   const server = Bun.serve<SocketData>({
@@ -99,10 +114,11 @@ export function serveRelay(options: ServeRelayOptions): RelayServer {
       maxPayloadLength: MAX_FRAME_SIZE,
       backpressureLimit: backstop,
       closeOnBackpressureLimit: true,
-      idleTimeout: Math.ceil(IDLE_TIMEOUT_MS / 1000),
+      idleTimeout: options.idleTimeoutSeconds ?? Math.ceil(IDLE_TIMEOUT_MS / 1000),
       sendPings: true,
 
       open(ws: ServerWebSocket<SocketData>) {
+        open.add(ws);
         const transport = {
           send: (frame: Uint8Array) => ws.sendBinary(frame),
           bufferedAmount: () => ws.getBufferedAmount(),
@@ -125,10 +141,26 @@ export function serveRelay(options: ServeRelayOptions): RelayServer {
       },
 
       close(ws: ServerWebSocket<SocketData>) {
+        open.delete(ws);
         ws.data.handle?.closed();
       },
     },
   });
+
+  const pingEvery = options.pingIntervalMs ?? RELAY_PING_INTERVAL_MS;
+  const pinger =
+    pingEvery > 0
+      ? setInterval(() => {
+          for (const ws of open) {
+            try {
+              ws.ping();
+            } catch {
+              // closing; its close handler removes it
+            }
+          }
+        }, pingEvery)
+      : null;
+  pinger?.unref?.();
 
   return {
     server,
@@ -136,6 +168,7 @@ export function serveRelay(options: ServeRelayOptions): RelayServer {
       return server.port ?? options.port;
     },
     async stop() {
+      if (pinger) clearInterval(pinger);
       core.shutdown();
       await server.stop(true);
     },

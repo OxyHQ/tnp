@@ -124,6 +124,9 @@ export async function registerServiceNode(
           chain,
           kaCert,
           oxyUserId: userId,
+          // A binding is signed by the node key; one from another key would
+          // only be refused by clients, so it does not outlive the key.
+          relayBinding: sql`case when ${serviceNodes.publicKey} = ${publicKey} then ${serviceNodes.relayBinding} else null end`,
           lastSeen: sql`now()`,
           updatedAt: sql`now()`,
         },
