@@ -49,7 +49,7 @@ tnp status
 
 - The passphrase is asked for on the terminal without echo, or read from stdin with `--passphrase-stdin` (then pass the token in `TNP_TOKEN`, not `--token-stdin`). It is never accepted as an argument.
 - After the first pull the **rules key** is kept, root-only, so later pulls (`sudo tnp rules pull`, from cron if you like) need no passphrase. If you re-create the rule set with a new passphrase, run `sudo tnp rules pull --passphrase`; approvals on that device are cleared.
-- **Blocks apply right after a pull. Redirects wait** for `tnp rules approve`. The prompt names the exact domain and target and says that its public meaning is being replaced on this device. `tnp rules approve <name> --yes` approves a redirect you name explicitly without the prompt. If a redirect's target changes later, it is pending again until re-approved. `tnp rules revoke <name>` stops one.
+- **Blocks apply right after a pull. Redirects wait** for `tnp rules approve`. Each of these also updates the per-name routing described below. The prompt names the exact domain and target and says that its public meaning is being replaced on this device. `tnp rules approve <name> --yes` approves a redirect you name explicitly without the prompt. If a redirect's target changes later, it is pending again until re-approved. `tnp rules revoke <name>` stops one.
 - `tnp rules forget` deletes the key, the state and the active rules file from the device. Your encrypted rules stay on TNP until you delete them in the dashboard.
 
 ### Refusals that protect you
@@ -71,10 +71,19 @@ The resolver daemon reads only the first file. It ignores the file entirely if i
 
 ### Which lookups the rules affect
 
-The client applies rules to the lookups **its own resolver answers**. With `tnp install`, your system sends that resolver only `.ox` names (it never takes over your DNS), so:
+The client applies rules to the lookups **its own resolver answers**. `tnp install` routes only `.ox` names to it, and never takes over your DNS. On top of that, once you have pulled blocks or approved redirects for **public** names, `tnp rules` routes **exactly those names** to the installed resolver as well, and nothing else:
 
-- blocks of `.ox` names work out of the box;
-- for public names, point the device's DNS (or an application) at the local resolver, or put the rules on your router with the export below.
+| System | What `tnp rules` writes | Removed by |
+|---|---|---|
+| Linux, systemd ≥ 258 | `/etc/systemd/dns-delegate.d/tnp-rules.dns-delegate` with `Domains=~google.com ~ads.example.com …` and no default route | `tnp rules revoke` (for that name), `tnp rules forget`, `tnp uninstall` |
+| Linux, older systemd-resolved | a `tnp2` link with those routing domains. It does not survive a reboot: run `sudo tnp rules route` after one | as above |
+| macOS | `/etc/resolver/<name>` per name. An existing file there is never overwritten; that rule is reported as not routed | as above |
+| Windows | NRPT rules tagged `Managed by TNP (personal rules)`: the exact name, plus `.name` for a block with subdomains | as above |
+
+- Nothing is routed until `tnp install` has set up the system resolver: routing a name to a resolver that is not running would make it stop resolving. `sudo tnp rules route` re-applies routing from the active rules at any time.
+- On Linux and macOS, routing `google.com` also sends `www.google.com` to the TNP resolver, which forwards it upstream unchanged (encrypted, to the DoH resolvers in your TNP config) — only the exact name is redirected.
+- Without systemd-resolved, Linux cannot route by name; point your DNS at the TNP resolver or use the router export.
+- The routing files and NRPT rules are readable by other accounts on the device, so the names you route are visible to them.
 
 ## Using the rules on a router (export)
 

@@ -24,6 +24,7 @@ import {
   type RulesPaths,
   type RulesView,
 } from './dns-rules-store';
+import { removeRulesRouting, routesForRules, syncRulesRouting } from './rules-routing';
 import { resolveToken } from './token';
 
 const USAGE = `
@@ -38,11 +39,12 @@ Usage:
       Approve pending redirects. Each is shown and confirmed; --yes skips the
       prompt only for names given explicitly.
   tnp rules revoke <name> Stop applying an approved redirect on this device
-  tnp rules forget        Delete the rules key, state and active rules file
+  tnp rules route         Re-apply the per-name OS routing for the active rules
+  tnp rules forget        Delete the rules key, state, active rules file and routing
 
-Rules apply to lookups answered by this device's TNP resolver. With
-\`tnp install\`, the system sends it only .ox names; point a device or router at
-it (or use "Export for router" in the dashboard) for public names.
+Rules apply to lookups answered by this device's TNP resolver. After
+\`tnp install\`, the public names your active rules cover (blocks you pulled,
+redirects you approved here) are routed to it by name; nothing else is.
 `;
 
 function isNativeWith(tlds: Iterable<string>) {
@@ -131,7 +133,8 @@ export function approvalPrompt(rule: Extract<DnsRule, { type: 'redirect' }>): st
   return [
     `Redirect ${rule.name} -> ${describeDnsRuleTarget(rule.target)}`,
     `  ${rule.name} is a public DNS name. Approving replaces its public meaning on this device:`,
-    `  lookups answered by this device's TNP resolver will ${what} instead of what public DNS says.`,
+    `  lookups answered by this device's TNP resolver will ${what} instead of what public DNS says,`,
+    `  and this system will send ${rule.name} lookups to that resolver.`,
   ].join('\n');
 }
 
@@ -155,6 +158,35 @@ function printView(view: RulesView, paths: RulesPaths): void {
     for (const r of view.rejected) console.log(`        rule #${r.index + 1}: ${r.error}`);
   }
   console.log(`[tnp] active rules file: ${paths.activeFile}`);
+}
+
+/**
+ * Bring OS routing in line with the rules now active (rules-routing.ts) and
+ * say what happened. Only names in `active` — pulled blocks and redirects
+ * approved here — are ever routed.
+ */
+function routeActive(view: RulesView, isNative: (name: string) => boolean): void {
+  const outcome = syncRulesRouting(routesForRules(view.active, isNative));
+  switch (outcome.kind) {
+    case 'applied':
+      console.log(
+        `[tnp] DNS: ${outcome.routes.length} public name(s) from your rules now go to the TNP resolver: ${outcome.routes
+          .map((r) => (r.subtree ? `${r.name} (and subdomains)` : r.name))
+          .join(', ')}`,
+      );
+      for (const name of outcome.skipped) console.warn(`[tnp] DNS: ${name} could not be routed`);
+      break;
+    case 'removed':
+      console.log('[tnp] DNS: no public names are routed for personal rules');
+      break;
+    case 'no-resolver':
+      console.log(
+        `[tnp] DNS: ${outcome.pending} public name(s) in your rules are not routed: no installed TNP resolver. Run \`sudo tnp install\`, then \`sudo tnp rules route\`.`,
+      );
+      break;
+    case 'unchanged':
+      break;
+  }
 }
 
 function explain(err: unknown): string {
@@ -227,6 +259,7 @@ async function cmdPull(argv: readonly string[], paths: RulesPaths): Promise<void
     console.log(`[tnp] ${result.view.rejected.length} rule(s) refused; see \`tnp rules status\``);
   }
   console.log(`[tnp] active rules file: ${paths.activeFile}`);
+  routeActive(result.view, isNative);
 }
 
 async function cmdApprove(argv: readonly string[], paths: RulesPaths): Promise<void> {
@@ -271,6 +304,7 @@ async function cmdApprove(argv: readonly string[], paths: RulesPaths): Promise<v
     `[tnp] approved ${approved.length} redirect(s); ${after.pending.length} still pending`,
   );
   console.log(`[tnp] active rules file: ${paths.activeFile}`);
+  routeActive(after, isNative);
 }
 
 /** Entry point for `tnp rules <subcommand>`. Returns the process exit code. */
@@ -307,11 +341,22 @@ export async function runRulesCommand(
       case 'revoke': {
         const name = rest.find((a) => !a.startsWith('--'));
         if (!name) throw new Error('usage: tnp rules revoke <name>');
-        revokeRedirect(paths, name, isNativeWith(loadNativeTlds()));
+        const isNative = isNativeWith(loadNativeTlds());
+        const view = revokeRedirect(paths, name, isNative);
         console.log(`[tnp] ${name} no longer redirects on this device`);
+        routeActive(view, isNative);
+        return 0;
+      }
+      case 'route': {
+        const isNative = isNativeWith(loadNativeTlds());
+        const view = currentRulesView(paths, isNative);
+        if (view) routeActive(view, isNative);
+        else if (removeRulesRouting()) console.log('[tnp] DNS: personal-rule routing removed');
+        else console.log('[tnp] no personal DNS rules on this device');
         return 0;
       }
       case 'forget': {
+        if (removeRulesRouting()) console.log('[tnp] DNS: personal-rule routing removed');
         const removed = forgetRules(paths);
         if (removed.length === 0) console.log('[tnp] nothing to forget');
         for (const path of removed) console.log(`[tnp] removed ${path}`);

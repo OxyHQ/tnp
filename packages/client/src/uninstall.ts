@@ -20,6 +20,7 @@ import { join, win32 } from 'node:path';
 import { type AutoConnectUser, removeAutoConnect } from './autoconnect';
 import { dataDir, logPath, RESOLVER_STATE_DIR } from './config';
 import { readRoutingState, removeNativeRouting, routingStatePath } from './dns-routing';
+import { removeRulesRouting } from './rules-routing';
 import { disableKillSwitch } from './killswitch';
 import { SERVICE_USER, serviceBinaryPath, uninstallService } from './service';
 import { findSystemBinary, isRoot, runCmd } from './system-cmd';
@@ -51,6 +52,7 @@ const DATA_DIR_FILES = [
   'tlds.json',
   'dns-routing-install.json',
   'dns-routing-connect.json',
+  'dns-routing-rules.json',
 ];
 
 /** Every place TNP leaves data, per platform. Pure: decides, does not look. */
@@ -253,6 +255,14 @@ export function performUninstall(opts: { purge: boolean; publicDnsIp: string }):
     } catch (err) {
       report.failed.push(`DNS routing left by \`tnp connect\`: ${errorMessage(err)}`);
     }
+  }
+
+  // Per-name routing for personal DNS rules points at the resolver being
+  // removed; left behind, those names would stop resolving.
+  try {
+    if (removeRulesRouting()) report.done.push('DNS routing for personal DNS rules');
+  } catch (err) {
+    report.failed.push(`DNS routing for personal DNS rules: ${errorMessage(err)}`);
   }
 
   try {

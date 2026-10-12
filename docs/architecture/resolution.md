@@ -321,5 +321,15 @@ on 53. `tnp connect` on Windows with the default port 5354 leaves DNS unchanged
 and says how to fix it; it no longer points Windows at the TNP public resolver,
 which would carry every `.ox` lookup across the network in plaintext.
 
+**Personal rules (owner `rules`).** The one other routing object TNP writes
+is opt-in and per name: for the public names a device's active personal rules
+cover (naming.md §3), `tnp rules` adds a third delegate
+(`tnp-rules.dns-delegate`), link (`tnp2`), `/etc/resolver/<name>` files or
+NRPT rules (comment `Managed by TNP (personal rules)`), pointed at the
+installed resolver's recorded target and recorded in
+`<dataDir>/dns-routing-rules.json` (`rules-routing.ts`). Nothing pre-existing
+is overwritten, nothing is routed without an installed resolver, and the
+native-TLD routing above is never touched by it.
+
 **Not verified on real systems by tests:** the generated configuration is
 unit-tested; its effect on Windows, macOS and each systemd version is not.

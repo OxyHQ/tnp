@@ -106,7 +106,7 @@
     "step1": "Installez le client TNP, puis lancez <code>sudo TNP_TOKEN=... tnp rules pull</code> et saisissez votre phrase de synchronisation. Les téléchargements suivants ne la redemandent pas.",
     "step2": "Les règles de blocage s'appliquent immédiatement. Les redirections attendent que vous approuviez chacune d'elles sur cet appareil avec <code>sudo tnp rules approve</code>.",
     "step3": "Vérifiez ce qui est actif avec <code>tnp status</code> ou <code>tnp rules status</code>.",
-    "scope": "Le client applique les règles aux requêtes auxquelles répond son propre résolveur. Par défaut, votre système ne lui envoie que les noms .ox ; pour les autres domaines, pointez l'appareil ou votre routeur vers lui, ou utilisez l'export pour routeur ci-dessus."
+    "scope": "Après <code>tnp install</code>, le client envoie à son propre résolveur exactement les noms publics couverts par vos règles actives (les blocages téléchargés et les redirections approuvées sur cet appareil), et rien d'autre. Les appareils sans le client peuvent utiliser l'export pour routeur ci-dessus."
   },
   "privacy": {
     "heading": "Ce que TNP peut voir",

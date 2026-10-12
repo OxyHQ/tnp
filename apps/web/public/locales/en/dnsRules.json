@@ -106,7 +106,7 @@
     "step1": "Install the TNP client, then run <code>sudo TNP_TOKEN=... tnp rules pull</code> and enter your sync passphrase. Later pulls do not ask again.",
     "step2": "Block rules apply at once. Redirects wait until you approve each one on that device with <code>sudo tnp rules approve</code>.",
     "step3": "Check what is active with <code>tnp status</code> or <code>tnp rules status</code>.",
-    "scope": "The client applies rules to lookups its own resolver answers. By default your system sends it only .ox names, so for other domains point the device or your router at it, or use the router export above."
+    "scope": "After <code>tnp install</code>, the client sends exactly the public names your active rules cover (blocks you pulled, redirects you approved on that device) to its own resolver, and nothing else. Devices without the client can use the router export above."
   },
   "privacy": {
     "heading": "What TNP can see",

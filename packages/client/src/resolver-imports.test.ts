@@ -1,17 +1,19 @@
 /**
  * What the resolver may import.
  *
- * The public-resolver image (`Dockerfile.dns`) copies the source of only the
- * client, namespace, protocol and shared-types packages, and runs
- * `apps/dns-server`, which imports `proxy.ts` by relative path. Two things
- * follow, and both are checked on the parsed import graph here:
+ * The public-resolver image (`Dockerfile.dns`) runs `apps/dns-server`, which
+ * imports `proxy.ts` by relative path, and contains the SOURCE of only the
+ * workspace packages the Dockerfile copies. Two properties are checked on the
+ * parsed import graph (type-only imports are erased and not followed):
  *
- * - Nothing the resolver reaches may import `@tnp/crypto`: its source is not
- *   in that image, so such an import fails at start-up in production while
- *   every local test passes.
- * - Nothing the resolver reaches may import the personal-rules store: the
- *   rules key and the decryption code belong to `tnp rules` (root), never to
- *   a daemon, and never to the public resolver.
+ * - Every workspace package the resolver reaches, directly or through another
+ *   workspace package, is one whose source `Dockerfile.dns` copies. The list
+ *   is read from the Dockerfile itself, so adding a package there satisfies
+ *   the check and importing one it lacks fails it — the breakage this catches
+ *   starts in production only, while every local test passes.
+ * - Nothing the resolver reaches is the personal-rules store or CLI: the rules
+ *   key and the decryption code belong to `tnp rules` (root), never to a
+ *   daemon, and never to the public resolver (naming.md §3).
  */
 
 import { describe, expect, test } from 'bun:test';
@@ -20,28 +22,37 @@ import { dirname, join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dir, '../../..');
 
-function resolveRelative(from: string, specifier: string): string | null {
-  const base = resolve(dirname(from), specifier);
-  for (const candidate of [
-    base,
-    `${base}.ts`,
-    base.replace(/\.js$/, '.ts'),
-    join(base, 'index.ts'),
-  ]) {
-    try {
-      if (statSync(candidate).isFile()) return candidate;
-    } catch {
-      // next
-    }
+function isFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
   }
-  return null;
 }
 
-/** Every file reachable from `entry` by relative import, and every bare specifier they import. */
-function importGraph(entry: string): { files: Set<string>; bare: Map<string, string> } {
+function resolveRelative(from: string, specifier: string): string | null {
+  const base = resolve(dirname(from), specifier);
+  const candidates = [base, `${base}.ts`, base.replace(/\.js$/, '.ts'), join(base, 'index.ts')];
+  return candidates.find(isFile) ?? null;
+}
+
+/** `@tnp/<pkg>[/<sub>]` → the source file its package.json `exports` names. */
+function resolveWorkspace(specifier: string): { pkg: string; file: string } | null {
+  const match = /^@tnp\/([^/]+)(\/.*)?$/.exec(specifier);
+  if (!match) return null;
+  const dir = join(ROOT, 'packages', match[1]);
+  const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8')) as {
+    exports?: Record<string, string>;
+  };
+  const target = manifest.exports?.[match[2] ? `.${match[2]}` : '.'];
+  return target ? { pkg: `packages/${match[1]}`, file: join(dir, target) } : null;
+}
+
+/** Files reachable from `entry`, and the workspace packages they pull in. */
+function importGraph(entry: string): { files: Set<string>; packages: Set<string> } {
   const transpiler = new Bun.Transpiler({ loader: 'ts' });
   const files = new Set<string>();
-  const bare = new Map<string, string>();
+  const packages = new Set<string>();
   const queue = [entry];
   while (queue.length > 0) {
     const file = queue.pop() as string;
@@ -51,33 +62,49 @@ function importGraph(entry: string): { files: Set<string>; bare: Map<string, str
       if (path.startsWith('.')) {
         const next = resolveRelative(file, path);
         if (next) queue.push(next);
-      } else if (!bare.has(path)) {
-        bare.set(path, file);
+        continue;
+      }
+      const workspace = resolveWorkspace(path);
+      if (workspace) {
+        packages.add(workspace.pkg);
+        queue.push(workspace.file);
       }
     }
   }
-  return { files, bare };
+  return { files, packages };
+}
+
+/** Source directories `Dockerfile.dns` copies (`COPY <dir> <dir>`, not package.json lines). */
+function copiedSourceDirs(dockerfile: string): Set<string> {
+  const dirs = new Set<string>();
+  for (const line of dockerfile.split('\n')) {
+    const match = /^COPY\s+(\S+)\s+\S+\s*$/.exec(line.trim());
+    if (match && !match[1].endsWith('.json') && !match[1].endsWith('.toml')) dirs.add(match[1]);
+  }
+  return dirs;
 }
 
 describe('the resolver import graph', () => {
   const graph = importGraph(join(ROOT, 'apps/dns-server/src/index.ts'));
+  const relative = [...graph.files].map((f) => f.slice(ROOT.length + 1));
+  const copied = copiedSourceDirs(readFileSync(join(ROOT, 'Dockerfile.dns'), 'utf-8'));
 
   test('reaches the resolver and the personal-rules reader (vacuity floor)', () => {
-    const names = [...graph.files].map((f) => f.slice(ROOT.length + 1));
-    expect(names).toContain('packages/client/src/proxy.ts');
-    expect(names).toContain('packages/client/src/dns-rules.ts');
+    expect(relative).toContain('packages/client/src/proxy.ts');
+    expect(relative).toContain('packages/client/src/dns-rules.ts');
+    expect(graph.packages).toContain('packages/shared-types');
+    expect(copied).toContain('packages/client');
   });
 
-  test('never imports @tnp/crypto, whose source the DNS image does not contain', () => {
-    const offenders = [...graph.bare].filter(
-      ([spec]) => spec === '@tnp/crypto' || spec.startsWith('@tnp/crypto/'),
-    );
-    expect(offenders).toEqual([]);
+  test('every workspace package it reaches is copied into the DNS image', () => {
+    const missing = [...graph.packages].filter((pkg) => !copied.has(pkg));
+    expect(missing).toEqual([]);
   });
 
   test('never reaches the rules store, the rules CLI or anything holding the rules key', () => {
-    const names = [...graph.files].map((f) => f.slice(ROOT.length + 1));
-    expect(names).not.toContain('packages/client/src/dns-rules-store.ts');
-    expect(names).not.toContain('packages/client/src/rules-cli.ts');
+    expect(relative).not.toContain('packages/client/src/dns-rules-store.ts');
+    expect(relative).not.toContain('packages/client/src/rules-cli.ts');
+    expect(relative).not.toContain('packages/client/src/rules-routing.ts');
+    expect(relative.some((f) => f === 'packages/crypto/src/dns-rules.ts')).toBe(false);
   });
 });

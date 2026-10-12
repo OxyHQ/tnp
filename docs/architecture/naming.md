@@ -161,9 +161,24 @@ name is answered differently by any TNP code path.
 - **Where they apply.** Only to queries answered by the user's local TNP
   resolver (`tnp run`, `tnp connect`) or by a router the user configured from
   the dashboard's local export. The public TNP resolver never applies personal
-  rules: it has no key and is never given a rules file. With `tnp install`
-  the OS routes only native TLDs to the local resolver (resolution.md §10), so
-  public-name rules reach only devices or routers the user points at it.
+  rules: it has no key and is never given a rules file.
+- **Per-name OS routing.** With `tnp install` the OS routes only native TLDs
+  to the local resolver (resolution.md §10). For the public names a device's
+  *active* rules cover — blocks the user pulled, and redirects the user
+  approved on that device, nothing else — `tnp rules pull/approve/revoke`
+  also install per-name routing to the installed resolver: a separate
+  systemd-resolved delegate (`tnp-rules.dns-delegate`, `Domains=~name …`, no
+  default route; a `tnp2` link before systemd 258), one `/etc/resolver/<name>`
+  per name on macOS, or NRPT rules tagged `Managed by TNP (personal rules)` on
+  Windows (an exact FQDN rule, plus the `.name` suffix for a block with
+  subdomains). On Linux and macOS a routed name carries its subdomains to the
+  TNP resolver too; those it simply forwards upstream. What was written is
+  recorded in `<dataDir>/dns-routing-rules.json`, and revoke, forget and
+  uninstall remove exactly that. A pre-existing `/etc/resolver/<name>` or a
+  foreign file at the delegate path is never overwritten, and nothing is
+  routed without an installed resolver (a name sent to a resolver that is not
+  running would stop resolving). These OS routing objects are readable by
+  other local accounts, so a routed name is visible to them.
 - **One file.** The device writes the decrypted, approved set to
   `<configDir>/dns-rules.conf` (Linux `/etc/tnp/dns-rules.conf`, root:tnp
   0640 so the sandboxed daemon can read it; 0600 elsewhere). The rules key,

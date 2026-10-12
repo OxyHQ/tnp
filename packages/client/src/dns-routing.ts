@@ -72,7 +72,7 @@ export interface RoutingTarget {
  * (a foreground session) each get their own delegate file, link and NRPT
  * comment, so disconnecting a session never removes the installed routing.
  */
-export type RoutingOwner = 'install' | 'connect';
+export type RoutingOwner = 'install' | 'connect' | 'rules';
 
 export interface OwnerNames {
   /** systemd-resolved DNS delegate file. */
@@ -86,19 +86,32 @@ export interface OwnerNames {
 }
 
 export function ownerNames(owner: RoutingOwner): OwnerNames {
-  return owner === 'install'
-    ? {
+  switch (owner) {
+    case 'install':
+      return {
         delegate: '/etc/systemd/dns-delegate.d/tnp.dns-delegate',
         link: 'tnp0',
         linkAddress: '192.0.2.53/32',
         nrptComment: 'Managed by TNP',
-      }
-    : {
+      };
+    case 'connect':
+      return {
         delegate: '/etc/systemd/dns-delegate.d/tnp-connect.dns-delegate',
         link: 'tnp1',
         linkAddress: '192.0.2.54/32',
         nrptComment: 'Managed by TNP (connect)',
       };
+    case 'rules':
+      // Personal DNS rules (naming.md §3): the public names the user's active
+      // rules cover, each by name — never a TLD — in its own routing object, so
+      // syncing rules never touches the native-TLD routing above.
+      return {
+        delegate: '/etc/systemd/dns-delegate.d/tnp-rules.dns-delegate',
+        link: 'tnp2',
+        linkAddress: '192.0.2.55/32',
+        nrptComment: 'Managed by TNP (personal rules)',
+      };
+  }
 }
 
 /** The global drop-in earlier versions wrote. Removed on sight. */
@@ -281,6 +294,8 @@ export interface RoutingState {
   down: string[];
   /** Adapter DNS before a legacy repair, kept for the record (Windows). */
   adapterSnapshot?: string;
+  /** Owner `rules` only: the public names routed, and whether each covers its subdomains. */
+  routes?: RuleRoute[];
 }
 
 export interface RoutingDeps {
@@ -601,5 +616,219 @@ export function removeLegacyMacResolverFiles(deps: RoutingDeps = systemDeps): vo
     if (!/^nameserver 127\.0\.0\.1$/m.test(content)) continue;
     deps.remove(path);
     deps.log(`[tnp] removed ${path}: .${tld} is public DNS, not TNP's`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Per-name routing for personal DNS rules (owner `rules`)
+// ---------------------------------------------------------------------------
+
+/**
+ * One public name a device's active personal rules cover: an approved
+ * redirect, or a block. `subtree` is set for a block that covers subdomains.
+ */
+export interface RuleRoute {
+  name: string;
+  subtree: boolean;
+}
+
+const RULE_NAME_RE =
+  /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+/**
+ * Throw unless every route is a multi-label LDH name that is not under a
+ * native TLD. These names reach config files and shell commands, so the check
+ * is here, at the last step, whatever the caller validated before.
+ */
+function assertRuleRoutes(routes: readonly RuleRoute[]): void {
+  for (const { name } of routes) {
+    if (!RULE_NAME_RE.test(name) || /^[0-9.]+$/.test(name)) {
+      throw new Error('refusing to route a personal rule: not a multi-label domain name');
+    }
+    const tld = name.slice(name.lastIndexOf('.') + 1);
+    if (ROUTED_TLDS.includes(tld)) {
+      throw new Error(
+        'refusing to route a TNP-native name as a personal rule: it is already routed',
+      );
+    }
+  }
+}
+
+/** The routes in a stable order, one per name (a subtree route wins). */
+export function normalizeRuleRoutes(routes: readonly RuleRoute[]): RuleRoute[] {
+  const byName = new Map<string, boolean>();
+  for (const r of routes) byName.set(r.name, (byName.get(r.name) ?? false) || r.subtree);
+  return [...byName]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([name, subtree]) => ({ name, subtree }));
+}
+
+/**
+ * The resolved delegate for personal rules. A routing domain `~name` covers
+ * the name and everything under it; for an exact-name rule the extra names
+ * reach the TNP resolver, which forwards them upstream unchanged.
+ */
+export function rulesDelegateFile(target: RoutingTarget, routes: readonly RuleRoute[]): string {
+  assertRuleRoutes(routes);
+  return [
+    '# Written by TNP (tnp rules). Routes the public names your personal DNS',
+    '# rules cover on this device, and nothing else, to the local TNP resolver.',
+    '# Removed by tnp rules revoke/forget and tnp uninstall.',
+    '[Delegate]',
+    `DNS=${resolvedServerSpec(target)}`,
+    `Domains=${routes.map((r) => `~${r.name}`).join(' ')}`,
+    'DefaultRoute=no',
+    '',
+  ].join('\n');
+}
+
+/** The dedicated `tnp2` link for personal rules (systemd older than 258). */
+export function rulesLinkCommands(
+  target: RoutingTarget,
+  routes: readonly RuleRoute[],
+): { up: string[]; down: string[] } {
+  assertRuleRoutes(routes);
+  const { link, linkAddress } = ownerNames('rules');
+  return {
+    up: [
+      `ip link show ${link} >/dev/null 2>&1 || ip link add ${link} type dummy`,
+      `ip link set ${link} up`,
+      `resolvectl default-route ${link} false`,
+      `resolvectl domain ${link} ${routes.map((r) => `"~${r.name}"`).join(' ')}`,
+      `ip address replace ${linkAddress} dev ${link}`,
+      `resolvectl dns ${link} ${resolvedServerSpec(target)}`,
+    ],
+    down: [`resolvectl revert ${link}`, `ip link delete ${link}`],
+  };
+}
+
+/**
+ * NRPT rules for personal rules. A namespace without a leading dot is one
+ * exact name; with one it is a suffix. A subtree rule gets both.
+ */
+export function windowsNrptRulesAddScript(server: string, routes: readonly RuleRoute[]): string {
+  assertRuleRoutes(routes);
+  if (!net.isIP(server)) throw new Error(`NRPT name server must be an IP address: ${server}`);
+  const { nrptComment } = ownerNames('rules');
+  const namespaces = routes.flatMap((r) => (r.subtree ? [r.name, `.${r.name}`] : [r.name]));
+  return [
+    `Get-DnsClientNrptRule | Where-Object { $_.Comment -eq '${nrptComment}' } | Remove-DnsClientNrptRule -Force`,
+    ...namespaces.map(
+      (ns) =>
+        `Add-DnsClientNrptRule -Namespace '${ns}' -NameServers '${server}' -Comment '${nrptComment}'`,
+    ),
+    'Clear-DnsClientCache',
+  ].join('; ');
+}
+
+/**
+ * Route exactly `routes` to `target` (the installed resolver), as owner
+ * `rules`, and return what was written. Teardown is `removeNativeRouting` on
+ * the returned state. The caller removes any previous rules routing first.
+ *
+ * macOS: `/etc/resolver/<name>` per name. A file that already exists there
+ * belongs to someone else (another tool or the user) and is never
+ * overwritten: that name is skipped and reported.
+ */
+export function applyRuleRouting(
+  options: { target: RoutingTarget; routes: readonly RuleRoute[] },
+  deps: RoutingDeps = systemDeps,
+): RoutingState {
+  const routes = normalizeRuleRoutes(options.routes);
+  const { target } = options;
+  assertRuleRoutes(routes);
+  const names = ownerNames('rules');
+  const written: Record<string, string> = {};
+  const routed: RuleRoute[] = [];
+  const state: RoutingState = {
+    version: 1,
+    owner: 'rules',
+    mechanism: 'none',
+    target,
+    tlds: [],
+    files: [],
+    backups: {},
+    written,
+    down: [],
+    routes: routed,
+  };
+  if (routes.length === 0) return state;
+
+  switch (deps.platform) {
+    case 'darwin': {
+      const content = macResolverFile(target);
+      for (const route of routes) {
+        const path = `/etc/resolver/${route.name}`;
+        if (deps.exists(path)) {
+          deps.warn(
+            `[tnp] ${path} already exists and is not TNP's; left alone, so that rule does not reach the TNP resolver on this Mac`,
+          );
+          continue;
+        }
+        deps.write(path, content);
+        state.files.push(path);
+        written[path] = content;
+        routed.push(route);
+      }
+      state.mechanism = 'macos-resolver';
+      return state;
+    }
+
+    case 'win32': {
+      if (target.port !== 53) {
+        deps.warn(
+          `[tnp] Windows NRPT cannot use port ${target.port}; personal rules are not routed`,
+        );
+        return state;
+      }
+      deps.run(powershellCommand(windowsNrptRulesAddScript(target.address, routes)));
+      routed.push(...routes);
+      state.mechanism = 'windows-nrpt';
+      return state;
+    }
+
+    default: {
+      if (!deps.exists('/run/systemd/resolve')) {
+        deps.warn(
+          '[tnp] systemd-resolved is not running, so personal rules for public names cannot be routed by name; ' +
+            'point your DNS at the TNP resolver to use them',
+        );
+        return state;
+      }
+      let version: number | null = null;
+      try {
+        version = parseSystemdVersion(deps.run('systemctl --version'));
+      } catch {
+        version = null;
+      }
+      if (version !== null && version >= DNS_DELEGATE_MIN_SYSTEMD) {
+        if (
+          deps.exists(names.delegate) &&
+          !deps.read(names.delegate).startsWith('# Written by TNP')
+        ) {
+          deps.warn(
+            `[tnp] ${names.delegate} exists and is not TNP's; personal rules are not routed`,
+          );
+          return state;
+        }
+        const delegate = rulesDelegateFile(target, routes);
+        deps.write(names.delegate, delegate);
+        state.files.push(names.delegate);
+        written[names.delegate] = delegate;
+        tryRun(deps, 'systemctl try-reload-or-restart systemd-resolved');
+        routed.push(...routes);
+        state.mechanism = 'dns-delegate';
+        return state;
+      }
+      const link = rulesLinkCommands(target, routes);
+      for (const cmd of link.up) deps.run(`sh -c '${cmd}'`);
+      state.down = link.down;
+      routed.push(...routes);
+      state.mechanism = 'resolved-link';
+      deps.warn(
+        `[tnp] this systemd (older than ${DNS_DELEGATE_MIN_SYSTEMD}) routes personal rules through link ${names.link}, which does not survive a reboot; run \`sudo tnp rules route\` after one`,
+      );
+      return state;
+    }
   }
 }

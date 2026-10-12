@@ -106,7 +106,7 @@
     "step1": "安装 TNP 客户端，然后运行 <code>sudo TNP_TOKEN=... tnp rules pull</code> 并输入同步口令。之后的拉取不会再次询问。",
     "step2": "屏蔽规则立即生效。重定向需要你在该设备上用 <code>sudo tnp rules approve</code> 逐条批准后才会生效。",
     "step3": "使用 <code>tnp status</code> 或 <code>tnp rules status</code> 查看哪些规则处于活动状态。",
-    "scope": "客户端只对其自身解析器应答的查询应用规则。默认情况下，系统只会将 .ox 名称发送给它；对于其他域名，请将设备或路由器指向它，或使用上方的路由器导出。"
+    "scope": "运行 <code>tnp install</code> 后，客户端只会把你的活动规则所涉及的公共名称（你拉取的屏蔽规则，以及你在该设备上批准的重定向）发送到它自己的解析器，其他一概不变。没有安装客户端的设备可以使用上方的路由器导出。"
   },
   "privacy": {
     "heading": "TNP 能看到什么",

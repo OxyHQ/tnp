@@ -29,6 +29,11 @@ deployed while the relay is parked, [`relays.md`](./relays.md) §8.)
 - With `tnp install` or `tnp connect`, the operating system sends TNP only
   TNP-native names (`.ox`). Public names keep going to whatever resolver you
   already use; TNP does not see them and does not change how private they are.
+  The one exception is opt-in: the public names your own personal DNS rules
+  cover on a device (naming.md §3) — and, on Linux and macOS, names under them
+  — go to the local TNP resolver, which forwards what it does not answer to
+  its configured upstream (DNS-over-HTTPS by default). The TNP API never sees
+  them.
 - TNP-native names travel from the local resolver to the TNP API over HTTPS:
   your network sees a connection to the API, not the names. Oxy sees every
   native name you resolve, and your IP.
