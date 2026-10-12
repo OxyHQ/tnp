@@ -9,7 +9,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { createHash, generateKeyPairSync, sign } from 'node:crypto';
+import { createHash, createPublicKey, generateKeyPairSync, sign, verify } from 'node:crypto';
 import {
   chmodSync,
   existsSync,
@@ -121,10 +121,14 @@ describe('served installers', () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
-  test('install.ps1 verifies the checksum (and signature when it can) before installing', () => {
+  test('install.ps1 always verifies the signature and the checksum before installing', () => {
     expect(INSTALL_PS1).toContain('Get-FileHash -Algorithm SHA256');
-    expect(INSTALL_PS1).toContain('pkeyutl -verify -pubin -inkey $pem -rawin');
-    expect(INSTALL_PS1).toContain('Only the SHA-256 checksum was checked');
+    expect(INSTALL_PS1).toContain('function Test-Ed25519Signature');
+    expect(INSTALL_PS1).toContain('Test-Ed25519SelfCheck');
+    // No path that installs with the checksum alone, and no external verifier.
+    expect(INSTALL_PS1).not.toContain('Only the SHA-256 checksum');
+    expect(INSTALL_PS1).not.toContain('TNP_REQUIRE_SIGNATURE');
+    expect(INSTALL_PS1).not.toMatch(/openssl/i);
     expect(INSTALL_PS1).not.toContain('tnp-installer-$PID');
     const main = INSTALL_PS1.slice(INSTALL_PS1.indexOf('\nfunction Main {'));
     const order = ['Get-ReleaseFile', 'Test-Signature', 'Test-Checksum', 'Install-Binary'].map(
@@ -360,7 +364,111 @@ describe.skipIf(!runnable)('install.sh against a stub release', () => {
 
 const pwsh = Bun.which('pwsh');
 
-describe.skipIf(!pwsh || !hasOpenSsl3)('install.ps1 verification under pwsh', () => {
+// The PowerShell installer's Ed25519 verifier is code this repository owns, so
+// CI must run it: a runner without pwsh fails here instead of skipping.
+test('pwsh is available in CI, so the PowerShell verifier is exercised', () => {
+  if (process.env.CI) expect(pwsh).not.toBeNull();
+});
+
+/** RFC 8032 §7.1 TEST 1-3 and TEST SHA(abc), as (key, message, signature) hex. */
+const RFC8032_VECTORS = [
+  {
+    name: 'rfc8032-test1',
+    key: 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a',
+    msg: '',
+    sig: 'e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b',
+  },
+  {
+    name: 'rfc8032-test2',
+    key: '3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c',
+    msg: '72',
+    sig: '92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00',
+  },
+  {
+    name: 'rfc8032-test3',
+    key: 'fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025',
+    msg: 'af82',
+    sig: '6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a',
+  },
+  {
+    name: 'rfc8032-sha-abc',
+    key: 'ec172b93ad5e563bf4932c70e1245034c35467ef2efd4d64ebf819683467e2bf',
+    msg: 'ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f',
+    sig: 'dc2a4459e7369633a52b1bf277839a00201009a3efbf3ecb69bea2186c26b58909351fc9ac90b3ecfdfbc7c66431e0303dca179c138ac17ad9bef1177331a704',
+  },
+] as const;
+
+const L = 2n ** 252n + 27742317777372353535851937790883648493n;
+
+function flipBit(hex: string, bit: number): string {
+  const bytes = Buffer.from(hex, 'hex');
+  bytes[bit >> 3] ^= 1 << (bit & 7);
+  return bytes.toString('hex');
+}
+
+/** Valid vectors, and for each a set of near-misses that must all be refused. */
+function ed25519Vectors(): Array<{ name: string; key: string; msg: string; sig: string; valid: boolean }> {
+  const valid: Array<{ name: string; key: string; msg: string; sig: string }> = [...RFC8032_VECTORS];
+  for (let i = 0; i < 6; i++) {
+    const pair = generateKeyPairSync('ed25519');
+    const raw = pair.publicKey.export({ format: 'der', type: 'spki' }).subarray(12);
+    const msg = createHash('sha256').update(`message ${i}`).digest().subarray(0, i * 5);
+    valid.push({
+      name: `node-random-${i}`,
+      key: raw.toString('hex'),
+      msg: msg.toString('hex'),
+      sig: sign(null, msg, pair.privateKey).toString('hex'),
+    });
+  }
+  const out: Array<{ name: string; key: string; msg: string; sig: string; valid: boolean }> = [];
+  for (const v of valid) {
+    out.push({ ...v, valid: true });
+    out.push({ ...v, name: `${v.name}/sig-R-bit`, sig: flipBit(v.sig, 5), valid: false });
+    out.push({ ...v, name: `${v.name}/sig-S-bit`, sig: flipBit(v.sig, 300), valid: false });
+    out.push({ ...v, name: `${v.name}/key-bit`, key: flipBit(v.key, 17), valid: false });
+    out.push({
+      ...v,
+      name: `${v.name}/msg-changed`,
+      msg: v.msg === '' ? '00' : flipBit(v.msg, 0),
+      valid: false,
+    });
+    // S + L: the same group element, but S must be reduced (malleability).
+    const s = BigInt(`0x${Buffer.from(v.sig.slice(64), 'hex').reverse().toString('hex')}`) + L;
+    const sPlusL = Buffer.from(s.toString(16).padStart(64, '0'), 'hex').reverse().toString('hex');
+    out.push({ ...v, name: `${v.name}/S-plus-L`, sig: v.sig.slice(0, 64) + sPlusL, valid: false });
+  }
+  // A key that is not a point on the curve (y = 2 has no x).
+  out.push({
+    name: 'key-not-on-curve',
+    key: `02${'00'.repeat(31)}`,
+    msg: '',
+    sig: RFC8032_VECTORS[0].sig,
+    valid: false,
+  });
+  return out;
+}
+
+test('the Ed25519 vectors handed to pwsh are what node:crypto says they are', () => {
+  for (const v of ed25519Vectors()) {
+    let ok: boolean;
+    try {
+      const key = createPublicKey({
+        key: Buffer.concat([
+          Buffer.from('302a300506032b6570032100', 'hex'),
+          Buffer.from(v.key, 'hex'),
+        ]),
+        format: 'der',
+        type: 'spki',
+      });
+      ok = verify(null, Buffer.from(v.msg, 'hex'), key, Buffer.from(v.sig, 'hex'));
+    } catch {
+      ok = false;
+    }
+    expect({ name: v.name, ok }).toEqual({ name: v.name, ok: v.valid });
+  }
+});
+
+describe.skipIf(!pwsh)('install.ps1 verification under pwsh', () => {
   let dir: string;
 
   beforeAll(() => {
@@ -392,6 +500,14 @@ describe.skipIf(!pwsh || !hasOpenSsl3)('install.ps1 verification under pwsh', ()
         sign(null, Buffer.from(sums), signer.privateKey),
       );
     }
+    mkdirSync(join(dir, 'short-sig'));
+    writeFileSync(join(dir, 'short-sig', 'tnp-windows-x64.exe'), binary);
+    writeFileSync(join(dir, 'short-sig', 'SHA256SUMS'), sums);
+    writeFileSync(
+      join(dir, 'short-sig', 'SHA256SUMS.sig'),
+      sign(null, Buffer.from(sums), releaseKey.privateKey).subarray(0, 63),
+    );
+    writeFileSync(join(dir, 'vectors.json'), JSON.stringify(ed25519Vectors()));
   });
 
   afterAll(() => {

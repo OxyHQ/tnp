@@ -462,9 +462,14 @@ rotating the domain key is not possible yet.
   same fixed URLs into a `mktemp -d` directory and verify **before running or
   moving anything**, with no fallback URL. The shell installer verifies the
   signature when OpenSSL 3 or later is present and otherwise says that only the
-  checksum was checked (`TNP_REQUIRE_SIGNATURE=1` makes that fatal). PowerShell
-  has no Ed25519: the Windows installer uses OpenSSL 3 if it finds one (for
-  example Git for Windows') and otherwise states it checked the checksum only.
+  checksum was checked (`TNP_REQUIRE_SIGNATURE=1` makes that fatal). The
+  Windows installer **always** verifies the signature: PowerShell has no
+  Ed25519, so `install.ps1` carries its own RFC 8032 verifier (BigInteger and
+  SHA-512 from .NET, no external tool), which must pass an RFC 8032 test vector
+  and refuse a mutated one before its answer is believed. It has no unsigned
+  path. CI runs it under `pwsh` against the RFC 8032 vectors, random
+  `node:crypto` signatures and their near-misses (flipped bits, `S + L`, a key
+  off the curve), and fails if `pwsh` is missing.
   The installer option that pointed all system DNS at TNP's resolver over
   plaintext UDP is removed.
 

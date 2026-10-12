@@ -6,12 +6,13 @@
 # local TNP service.
 #
 # Verification, before anything downloaded is run or moved:
-#   1. The binary's SHA-256 (Get-FileHash) must equal its line in SHA256SUMS.
-#   2. SHA256SUMS.sig must be a valid Ed25519 signature over SHA256SUMS by the
-#      release key embedded below. PowerShell has no Ed25519, so this is checked
-#      only when OpenSSL 3 is available (for example the one Git for Windows
-#      ships); otherwise the installer says plainly that only the checksum was
-#      checked.
+#   1. SHA256SUMS.sig must be a valid Ed25519 signature over SHA256SUMS by the
+#      release key embedded below. Windows PowerShell has no Ed25519, so this
+#      script carries its own verifier (RFC 8032, below, using only .NET's
+#      BigInteger and SHA-512). It must pass an RFC 8032 test vector before its
+#      answer is believed, and there is no unsigned path: a signature that
+#      cannot be checked is a failed install.
+#   2. The binary's SHA-256 (Get-FileHash) must equal its line in SHA256SUMS.
 # Any mismatch stops the install. There is no fallback URL.
 #
 # Trust: this script itself comes from get.tnp.network over HTTPS, so whoever
@@ -22,8 +23,6 @@
 # Environment:
 #   $env:TNP_VERSION = "x.y.z"         install that release instead of v__TNP_VERSION__
 #   $env:TNP_INSTALL_DIR = "C:\path"   install there instead of %LOCALAPPDATA%\Programs\tnp
-#   $env:TNP_REQUIRE_SIGNATURE = "1"   fail instead of continuing when the
-#                                      signature cannot be checked here
 
 #Requires -Version 5.1
 $ErrorActionPreference = "Stop"
@@ -41,7 +40,8 @@ $ReleaseKeyPem = @'
 __TNP_RELEASE_KEY_PEM__
 '@
 
-$script:SignatureVerified = $false
+# Set by Initialize-Ed25519 on first use.
+$script:EdB = $null
 
 # ── Logging helpers ──────────────────────────────────────────────────────────
 
@@ -189,50 +189,194 @@ function Test-Checksum {
     Write-Ok "SHA-256 of $Asset matches SHA256SUMS: $actual"
 }
 
-# OpenSSL 3 or later can verify Ed25519 with -rawin; LibreSSL and OpenSSL 1.x cannot.
-function Find-OpenSsl {
-    $candidates = @()
-    $onPath = Get-Command openssl -ErrorAction SilentlyContinue
-    if ($onPath) { $candidates += $onPath.Source }
-    if ($env:ProgramFiles) { $candidates += Join-Path $env:ProgramFiles "Git\usr\bin\openssl.exe" }
-    foreach ($candidate in $candidates) {
-        if (-not (Test-Path -LiteralPath $candidate)) { continue }
-        $eap = $ErrorActionPreference
-        $ErrorActionPreference = "Continue"
-        $version = & $candidate version 2>$null
-        $ErrorActionPreference = $eap
-        if ("$version" -match '\AOpenSSL ([3-9]|[1-9][0-9]+)\.') { return $candidate }
+# ── Ed25519 (RFC 8032) ───────────────────────────────────────────────────────
+#
+# Verification only, over public data: no secret is involved, so constant time
+# does not matter and plain BigInteger arithmetic is enough. Points are in
+# extended coordinates [X, Y, Z, T] (x = X/Z, y = Y/Z, xy = T/Z) and use the
+# complete addition formula of RFC 8032 §5.1.4 for both adding and doubling.
+# Functions return arrays behind a leading comma so PowerShell does not unroll
+# them.
+
+function ConvertFrom-Hex {
+    param([string]$Hex)
+    $out = New-Object byte[] ($Hex.Length / 2)
+    for ($i = 0; $i -lt $out.Length; $i++) { $out[$i] = [Convert]::ToByte($Hex.Substring($i * 2, 2), 16) }
+    return , $out
+}
+
+function ConvertFrom-LittleEndian {
+    param([byte[]]$Bytes)
+    # One extra zero byte keeps BigInteger from reading the top bit as a sign.
+    $buffer = New-Object byte[] ($Bytes.Length + 1)
+    [Array]::Copy($Bytes, $buffer, $Bytes.Length)
+    return New-Object System.Numerics.BigInteger -ArgumentList (, $buffer)
+}
+
+function ConvertTo-LittleEndian32 {
+    param([System.Numerics.BigInteger]$Value)
+    $raw = $Value.ToByteArray()
+    $out = New-Object byte[] 32
+    [Array]::Copy($raw, $out, [Math]::Min($raw.Length, 32))
+    return , $out
+}
+
+function Add-EdPoint {
+    param($P1, $P2)
+    $p = $script:EdP
+    $a = (($P1[1] - $P1[0] + $p) * ($P2[1] - $P2[0] + $p)) % $p
+    $b = (($P1[1] + $P1[0]) * ($P2[1] + $P2[0])) % $p
+    $c = ((($P1[3] * $script:EdD2) % $p) * $P2[3]) % $p
+    $d = (($P1[2] * 2) * $P2[2]) % $p
+    $e = ($b - $a + $p) % $p
+    $f = ($d - $c + $p) % $p
+    $g = ($d + $c) % $p
+    $h = ($b + $a) % $p
+    return , @((($e * $f) % $p), (($g * $h) % $p), (($f * $g) % $p), (($e * $h) % $p))
+}
+
+function Invoke-EdScalarMult {
+    param([byte[]]$Scalar, $Point)
+    $zero = [System.Numerics.BigInteger]::Zero
+    $one = [System.Numerics.BigInteger]::One
+    $q = @($zero, $one, $one, $zero)
+    for ($i = 255; $i -ge 0; $i--) {
+        $q = Add-EdPoint $q $q
+        if ((($Scalar[$i -shr 3] -shr ($i -band 7)) -band 1) -eq 1) { $q = Add-EdPoint $q $Point }
     }
-    return $null
+    return , $q
+}
+
+# RFC 8032 §5.1.3. $null for anything that is not a valid point encoding.
+function ConvertFrom-EdPoint {
+    param([byte[]]$Bytes)
+    if ($Bytes.Length -ne 32) { return $null }
+    $p = $script:EdP
+    $signBit = ($Bytes[31] -shr 7) -band 1
+    $yBytes = [byte[]]$Bytes.Clone()
+    $yBytes[31] = $yBytes[31] -band 0x7f
+    $y = ConvertFrom-LittleEndian $yBytes
+    if ($y -ge $p) { return $null }
+    $y2 = ($y * $y) % $p
+    $u = ($y2 - 1 + $p) % $p
+    $v = ($script:EdD * $y2 + 1) % $p
+    $v3 = ((($v * $v) % $p) * $v) % $p
+    $v7 = ((($v3 * $v3) % $p) * $v) % $p
+    $x = ((($u * $v3) % $p) * [System.Numerics.BigInteger]::ModPow((($u * $v7) % $p), $script:EdPm5d8, $p)) % $p
+    $vx2 = ($v * (($x * $x) % $p)) % $p
+    if ($vx2 -ne $u) {
+        if ($vx2 -ne (($p - $u) % $p)) { return $null }
+        $x = ($x * $script:EdSqrtM1) % $p
+    }
+    if ($x.IsZero -and $signBit -eq 1) { return $null }
+    $xOdd = if ($x.IsEven) { 0 } else { 1 }
+    if ($xOdd -ne $signBit) { $x = $p - $x }
+    return , @($x, $y, [System.Numerics.BigInteger]::One, (($x * $y) % $p))
+}
+
+# The curve constants, derived from their definitions rather than typed in.
+function Initialize-Ed25519 {
+    if ($script:EdB) { return }
+    $two = New-Object System.Numerics.BigInteger 2
+    $p = [System.Numerics.BigInteger]::Pow($two, 255) - 19
+    $script:EdP = $p
+    $script:EdL = [System.Numerics.BigInteger]::Pow($two, 252) + [System.Numerics.BigInteger]::Parse("27742317777372353535851937790883648493")
+    # d = -121665/121666 mod p
+    $inverse = [System.Numerics.BigInteger]::ModPow((New-Object System.Numerics.BigInteger 121666), $p - 2, $p)
+    $script:EdD = (($p - 121665) * $inverse) % $p
+    $script:EdD2 = ($script:EdD * 2) % $p
+    $script:EdPm5d8 = [System.Numerics.BigInteger]::Divide($p - 5, 8)
+    $script:EdSqrtM1 = [System.Numerics.BigInteger]::ModPow($two, [System.Numerics.BigInteger]::Divide($p - 1, 4), $p)
+    # The base point: y = 4/5, x even.
+    $base = ConvertFrom-EdPoint (ConvertFrom-Hex "5866666666666666666666666666666666666666666666666666666666666666")
+    if ($null -eq $base) { throw "Ed25519 base point did not decode" }
+    $script:EdB = $base
+}
+
+# True only for a valid signature by $PublicKey over $Message: RFC 8032
+# §5.1.7, cofactorless equation [S]B = R + [k]A, with S < L and A and R both
+# valid point encodings.
+function Test-Ed25519Signature {
+    param([byte[]]$PublicKey, [byte[]]$Message, [byte[]]$Signature)
+    # Strict mode makes a $null slipping into the arithmetic an error, where
+    # PowerShell would otherwise read it as 0 and could make both sides equal.
+    Set-StrictMode -Version 3.0
+    Initialize-Ed25519
+    if ($PublicKey.Length -ne 32 -or $Signature.Length -ne 64) { return $false }
+    $rBytes = New-Object byte[] 32
+    $sBytes = New-Object byte[] 32
+    [Array]::Copy($Signature, 0, $rBytes, 0, 32)
+    [Array]::Copy($Signature, 32, $sBytes, 0, 32)
+    if ((ConvertFrom-LittleEndian $sBytes) -ge $script:EdL) { return $false }
+    $a = ConvertFrom-EdPoint $PublicKey
+    if ($null -eq $a) { return $false }
+    $r = ConvertFrom-EdPoint $rBytes
+    if ($null -eq $r) { return $false }
+
+    $sha = [Security.Cryptography.SHA512]::Create()
+    try {
+        [void]$sha.TransformBlock($rBytes, 0, 32, $null, 0)
+        [void]$sha.TransformBlock($PublicKey, 0, 32, $null, 0)
+        [void]$sha.TransformFinalBlock($Message, 0, $Message.Length)
+        $digest = $sha.Hash
+    }
+    finally { $sha.Dispose() }
+    $k = ConvertTo-LittleEndian32 ((ConvertFrom-LittleEndian $digest) % $script:EdL)
+
+    $left = Invoke-EdScalarMult $sBytes $script:EdB
+    $right = Add-EdPoint $r (Invoke-EdScalarMult $k $a)
+    if ($left.Count -ne 4 -or $right.Count -ne 4) { throw "Ed25519 arithmetic failed" }
+    $p = $script:EdP
+    $sameX = (($left[0] * $right[2]) % $p) -eq (($right[0] * $left[2]) % $p)
+    $sameY = (($left[1] * $right[2]) % $p) -eq (($right[1] * $left[2]) % $p)
+    return [bool]($sameX -and $sameY)
+}
+
+# RFC 8032 §7.1 TEST 2 must verify, and the same signature over another
+# message must not, before this verifier's answer about a release is believed.
+function Test-Ed25519SelfCheck {
+    $key = ConvertFrom-Hex "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c"
+    $sig = ConvertFrom-Hex "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00"
+    $good = Test-Ed25519Signature $key ([byte[]]@(0x72)) $sig
+    $bad = Test-Ed25519Signature $key ([byte[]]@(0x73)) $sig
+    return ($good -eq $true) -and ($bad -eq $false)
+}
+
+# The raw 32-byte key inside the pinned SubjectPublicKeyInfo PEM.
+function Get-ReleaseKeyBytes {
+    $body = ($ReleaseKeyPem -replace '-----(BEGIN|END) PUBLIC KEY-----', '') -replace '\s', ''
+    $der = [Convert]::FromBase64String($body)
+    $prefix = ConvertFrom-Hex "302a300506032b6570032100"
+    $ok = $der.Length -eq 44
+    for ($i = 0; $ok -and $i -lt $prefix.Length; $i++) { $ok = $der[$i] -eq $prefix[$i] }
+    if (-not $ok) { Exit-Fatal "The embedded release key is not an Ed25519 key. Not installing." }
+    $key = New-Object byte[] 32
+    [Array]::Copy($der, 12, $key, 0, 32)
+    return , $key
 }
 
 function Test-Signature {
-    param([string]$WorkDir, [string]$SumsPath, [string]$SigPath)
+    param([string]$SumsPath, [string]$SigPath)
 
-    $openssl = Find-OpenSsl
-    if (-not $openssl) {
-        if ($env:TNP_REQUIRE_SIGNATURE -eq "1") {
-            Exit-Fatal "TNP_REQUIRE_SIGNATURE=1 but no OpenSSL 3 was found to check the Ed25519 signature."
-        }
-        Write-Warn "Could not check the release SIGNATURE: PowerShell has no Ed25519 and no OpenSSL 3 was found."
-        Write-Warn "Only the SHA-256 checksum was checked, against SHA256SUMS downloaded from the"
-        Write-Warn "same GitHub release as the binary. That catches corruption, not tampering."
-        Write-Warn "Install Git for Windows (it ships OpenSSL 3) and re-run, or set TNP_REQUIRE_SIGNATURE=1."
-        return
+    $sumsSize = (Get-Item -LiteralPath $SumsPath).Length
+    if ($sumsSize -gt 65536) { Exit-Fatal "SHA256SUMS is $sumsSize bytes, more than a release carries. Not installing." }
+    $sums = [IO.File]::ReadAllBytes($SumsPath)
+    $sig = [IO.File]::ReadAllBytes($SigPath)
+    if ($sig.Length -ne 64) { Exit-Fatal "SHA256SUMS.sig is $($sig.Length) bytes, not a 64-byte Ed25519 signature. Not installing." }
+
+    $selfCheck = $false
+    try { $selfCheck = Test-Ed25519SelfCheck } catch { $selfCheck = $false }
+    if ($selfCheck -ne $true) {
+        Exit-Fatal "The built-in Ed25519 verifier failed its self-test in this PowerShell, so the release signature cannot be checked. Not installing."
     }
 
-    $pem = Join-Path $WorkDir "release-key.pem"
-    [IO.File]::WriteAllText($pem, $ReleaseKeyPem.Trim() + "`n", (New-Object Text.ASCIIEncoding))
-    $eap = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    & $openssl pkeyutl -verify -pubin -inkey $pem -rawin -in $SumsPath -sigfile $SigPath 2>$null | Out-Null
-    $code = $LASTEXITCODE
-    $ErrorActionPreference = $eap
-    if ($code -ne 0) {
+    $key = Get-ReleaseKeyBytes
+    $valid = $false
+    try { $valid = Test-Ed25519Signature $key $sums $sig } catch { $valid = $false }
+    if ($valid -ne $true) {
         Exit-Fatal "SHA256SUMS.sig is NOT a valid signature by the TNP release key. Not installing."
     }
-    $script:SignatureVerified = $true
-    Write-Ok "Signature on SHA256SUMS verified with the pinned TNP release key ($openssl)."
+    Write-Ok "Signature on SHA256SUMS verified with the pinned TNP release key."
 }
 
 # ── Install binary ───────────────────────────────────────────────────────────
@@ -339,9 +483,6 @@ function Test-Installation {
 function Show-Success {
     Write-Host ""
     Write-Host "  Installation complete." -ForegroundColor Green
-    if (-not $script:SignatureVerified) {
-        Write-Host "  Signature not checked on this machine; checksum only (see above)." -ForegroundColor Yellow
-    }
     Write-Host ""
     Write-Host "  Get started:"
     Write-Host "    Register domains  " -NoNewline; Write-Host "https://tnp.network" -ForegroundColor DarkGray
@@ -380,7 +521,7 @@ function Main {
     Get-ReleaseFile -Url "$baseUrl/SHA256SUMS" -OutFile $sumsPath
     Get-ReleaseFile -Url "$baseUrl/SHA256SUMS.sig" -OutFile $sigPath
 
-    Test-Signature -WorkDir $script:WorkDir -SumsPath $sumsPath -SigPath $sigPath
+    Test-Signature -SumsPath $sumsPath -SigPath $sigPath
     Test-Checksum -Asset $asset -BinaryPath $binaryPath -SumsPath $sumsPath
 
     Install-Binary -TmpFile $binaryPath
