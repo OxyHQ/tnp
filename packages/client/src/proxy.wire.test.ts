@@ -13,7 +13,7 @@ import { afterAll, afterEach, describe, expect, test } from 'bun:test';
 import { createSocket, type Socket } from 'node:dgram';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import net from 'node:net';
-import { tmpdir } from 'node:os';
+import { networkInterfaces, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import dnsPacket from 'dns-packet';
 import type { DnsProxyConfig } from './config';
@@ -208,6 +208,86 @@ async function tcpExchange(port: number, packets: Buffer[], expect: number): Pro
 }
 
 const rcode = (buf: Buffer) => dnsPacket.decode(buf).rcode;
+
+// ---------------------------------------------------------------------------
+// The per-source limit and its exemption list
+// ---------------------------------------------------------------------------
+
+/**
+ * Loopback is always exempt, so this needs a non-loopback source: a socket
+ * bound to one of this machine's own interface addresses, sending to that
+ * address. CI runners have one; a machine without any reports why it did not run.
+ */
+const localSource = Object.values(networkInterfaces())
+  .flat()
+  .find((i) => i && i.family === 'IPv4' && !i.internal)?.address;
+if (!localSource)
+  console.warn('[proxy.wire.test] no non-loopback IPv4: rate-limit wire test not run');
+
+async function burstFrom(source: string, port: number, count: number) {
+  const socket = createSocket('udp4');
+  await new Promise<void>((resolve) => socket.bind(0, source, resolve));
+  const replies: Buffer[] = [];
+  socket.on('message', (msg) => replies.push(Buffer.from(msg)));
+  try {
+    for (let i = 0; i < count; i++)
+      socket.send(query('example.com', 'A', { id: i + 1 }), port, source);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+  } finally {
+    socket.close();
+  }
+  const answered = replies.filter((r) => {
+    const p = dnsPacket.decode(r);
+    return (
+      p.rcode === 'NOERROR' &&
+      !((p.flags ?? 0) & dnsPacket.TRUNCATED_RESPONSE) &&
+      (p.answers?.length ?? 0) > 0
+    );
+  });
+  return answered.length;
+}
+
+describe.if(Boolean(localSource))('per-source rate limit on the wire', () => {
+  const strict = { rateLimit: { perSecond: 0.01, burst: 1 }, listenAddr: '0.0.0.0' };
+
+  test('a non-exempt source is throttled after its burst', async () => {
+    const upstream = await fakeUpstream();
+    cleanups.push(() => upstream.close());
+    const proxy = await startProxy(upstream.port, DEAD_REGISTRY, strict);
+    expect(await burstFrom(localSource as string, proxy.udpPort ?? 0, 6)).toBe(1);
+  });
+
+  test('an exempt source is answered every time while the limit still applies to others', async () => {
+    const upstream = await fakeUpstream();
+    cleanups.push(() => upstream.close());
+    const proxy = await startProxy(upstream.port, DEAD_REGISTRY, {
+      ...strict,
+      rateLimitExempt: [`${localSource}/32`],
+    });
+    expect(await burstFrom(localSource as string, proxy.udpPort ?? 0, 6)).toBe(6);
+
+    // Same exemption list, a different source address: still limited.
+    const other = await startProxy(upstream.port, DEAD_REGISTRY, {
+      ...strict,
+      rateLimitExempt: ['192.0.2.1'],
+    });
+    expect(await burstFrom(localSource as string, other.udpPort ?? 0, 6)).toBe(1);
+  });
+});
+
+test('an invalid exemption entry is refused at construction', () => {
+  expect(
+    () =>
+      new DnsProxy({
+        listenAddr: '127.0.0.1',
+        listenPort: 0,
+        apiBaseUrl: DEAD_REGISTRY,
+        cacheMaxEntries: 10,
+        upstreamDns: '127.0.0.1:53',
+        rateLimitExempt: ['10.0.0.5/24'],
+      }),
+  ).toThrow('invalid source entries: 10.0.0.5/24');
+});
 
 // ---------------------------------------------------------------------------
 // A native name never goes upstream

@@ -4,6 +4,47 @@ import { join } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { restrictWindowsAcl, writeFileAtomic } from './secure-fs';
 
+import { parseSourceList } from './dns/rate-limit';
+
+export type RateLimitExemptResult =
+  | { ok: true; entries: string[]; warning?: string }
+  | { ok: false; error: string };
+
+/**
+ * The public resolver's `TNP_DNS_RATE_LIMIT_EXEMPT` (read by apps/dns-server,
+ * which imports this module already and may not add another relative import
+ * into this package; AGENTS.md): addresses or CIDR prefixes the per-source
+ * response rate limit does not apply to — TNP's own WireGuard exits, each of
+ * which sends every VPN user's queries from one address
+ * (docs/architecture/exit-nodes.md §9.6). Exempt sources still count toward
+ * the in-flight and TCP connection caps.
+ *
+ * Parsed strictly (`parseSourceList`). In production an invalid entry refuses
+ * startup: a silently shorter list would throttle every user behind the exit
+ * the entry was meant for, and a misread one could exempt strangers from the
+ * amplification limit. Outside production invalid entries are dropped with a
+ * warning that names them.
+ */
+export function readRateLimitExempt(
+  value: string | undefined,
+  production: boolean,
+): RateLimitExemptResult {
+  const entries = (value ?? '')
+    .split(/[\s,]+/)
+    .map((e) => e.trim())
+    .filter((e) => e !== '');
+  const parsed = parseSourceList(value);
+  if (parsed.ok) return { ok: true, entries };
+  const message = `TNP_DNS_RATE_LIMIT_EXEMPT has invalid entries: ${parsed.invalid.join(', ')} (expected IP addresses or CIDR prefixes with zero host bits)`;
+  if (production) return { ok: false, error: message };
+  const invalid = new Set(parsed.invalid);
+  return {
+    ok: true,
+    entries: entries.filter((e) => !invalid.has(e)),
+    warning: `${message}; ignoring them`,
+  };
+}
+
 /**
  * True for a bare IPv4 or IPv6 literal and nothing else.
  *
@@ -78,6 +119,13 @@ export interface DnsProxyConfig {
    * exempt. `null` disables it; unset uses the default.
    */
   rateLimit?: { perSecond: number; burst: number } | null;
+  /**
+   * Sources (addresses or CIDR prefixes) the per-source limit does not apply
+   * to — TNP's own WireGuard exits, which send every VPN user's queries from
+   * one address. They still count toward `maxInflight` and
+   * `maxTcpConnections`. Every entry must be valid (`parseSourceList`).
+   */
+  rateLimitExempt?: readonly string[];
   /** Concurrent TCP client connections. Further connections are closed at once. */
   maxTcpConnections?: number;
   /**

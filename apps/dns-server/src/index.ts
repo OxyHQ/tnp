@@ -4,7 +4,11 @@ import {
   stopEcosystemActivity,
 } from './ecosystemActivity.js';
 import { DnsProxy } from '../../../packages/client/src/proxy';
-import { DEFAULT_UPSTREAM_DNS, type DnsProxyConfig } from '../../../packages/client/src/config';
+import {
+  DEFAULT_UPSTREAM_DNS,
+  type DnsProxyConfig,
+  readRateLimitExempt,
+} from '../../../packages/client/src/config';
 
 /** A positive integer from the environment, or the fallback. */
 function envInt(name: string, fallback: number): number {
@@ -20,6 +24,18 @@ function envInt(name: string, fallback: number): number {
  * flight. `TNP_UPSTREAM_DNS` (set in oxy-infra) overrides the upstream list;
  * a plaintext entry there is logged as a warning at startup.
  */
+// TNP's WireGuard exits send every VPN user's queries from one address each,
+// so they are exempt from the per-source limit (still bound by the global caps).
+const exempt = readRateLimitExempt(
+  process.env.TNP_DNS_RATE_LIMIT_EXEMPT,
+  process.env.NODE_ENV === 'production',
+);
+if (!exempt.ok) {
+  console.error(`[tnp-dns] ${exempt.error}. Refusing to start.`);
+  process.exit(1);
+}
+if (exempt.warning) console.warn(`[tnp-dns] ${exempt.warning}`);
+
 const config: DnsProxyConfig = {
   listenAddr: process.env.TNP_LISTEN_ADDR || '0.0.0.0',
   listenPort: Number(process.env.TNP_LISTEN_PORT) || 5353,
@@ -31,6 +47,7 @@ const config: DnsProxyConfig = {
     perSecond: envInt('TNP_RATE_LIMIT_QPS', 20),
     burst: envInt('TNP_RATE_LIMIT_BURST', 100),
   },
+  rateLimitExempt: exempt.entries,
   maxTcpConnections: envInt('TNP_MAX_TCP_CONNECTIONS', 256),
   maxInflight: envInt('TNP_MAX_INFLIGHT', 512),
 };
@@ -41,6 +58,7 @@ console.log('[tnp-dns] starting public DNS server...');
 console.log(`[tnp-dns] listen: ${config.listenAddr}:${config.listenPort}`);
 console.log(`[tnp-dns] API: ${config.apiBaseUrl}`);
 console.log(`[tnp-dns] upstream: ${config.upstreamDns}`);
+console.log(`[tnp-dns] rate-limit exempt sources: ${exempt.entries.length}`);
 
 startEcosystemActivity(() => proxy.listening);
 proxy.startTldSync(5 * 60 * 1000);

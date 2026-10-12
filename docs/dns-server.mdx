@@ -107,6 +107,7 @@ The publisher does not move `latest`, register a task definition, scale a servic
 | `TNP_CACHE_MAX_ENTRIES` | `10000` | Maximum DNS answers retained in the in-memory LRU cache. |
 | `TNP_TLD_CACHE_PATH` | unset | File for the last good TLD list. Unset: built-ins plus whatever the current process synced. |
 | `TNP_RATE_LIMIT_QPS` / `TNP_RATE_LIMIT_BURST` | `20` / `100` | Per-source UDP token bucket. |
+| `TNP_DNS_RATE_LIMIT_EXEMPT` | unset | Comma-separated IP addresses or CIDR prefixes the per-source bucket does not apply to: the Elastic IPs of TNP's WireGuard exits, each of which sends every VPN user's queries from one address ([`architecture/exit-nodes.md` §9.6](./architecture/exit-nodes.md)). Parsed strictly — a prefix must have zero host bits (`10.0.0.5/24` is refused). In production (`NODE_ENV=production`, as the image sets) any invalid entry **refuses startup**; elsewhere it is dropped with a warning. Exempt sources still count toward `TNP_MAX_INFLIGHT` and `TNP_MAX_TCP_CONNECTIONS`. List only addresses TNP controls: an exempt address is also exempt from the amplification limit if someone spoofs it. |
 | `TNP_MAX_TCP_CONNECTIONS` | `256` | Concurrent TCP clients. |
 | `TNP_MAX_INFLIGHT` | `512` | Queries resolved at once before answering `SERVFAIL`. |
 

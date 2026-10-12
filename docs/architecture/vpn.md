@@ -213,9 +213,10 @@ TNP-native names resolve natively and public names are forwarded upstream over
 DoH, exactly as for any other public-resolver user
 ([`resolution.md`](./resolution.md)). The exit rate-limits each peer's DNS
 packets to it, because every peer reaches the resolver from the exit's one
-address. That shared address is also why the resolver's own per-source limit
-would throttle all of them together today; exit-nodes.md §9.6 lists it as a
-launch blocker.
+address. For the same reason the resolver exempts exit addresses from its
+own per-source limit (`TNP_DNS_RATE_LIMIT_EXEMPT`, exit-nodes.md §9.6), which
+would otherwise throttle all of an exit's users together; the global in-flight
+caps still apply to them.
 
 Between the exit and the resolver, queries are ordinary DNS packets the exit
 forwards like any other traffic. Oxy runs both, so it can see every name a
