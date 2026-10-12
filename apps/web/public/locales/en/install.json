@@ -70,14 +70,14 @@
     },
     "macos": {
       "title": "macOS",
-      "desc": "Create a resolver file for .ox. Only .ox goes to TNP; everything else uses your current DNS.",
+      "desc": "Create a resolver file for .ox. Only .ox goes to TNP; everything else uses your current DNS. If /etc/resolver/ox already exists (the TNP client writes it), the command leaves it unchanged, and undo only removes a file these steps created.",
       "test": "<code>dig</code> and <code>nslookup</code> ignore /etc/resolver. Test in a browser or with <code>dscacheutil -q host -a name yourname.ox</code>; <code>scutil --dns</code> lists the new resolver."
     },
     "linux": {
       "title": "Linux",
       "delegate": {
         "title": "systemd-resolved 258 or later",
-        "desc": "Check the version with <code>systemctl --version</code>. Create <code>/etc/systemd/dns-delegate.d/tnp.dns-delegate</code> with:",
+        "desc": "Check the version with <code>systemctl --version</code>. Create <code>/etc/systemd/dns-delegate.d/tnp-manual.dns-delegate</code> with:",
         "apply": "Or write it and restart systemd-resolved in one go:"
       },
       "dnsmasq": {

@@ -70,14 +70,14 @@
     },
     "macos": {
       "title": "macOS",
-      "desc": ".ox के लिए एक रिज़ॉल्वर फ़ाइल बनाएं। केवल .ox TNP पर जाता है; बाकी सब आपके मौजूदा DNS का उपयोग करता है।",
+      "desc": ".ox के लिए एक रिज़ॉल्वर फ़ाइल बनाएं। केवल .ox TNP पर जाता है; बाकी सब आपके मौजूदा DNS का उपयोग करता है। अगर /etc/resolver/ox पहले से मौजूद है (TNP क्लाइंट इसे लिखता है), तो कमांड उसे नहीं बदलता, और वापस लेने का कमांड केवल इन्हीं चरणों से बनी फ़ाइल हटाता है।",
       "test": "<code>dig</code> और <code>nslookup</code> /etc/resolver को अनदेखा करते हैं। ब्राउज़र में या <code>dscacheutil -q host -a name yourname.ox</code> से जांचें; <code>scutil --dns</code> नया रिज़ॉल्वर दिखाता है।"
     },
     "linux": {
       "title": "Linux",
       "delegate": {
         "title": "systemd-resolved 258 या बाद का",
-        "desc": "<code>systemctl --version</code> से संस्करण जांचें। <code>/etc/systemd/dns-delegate.d/tnp.dns-delegate</code> इस सामग्री के साथ बनाएं:",
+        "desc": "<code>systemctl --version</code> से संस्करण जांचें। <code>/etc/systemd/dns-delegate.d/tnp-manual.dns-delegate</code> इस सामग्री के साथ बनाएं:",
         "apply": "या इसे लिखें और systemd-resolved को एक साथ रीस्टार्ट करें:"
       },
       "dnsmasq": {

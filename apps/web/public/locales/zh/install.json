@@ -70,14 +70,14 @@
     },
     "macos": {
       "title": "macOS",
-      "desc": "为 .ox 创建一个解析器文件。只有 .ox 会发往 TNP，其他查询仍使用你当前的 DNS。",
+      "desc": "为 .ox 创建一个解析器文件。只有 .ox 会发往 TNP，其他查询仍使用你当前的 DNS。如果 /etc/resolver/ox 已经存在（TNP 客户端会写入它），该命令不会改动它，撤销命令也只会删除由这些步骤创建的文件。",
       "test": "<code>dig</code> 和 <code>nslookup</code> 会忽略 /etc/resolver。请在浏览器中测试，或使用 <code>dscacheutil -q host -a name yourname.ox</code>；<code>scutil --dns</code> 会列出新的解析器。"
     },
     "linux": {
       "title": "Linux",
       "delegate": {
         "title": "systemd-resolved 258 或更高版本",
-        "desc": "用 <code>systemctl --version</code> 查看版本。创建 <code>/etc/systemd/dns-delegate.d/tnp.dns-delegate</code>，内容如下：",
+        "desc": "用 <code>systemctl --version</code> 查看版本。创建 <code>/etc/systemd/dns-delegate.d/tnp-manual.dns-delegate</code>，内容如下：",
         "apply": "或者一步写入文件并重启 systemd-resolved："
       },
       "dnsmasq": {

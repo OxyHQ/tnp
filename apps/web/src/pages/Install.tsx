@@ -41,9 +41,25 @@ function resolverIp(info: ClientInfo | null): string | null {
   const ip = info?.dns?.ip?.trim();
   if (!ip) return null;
   const v4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-  const v6 = /^[0-9a-fA-F:.]+$/;
-  return v4.test(ip) || (ip.includes(':') && v6.test(ip)) ? ip : null;
+  if (v4.test(ip)) return ip;
+  // The URL parser implements the full IPv6 grammar (group counts, `::`).
+  if (!ip.includes(':') || !/^[0-9a-fA-F:.]+$/.test(ip)) return null;
+  try {
+    new URL(`http://[${ip}]/`);
+    return ip;
+  } catch {
+    return null;
+  }
 }
+
+/**
+ * Marks what the manual steps add, so undo removes exactly that — never the
+ * client's own NRPT rule, resolver file or delegate — whatever the resolver
+ * address was at setup time.
+ */
+const MANUAL_MARKER = 'Added manually from tnp.network/install';
+/** Not the client's `tnp.dns-delegate`: each side owns, and removes, its own file. */
+const MANUAL_DELEGATE = '/etc/systemd/dns-delegate.d/tnp-manual.dns-delegate';
 
 const inlineCode = <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />;
 const accent = <span className="text-muted-foreground" />;
@@ -84,9 +100,15 @@ export default function Install() {
   }, []);
 
   const copyCommand = useCallback((command: string, field: string) => {
-    navigator.clipboard.writeText(command).catch(() => {});
-    setCopied(field);
-    setTimeout(() => setCopied(null), 2000);
+    // Only claim "copied" once the write succeeded; a blocked clipboard must
+    // not leave the user pasting whatever was there before.
+    navigator.clipboard
+      .writeText(command)
+      .then(() => {
+        setCopied(field);
+        setTimeout(() => setCopied(null), 2000);
+      })
+      .catch(() => setCopied(null));
   }, []);
 
   const methodKeys: SetupMethod[] = ['dns', 'client', 'serve', 'relay'];
@@ -155,8 +177,9 @@ export default function Install() {
       'uci commit dhcp',
       '/etc/init.d/dnsmasq restart',
     ].join('\n'),
+    // Removes every /ox/ forward, whichever resolver address it names.
     openwrtRemove: [
-      `uci del_list dhcp.@dnsmasq[0].server='${forward}'`,
+      `for s in $(uci -q get dhcp.@dnsmasq[0].server); do case "$s" in /${tld}/*) uci del_list dhcp.@dnsmasq[0].server="$s";; esac; done`,
       'uci commit dhcp',
       '/etc/init.d/dnsmasq restart',
     ].join('\n'),
@@ -169,28 +192,35 @@ export default function Install() {
     unboundInsecure: `server:\n  domain-insecure: "${tld}"`,
     dnsmasq: `server=${forward}`,
     windowsAdd: [
-      `Add-DnsClientNrptRule -Namespace ".${tld}" -NameServers "${ipText}"`,
+      `Add-DnsClientNrptRule -Namespace ".${tld}" -NameServers "${ipText}" -Comment "${MANUAL_MARKER}"`,
       'Clear-DnsClientCache',
     ].join('\n'),
     windowsRemove: [
-      `Get-DnsClientNrptRule | Where-Object Namespace -eq '.${tld}' | Remove-DnsClientNrptRule -Force`,
+      `Get-DnsClientNrptRule | Where-Object Comment -eq "${MANUAL_MARKER}" | Remove-DnsClientNrptRule -Force`,
       'Clear-DnsClientCache',
     ].join('\n'),
+    // /etc/resolver/ox is the one name macOS reads for .ox, and the client
+    // writes it too: never overwrite an existing file, and undo deletes only
+    // a file carrying the marker.
     macosAdd: [
       'sudo mkdir -p /etc/resolver',
-      `echo "nameserver ${ipText}" | sudo tee /etc/resolver/${tld}`,
+      `if [ -e /etc/resolver/${tld} ]; then echo "/etc/resolver/${tld} already exists; left unchanged:"; cat /etc/resolver/${tld}; else printf '%s\\n' '# ${MANUAL_MARKER}' 'nameserver ${ipText}' | sudo tee /etc/resolver/${tld}; fi`,
     ].join('\n'),
-    macosRemove: `sudo rm /etc/resolver/${tld}`,
-    linuxDelegateFile: ['[Delegate]', `DNS=${ipText}`, `Domains=~${tld}`, 'DefaultRoute=no'].join(
-      '\n',
-    ),
+    macosRemove: `grep -q '${MANUAL_MARKER}' /etc/resolver/${tld} && sudo rm /etc/resolver/${tld}`,
+    linuxDelegateFile: [
+      `# ${MANUAL_MARKER}`,
+      '[Delegate]',
+      `DNS=${ipText}`,
+      `Domains=~${tld}`,
+      'DefaultRoute=no',
+    ].join('\n'),
     linuxDelegateApply: [
       'sudo mkdir -p /etc/systemd/dns-delegate.d',
-      `printf '%s\\n' '[Delegate]' 'DNS=${ipText}' 'Domains=~${tld}' 'DefaultRoute=no' | sudo tee /etc/systemd/dns-delegate.d/tnp.dns-delegate`,
+      `printf '%s\\n' '# ${MANUAL_MARKER}' '[Delegate]' 'DNS=${ipText}' 'Domains=~${tld}' 'DefaultRoute=no' | sudo tee ${MANUAL_DELEGATE}`,
       'sudo systemctl restart systemd-resolved',
     ].join('\n'),
     linuxDelegateRemove: [
-      'sudo rm /etc/systemd/dns-delegate.d/tnp.dns-delegate',
+      `sudo rm ${MANUAL_DELEGATE}`,
       'sudo systemctl restart systemd-resolved',
     ].join('\n'),
   };
