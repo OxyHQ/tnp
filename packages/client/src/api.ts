@@ -3,7 +3,9 @@ import {
   type DnsResolveAnswer,
   type DnsResolveOverlay,
   type DnsResolveResponse,
+  type DnsRulesRecord,
   type DomainKeyRecord,
+  parseDnsRulesRecord,
   parseDomainKeyRecord,
   type RegisterDomainKeyRequest,
   type RegisterRelayRequest,
@@ -221,6 +223,27 @@ export class TnpApiClient {
       authToken,
       REGISTER_TIMEOUT_MS,
     );
+  }
+
+  /**
+   * The caller's encrypted personal DNS rules (auth required), or null when
+   * none are stored. The response is validated against the contract before
+   * it is returned; decrypting it is `dns-rules-store.ts`'s job, and the
+   * API never had the key.
+   */
+  async getDnsRules(authToken: string): Promise<DnsRulesRecord | null> {
+    const res = await fetch(`${this.baseUrl}/me/dns-rules`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+      signal: AbortSignal.timeout(REGISTER_TIMEOUT_MS),
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      const failure = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(failure.error ?? `TNP API returned ${res.status}`);
+    }
+    const parsed = parseDnsRulesRecord(await res.json());
+    if (!parsed.ok) throw new Error(`the API returned a malformed rule set: ${parsed.error}`);
+    return parsed.value;
   }
 
   /**

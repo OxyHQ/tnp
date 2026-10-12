@@ -47,6 +47,7 @@ describe('tnpTraces', () => {
     for (const trace of traces) expect(trace.files?.length).toBeGreaterThan(0);
     const paths = traces.map((t) => t.path);
     expect(paths).toEqual([
+      'C:\\ProgramData\\tnp\\dns-rules',
       'C:\\ProgramData\\tnp',
       'C:\\Users\\a\\AppData\\Local\\tnp',
       // The SYSTEM resolver task's own data directory.

@@ -81,6 +81,12 @@ export interface DnsProxyConfig {
   /** Concurrent TCP client connections. Further connections are closed at once. */
   maxTcpConnections?: number;
   /**
+   * The active personal-rules file `tnp rules` writes (`dns-rules.ts`).
+   * Set only by the client's own resolver (`tnp run`, `tnp connect`); the
+   * public resolver never sets it, so it never applies anyone's rules.
+   */
+  personalRulesPath?: string;
+  /**
    * Queries being resolved at once (upstream or registry). A query beyond the
    * limit gets SERVFAIL immediately instead of opening yet another socket.
    */
@@ -365,6 +371,16 @@ export function resolverSubset(cfg: DnsProxyConfig): DnsProxyConfig {
     ...(cfg.maxTcpConnections === undefined ? {} : { maxTcpConnections: cfg.maxTcpConnections }),
     ...(cfg.maxInflight === undefined ? {} : { maxInflight: cfg.maxInflight }),
   };
+}
+
+/**
+ * The active personal-DNS-rules file (`dns-rules.ts`): the decrypted rules
+ * approved on this device, written by `tnp rules`, read by the resolver.
+ * In the config directory because that is what the sandboxed Linux daemon
+ * can read (root:tnp 0750); the rules key is elsewhere, root only.
+ */
+export function personalRulesPath(): string {
+  return join(configDir(), 'dns-rules.conf');
 }
 
 /**

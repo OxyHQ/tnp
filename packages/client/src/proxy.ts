@@ -32,6 +32,7 @@ import {
 import { DnsCache } from './dns/cache';
 import { encodeTruncated, inspectQuery } from './dns/guard';
 import { isLoopback, SourceRateLimiter } from './dns/rate-limit';
+import { answerFromPersonalRules, PersonalRulesFile } from './dns-rules';
 import dgram from 'node:dgram';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
@@ -127,6 +128,9 @@ export class DnsProxy {
   /** Handle for the periodic TLD sync interval, so it can be cleared on stop. */
   private tldSyncInterval: ReturnType<typeof setInterval> | null = null;
 
+  /** The user's approved personal rules (naming.md §3); null on the public resolver. */
+  private readonly personalRules: PersonalRulesFile | null;
+
   constructor(
     config: DnsProxyConfig,
     private readonly onTraffic?: (direction: 'inbound' | 'outbound') => void,
@@ -139,6 +143,9 @@ export class DnsProxy {
     this.rateLimiter = rateLimit ? new SourceRateLimiter(rateLimit) : null;
     this.maxInflight = config.maxInflight ?? DEFAULT_MAX_INFLIGHT;
     this.maxTcpConnections = config.maxTcpConnections ?? DEFAULT_MAX_TCP_CONNECTIONS;
+    this.personalRules = config.personalRulesPath
+      ? new PersonalRulesFile(config.personalRulesPath)
+      : null;
     this.loadPersistedTlds();
   }
 
@@ -435,6 +442,14 @@ export class DnsProxy {
     }
     this.inflight++;
     try {
+      // Personal rules: local, approved on this device, applied before the
+      // namespace split (dns-rules.ts). Absent on the public resolver.
+      const ruled = await answerFromPersonalRules(this.personalRules, query, {
+        isNative: (name) => this.classify(name) === 'tnp-native',
+        resolve: (q) => this.resolveThroughNamespace(q),
+      });
+      if (ruled) return forUdp ? encodeForUdp(query, ruled) : encode(ruled);
+
       // Classification happens first, offline, always. A public-dns name never
       // reaches the TNP API — that is both the namespace guarantee and a privacy
       // property, since it stops the API from learning the user's public
@@ -450,6 +465,18 @@ export class DnsProxy {
     } finally {
       this.inflight--;
     }
+  }
+
+  /**
+   * The normal path for a query the resolver makes itself — the target of a
+   * personal CNAME-like redirect: native names from the registry, public
+   * names upstream. Uncapped; the caller fits the final answer to UDP.
+   */
+  private async resolveThroughNamespace(query: DecodedPacket): Promise<Buffer> {
+    const question = query.questions?.[0];
+    if (!question) return encode(buildResponse(query, { rcode: 'FORMERR' }));
+    if (this.classify(question.name) !== 'tnp-native') return this.forwardUpstream(query);
+    return encode(await this.resolveNative(query, question.name, question.type));
   }
 
   /**

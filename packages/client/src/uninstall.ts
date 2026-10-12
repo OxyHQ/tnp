@@ -62,11 +62,18 @@ export function tnpTraces(ctx: TraceContext): Trace[] {
     // delete anywhere.
     const localAppData = ctx.env.LOCALAPPDATA;
     const systemRoot = ctx.env.SystemRoot || 'C:\\Windows';
+    const programData = win32.join(ctx.env.PROGRAMDATA || 'C:\\ProgramData', 'tnp');
     return [
       {
-        path: win32.join(ctx.env.PROGRAMDATA || 'C:\\ProgramData', 'tnp'),
-        what: 'configuration and kill-switch record',
-        files: ['config.json', 'killswitch.json'],
+        // Before its parent, which is removed only once empty.
+        path: win32.join(programData, 'dns-rules'),
+        what: 'personal DNS rules key and state',
+        files: ['key.json', 'state.json', 'envelope.json'],
+      },
+      {
+        path: programData,
+        what: 'configuration, kill-switch record and active personal DNS rules',
+        files: ['config.json', 'killswitch.json', 'dns-rules.conf'],
       },
       ...(localAppData
         ? [
@@ -109,8 +116,14 @@ export function tnpTraces(ctx: TraceContext): Trace[] {
   ];
   if (ctx.platform === 'darwin') {
     return [
-      { path: '/usr/local/etc/tnp', what: 'configuration (may hold a relay auth token)' },
-      { path: '/Library/Application Support/tnp', what: 'kill-switch record' },
+      {
+        path: '/usr/local/etc/tnp',
+        what: 'configuration (may hold a relay auth token) and active personal DNS rules',
+      },
+      {
+        path: '/Library/Application Support/tnp',
+        what: 'kill-switch record and personal DNS rules key',
+      },
       ...ctx.homes.map((home) => ({
         path: join(home, 'Library', 'Application Support', 'tnp'),
         what: 'identity key, DNS routing records and TLD cache',
@@ -120,10 +133,13 @@ export function tnpTraces(ctx: TraceContext): Trace[] {
     ];
   }
   return [
-    { path: '/etc/tnp', what: 'configuration (may hold a relay auth token)' },
+    {
+      path: '/etc/tnp',
+      what: 'configuration (may hold a relay auth token) and active personal DNS rules',
+    },
     {
       path: '/var/lib/tnp',
-      what: 'identity key, kill-switch record, DNS routing records and TLD cache',
+      what: 'identity key, kill-switch record, DNS routing records, TLD cache and personal DNS rules key',
     },
     {
       // Owned by the resolver's service user, so never deleted recursively.
