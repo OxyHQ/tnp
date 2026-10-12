@@ -1,19 +1,13 @@
 #!/usr/bin/env bun
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { installAutoConnect, removeAutoConnect } from './autoconnect';
 import {
   dataDir,
   loadConfig,
+  loadResolverConfig,
   saveConfig,
   parsePrivacyLevel,
-  KILLSWITCH_MARKER_PATH,
   type TnpConfig,
 } from './config';
 import {
@@ -24,16 +18,19 @@ import {
   type RoutingState,
   type RoutingTarget,
 } from './dns-routing';
+import {
+  describeKillSwitch,
+  disableKillSwitch,
+  enableKillSwitch,
+  killSwitchAllow,
+  killSwitchRecorded,
+  upstreamsBlockedByKillSwitch,
+} from './killswitch';
 import { parseLocalTarget } from './parse-input';
 import { DnsProxy } from './proxy';
-import {
-  installService,
-  uninstallService,
-  serviceStatus,
-  stopService,
-  startService,
-  NATIVE_TLDS,
-} from './service';
+import { installService, serviceStatus, stopService, startService, NATIVE_TLDS } from './service';
+import { resolveToken } from './token';
+import { affectedUsers, formatUninstallReport, performUninstall } from './uninstall';
 import {
   currentReleasePlatform,
   decideUpdate,
@@ -46,20 +43,6 @@ import {
 
 const VERSION = '0.2.0';
 
-function resolveRealBinaryPath(): string {
-  try {
-    if (process.platform === 'linux' && existsSync('/proc/self/exe')) {
-      const { readlinkSync } = require('node:fs');
-      const real = readlinkSync('/proc/self/exe');
-      if (!real.includes('bunfs')) return real;
-    }
-    const { execSync } = require('node:child_process');
-    return execSync('which tnp', { encoding: 'utf-8', stdio: 'pipe' }).trim();
-  } catch {
-    return '/usr/local/bin/tnp';
-  }
-}
-
 function usage() {
   console.log(`
 tnp v${VERSION} -- The Network Protocol resolver & overlay client
@@ -70,7 +53,10 @@ Usage:
   tnp serve            Start service node mode (serve a domain)
   tnp relay            Start a community relay (see apps/relay)
   tnp install          Install as a system service and configure DNS
-  tnp uninstall        Remove the system service and DNS configuration
+  tnp uninstall        Remove the service, DNS configuration, kill-switch rules
+                       and autoconnect; lists the data left on disk
+  tnp uninstall --purge
+                       Also delete that data: config, identity key, log, binary
   tnp update           Update to the latest version
   tnp status           Check if the resolver service is running
   tnp test <domain>    Test resolving a TNP domain
@@ -85,17 +71,27 @@ Overlay commands:
     traffic, but it sees your IP and which service you reach.
     Multi-hop "private" routing is not implemented yet and is rejected.
 
-  tnp serve --domain <domain> [--target <host:port>] [--relay <wss://url>] --token <token>
+  tnp connect --killswitch
+    Also blocks outbound plain DNS (UDP/TCP port 53, IPv4 and IPv6) to every
+    address except loopback and the TNP resolver. Nothing else is blocked:
+    it is not a full-traffic kill switch. Needs root/Administrator; if the
+    rules cannot be fully applied, connect refuses to start.
+
+  TNP_TOKEN=<token> tnp serve --domain <domain> [--target <host:port>] [--relay <wss://url>]
     Registers this machine as a service node for the given domain.
     Incoming connections are forwarded to the local target (default localhost:80).
 
-  tnp relay --endpoint <wss://url> --token <token> [--port N] [--host addr]
+  TNP_TOKEN=<token> tnp relay --endpoint <wss://url> [--port N] [--host addr]
             [--location label] [--max-connections N] [--bandwidth mbps]
     Runs a community relay and publishes it in the relay directory.
     --endpoint is the public URL other people's clients dial. It is not the
     bind address: --host/--port say where to listen, --endpoint says how the
     rest of the network reaches you through whatever name, port or TLS
     termination sits in front.
+
+  Auth tokens: set TNP_TOKEN, or pipe the token to --token-stdin.
+  --token <token> still works but is deprecated: other local users can read it
+  from the process list, and it lands in shell history.
 
 Config: /etc/tnp/config.json (or /usr/local/etc/tnp/config.json on macOS)
 Docs:   https://tnp.network/install
@@ -107,7 +103,9 @@ Docs:   https://tnp.network/install
 // ---------------------------------------------------------------------------
 
 async function cmdRun() {
-  const config = loadConfig();
+  // The sandboxed service user cannot read config.json (it can hold tokens);
+  // it gets the secret-free resolver.json instead.
+  const config = loadResolverConfig();
   console.log(`[tnp] v${VERSION} starting...`);
   console.log(`[tnp] API: ${config.apiBaseUrl}`);
   console.log(`[tnp] upstream DNS: ${config.upstreamDns}`);
@@ -139,13 +137,20 @@ async function cmdRun() {
 }
 
 async function cmdConnect() {
-  // Recover from a previous crash: if kill switch marker exists, stale firewall rules are blocking DNS
-  if (existsSync(KILLSWITCH_MARKER_PATH)) {
-    console.log('[tnp] detected stale kill switch from a previous session, cleaning up...');
-    disableKillSwitch();
-  }
-
   const config = loadConfig();
+
+  // Recover from a previous crash: a recorded kill switch may still be blocking DNS.
+  if (killSwitchRecorded()) {
+    console.log('[tnp] found kill-switch rules from a previous session, removing them...');
+    if (!removeKillSwitch(config.publicDnsIp)) {
+      // Connecting over stale rules would leave DNS blocked behind a session
+      // that looks healthy. Stop and say so instead.
+      console.error(
+        '[tnp] not connecting while stale kill-switch rules may still block DNS. Rerun with sudo (as Administrator on Windows), or run `sudo tnp uninstall`.',
+      );
+      process.exit(1);
+    }
+  }
 
   // Parse --privacy flag
   const privacyIdx = process.argv.indexOf('--privacy');
@@ -160,10 +165,16 @@ async function cmdConnect() {
 
   // Parse --autoconnect flag
   if (process.argv.includes('--autoconnect')) {
-    config.autoConnect = true;
-    saveConfig(config);
-    installAutoConnect();
-    console.log(`[tnp] autoconnect enabled — TNP will connect on startup`);
+    try {
+      installAutoConnect();
+      // Recorded only once it exists, so the flag never claims an autostart
+      // that registration failed to create.
+      config.autoConnect = true;
+      saveConfig(config);
+      console.log(`[tnp] autoconnect enabled — TNP will connect on startup`);
+    } catch (err) {
+      console.error(`[tnp] autoconnect setup failed: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   // Parse --killswitch flag
@@ -173,10 +184,14 @@ async function cmdConnect() {
 
   // Parse --no-autoconnect / --no-killswitch
   if (process.argv.includes('--no-autoconnect')) {
-    config.autoConnect = false;
-    saveConfig(config);
-    removeAutoConnect();
-    console.log(`[tnp] autoconnect disabled`);
+    const removal = removeAutoConnect(affectedUsers());
+    if (removal.failed.length > 0) {
+      console.error(`[tnp] autoconnect could not be removed: ${removal.failed.join('; ')}`);
+    } else {
+      config.autoConnect = false;
+      saveConfig(config);
+      console.log(`[tnp] autoconnect disabled`);
+    }
   }
   if (process.argv.includes('--no-killswitch')) {
     config.killSwitch = false;
@@ -184,14 +199,47 @@ async function cmdConnect() {
 
   console.log(`[tnp] v${VERSION} overlay client starting...`);
   console.log(`[tnp] API: ${config.apiBaseUrl}`);
-  console.log(
-    `[tnp] privacy: ${config.privacyLevel}  kill switch: ${config.killSwitch ? 'on' : 'off'}  autoconnect: ${config.autoConnect ? 'on' : 'off'}`,
-  );
 
-  // Enable kill switch (block all DNS if tunnel drops)
+  // The kill switch goes first and is all-or-nothing. Asked for and not fully
+  // applied means not connecting: carrying on would give the user exactly the
+  // leak they asked to be protected from, behind a line saying it was on.
+  let killSwitchOn = false;
   if (config.killSwitch) {
-    enableKillSwitch();
+    try {
+      const allow = killSwitchAllow(config.publicDnsIp);
+      console.log(`[tnp] kill switch: ${describeKillSwitch(allow)}`);
+      const record = enableKillSwitch(config.publicDnsIp);
+      killSwitchOn = true;
+      console.log(`[tnp] kill switch applied (${record.backend}, IPv4 and IPv6)`);
+      // A crash keeps the rules — failing closed is the point — but the user
+      // must be told DNS stays blocked and how to undo it.
+      process.on('exit', (code) => {
+        if (code !== 0 && killSwitchOn) {
+          console.error(
+            '[tnp] the kill switch is still on: plain DNS stays blocked. `sudo tnp connect --no-killswitch` or `sudo tnp uninstall` removes it.',
+          );
+        }
+      });
+      const cut = upstreamsBlockedByKillSwitch(config.upstreamDns, allow);
+      if (cut.length > 0) {
+        console.warn(
+          `[tnp] warning: the local resolver forwards public names over plain DNS to ${cut.join(', ')}, which the kill switch blocks; public names will not resolve through it. Set upstreamDns to a DNS-over-HTTPS URL (https://...) to keep them working.`,
+        );
+      }
+    } catch (err) {
+      console.error(
+        `[tnp] kill switch could not be applied: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      console.error(
+        '[tnp] no kill-switch rules were left in place. Not connecting, because the kill switch was requested; fix the problem above or connect with --no-killswitch.',
+      );
+      process.exit(1);
+    }
   }
+
+  console.log(
+    `[tnp] privacy: ${config.privacyLevel}  kill switch: ${killSwitchOn ? 'on (plain DNS only)' : 'off'}  autoconnect: ${config.autoConnect ? 'on' : 'off'}`,
+  );
 
   // Start DNS proxy with overlay enabled
   const proxy = new DnsProxy(config);
@@ -223,8 +271,10 @@ async function cmdConnect() {
 
   const shutdown = () => {
     console.log('\n[tnp] shutting down overlay client...');
-    if (config.killSwitch) {
-      disableKillSwitch();
+    // A kill switch that could not be removed makes the exit non-zero, so
+    // nothing reports a clean stop while DNS stays blocked.
+    if (killSwitchOn && removeKillSwitch(config.publicDnsIp)) {
+      killSwitchOn = false;
     }
     if (dnsConfigured) {
       restoreDns();
@@ -232,7 +282,7 @@ async function cmdConnect() {
     socksProxy.stop();
     tunnelManager.shutdown();
     proxy.stop();
-    process.exit(0);
+    process.exit(killSwitchOn ? 1 : 0);
   };
 
   process.on('SIGINT', shutdown);
@@ -343,230 +393,48 @@ function restoreDns(): void {
   }
 }
 
-/** Install autoconnect — register tnp connect to run on system boot/login. */
-function installAutoConnect(): void {
-  const { execSync } = require('node:child_process');
-  const binaryPath = resolveRealBinaryPath();
-
+/**
+ * Remove kill-switch rules and say what happened. Never throws: it runs on
+ * shutdown and on crash recovery, where a throw would skip the DNS restore.
+ */
+function removeKillSwitch(publicDnsIp: string): boolean {
   try {
-    if (process.platform === 'win32') {
-      // Windows: create a scheduled task that runs tnp connect at logon
-      execSync(
-        `schtasks /Create /TN "TnpAutoConnect" /TR "\\"${binaryPath}\\" connect" /SC ONLOGON /RL HIGHEST /F`,
-        { stdio: 'pipe' },
-      );
-    } else if (process.platform === 'darwin') {
-      // macOS: create a LaunchAgent plist
-      const { writeFileSync, mkdirSync } = require('node:fs');
-      const { homedir } = require('node:os');
-      const { join } = require('node:path');
-      const plistDir = join(homedir(), 'Library', 'LaunchAgents');
-      mkdirSync(plistDir, { recursive: true });
-      writeFileSync(
-        join(plistDir, 'so.oxy.tnp.connect.plist'),
-        `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>so.oxy.tnp.connect</string>
-  <key>ProgramArguments</key><array><string>${binaryPath}</string><string>connect</string></array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-</dict>
-</plist>`,
-      );
-      execSync(`launchctl load ~/Library/LaunchAgents/so.oxy.tnp.connect.plist`, { stdio: 'pipe' });
-    } else {
-      // Linux: create a systemd user service
-      const { writeFileSync, mkdirSync } = require('node:fs');
-      const { homedir } = require('node:os');
-      const { join } = require('node:path');
-      const unitDir = join(homedir(), '.config', 'systemd', 'user');
-      mkdirSync(unitDir, { recursive: true });
-      writeFileSync(
-        join(unitDir, 'tnp-connect.service'),
-        `[Unit]
-Description=TNP Overlay Client
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-ExecStart=${binaryPath} connect
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=default.target
-`,
-      );
-      execSync('systemctl --user daemon-reload', { stdio: 'pipe' });
-      execSync('systemctl --user enable tnp-connect.service', { stdio: 'pipe' });
-      execSync('systemctl --user start tnp-connect.service', { stdio: 'pipe' });
+    const { residual } = disableKillSwitch(publicDnsIp);
+    if (residual.length === 0) {
+      console.log('[tnp] kill switch off -- plain DNS is no longer blocked');
+      return true;
     }
-  } catch (err) {
-    console.error(`[tnp] autoconnect setup failed: ${err instanceof Error ? err.message : err}`);
-  }
-}
-
-/** Remove autoconnect service. */
-function removeAutoConnect(): void {
-  const { execSync } = require('node:child_process');
-  try {
-    if (process.platform === 'win32') {
-      execSync(`schtasks /Delete /TN "TnpAutoConnect" /F`, { stdio: 'pipe' });
-    } else if (process.platform === 'darwin') {
-      execSync(`launchctl unload ~/Library/LaunchAgents/so.oxy.tnp.connect.plist 2>/dev/null`, {
-        stdio: 'pipe',
-      });
-      try {
-        require('node:fs').unlinkSync(
-          `${require('node:os').homedir()}/Library/LaunchAgents/so.oxy.tnp.connect.plist`,
-        );
-      } catch (err: unknown) {
-        console.warn(
-          `[tnp] could not remove launch agent plist: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    } else {
-      execSync('systemctl --user stop tnp-connect.service 2>/dev/null', { stdio: 'pipe' });
-      execSync('systemctl --user disable tnp-connect.service 2>/dev/null', { stdio: 'pipe' });
-      try {
-        require('node:fs').unlinkSync(
-          `${require('node:os').homedir()}/.config/systemd/user/tnp-connect.service`,
-        );
-      } catch (err: unknown) {
-        console.warn(
-          `[tnp] could not remove systemd unit file: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
+    console.error(
+      `[tnp] kill-switch rules are still present: ${residual.join(', ')}. Run \`sudo tnp uninstall\` (as Administrator on Windows) to retry.`,
+    );
   } catch (err) {
     console.error(
-      `[tnp] failed to remove autoconnect: ${err instanceof Error ? err.message : String(err)}`,
+      `[tnp] could not remove kill-switch rules: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
+  return false;
 }
 
-/** Kill switch: block all DNS except through TNP. If the tunnel drops, nothing leaks. */
-function enableKillSwitch(): void {
-  const { execSync } = require('node:child_process');
-  const dnsIp = loadConfig().publicDnsIp;
-  console.log('[tnp] enabling kill switch...');
-
-  try {
-    if (process.platform === 'win32') {
-      // Windows: create firewall rules to block all DNS (port 53) except to localhost
-      execSync(
-        `netsh advfirewall firewall add rule name="TNP-KillSwitch-Block-DNS" dir=out protocol=udp remoteport=53 action=block`,
-        { stdio: 'pipe' },
-      );
-      execSync(
-        `netsh advfirewall firewall add rule name="TNP-KillSwitch-Block-DNS-TCP" dir=out protocol=tcp remoteport=53 action=block`,
-        { stdio: 'pipe' },
-      );
-      execSync(
-        `netsh advfirewall firewall add rule name="TNP-KillSwitch-Allow-Local" dir=out protocol=udp remoteport=53 remoteip=127.0.0.1 action=allow`,
-        { stdio: 'pipe' },
-      );
-      if (dnsIp) {
-        execSync(
-          `netsh advfirewall firewall add rule name="TNP-KillSwitch-Allow-TNP" dir=out protocol=udp remoteport=53 remoteip=${dnsIp} action=allow`,
-          { stdio: 'pipe' },
-        );
-      }
-    } else if (process.platform === 'darwin') {
-      // macOS: use pf anchor so we don't replace the entire ruleset
-      const pfRules = [
-        'block out quick proto { tcp, udp } to any port 53',
-        'pass out quick proto { tcp, udp } to 127.0.0.1 port 53',
-      ];
-      if (dnsIp) {
-        pfRules.push(`pass out quick proto { tcp, udp } to ${dnsIp} port 53`);
-      }
-      pfRules.push('pass out quick proto { tcp, udp } to 127.0.0.1 port 5354', '');
-      writeFileSync('/tmp/tnp-killswitch.conf', pfRules.join('\n'));
-      execSync('sudo pfctl -a tnp-killswitch -f /tmp/tnp-killswitch.conf 2>/dev/null', {
-        stdio: 'pipe',
-      });
-    } else {
-      // Linux: use iptables
-      execSync('sudo iptables -I OUTPUT -p udp --dport 53 -j DROP 2>/dev/null', { stdio: 'pipe' });
-      execSync('sudo iptables -I OUTPUT -p tcp --dport 53 -j DROP 2>/dev/null', { stdio: 'pipe' });
-      execSync('sudo iptables -I OUTPUT -p udp --dport 53 -d 127.0.0.1 -j ACCEPT 2>/dev/null', {
-        stdio: 'pipe',
-      });
-      if (dnsIp) {
-        execSync(`sudo iptables -I OUTPUT -p udp --dport 53 -d ${dnsIp} -j ACCEPT 2>/dev/null`, {
-          stdio: 'pipe',
-        });
-      }
-      execSync('sudo iptables -I OUTPUT -p udp --dport 5354 -d 127.0.0.1 -j ACCEPT 2>/dev/null', {
-        stdio: 'pipe',
-      });
-    }
-
-    // Write marker file so a future process can detect stale rules after a crash
-    writeFileSync(KILLSWITCH_MARKER_PATH, String(process.pid), { mode: 0o600 });
-    console.log('[tnp] kill switch active -- DNS blocked except through TNP');
-  } catch (err) {
-    console.log(
-      `[tnp] kill switch failed (may need admin/sudo): ${err instanceof Error ? err.message : err}`,
-    );
+/**
+ * The Oxy token for `serve`/`relay`, from `--token-stdin`, `TNP_TOKEN` or the
+ * deprecated `--token`. Exits on a malformed source. `TNP_TOKEN` is removed
+ * from the environment once read, so no child process inherits it.
+ */
+async function readTokenOrExit(): Promise<string | null> {
+  const result = await resolveToken({
+    argv: process.argv,
+    env: process.env,
+    readStdin: () => Bun.stdin.text(),
+  });
+  delete process.env.TNP_TOKEN;
+  if (!result.ok) {
+    console.error(`[tnp] ${result.error}`);
+    process.exit(1);
   }
-}
-
-/** Disable kill switch -- restore normal DNS access. */
-function disableKillSwitch(): void {
-  const { execSync } = require('node:child_process');
-  const dnsIp = loadConfig().publicDnsIp;
-  console.log('[tnp] disabling kill switch...');
-
-  try {
-    if (process.platform === 'win32') {
-      const rules = [
-        'TNP-KillSwitch-Block-DNS',
-        'TNP-KillSwitch-Block-DNS-TCP',
-        'TNP-KillSwitch-Allow-Local',
-        'TNP-KillSwitch-Allow-TNP',
-      ];
-      for (const rule of rules) {
-        try {
-          execSync(`netsh advfirewall firewall delete rule name="${rule}"`, { stdio: 'pipe' });
-        } catch (err) {
-          console.warn(
-            `[tnp] could not remove firewall rule "${rule}": ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
-    } else if (process.platform === 'darwin') {
-      // Flush only the tnp-killswitch anchor, leaving the rest of pf intact
-      execSync('sudo pfctl -a tnp-killswitch -F all 2>/dev/null', { stdio: 'pipe' });
-    } else {
-      execSync('sudo iptables -D OUTPUT -p udp --dport 53 -j DROP 2>/dev/null', { stdio: 'pipe' });
-      execSync('sudo iptables -D OUTPUT -p tcp --dport 53 -j DROP 2>/dev/null', { stdio: 'pipe' });
-      execSync('sudo iptables -D OUTPUT -p udp --dport 53 -d 127.0.0.1 -j ACCEPT 2>/dev/null', {
-        stdio: 'pipe',
-      });
-      execSync(`sudo iptables -D OUTPUT -p udp --dport 53 -d ${dnsIp} -j ACCEPT 2>/dev/null`, {
-        stdio: 'pipe',
-      });
-      execSync('sudo iptables -D OUTPUT -p udp --dport 5354 -d 127.0.0.1 -j ACCEPT 2>/dev/null', {
-        stdio: 'pipe',
-      });
-    }
-    console.log('[tnp] kill switch disabled -- normal DNS restored');
-  } catch (err) {
-    console.warn(
-      `[tnp] could not remove kill switch rules automatically: ${err instanceof Error ? err.message : String(err)}`,
-    );
+  if (result.token !== null && result.warning) {
+    console.warn(`[tnp] warning: ${result.warning}`);
   }
-
-  // Remove marker file regardless of whether rule removal succeeded
-  try {
-    unlinkSync(KILLSWITCH_MARKER_PATH);
-  } catch {
-    // Marker file may already be gone -- that is fine
-  }
+  return result.token;
 }
 
 async function cmdServe() {
@@ -576,16 +444,18 @@ async function cmdServe() {
   const domain = getFlag('--domain');
   const target = getFlag('--target') || 'localhost:80';
   const relayEndpoint = getFlag('--relay');
-  const authToken = getFlag('--token');
+  const authToken = await readTokenOrExit();
 
   if (!domain) {
     console.error('[tnp] --domain is required for serve mode');
-    console.error('Example: tnp serve --domain example.ox --token <auth-token>');
+    console.error('Example: TNP_TOKEN=<auth-token> tnp serve --domain example.ox');
     process.exit(1);
   }
 
   if (!authToken) {
-    console.error('[tnp] --token is required for serve mode (Oxy auth token)');
+    console.error(
+      '[tnp] an Oxy auth token is required for serve mode: set TNP_TOKEN or pipe it to --token-stdin',
+    );
     process.exit(1);
   }
 
@@ -644,20 +514,20 @@ async function cmdRelay() {
   const port = Number(getFlag('--port') ?? config.relayPort);
   const host = getFlag('--host') ?? '0.0.0.0';
   const location = getFlag('--location') ?? config.relayLocation;
-  const authToken = getFlag('--token') ?? config.relayAuthToken;
+  const authToken = (await readTokenOrExit()) ?? config.relayAuthToken;
   const maxConn = Number(getFlag('--max-connections') ?? config.relayMaxConnections);
   const bandwidth = Number(getFlag('--bandwidth') ?? config.relayBandwidth);
   const endpoint = getFlag('--endpoint') ?? config.relayEndpoint;
 
   if (!authToken) {
-    console.error('[tnp] --token is required (Oxy auth token)');
-    console.error('Example: tnp relay --endpoint wss://relay.example.com --token <auth-token>');
+    console.error('[tnp] an Oxy auth token is required: set TNP_TOKEN or pipe it to --token-stdin');
+    console.error('Example: TNP_TOKEN=<auth-token> tnp relay --endpoint wss://relay.example.com');
     process.exit(1);
   }
 
   if (!endpoint) {
     console.error('[tnp] --endpoint is required: the public URL clients dial');
-    console.error('Example: tnp relay --endpoint wss://relay.example.com --token <auth-token>');
+    console.error('Example: TNP_TOKEN=<auth-token> tnp relay --endpoint wss://relay.example.com');
     console.error('It is not the bind address -- use --host/--port for that.');
     process.exit(1);
   }
@@ -707,13 +577,12 @@ function cmdInstall() {
   config.listenAddr = '127.0.0.1';
   saveConfig(config);
 
-  const binaryPath = resolveRealBinaryPath();
   console.log(`[tnp] installing service...`);
-  console.log(`[tnp] binary: ${binaryPath}`);
   console.log(`[tnp] listen: ${config.listenAddr}:${config.listenPort}`);
 
   try {
-    installService(binaryPath, config);
+    const binaryPath = installService(config);
+    console.log(`[tnp] service binary: ${binaryPath}`);
     console.log('[tnp] service installed and started');
     console.log(
       `[tnp] TNP-native domains (${NATIVE_TLDS.map((t) => `.${t}`).join(', ')}) will now resolve on this device`,
@@ -802,12 +671,23 @@ async function cmdUpdate() {
 }
 
 function cmdUninstall() {
-  console.log('[tnp] uninstalling service...');
+  const purge = process.argv.includes('--purge');
+  console.log(purge ? '[tnp] uninstalling and purging TNP data...' : '[tnp] uninstalling...');
+
+  let publicDnsIp = '';
+  try {
+    publicDnsIp = loadConfig().publicDnsIp;
+  } catch {
+    // An unreadable config must not block removal; it only names an extra
+    // address that 0.2.0's kill switch may have allowed.
+  }
 
   try {
-    uninstallService();
-    console.log('[tnp] service removed');
-    console.log('[tnp] DNS configuration restored');
+    const report = performUninstall({ purge, publicDnsIp });
+    for (const line of formatUninstallReport(report, purge)) {
+      console.log(line ? `[tnp] ${line}` : '');
+    }
+    if (report.failed.length > 0) process.exit(1);
   } catch (err) {
     console.error(`[tnp] uninstall failed: ${err}`);
     console.error('[tnp] you may need to run this command with sudo');

@@ -120,7 +120,7 @@ open http://your.ox
 
 ```sh
 # Register a service node for your domain
-tnp serve --domain your.ox --target localhost:8080 --token <oxy-token>
+TNP_TOKEN=<oxy-token> tnp serve --domain your.ox --target localhost:8080
 
 # Anyone running `tnp connect` resolves your.ox to 127.0.0.1, the SOCKS5
 # proxy picks up the connection and forwards encrypted payloads through a relay.

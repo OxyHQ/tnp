@@ -1,6 +1,26 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { isIP } from 'node:net';
 import { join } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
+import { restrictWindowsAcl, writeFileAtomic } from './secure-fs';
+
+/**
+ * True for a bare IPv4 or IPv6 literal and nothing else.
+ *
+ * Addresses from config and the environment end up in firewall rules and
+ * system commands, so this is the gate that keeps them from carrying anything
+ * else: zone IDs (`fe80::1%eth0`) and CIDR suffixes are refused too.
+ */
+export function isIpLiteral(value: string): boolean {
+  return value.length > 0 && !value.includes('%') && isIP(value) !== 0;
+}
+
+function envPublicDns(): string {
+  const raw = process.env.TNP_PUBLIC_DNS?.trim() ?? '';
+  if (raw === '' || isIpLiteral(raw)) return raw;
+  console.warn(`[tnp] ignoring TNP_PUBLIC_DNS="${raw}": not an IP address`);
+  return '';
+}
 
 /**
  * Default TNP public DNS resolver IP. Sourced from the TNP_PUBLIC_DNS env var at
@@ -14,10 +34,14 @@ import { homedir, tmpdir } from 'node:os';
  * release binaries, once the dns-server NLB is provisioned (oxy-infra
  * app-tnp.tf is pending).
  */
-export const TNP_PUBLIC_DNS = process.env.TNP_PUBLIC_DNS?.trim() ?? '';
+export const TNP_PUBLIC_DNS = envPublicDns();
 
-/** Path to the kill switch marker file. Presence means firewall rules are active. */
-export const KILLSWITCH_MARKER_PATH = join(tmpdir(), 'tnp-killswitch-active');
+/**
+ * Where releases up to 0.2.0 recorded an active kill switch: a world-writable
+ * temporary directory (audit S10). Only ever deleted now, never written — its
+ * presence still means an older client may have left rules behind.
+ */
+export const LEGACY_KILLSWITCH_MARKER_PATH = join(tmpdir(), 'tnp-killswitch-active');
 
 /**
  * The subset of configuration the DNS resolver actually consumes.
@@ -189,6 +213,26 @@ export function dataDir(): string {
   }
 }
 
+/**
+ * Machine-wide state that only root/Administrators may write: the kill-switch
+ * record, and on Linux the identity key.
+ *
+ * Never a temporary directory and never a directory the resolver daemon's
+ * unprivileged service user owns, because root writes here: a directory another
+ * principal controls is a directory where a planted symlink redirects root's
+ * write.
+ */
+export function systemStateDir(platform: NodeJS.Platform = process.platform): string {
+  switch (platform) {
+    case 'darwin':
+      return '/Library/Application Support/tnp';
+    case 'win32':
+      return join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'tnp');
+    default:
+      return '/var/lib/tnp';
+  }
+}
+
 export function logPath(): string {
   switch (process.platform) {
     case 'win32':
@@ -234,6 +278,21 @@ const DEFAULT_CONFIG: TnpConfig = {
 export function applyStoredConfig(saved: Partial<TnpConfig>): TnpConfig {
   const merged = { ...DEFAULT_CONFIG, ...saved };
 
+  // These two reach firewall rules and system commands. Anything that is not a
+  // plain IP literal is refused here, once, so no later caller has to trust it.
+  if (!isIpLiteral(String(merged.listenAddr))) {
+    console.warn(
+      `[tnp] stored listenAddr "${String(merged.listenAddr)}" is not an IP address. Falling back to "${DEFAULT_CONFIG.listenAddr}".`,
+    );
+    merged.listenAddr = DEFAULT_CONFIG.listenAddr;
+  }
+  if (merged.publicDnsIp !== '' && !isIpLiteral(String(merged.publicDnsIp))) {
+    console.warn(
+      `[tnp] stored publicDnsIp "${String(merged.publicDnsIp)}" is not an IP address. Ignoring it.`,
+    );
+    merged.publicDnsIp = DEFAULT_CONFIG.publicDnsIp;
+  }
+
   const privacy = parsePrivacyLevel(String(merged.privacyLevel));
   if (!privacy.ok) {
     console.warn(`[tnp] stored ${privacy.error} Falling back to "${DEFAULT_CONFIG.privacyLevel}".`);
@@ -260,7 +319,18 @@ export function loadConfig(): TnpConfig {
     return { ...DEFAULT_CONFIG };
   }
 
-  const raw = readFileSync(path, 'utf-8');
+  let raw: string;
+  try {
+    raw = readFileSync(path, 'utf-8');
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'EACCES' || code === 'EPERM') {
+      throw new Error(
+        `cannot read ${path}: permission denied. It can hold auth tokens, so only root/Administrators may read it; rerun with sudo or as Administrator.`,
+      );
+    }
+    throw err;
+  }
   let saved: Partial<TnpConfig>;
   try {
     saved = JSON.parse(raw) as Partial<TnpConfig>;
@@ -273,10 +343,101 @@ export function loadConfig(): TnpConfig {
   return applyStoredConfig(saved);
 }
 
+/**
+ * The resolver daemon's own config: only what `tnp run` consumes, and no
+ * secret. On Linux the sandboxed daemon (user `tnp`) reads this through its
+ * group; it never gets read access to `config.json`, which can hold the relay
+ * auth token.
+ */
+export function resolverConfigPath(): string {
+  return join(configDir(), 'resolver.json');
+}
+
+/** The secret-free subset of a config the resolver needs. */
+export function resolverSubset(cfg: DnsProxyConfig): DnsProxyConfig {
+  return {
+    listenAddr: cfg.listenAddr,
+    listenPort: cfg.listenPort,
+    apiBaseUrl: cfg.apiBaseUrl,
+    upstreamDns: cfg.upstreamDns,
+    ...(cfg.cacheMaxEntries === undefined ? {} : { cacheMaxEntries: cfg.cacheMaxEntries }),
+    ...(cfg.rateLimit === undefined ? {} : { rateLimit: cfg.rateLimit }),
+    ...(cfg.maxTcpConnections === undefined ? {} : { maxTcpConnections: cfg.maxTcpConnections }),
+    ...(cfg.maxInflight === undefined ? {} : { maxInflight: cfg.maxInflight }),
+  };
+}
+
+/**
+ * The Linux resolver service's own writable state: systemd creates it from the
+ * unit's `StateDirectory=tnp-resolver`, owned by the `tnp` user. Separate from
+ * root's `/var/lib/tnp`, so a compromised daemon can neither plant files where
+ * root writes nor poison the TLD cache root's `tnp connect` reads.
+ */
+export const RESOLVER_STATE_DIR = '/var/lib/tnp-resolver';
+export const RESOLVER_TLD_CACHE = join(RESOLVER_STATE_DIR, 'tlds.json');
+
+/**
+ * Config for `tnp run`: `config.json` when this process can read it (root),
+ * otherwise the group-readable `resolver.json` the sandboxed daemon is given.
+ */
+export function loadResolverConfig(): DnsProxyConfig {
+  try {
+    return loadConfig();
+  } catch (err) {
+    if (!existsSync(resolverConfigPath())) throw err;
+    try {
+      const saved = JSON.parse(readFileSync(resolverConfigPath(), 'utf-8')) as Partial<TnpConfig>;
+      // The sandboxed daemon keeps its TLD cache in its own systemd
+      // StateDirectory, never in root's /var/lib/tnp; the path is fixed here
+      // rather than read from the file.
+      return { ...resolverSubset(applyStoredConfig(saved)), tldCachePath: RESOLVER_TLD_CACHE };
+    } catch {
+      throw err;
+    }
+  }
+}
+
+/**
+ * Write the config so only root/Administrators can read it.
+ *
+ * It can hold the relay auth token, so the mode is enforced on every save, not
+ * only when the file is first created — `writeFileSync`'s `mode` is ignored for
+ * a file that already exists, which is how a config written by an older build
+ * stayed at whatever the umask gave it.
+ *
+ * On Linux `tnp install` makes `/etc/tnp` root:tnp 0750. In a config dir root
+ * owns with a non-root group, the secret-free `resolver.json` is also written,
+ * root:<group> 0640, for the sandboxed resolver; `config.json` stays 0600. On
+ * Windows the directory ACL is reset to SYSTEM and Administrators, because
+ * `%ProgramData%` children otherwise inherit Users:Read.
+ */
 export function saveConfig(cfg: TnpConfig): void {
   const dir = configDir();
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(configPath(), `${JSON.stringify(cfg, null, 2)}\n`, { mode: 0o600 });
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const body = `${JSON.stringify(cfg, null, 2)}\n`;
+
+  if (process.platform === 'win32') {
+    restrictWindowsAcl(dir, 'admin-only');
+    writeFileAtomic(configPath(), body);
+    return;
+  }
+
+  const st = statSync(dir);
+  if ((st.mode & 0o007) !== 0) chmodSync(dir, st.mode & 0o770);
+  writeFileAtomic(configPath(), body, { mode: 0o600 });
+
+  // Linux only: on macOS a new directory inherits its parent's group (often
+  // `admin`), so a non-root group there says nothing about who should read.
+  const serviceGroup =
+    process.platform === 'linux' && st.uid === 0 && st.gid !== 0 && process.geteuid?.() === 0
+      ? st.gid
+      : undefined;
+  if (serviceGroup !== undefined) {
+    writeFileAtomic(resolverConfigPath(), `${JSON.stringify(resolverSubset(cfg), null, 2)}\n`, {
+      mode: 0o640,
+      gid: serviceGroup,
+    });
+  }
 }
 
 /** Regex to validate network interface names, preventing command injection. */
