@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import nacl from 'tweetnacl';
@@ -178,6 +187,44 @@ describe('loadOrCreateIdentity', () => {
       };
       expect(fromBase64(onDisk.publicKey)).toEqual(created.publicKey);
       expect(fromBase64(onDisk.secretKey)).toEqual(created.secretKey);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test('writes the key 0600 inside a 0700 directory it creates', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tnp-identity-'));
+    try {
+      const keyPath = join(dir, 'state', 'identity.key');
+      loadOrCreateIdentity(keyPath);
+      expect(statSync(keyPath).mode & 0o777).toBe(0o600);
+      expect(statSync(join(dir, 'state')).mode & 0o777).toBe(0o700);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('tightens a key an earlier build left readable by others', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tnp-identity-'));
+    try {
+      const keyPath = join(dir, 'identity.key');
+      const created = loadOrCreateIdentity(keyPath);
+      chmodSync(keyPath, 0o644);
+      const reloaded = loadOrCreateIdentity(keyPath);
+      expect(toBase64(reloaded.publicKey)).toBe(toBase64(created.publicKey));
+      expect(statSync(keyPath).mode & 0o777).toBe(0o600);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('refuses to read a key through a symlink', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tnp-identity-'));
+    try {
+      const elsewhere = join(dir, 'attacker.key');
+      writeFileSync(elsewhere, JSON.stringify({ publicKey: 'AA==', secretKey: 'AA==' }));
+      const keyPath = join(dir, 'identity.key');
+      symlinkSync(elsewhere, keyPath);
+      expect(() => loadOrCreateIdentity(keyPath)).toThrow('not a regular file');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -379,9 +379,24 @@ revocation mechanism yet.
 - The daemon's control socket is owner-only and authenticated. A local
   unprivileged process must not be able to reconfigure routing, install an
   override, or read key material.
-- Configuration is `0600` and owned by the daemon user. State that must survive a
-  reboot goes in the data directory, not a world-writable temporary directory —
-  the kill-switch marker currently lives in `/tmp` (audit S10).
+- Configuration is never readable by other users: `config.json` is `0600` root
+  (it can hold the relay auth token). On Linux the sandboxed resolver instead
+  reads `resolver.json` — only its listen address, API URL, upstreams and cache
+  size, no secret — root:tnp `0640` inside a root:tnp `0750` directory, so it
+  can read its settings but never write them or see a token. On Windows the
+  config directory's ACL is SYSTEM and Administrators only.
+- Anything root writes lives in a directory only root controls — never `/tmp`,
+  and never a directory the unprivileged daemon user owns, where a planted
+  symlink would redirect root's write. The kill-switch record is in the system
+  state directory (`/var/lib/tnp`, `/Library/Application Support/tnp`,
+  `%ProgramData%\tnp`), closing audit S10.
+- A binary a privileged service executes lives where only administrators can
+  write (`/usr/local/bin/tnp` after a root-ownership check, `%ProgramFiles%\TNP`);
+  install refuses rather than point a root unit or SYSTEM task at a
+  user-writable file.
+- Tokens are not passed on the command line: `TNP_TOKEN` or `--token-stdin`.
+  `--token` remains for compatibility and warns, because `/proc/<pid>/cmdline`
+  is readable by every local user.
 - Diagnostics are redacted at the point of generation. A redaction step applied
   at display time is a redaction step that will eventually be skipped.
 

@@ -180,9 +180,11 @@ describe('generated configuration', () => {
     expect(plain).toContain('After=network.target systemd-resolved.service');
 
     const withLink = buildSystemdUnit('/usr/local/bin/tnp', resolvedLinkCommands(LOCAL));
-    expect(withLink).toMatch(/^ExecStartPost=-\/bin\/sh -c '.*resolvectl dns tnp0 127\.0\.0\.1'$/m);
     expect(withLink).toMatch(
-      /^ExecStopPost=-\/bin\/sh -c 'resolvectl revert tnp0; ip link delete tnp0'$/m,
+      /^ExecStartPost=-\+\/bin\/sh -c '.*resolvectl dns tnp0 127\.0\.0\.1'$/m,
+    );
+    expect(withLink).toMatch(
+      /^ExecStopPost=-\+\/bin\/sh -c 'resolvectl revert tnp0; ip link delete tnp0'$/m,
     );
   });
 

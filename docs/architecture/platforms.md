@@ -85,6 +85,42 @@ Requirements:
 
 Consent is per capability, not one blanket approval at install.
 
+### As implemented (client 0.2.x)
+
+**Kill switch (`tnp connect --killswitch`) — DNS only.** It blocks outbound
+plain DNS (UDP and TCP port 53, IPv4 and IPv6) to every address except loopback
+and the configured TNP resolver. Nothing else is blocked; it is not a
+full-traffic kill switch and must never be described as a VPN kill switch.
+It is all or nothing: if both address families cannot be blocked and verified,
+the partial rules are rolled back and `connect` refuses to start. Needs
+root/Administrator; it never shells out to `sudo`.
+
+| | Mechanism | Verified before reporting "on" |
+|---|---|---|
+| Linux | `inet` nftables table `tnp_killswitch`; without `nft`, chain `TNP_KILLSWITCH` in iptables **and** ip6tables | table/chain present; an IPv6 host without ip6tables is refused |
+| macOS | pf anchor `com.apple/tnp-killswitch` (evaluated by the stock `anchor "com.apple/*"`), passes before a quick block, loaded from stdin; pf enabled with `pfctl -E` and the token released with `pfctl -X` | main ruleset references `com.apple/*`, anchor loaded, pf enabled |
+| Windows | block rules whose remote addresses are the complement of the allowed set (block beats allow in Windows Firewall) | every firewall profile enabled, every rule present |
+
+A plain-DNS `upstreamDns` is cut off too; `connect` warns that public names then
+need a DoH upstream. The record lives in the system state directory, and the
+0.2.0 `/tmp` marker, rule names and pf anchor are cleaned up on sight.
+
+**Resolver service.** Every platform's service runs an admin-only copy of the
+binary (`/usr/local/bin/tnp` checked root-owned all the way up, or
+`%ProgramFiles%\TNP\tnp.exe`), never the file that was launched. On Linux the
+unit runs as the `tnp` system user with only `CAP_NET_BIND_SERVICE`,
+`ProtectSystem=strict` (its only writable path is its own `/var/lib/tnp-resolver` TLD cache; the `tnp0` link hooks run privileged via `+`), a syscall filter and address-family
+restriction (`systemd-analyze security`: 1.4). It reads the secret-free
+`/etc/tnp/resolver.json` through its group, never `config.json`, which can hold
+the relay token. **Follow-ups:** the macOS
+launchd job and the Windows task still run as root/SYSTEM; a dedicated macOS
+service account (`dscl`) and `LOCAL SERVICE` on Windows are next.
+
+**Uninstall.** `tnp uninstall` removes the service, TNP's DNS routing,
+kill-switch rules and autoconnect units, then lists the data still on disk.
+`tnp uninstall --purge` also deletes config, identity key, log, binary and the
+`tnp` account, and names what TNP cannot remove (journal, shell history).
+
 ## 5. Diagnostics and repair
 
 `tnp status` reports each subsystem **independently**: API reachability, resolver,

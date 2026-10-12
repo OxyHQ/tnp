@@ -513,13 +513,14 @@ async function actionInstall(): Promise<void> {
     const config = loadConfig();
     saveConfig(config);
 
-    const binaryPath = process.argv[1] || 'tnp';
-    addKeyValue('Binary', binaryPath);
     addKeyValue('Listen', `${config.listenAddr}:${config.listenPort}`);
 
     try {
       const { installService } = await import('./service');
-      installService(binaryPath, config);
+      // The service runs an admin-only copy of this binary, never the file
+      // that was launched (which the user, or malware as the user, can swap).
+      const binaryPath = installService(config);
+      addKeyValue('Binary', binaryPath);
       addLine('✓ Service installed and started.', GREEN);
       addLine('TNP domains will now resolve on this device.', DIM);
     } catch (err) {
@@ -532,10 +533,17 @@ async function actionInstall(): Promise<void> {
 async function actionUninstall(): Promise<void> {
   await showActionScreen('Uninstall System Service', '✗', async () => {
     try {
-      const { uninstallService } = await import('./service');
-      uninstallService();
-      addLine('✓ Service removed.', GREEN);
-      addLine('DNS configuration restored.', DIM);
+      const { formatUninstallReport, performUninstall } = await import('./uninstall');
+      let publicDnsIp = '';
+      try {
+        publicDnsIp = loadConfig().publicDnsIp;
+      } catch {
+        // Removal must not depend on reading the config.
+      }
+      const report = performUninstall({ purge: false, publicDnsIp });
+      for (const line of formatUninstallReport(report, false)) {
+        addLine(line, line.startsWith('FAILED') ? RED : line.startsWith('removed') ? GREEN : DIM);
+      }
     } catch (err) {
       addLine(`Uninstall failed: ${err instanceof Error ? err.message : String(err)}`, RED);
       addLine('You may need to run with sudo.', DIM);
@@ -645,7 +653,7 @@ async function actionHelp(): Promise<void> {
     addLine('    service nodes are routed through encrypted tunnels via relay nodes.');
     addLine('');
     addLine(
-      '  tnp serve --domain <domain> [--target <host:port>] [--relay <wss://url>] --token <token>',
+      '  TNP_TOKEN=<token> tnp serve --domain <domain> [--target <host:port>] [--relay <wss://url>]',
       CYAN,
     );
     addLine('    Registers this machine as a service node for the given domain.');

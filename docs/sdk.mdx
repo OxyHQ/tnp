@@ -67,7 +67,7 @@ tnp help                   Show usage
 | `--domain <name.tld>` | The TNP domain you own. Required. |
 | `--target <host:port>` | Local target to forward circuits to. Default `localhost:80`. |
 | `--relay <wss://…>` | Specific relay endpoint. Defaults to picking from the API. |
-| `--token <oxy-token>` | Bearer token for `/nodes/register` and `/nodes/heartbeat`. |
+| `TNP_TOKEN=<oxy-token>` (env) or `--token-stdin` | Bearer token for `/nodes/register` and `/nodes/heartbeat`. `--token <oxy-token>` still works but is deprecated: it is visible to every local user in the process list and lands in shell history. |
 
 ## Configuration file
 

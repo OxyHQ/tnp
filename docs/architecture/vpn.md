@@ -78,8 +78,10 @@ prevention is a correctness requirement, not a nicety.
 - When on: traffic matching the tunnel policy is blocked while the tunnel is
   down, including during reconnects.
 - Rules are removed on clean shutdown, and on the next start after a crash. The
-  marker that records "rules are active" belongs in the data directory, not a
-  world-writable temp directory (audit S10).
+  record that says "rules are active" lives in the root-only system state
+  directory, never a world-writable temp directory (audit S10; done for the
+  DNS-only kill switch `tnp connect --killswitch` has today — see
+  [`platforms.md`](./platforms.md) §4).
 - The user is always told, clearly, when the kill switch is what is blocking
   their traffic. A kill switch that looks like a broken network is a support
   incident and a trust problem.
