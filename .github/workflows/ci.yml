@@ -186,6 +186,32 @@ jobs:
             sleep 1
           done
 
+          # The API runs unprivileged and cannot rewrite itself: the process is
+          # not uid 0, and its code and node_modules are root-owned and not
+          # writable by it. Checked in the running container, so a base image
+          # without the `bun` user or a COPY --chown fails here.
+          uid=$(docker exec api id -u)
+          echo "API uid: $uid"
+          if [ "$uid" = "0" ]; then
+            echo "::error::The API container runs as root"
+            exit 1
+          fi
+          for path in /app /app/apps/api/src /app/apps/api/src/index.ts /app/node_modules /app/node_modules/express; do
+            if docker exec api test -w "$path"; then
+              echo "::error::$path is writable by the API process"
+              exit 1
+            fi
+          done
+
+          # Production dependencies only: no devDependency, and none of the web
+          # app's React Native tree, is installed in the API image.
+          for pkg in typescript drizzle-kit @biomejs/biome bun-types react-native vite; do
+            if docker exec api test -e "/app/node_modules/$pkg"; then
+              echo "::error::$pkg is installed in the API image"
+              exit 1
+            fi
+          done
+
           # The namespace policy has to hold in the built image, not only in the
           # test suite: a reserved TLD must not appear in the table clients cache.
           tlds=$(curl -fsS -m 5 http://127.0.0.1:8080/dns/tlds)
