@@ -27,20 +27,22 @@ able to reconfigure routing, install a namespace override, or read key material.
 
 | | Service | Tunnel | DNS configuration | Keys |
 |---|---|---|---|---|
-| **Linux** | systemd unit | TUN | systemd-resolved per-domain routing, or `resolv.conf` fallback | Kernel keyring or encrypted file |
+| **Linux** | systemd unit | TUN | systemd-resolved DNS delegate (≥ 258) or dedicated `tnp0` link; no `resolv.conf` fallback | Kernel keyring or encrypted file |
 | **macOS** | launchd daemon | Network Extension | `/etc/resolver/<tld>` per native TLD | Keychain, non-exportable |
-| **Windows** | Windows service | Wintun | Per-adapter DNS | DPAPI / CNG |
+| **Windows** | Windows service | Wintun | NRPT rule per native TLD; adapter DNS untouched | DPAPI / CNG |
 | **Android** | Foreground service | `VpnService` | Provided by `VpnService` | Android Keystore |
 | **iOS** | Network Extension | Packet Tunnel Provider | Provided by the extension | Secure Enclave / Keychain |
 
 ### Linux
 
 Coexist with NetworkManager and systemd-resolved rather than fighting them.
-`resolv.conf` is a fallback, not the primary path.
+There is no `resolv.conf` fallback: it cannot route by domain, so prepending a
+nameserver captures all DNS. Without systemd-resolved nothing is changed and
+the user is told how to forward `.ox` (resolution.md §10).
 
-**Per-TLD routing domains only.** The current installer writes `Domains=~.`,
-which makes TNP the routing domain for all DNS and is the namespace violation in
-audit finding S4. It must route only native TLDs.
+**Per-TLD routing domains only.** Earlier installers wrote `Domains=~.`, which
+made TNP the routing domain for all DNS (audit finding S4). `dns-routing.ts` now
+routes only native TLDs.
 
 ### macOS
 
@@ -52,9 +54,10 @@ not merely stop writing new ones.
 ### Windows
 
 Windows only accepts DNS on port 53, so a loopback resolver on another port is
-not reachable as a system resolver. Either bind 53 on loopback or point the
-adapter at the public TNP resolver — and say which is happening, because the
-second choice sends the user's queries to Oxy.
+not reachable as a system resolver. `tnp install` binds 53 on loopback and adds
+an NRPT rule per native TLD; adapter DNS servers are never rewritten. Pointing
+an adapter at the public TNP resolver would send every lookup to Oxy in
+plaintext, so neither the client nor the install page does it.
 
 ## 3. Install and uninstall
 

@@ -1,86 +1,102 @@
 {
   "meta": {
     "title": "安装 TNP -- The Network Protocol",
-    "description": "设置 TNP 以在任何设备上解析 TNP 域名。更改 DNS 或安装 TNP 客户端。",
+    "description": "设置 TNP 以在任何设备上解析 TNP 域名。安装 TNP 客户端，或将 .ox 转发到 TNP 解析器。",
     "ogTitle": "安装 TNP -- The Network Protocol",
     "ogDescription": "设置 TNP 以在任何设备上解析 TNP 域名。"
   },
   "title": "设置 TNP",
   "subtitle": "在任何设备上解析 TNP 域名。选择以下方法。",
   "methods": {
-    "dns": "更改 DNS（高级）",
+    "dns": "使用 TNP DNS（高级）",
     "client": "安装 TNP 客户端（推荐）",
     "serve": "托管服务",
     "relay": "运行中继"
   },
   "dns": {
-    "intro": "将设备的 DNS 指向 TNP 解析器的 5353 端口。注意：大多数操作系统仅支持 53 端口的 DNS。要获得最简单的设置，请使用安装 TNP 客户端方法。TNP 解析器运行在 {{dnsIp}} 的 {{dnsPort}} 端口。",
-    "android": {
-      "title": "Android",
-      "steps": [
-        "打开<accent>设置</accent>",
-        "点击<accent>网络和互联网</accent>（或<accent>连接</accent>）",
-        "点击<accent>私人 DNS</accent>",
-        "选择<accent>私人 DNS 提供商主机名</accent>",
-        "输入 <code>{{dnsHost}}</code>",
-        "点击<accent>保存</accent>"
-      ],
-      "note": "需要 Android 9+ 且支持私人 DNS (DNS-over-TLS)。或者将 Wi-Fi DNS 设置为 <code>{{dnsIp}}</code>。"
+    "facts": [
+      "TNP 解析器 <code>{{dnsIp}}</code> 在 53 端口（UDP 和 TCP）上提供普通 DNS 服务。",
+      "它不加密，也不支持 DNS-over-TLS。TNP 运营方以及网络路径上的任何人都能看到你查询的 .ox 名称。",
+      "下面的步骤只把 .ox 转发给它。其他查询仍然发往你现在使用的解析器，因此你的其他查询永远不会到达 TNP。"
+    ],
+    "clientHint": "在电脑上，如果可以，请改为<clientLink>安装 TNP 客户端</clientLink>：它在你的机器上通过 HTTPS 解析 .ox，并且只把 .ox 路由给自己。",
+    "ipLoading": "正在加载 TNP 解析器地址...",
+    "ipError": "无法加载 TNP 解析器地址。请刷新页面重试。",
+    "undo": "撤销方法：",
+    "clientNote": "TNP 客户端会自动完成这些设置。如果你之后安装客户端，请先撤销手动设置。",
+    "tabs": {
+      "router": "路由器",
+      "windows": "Windows",
+      "macos": "macOS",
+      "linux": "Linux",
+      "mobile": "Android / iOS"
     },
-    "ios": {
-      "title": "iOS / iPadOS",
-      "steps": [
-        "打开<accent>设置</accent>",
-        "点击<accent>Wi-Fi</accent>",
-        "点击你的网络旁边的 <accent>(i)</accent>",
-        "点击<accent>配置 DNS</accent>",
-        "选择<accent>手动</accent>",
-        "删除现有服务器，添加 <code>{{dnsIp}}</code>",
-        "点击<accent>保存</accent>"
-      ],
-      "note": "注意：这只适用于当前 Wi-Fi 网络。要全系统 DNS，请安装 TNP 客户端。"
+    "router": {
+      "title": "路由器或网络解析器",
+      "intro": "在你的网络已经用来解析域名的地方转发 .ox。之后，所有使用它的设备（包括手机）都能解析 .ox，其他查询仍然发往路由器原来的上游服务器。",
+      "openwrt": {
+        "title": "OpenWRT（dnsmasq）",
+        "cli": "通过 SSH：",
+        "luci": "或在 LuCI 中：<accent>网络 → DHCP/DNS</accent>，<accent>转发</accent>选项卡（旧版本为<accent>常规设置</accent>），在 <accent>DNS 转发</accent>字段中添加 <code>{{forward}}</code>，然后点击<accent>保存并应用</accent>。",
+        "rebind": "dnsmasq 的重绑定保护会丢弃指向私有地址（10.x、172.16-31.x、192.168.x）的应答。仅当你使用的某个 .ox 名称解析到这类地址时，才为 .ox 放行："
+      },
+      "pihole": {
+        "title": "Pi-hole",
+        "v6": "Pi-hole v6：<accent>Settings → All settings → Miscellaneous → misc.dnsmasq_lines</accent>，添加 <code>server={{forward}}</code>，然后点击 <accent>Save & Apply</accent>。或在命令行中执行（这会替换该设置中已有的所有行）：",
+        "v5": "Pi-hole v5："
+      },
+      "adguard": {
+        "title": "AdGuard Home",
+        "desc": "<accent>设置 → DNS 设置 → 上游 DNS 服务器</accent>：添加下面这一行，保留现有的上游服务器，然后点击<accent>应用</accent>："
+      },
+      "unbound": {
+        "title": "pfSense / OPNsense（Unbound）",
+        "pfsense": "pfSense：<accent>Services → DNS Resolver → General Settings → Domain Overrides → Add</accent>，域名 <code>ox</code>，IP 地址 <code>{{dnsIp}}</code>。",
+        "opnsense": "OPNsense：<accent>Services → Unbound DNS → Query Forwarding</accent>，添加域名 <code>ox</code>，服务器 IP <code>{{dnsIp}}</code>。",
+        "dnssec": "如果开启了 DNSSEC 验证，.ox 的应答会验证失败，因为公共根区中没有 .ox。请将 .ox 标记为不安全：在 pfSense 的 <accent>Custom options</accent> 中，或在 OPNsense 的 <accent>Advanced → Insecure Domains</accent> 中："
+      },
+      "dnsmasq": {
+        "title": "其他 dnsmasq",
+        "desc": "将这一行添加到 <code>/etc/dnsmasq.conf</code> 或 <code>/etc/dnsmasq.d/</code> 中的某个文件，然后重启 dnsmasq："
+      },
+      "basic": {
+        "title": "只能设置主/备 DNS 的路由器",
+        "desc": "大多数运营商和家用路由器只能替换 DNS 服务器，无法单独转发某个域名。把 TNP 填在那里，会让网络中每台设备的每一次查询都以未加密的方式发往 TNP。我们不建议这样做。也不要把 TNP 和某个公共解析器搭配作为备用 DNS：设备会随机使用其中一个，.ox 只会时好时坏。请改为在网络中运行 Pi-hole 或 AdGuard Home，或逐台设置电脑。"
+      }
     },
     "windows": {
       "title": "Windows",
-      "steps": [
-        "打开<accent>设置 > 网络和 Internet</accent>",
-        "点击你的活动连接（Wi-Fi 或以太网）",
-        "点击<accent>硬件属性</accent>",
-        "在 DNS 服务器分配旁边，点击<accent>编辑</accent>",
-        "选择<accent>手动</accent>，启用 <accent>IPv4</accent>",
-        "将首选 DNS 设置为 <code>{{dnsIp}}</code>",
-        "点击<accent>保存</accent>"
-      ]
+      "desc": "以管理员身份打开 PowerShell，添加一条名称解析策略表（NRPT）规则。只有 .ox 会发往 TNP；网络适配器的 DNS 服务器不会被更改。"
     },
     "macos": {
       "title": "macOS",
-      "steps": [
-        "打开<accent>系统设置 > 网络</accent>",
-        "选择你的活动连接（Wi-Fi 或以太网）",
-        "点击<accent>详细信息...</accent>",
-        "点击侧边栏中的 <accent>DNS</accent>",
-        "点击 <accent>+</accent> 并添加 <code>{{dnsIp}}</code>",
-        "点击<accent>好</accent>"
-      ]
+      "desc": "为 .ox 创建一个解析器文件。只有 .ox 会发往 TNP，其他查询仍使用你当前的 DNS。",
+      "test": "<code>dig</code> 和 <code>nslookup</code> 会忽略 /etc/resolver。请在浏览器中测试，或使用 <code>dscacheutil -q host -a name yourname.ox</code>；<code>scutil --dns</code> 会列出新的解析器。"
     },
     "linux": {
       "title": "Linux",
-      "systemdResolved": "systemd-resolved (Ubuntu, Fedora 等)：",
-      "resolvConf": "resolv.conf（手动）：",
-      "networkManager": "NetworkManager：",
-      "networkManagerDesc": "打开设置 > 网络 > 你的连接 > IPv4 > 将 DNS 设置为 <code>{{dnsIp}}</code>"
+      "delegate": {
+        "title": "systemd-resolved 258 或更高版本",
+        "desc": "用 <code>systemctl --version</code> 查看版本。创建 <code>/etc/systemd/dns-delegate.d/tnp.dns-delegate</code>，内容如下：",
+        "apply": "或者一步写入文件并重启 systemd-resolved："
+      },
+      "dnsmasq": {
+        "title": "dnsmasq",
+        "desc": "如果 dnsmasq 是你的本地解析器（包括设置了 <code>dns=dnsmasq</code> 的 NetworkManager，它会读取 <code>/etc/NetworkManager/dnsmasq.d/</code>），添加这一行并重启它："
+      },
+      "other": {
+        "title": "较旧的 systemd-resolved，或没有 systemd-resolved",
+        "desc": "systemd 258 之前没有委派文件，而把 TNP 添加到某个网络接口或 resolved.conf 中，也会把你的公共查询发往 TNP。普通的 /etc/resolv.conf 根本无法按域名路由，所以绝不要把 TNP 的地址写进去。请<clientLink>安装 TNP 客户端</clientLink>：在较旧的 systemd-resolved 上，它会建立一个只接收 .ox 的专用链路。"
+      }
     },
-    "router": {
-      "title": "路由器",
-      "intro": "在路由器上设置 DNS 会将 TNP 解析应用到网络上的每个设备 -- 手机、笔记本、智能电视，所有设备。无需逐个设备配置。",
-      "steps": [
-        "打开路由器管理面板（通常是 <code1>192.168.1.1</code1> 或 <code2>192.168.0.1</code2>）",
-        "找到 <accent>DNS</accent> 或 <accent>DHCP</accent> 设置",
-        "将主 DNS 设置为 <code>{{dnsIp}}</code>",
-        "将备用 DNS 设置为 <code>1.1.1.1</code>（备用）",
-        "保存并重启路由器"
-      ],
-      "note": "适用于任何允许自定义 DNS 服务器的路由器。之后，网络上的所有设备将自动解析 TNP 域名。"
+    "mobile": {
+      "title": "Android 和 iOS",
+      "points": [
+        "手机在没有应用的情况下无法把单个域名发送到另一个解析器，所以这里没有针对手机的步骤。",
+        "请改为<routerLink>在路由器上转发 .ox</routerLink>。之后，该网络中的每部手机都能解析 .ox，其他查询仍然发往路由器原来的解析器。使用移动数据或其他网络时，.ox 将无法解析。",
+        "不要在 Android 的“私人 DNS”中填写 TNP 的域名。私人 DNS 使用 DNS-over-TLS，而 TNP 解析器不提供该服务，手机上的所有查询都会失败。",
+        "把 TNP 设为某个 Wi-Fi 网络的手动 DNS，会让该网络上的每一次查询都以未加密的方式发往 TNP。我们不建议这样做。"
+      ]
     }
   },
   "client": {
@@ -94,13 +110,18 @@
     },
     "linux": {
       "title": "Linux",
-      "description": "支持 systemd-resolved、NetworkManager 和独立的 resolv.conf 配置。安装程序会自动检测你的 DNS 配置。",
+      "description": "客户端通过 systemd-resolved 只把 .ox 发送到它的本地解析器：systemd 258 及以上使用 DNS 委派（delegate），更早的版本使用一个专用链路。你的其他 DNS 设置不会被改动。如果没有 systemd-resolved，它不做任何更改，并告诉你如何在自己的解析器中转发 .ox。",
       "requirementsTitle": "要求：",
-      "requirements": ["任何现代 Linux 发行版", "sudo 权限"]
+      "requirements": ["带有 systemd-resolved 的 Linux 发行版（用于自动配置 DNS）", "sudo 权限"]
     },
     "windows": {
       "title": "Windows",
-      "description": "Windows 支持即将推出。"
+      "description": "运行上面的 PowerShell 命令，并选择安装 TNP 服务。它会添加一条名称解析策略表（NRPT）规则，只把 .ox 发送到本地解析器。网络适配器的 DNS 服务器不会被更改。",
+      "requirementsTitle": "要求：",
+      "requirements": [
+        "64 位（x64）Windows",
+        "安装服务需要管理员权限（以管理员身份运行的 PowerShell）"
+      ]
     }
   },
   "serve": {

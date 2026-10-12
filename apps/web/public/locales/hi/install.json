@@ -1,86 +1,102 @@
 {
   "meta": {
     "title": "TNP इंस्टॉल करें -- The Network Protocol",
-    "description": "किसी भी डिवाइस पर TNP डोमेन हल करने के लिए TNP सेटअप करें। अपना DNS बदलें या TNP क्लाइंट इंस्टॉल करें।",
+    "description": "किसी भी डिवाइस पर TNP डोमेन हल करने के लिए TNP सेटअप करें। TNP क्लाइंट इंस्टॉल करें, या .ox को TNP रिज़ॉल्वर पर फ़ॉरवर्ड करें।",
     "ogTitle": "TNP इंस्टॉल करें -- The Network Protocol",
     "ogDescription": "किसी भी डिवाइस पर TNP डोमेन हल करने के लिए TNP सेटअप करें।"
   },
   "title": "TNP सेटअप करें",
   "subtitle": "किसी भी डिवाइस पर TNP डोमेन हल करें। नीचे एक तरीका चुनें।",
   "methods": {
-    "dns": "DNS बदलें (उन्नत)",
+    "dns": "TNP DNS का उपयोग करें (उन्नत)",
     "client": "TNP क्लाइंट इंस्टॉल करें (अनुशंसित)",
     "serve": "सेवा होस्ट करें",
     "relay": "रिले चलाएं"
   },
   "dns": {
-    "intro": "अपने डिवाइस का DNS TNP रिज़ॉल्वर के पोर्ट 5353 की ओर इंगित करें। नोट: अधिकांश ऑपरेटिंग सिस्टम केवल पोर्ट 53 पर DNS का समर्थन करते हैं। सबसे आसान सेटअप के लिए, TNP क्लाइंट इंस्टॉल करें विधि का उपयोग करें। TNP रिज़ॉल्वर {{dnsIp}} पर पोर्ट {{dnsPort}} पर चलता है।",
-    "android": {
-      "title": "Android",
-      "steps": [
-        "<accent>सेटिंग्स</accent> खोलें",
-        "<accent>नेटवर्क और इंटरनेट</accent> (या <accent>कनेक्शन</accent>) टैप करें",
-        "<accent>प्राइवेट DNS</accent> टैप करें",
-        "<accent>प्राइवेट DNS प्रदाता होस्टनाम</accent> चुनें",
-        "<code>{{dnsHost}}</code> दर्ज करें",
-        "<accent>सेव</accent> टैप करें"
-      ],
-      "note": "Android 9+ प्राइवेट DNS सपोर्ट (DNS-over-TLS) आवश्यक है। वैकल्पिक रूप से, अपने Wi-Fi DNS को <code>{{dnsIp}}</code> पर सेट करें।"
+    "facts": [
+      "<code>{{dnsIp}}</code> पर TNP रिज़ॉल्वर पोर्ट 53 (UDP और TCP) पर सामान्य DNS का जवाब देता है।",
+      "यह एन्क्रिप्टेड नहीं है और इसमें DNS-over-TLS नहीं है। TNP ऑपरेटर, और नेटवर्क रास्ते पर कोई भी, आपके द्वारा खोजे गए .ox नाम देख सकता है।",
+      "नीचे दिए गए चरण केवल .ox को इस पर फ़ॉरवर्ड करते हैं। बाकी सब उसी रिज़ॉल्वर पर जाता रहता है जिसका आप आज उपयोग करते हैं, इसलिए आपकी अन्य क्वेरी कभी TNP तक नहीं पहुंचतीं।"
+    ],
+    "clientHint": "कंप्यूटर पर, अगर संभव हो तो इसके बजाय <clientLink>TNP क्लाइंट इंस्टॉल करें</clientLink>: यह आपकी मशीन पर HTTPS के ज़रिए .ox हल करता है और केवल .ox को अपनी ओर भेजता है।",
+    "ipLoading": "TNP रिज़ॉल्वर का पता लोड हो रहा है...",
+    "ipError": "TNP रिज़ॉल्वर का पता लोड नहीं हो सका। फिर से कोशिश करने के लिए पेज रीलोड करें।",
+    "undo": "वापस लेने के लिए:",
+    "clientNote": "TNP क्लाइंट यह आपके लिए करता है। अगर आप उसे बाद में इंस्टॉल करते हैं, तो पहले मैन्युअल सेटअप हटा दें।",
+    "tabs": {
+      "router": "राउटर",
+      "windows": "Windows",
+      "macos": "macOS",
+      "linux": "Linux",
+      "mobile": "Android / iOS"
     },
-    "ios": {
-      "title": "iOS / iPadOS",
-      "steps": [
-        "<accent>सेटिंग्स</accent> खोलें",
-        "<accent>Wi-Fi</accent> टैप करें",
-        "अपने नेटवर्क के बगल में <accent>(i)</accent> टैप करें",
-        "<accent>DNS कॉन्फ़िगर करें</accent> टैप करें",
-        "<accent>मैनुअल</accent> चुनें",
-        "मौजूदा सर्वर हटाएं, <code>{{dnsIp}}</code> जोड़ें",
-        "<accent>सेव</accent> टैप करें"
-      ],
-      "note": "नोट: यह केवल वर्तमान Wi-Fi नेटवर्क पर लागू होता है। सिस्टम-वाइड DNS के लिए, TNP क्लाइंट इंस्टॉल करें।"
+    "router": {
+      "title": "राउटर या नेटवर्क रिज़ॉल्वर",
+      "intro": ".ox को वहां फ़ॉरवर्ड करें जहां आपका नेटवर्क पहले से नाम हल करता है। फिर उसका उपयोग करने वाला हर डिवाइस, फ़ोन सहित, .ox हल कर सकता है, और बाकी सभी क्वेरी राउटर के सामान्य अपस्ट्रीम पर जाती रहती हैं।",
+      "openwrt": {
+        "title": "OpenWRT (dnsmasq)",
+        "cli": "SSH के ज़रिए:",
+        "luci": "या LuCI में: <accent>Network → DHCP and DNS</accent>, टैब <accent>Forwards</accent> (पुराने संस्करणों में <accent>General Settings</accent>), फ़ील्ड <accent>DNS forwardings</accent>: <code>{{forward}}</code> जोड़ें, फिर <accent>Save & Apply</accent> दबाएं।",
+        "rebind": "dnsmasq की रीबाइंड सुरक्षा उन जवाबों को हटा देती है जो निजी पतों (10.x, 172.16-31.x, 192.168.x) की ओर इशारा करते हैं। केवल तभी, जब आपका कोई .ox नाम ऐसे पते पर हल होता हो, .ox के लिए अनुमति दें:"
+      },
+      "pihole": {
+        "title": "Pi-hole",
+        "v6": "Pi-hole v6: <accent>Settings → All settings → Miscellaneous → misc.dnsmasq_lines</accent>, <code>server={{forward}}</code> जोड़ें, फिर <accent>Save & Apply</accent> दबाएं। या शेल से (यह उस सेटिंग में पहले से मौजूद सभी पंक्तियों को बदल देता है):",
+        "v5": "Pi-hole v5:"
+      },
+      "adguard": {
+        "title": "AdGuard Home",
+        "desc": "<accent>Settings → DNS settings → Upstream DNS servers</accent>: यह पंक्ति जोड़ें, अपने मौजूदा अपस्ट्रीम रहने दें, फिर <accent>Apply</accent> दबाएं:"
+      },
+      "unbound": {
+        "title": "pfSense / OPNsense (Unbound)",
+        "pfsense": "pfSense: <accent>Services → DNS Resolver → General Settings → Domain Overrides → Add</accent>, डोमेन <code>ox</code>, IP पता <code>{{dnsIp}}</code>।",
+        "opnsense": "OPNsense: <accent>Services → Unbound DNS → Query Forwarding</accent>, डोमेन <code>ox</code> और सर्वर IP <code>{{dnsIp}}</code> जोड़ें।",
+        "dnssec": "अगर DNSSEC सत्यापन चालू है, तो .ox के जवाब उसमें विफल हो जाते हैं, क्योंकि पब्लिक रूट में .ox नहीं है। .ox को insecure चिह्नित करें: pfSense के <accent>Custom options</accent> में, या OPNsense में <accent>Advanced → Insecure Domains</accent> में:"
+      },
+      "dnsmasq": {
+        "title": "कोई भी अन्य dnsmasq",
+        "desc": "यह पंक्ति <code>/etc/dnsmasq.conf</code> में या <code>/etc/dnsmasq.d/</code> की किसी फ़ाइल में जोड़ें, फिर dnsmasq रीस्टार्ट करें:"
+      },
+      "basic": {
+        "title": "ऐसे राउटर जिनमें केवल प्राइमरी/सेकेंडरी DNS सेट हो सकता है",
+        "desc": "ज़्यादातर ISP और घरेलू राउटर केवल DNS सर्वर बदल सकते हैं; वे किसी एक डोमेन को फ़ॉरवर्ड नहीं कर सकते। वहां TNP डालने से आपके नेटवर्क के हर डिवाइस की हर क्वेरी बिना एन्क्रिप्शन के TNP पर जाती है। हम इसकी सलाह नहीं देते। TNP को किसी पब्लिक रिज़ॉल्वर के साथ सेकेंडरी के रूप में भी कभी न जोड़ें: डिवाइस दोनों में से किसी को भी बेतरतीब ढंग से चुनते हैं, इसलिए .ox केवल कभी-कभी हल होगा। इसके बजाय अपने नेटवर्क पर Pi-hole या AdGuard Home चलाएं, या हर कंप्यूटर को अलग से सेट करें।"
+      }
     },
     "windows": {
       "title": "Windows",
-      "steps": [
-        "<accent>सेटिंग्स > नेटवर्क और इंटरनेट</accent> खोलें",
-        "अपने सक्रिय कनेक्शन (Wi-Fi या ईथरनेट) पर क्लिक करें",
-        "<accent>हार्डवेयर प्रॉपर्टीज़</accent> पर क्लिक करें",
-        "DNS सर्वर असाइनमेंट के बगल में <accent>एडिट</accent> पर क्लिक करें",
-        "<accent>मैनुअल</accent> चुनें, <accent>IPv4</accent> सक्षम करें",
-        "पसंदीदा DNS को <code>{{dnsIp}}</code> पर सेट करें",
-        "<accent>सेव</accent> पर क्लिक करें"
-      ]
+      "desc": "एडमिनिस्ट्रेटर के रूप में PowerShell खोलें और एक Name Resolution Policy Table (NRPT) नियम जोड़ें। केवल .ox TNP पर जाता है; आपके नेटवर्क एडेप्टर के DNS सर्वर नहीं बदले जाते।"
     },
     "macos": {
       "title": "macOS",
-      "steps": [
-        "<accent>सिस्टम सेटिंग्स > नेटवर्क</accent> खोलें",
-        "अपना सक्रिय कनेक्शन (Wi-Fi या ईथरनेट) चुनें",
-        "<accent>विवरण...</accent> पर क्लिक करें",
-        "साइडबार में <accent>DNS</accent> पर क्लिक करें",
-        "<accent>+</accent> पर क्लिक करें और <code>{{dnsIp}}</code> जोड़ें",
-        "<accent>OK</accent> पर क्लिक करें"
-      ]
+      "desc": ".ox के लिए एक रिज़ॉल्वर फ़ाइल बनाएं। केवल .ox TNP पर जाता है; बाकी सब आपके मौजूदा DNS का उपयोग करता है।",
+      "test": "<code>dig</code> और <code>nslookup</code> /etc/resolver को अनदेखा करते हैं। ब्राउज़र में या <code>dscacheutil -q host -a name yourname.ox</code> से जांचें; <code>scutil --dns</code> नया रिज़ॉल्वर दिखाता है।"
     },
     "linux": {
       "title": "Linux",
-      "systemdResolved": "systemd-resolved (Ubuntu, Fedora, आदि):",
-      "resolvConf": "resolv.conf (मैनुअल):",
-      "networkManager": "NetworkManager:",
-      "networkManagerDesc": "सेटिंग्स > नेटवर्क > आपका कनेक्शन > IPv4 > DNS को <code>{{dnsIp}}</code> पर सेट करें खोलें"
+      "delegate": {
+        "title": "systemd-resolved 258 या बाद का",
+        "desc": "<code>systemctl --version</code> से संस्करण जांचें। <code>/etc/systemd/dns-delegate.d/tnp.dns-delegate</code> इस सामग्री के साथ बनाएं:",
+        "apply": "या इसे लिखें और systemd-resolved को एक साथ रीस्टार्ट करें:"
+      },
+      "dnsmasq": {
+        "title": "dnsmasq",
+        "desc": "अगर dnsmasq आपका लोकल रिज़ॉल्वर है (जिसमें <code>dns=dnsmasq</code> वाला NetworkManager भी शामिल है, जो <code>/etc/NetworkManager/dnsmasq.d/</code> पढ़ता है), तो यह पंक्ति जोड़ें और उसे रीस्टार्ट करें:"
+      },
+      "other": {
+        "title": "पुराना systemd-resolved, या बिल्कुल नहीं",
+        "desc": "systemd 258 से पहले कोई डेलिगेट फ़ाइल नहीं होती, और TNP को किसी इंटरफ़ेस या resolved.conf में जोड़ने से आपकी पब्लिक क्वेरी भी TNP पर जाती हैं। सादा /etc/resolv.conf डोमेन के हिसाब से रूट नहीं कर सकता, इसलिए उसमें TNP का पता कभी न डालें। <clientLink>TNP क्लाइंट इंस्टॉल करें</clientLink>: पुराने systemd-resolved पर यह एक अलग लिंक बनाता है जिसे केवल .ox मिलता है।"
+      }
     },
-    "router": {
-      "title": "राउटर",
-      "intro": "अपने राउटर पर DNS सेट करने से आपके नेटवर्क पर हर डिवाइस पर TNP रिज़ॉल्यूशन लागू होता है -- फ़ोन, लैपटॉप, स्मार्ट TV, सब कुछ। प्रति-डिवाइस सेटअप की आवश्यकता नहीं।",
-      "steps": [
-        "अपना राउटर एडमिन पैनल खोलें (आमतौर पर <code1>192.168.1.1</code1> या <code2>192.168.0.1</code2>)",
-        "<accent>DNS</accent> या <accent>DHCP</accent> सेटिंग्स खोजें",
-        "प्राइमरी DNS को <code>{{dnsIp}}</code> पर सेट करें",
-        "सेकेंडरी DNS को <code>1.1.1.1</code> (फ़ॉलबैक) पर सेट करें",
-        "सेव करें और राउटर रीबूट करें"
-      ],
-      "note": "किसी भी राउटर के साथ काम करता है जो DNS सर्वर कस्टमाइज़ करने की अनुमति देता है। इसके बाद, नेटवर्क पर सभी डिवाइस स्वचालित रूप से TNP डोमेन हल करेंगे।"
+    "mobile": {
+      "title": "Android और iOS",
+      "points": [
+        "फ़ोन किसी ऐप के बिना एक अकेले डोमेन को दूसरे रिज़ॉल्वर पर नहीं भेज सकते, इसलिए यहां फ़ोन के लिए अलग चरण नहीं हैं।",
+        "इसके बजाय <routerLink>अपने राउटर पर .ox फ़ॉरवर्ड करें</routerLink>। फिर उस नेटवर्क का हर फ़ोन .ox हल करता है, और बाकी सभी क्वेरी राउटर के सामान्य रिज़ॉल्वर पर जाती रहती हैं। मोबाइल डेटा या दूसरे नेटवर्क पर .ox हल नहीं होगा।",
+        "Android के Private DNS में TNP का कोई नाम न डालें। Private DNS, DNS-over-TLS है, जो TNP रिज़ॉल्वर नहीं देता, इसलिए फ़ोन की हर क्वेरी विफल हो जाएगी।",
+        "किसी Wi-Fi नेटवर्क का मैन्युअल DNS TNP पर सेट करने से उस नेटवर्क की हर क्वेरी बिना एन्क्रिप्शन के TNP पर जाएगी। हम इसकी सलाह नहीं देते।"
+      ]
     }
   },
   "client": {
@@ -97,13 +113,21 @@
     },
     "linux": {
       "title": "Linux",
-      "description": "systemd-resolved, NetworkManager और स्टैंडअलोन resolv.conf सेटअप के साथ काम करता है। इंस्टॉलर आपकी DNS कॉन्फ़िगरेशन को स्वचालित रूप से पहचानता है।",
+      "description": "क्लाइंट systemd-resolved के ज़रिए केवल .ox को अपने लोकल रिज़ॉल्वर पर भेजता है: systemd 258 या बाद के संस्करण पर DNS डेलिगेट, पुराने संस्करणों पर एक अलग लिंक। आपकी बाकी DNS सेटिंग्स नहीं बदली जातीं। systemd-resolved न होने पर यह कुछ नहीं बदलता और बताता है कि अपने रिज़ॉल्वर में .ox को कैसे फ़ॉरवर्ड करें।",
       "requirementsTitle": "आवश्यकताएं:",
-      "requirements": ["कोई भी आधुनिक Linux डिस्ट्रीब्यूशन", "sudo एक्सेस"]
+      "requirements": [
+        "systemd-resolved वाला Linux डिस्ट्रीब्यूशन (स्वचालित DNS सेटअप के लिए)",
+        "sudo एक्सेस"
+      ]
     },
     "windows": {
       "title": "Windows",
-      "description": "Windows सपोर्ट जल्द आ रहा है।"
+      "description": "ऊपर दिया गया PowerShell कमांड चलाएं और TNP सेवा इंस्टॉल करना चुनें। यह एक Name Resolution Policy Table (NRPT) नियम जोड़ता है जो केवल .ox को लोकल रिज़ॉल्वर पर भेजता है। आपके नेटवर्क एडेप्टर के DNS सर्वर नहीं बदले जाते।",
+      "requirementsTitle": "आवश्यकताएं:",
+      "requirements": [
+        "64-बिट (x64) Windows",
+        "सेवा इंस्टॉल करने के लिए एडमिनिस्ट्रेटर अधिकार (एडमिनिस्ट्रेटर के रूप में खोला गया PowerShell)"
+      ]
     }
   },
   "serve": {

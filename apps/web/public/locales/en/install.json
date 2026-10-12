@@ -1,86 +1,102 @@
 {
   "meta": {
     "title": "Install TNP -- The Network Protocol",
-    "description": "Set up TNP to resolve TNP domains on any device. Change your DNS or install the TNP client.",
+    "description": "Set up TNP to resolve TNP domains on any device. Install the TNP client, or forward .ox to the TNP resolver.",
     "ogTitle": "Install TNP -- The Network Protocol",
     "ogDescription": "Set up TNP to resolve TNP domains on any device."
   },
   "title": "Set Up TNP",
   "subtitle": "Resolve TNP domains on any device. Pick a method below.",
   "methods": {
-    "dns": "Change DNS (advanced)",
+    "dns": "Use TNP DNS (advanced)",
     "client": "Install TNP Client (recommended)",
     "serve": "Host a Service",
     "relay": "Run a Relay"
   },
   "dns": {
-    "intro": "Point your device's DNS to the TNP resolver on port 5353. Note: most operating systems only support DNS on port 53. For the easiest setup, use the Install TNP Client method instead. The TNP resolver runs on port {{dnsPort}} at {{dnsIp}}.",
-    "android": {
-      "title": "Android",
-      "steps": [
-        "Open <accent>Settings</accent>",
-        "Tap <accent>Network & internet</accent> (or <accent>Connections</accent>)",
-        "Tap <accent>Private DNS</accent>",
-        "Select <accent>Private DNS provider hostname</accent>",
-        "Enter <code>{{dnsHost}}</code>",
-        "Tap <accent>Save</accent>"
-      ],
-      "note": "Requires Android 9+ with Private DNS support (DNS-over-TLS). Alternatively, set your Wi-Fi DNS to <code>{{dnsIp}}</code>."
+    "facts": [
+      "The TNP resolver at <code>{{dnsIp}}</code> answers plain DNS on port 53 (UDP and TCP).",
+      "It is not encrypted and has no DNS-over-TLS. The TNP operator, and anyone on the network path, can see the .ox names you look up.",
+      "The steps below forward only .ox to it. Everything else keeps going to the resolver you use today, so your other lookups never reach TNP."
+    ],
+    "clientHint": "On a computer, <clientLink>install the TNP client</clientLink> instead if you can: it resolves .ox on your machine over HTTPS and routes only .ox to itself.",
+    "ipLoading": "Loading the TNP resolver address...",
+    "ipError": "Could not load the TNP resolver address. Reload the page to try again.",
+    "undo": "To undo:",
+    "clientNote": "The TNP client does this for you. If you install it later, undo the manual setup first.",
+    "tabs": {
+      "router": "Router",
+      "windows": "Windows",
+      "macos": "macOS",
+      "linux": "Linux",
+      "mobile": "Android / iOS"
     },
-    "ios": {
-      "title": "iOS / iPadOS",
-      "steps": [
-        "Open <accent>Settings</accent>",
-        "Tap <accent>Wi-Fi</accent>",
-        "Tap the <accent>(i)</accent> next to your network",
-        "Tap <accent>Configure DNS</accent>",
-        "Select <accent>Manual</accent>",
-        "Remove existing servers, add <code>{{dnsIp}}</code>",
-        "Tap <accent>Save</accent>"
-      ],
-      "note": "Note: this only applies to the current Wi-Fi network. For system-wide DNS, install the TNP client instead."
+    "router": {
+      "title": "Router or network resolver",
+      "intro": "Forward .ox where your network already resolves names. Every device that uses it, phones included, can then resolve .ox, and all other lookups keep going to the router's usual upstream.",
+      "openwrt": {
+        "title": "OpenWRT (dnsmasq)",
+        "cli": "Over SSH:",
+        "luci": "Or in LuCI: <accent>Network → DHCP and DNS</accent>, tab <accent>Forwards</accent> (<accent>General Settings</accent> on older releases), field <accent>DNS forwardings</accent>: add <code>{{forward}}</code>, then <accent>Save & Apply</accent>.",
+        "rebind": "dnsmasq's rebind protection drops answers that point to private addresses (10.x, 172.16-31.x, 192.168.x). Only if a .ox name you use resolves to one, allow it for .ox:"
+      },
+      "pihole": {
+        "title": "Pi-hole",
+        "v6": "Pi-hole v6: <accent>Settings → All settings → Miscellaneous → misc.dnsmasq_lines</accent>, add <code>server={{forward}}</code>, then <accent>Save & Apply</accent>. Or from the shell (this replaces any lines already in that setting):",
+        "v5": "Pi-hole v5:"
+      },
+      "adguard": {
+        "title": "AdGuard Home",
+        "desc": "<accent>Settings → DNS settings → Upstream DNS servers</accent>: add this line, keep your existing upstreams, then <accent>Apply</accent>:"
+      },
+      "unbound": {
+        "title": "pfSense / OPNsense (Unbound)",
+        "pfsense": "pfSense: <accent>Services → DNS Resolver → General Settings → Domain Overrides → Add</accent>, domain <code>ox</code>, IP address <code>{{dnsIp}}</code>.",
+        "opnsense": "OPNsense: <accent>Services → Unbound DNS → Query Forwarding</accent>, add domain <code>ox</code>, server IP <code>{{dnsIp}}</code>.",
+        "dnssec": "If DNSSEC validation is on, .ox answers fail it, because the public root has no .ox. Mark .ox insecure: in pfSense's <accent>Custom options</accent>, or in OPNsense under <accent>Advanced → Insecure Domains</accent>:"
+      },
+      "dnsmasq": {
+        "title": "Any other dnsmasq",
+        "desc": "Add this line to <code>/etc/dnsmasq.conf</code> or to a file in <code>/etc/dnsmasq.d/</code>, then restart dnsmasq:"
+      },
+      "basic": {
+        "title": "Routers that only let you set primary/secondary DNS",
+        "desc": "Most ISP and consumer routers can only replace the DNS servers; they cannot forward one domain. Putting TNP there sends every lookup from every device on your network to TNP, unencrypted. We recommend against it. Never pair TNP with a public resolver as the secondary either: devices use either server at random, so .ox would resolve only some of the time. Run Pi-hole or AdGuard Home on your network instead, or set up each computer."
+      }
     },
     "windows": {
       "title": "Windows",
-      "steps": [
-        "Open <accent>Settings > Network & Internet</accent>",
-        "Click your active connection (Wi-Fi or Ethernet)",
-        "Click <accent>Hardware properties</accent>",
-        "Next to DNS server assignment, click <accent>Edit</accent>",
-        "Select <accent>Manual</accent>, enable <accent>IPv4</accent>",
-        "Set Preferred DNS to <code>{{dnsIp}}</code>",
-        "Click <accent>Save</accent>"
-      ]
+      "desc": "In PowerShell as Administrator, add a Name Resolution Policy Table (NRPT) rule. Only .ox goes to TNP; your network adapters' DNS servers are not changed."
     },
     "macos": {
       "title": "macOS",
-      "steps": [
-        "Open <accent>System Settings > Network</accent>",
-        "Select your active connection (Wi-Fi or Ethernet)",
-        "Click <accent>Details...</accent>",
-        "Click <accent>DNS</accent> in the sidebar",
-        "Click <accent>+</accent> and add <code>{{dnsIp}}</code>",
-        "Click <accent>OK</accent>"
-      ]
+      "desc": "Create a resolver file for .ox. Only .ox goes to TNP; everything else uses your current DNS.",
+      "test": "<code>dig</code> and <code>nslookup</code> ignore /etc/resolver. Test in a browser or with <code>dscacheutil -q host -a name yourname.ox</code>; <code>scutil --dns</code> lists the new resolver."
     },
     "linux": {
       "title": "Linux",
-      "systemdResolved": "systemd-resolved (Ubuntu, Fedora, etc.):",
-      "resolvConf": "resolv.conf (manual):",
-      "networkManager": "NetworkManager:",
-      "networkManagerDesc": "Open Settings > Network > your connection > IPv4 > set DNS to <code>{{dnsIp}}</code>"
+      "delegate": {
+        "title": "systemd-resolved 258 or later",
+        "desc": "Check the version with <code>systemctl --version</code>. Create <code>/etc/systemd/dns-delegate.d/tnp.dns-delegate</code> with:",
+        "apply": "Or write it and restart systemd-resolved in one go:"
+      },
+      "dnsmasq": {
+        "title": "dnsmasq",
+        "desc": "If dnsmasq is your local resolver (including NetworkManager with <code>dns=dnsmasq</code>, which reads <code>/etc/NetworkManager/dnsmasq.d/</code>), add this line and restart it:"
+      },
+      "other": {
+        "title": "Older systemd-resolved, or none",
+        "desc": "Before systemd 258 there is no delegate file, and adding TNP to an interface or to resolved.conf also sends your public lookups to TNP. A plain /etc/resolv.conf cannot route by domain at all, so never put TNP's address in it. <clientLink>Install the TNP client</clientLink>: on older systemd-resolved it sets up a dedicated link that receives only .ox."
+      }
     },
-    "router": {
-      "title": "Router",
-      "intro": "Setting DNS on your router applies TNP resolution to every device on your network -- phones, laptops, smart TVs, everything. No per-device setup needed.",
-      "steps": [
-        "Open your router admin panel (usually <code1>192.168.1.1</code1> or <code2>192.168.0.1</code2>)",
-        "Find the <accent>DNS</accent> or <accent>DHCP</accent> settings",
-        "Set Primary DNS to <code>{{dnsIp}}</code>",
-        "Set Secondary DNS to <code>1.1.1.1</code> (fallback)",
-        "Save and reboot the router"
-      ],
-      "note": "Works with any router that lets you customize DNS servers. After this, all devices on the network will resolve TNP domains automatically."
+    "mobile": {
+      "title": "Android and iOS",
+      "points": [
+        "Phones cannot send a single domain to a different resolver without an app, so there are no per-phone steps.",
+        "<routerLink>Forward .ox on your router</routerLink> instead. Every phone on that network then resolves .ox, and all other lookups keep going to your router's usual resolver. On mobile data or other networks, .ox will not resolve.",
+        "Do not enter a TNP name in Android's Private DNS. Private DNS is DNS-over-TLS, which the TNP resolver does not offer, so every lookup on the phone would fail.",
+        "Setting TNP as a Wi-Fi network's manual DNS would send every lookup on that network to TNP, unencrypted. We recommend against it."
+      ]
     }
   },
   "client": {
@@ -97,13 +113,21 @@
     },
     "linux": {
       "title": "Linux",
-      "description": "Works with systemd-resolved, NetworkManager, and standalone resolv.conf setups. The installer detects your DNS configuration automatically.",
+      "description": "The client uses systemd-resolved to send only .ox to its local resolver: a DNS delegate on systemd 258 or later, a dedicated link on older versions. Your other DNS settings are not touched. Without systemd-resolved it changes nothing and tells you how to forward .ox in your own resolver.",
       "requirementsTitle": "Requirements:",
-      "requirements": ["Any modern Linux distribution", "sudo access"]
+      "requirements": [
+        "A Linux distribution with systemd-resolved (for automatic DNS setup)",
+        "sudo access"
+      ]
     },
     "windows": {
       "title": "Windows",
-      "description": "Windows support is coming soon."
+      "description": "Run the PowerShell command above and choose to install the TNP service. It adds a Name Resolution Policy Table (NRPT) rule that sends only .ox to the local resolver. Your network adapters' DNS servers are not changed.",
+      "requirementsTitle": "Requirements:",
+      "requirements": [
+        "64-bit (x64) Windows",
+        "Administrator rights to install the service (an elevated PowerShell)"
+      ]
     }
   },
   "serve": {

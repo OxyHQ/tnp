@@ -1,48 +1,72 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ReactElement } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Trans, useTranslation } from 'react-i18next';
 import type { ClientLatestResponse } from '@tnp/shared-types';
 import { apiFetch } from '../lib/api';
 
-type Platform = 'macos' | 'linux' | 'windows' | 'android' | 'ios' | 'router';
+type DnsPlatform = 'router' | 'windows' | 'macos' | 'linux' | 'mobile';
+type ClientPlatform = 'macos' | 'linux' | 'windows';
 type SetupMethod = 'dns' | 'client' | 'serve' | 'relay';
-type CopiedField = 'unix' | 'windows' | null;
 
-const dnsPlatforms: { id: Platform; label: string }[] = [
-  { id: 'android', label: 'Android' },
-  { id: 'ios', label: 'iOS' },
-  { id: 'windows', label: 'Windows' },
-  { id: 'macos', label: 'macOS' },
-  { id: 'linux', label: 'Linux' },
-  { id: 'router', label: 'Router' },
-];
+// Router first: one forwarding rule there covers every device on the network,
+// phones included, and phones have no per-domain option of their own.
+const dnsPlatforms: DnsPlatform[] = ['router', 'windows', 'macos', 'linux', 'mobile'];
+const OS_LABELS: Record<ClientPlatform, string> = {
+  macos: 'macOS',
+  linux: 'Linux',
+  windows: 'Windows',
+};
+const clientPlatforms: ClientPlatform[] = ['macos', 'linux', 'windows'];
 
-const clientPlatforms: { id: Platform; label: string }[] = [
-  { id: 'macos', label: 'macOS' },
-  { id: 'linux', label: 'Linux' },
-  { id: 'windows', label: 'Windows' },
-];
-
-const DNS_PORT = '5353';
-const DNS_HOST = 'dns.tnp.network';
+/**
+ * The TLD the manual steps forward to the TNP resolver. Mirrors
+ * `BUILTIN_NATIVE_TLDS` in `@tnp/namespace`, which is what the client routes.
+ * Only this TLD may ever appear here: forwarding a public TLD to TNP would
+ * shadow public DNS (docs/architecture/naming.md).
+ */
+const FORWARDED_TLD = 'ox';
+/** Shown in commands until the resolver address has loaded. */
+const IP_PLACEHOLDER = 'RESOLVER_IP';
 const INSTALL_CMD_UNIX = 'curl -fsSL https://get.tnp.network | sh';
 const INSTALL_CMD_WINDOWS = 'irm https://get.tnp.network/ps | iex';
 
 type ClientInfo = ClientLatestResponse;
 
+/**
+ * The resolver address as served by the API, or null if it is missing or not
+ * an IP literal. Every config below needs an IP: NRPT, /etc/resolver, dnsmasq
+ * and resolved all reject a hostname, so the hostname is never a fallback.
+ */
+function resolverIp(info: ClientInfo | null): string | null {
+  const ip = info?.dns?.ip?.trim();
+  if (!ip) return null;
+  const v4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+  const v6 = /^[0-9a-fA-F:.]+$/;
+  return v4.test(ip) || (ip.includes(':') && v6.test(ip)) ? ip : null;
+}
+
+const inlineCode = <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />;
+const accent = <span className="text-muted-foreground" />;
+const proseClass = 'font-mono text-xs text-muted-foreground/70';
+const subheadClass = 'mb-1 font-mono text-xs font-medium text-muted-foreground';
+
 export default function Install() {
   const { t } = useTranslation(['install', 'common']);
   const [method, setMethod] = useState<SetupMethod>('dns');
-  const [dnsPlatform, setDnsPlatform] = useState<Platform>('android');
-  const [clientPlatform, setClientPlatform] = useState<Platform>('macos');
+  const [dnsPlatform, setDnsPlatform] = useState<DnsPlatform>('router');
+  const [clientPlatform, setClientPlatform] = useState<ClientPlatform>('macos');
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
-  const [copied, setCopied] = useState<CopiedField>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
 
   // The public DNS resolver IP is owned by the API (config.parkingIp /
   // TNP_PARKING_IP) and served via /client/latest. Never hardcode it here — a
-  // stale literal would tell users to point their DNS at a dead/wrong host. Fall
-  // back to the resolver hostname for display until the value loads.
-  const DNS_IP = clientInfo?.dns?.ip || DNS_HOST;
+  // stale literal would tell users to point their DNS at a dead/wrong host.
+  // The resolver answers plain DNS on port 53 only; /client/latest carries no
+  // port, and NRPT and /etc/resolver would need 53 regardless.
+  const ip = resolverIp(clientInfo);
+  const ipText = ip ?? IP_PLACEHOLDER;
+  const forward = `/${FORWARDED_TLD}/${ipText}`;
 
   useEffect(() => {
     let ignore = false;
@@ -50,19 +74,133 @@ export default function Install() {
       .then((data) => {
         if (!ignore) setClientInfo(data);
       })
-      .catch((err) => console.error('Failed to load client release info:', err));
+      .catch((err) => {
+        console.error('Failed to load client release info:', err);
+        if (!ignore) setLoadFailed(true);
+      });
     return () => {
       ignore = true;
     };
   }, []);
 
-  const copyCommand = useCallback((command: string, field: CopiedField) => {
-    navigator.clipboard.writeText(command);
+  const copyCommand = useCallback((command: string, field: string) => {
+    navigator.clipboard.writeText(command).catch(() => {});
     setCopied(field);
     setTimeout(() => setCopied(null), 2000);
   }, []);
 
   const methodKeys: SetupMethod[] = ['dns', 'client', 'serve', 'relay'];
+
+  const richComponents: Record<string, ReactElement> = {
+    accent,
+    code: inlineCode,
+    clientLink: (
+      <button
+        type="button"
+        onClick={() => setMethod('client')}
+        className="cursor-pointer text-primary-text underline transition-colors hover:text-foreground"
+      />
+    ),
+    routerLink: (
+      <button
+        type="button"
+        onClick={() => setDnsPlatform('router')}
+        className="cursor-pointer text-primary-text underline transition-colors hover:text-foreground"
+      />
+    ),
+  };
+
+  const rich = (key: string) => (
+    <Trans i18nKey={key} t={t} values={{ dnsIp: ipText, forward }} components={richComponents} />
+  );
+
+  const richList = (key: string) => (
+    <ul className={`list-disc space-y-1.5 pl-5 ${proseClass}`}>
+      {(t(key, { returnObjects: true, dnsIp: ipText, forward }) as string[]).map((item, i) => (
+        <li key={item}>{rich(`${key}.${i}`)}</li>
+      ))}
+    </ul>
+  );
+
+  // A copyable command. Commands that embed the resolver address cannot be
+  // copied until it has loaded, so nobody pastes the placeholder.
+  const command = (id: string, text: string, needsIp = true) => {
+    const ready = !needsIp || ip !== null;
+    return (
+      <div className="flex items-start justify-between gap-3 rounded bg-background px-3 py-2">
+        <pre className="min-w-0 flex-1 overflow-x-auto font-mono text-xs text-primary-text">
+          <code>{text}</code>
+        </pre>
+        <button
+          type="button"
+          disabled={!ready}
+          onClick={() => copyCommand(text, id)}
+          className="shrink-0 cursor-pointer font-mono text-xs text-muted-foreground/70 transition-colors hover:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          [{copied === id ? t('common:copied') : t('common:copy')}]
+        </button>
+      </div>
+    );
+  };
+
+  const tld = FORWARDED_TLD;
+  const commands = {
+    openwrtAdd: [
+      `uci add_list dhcp.@dnsmasq[0].server='${forward}'`,
+      'uci commit dhcp',
+      '/etc/init.d/dnsmasq restart',
+    ].join('\n'),
+    openwrtRebind: [
+      `uci add_list dhcp.@dnsmasq[0].rebind_domain='${tld}'`,
+      'uci commit dhcp',
+      '/etc/init.d/dnsmasq restart',
+    ].join('\n'),
+    openwrtRemove: [
+      `uci del_list dhcp.@dnsmasq[0].server='${forward}'`,
+      'uci commit dhcp',
+      '/etc/init.d/dnsmasq restart',
+    ].join('\n'),
+    piholeV6: `sudo pihole-FTL --config misc.dnsmasq_lines '["server=${forward}"]'`,
+    piholeV5: [
+      `echo "server=${forward}" | sudo tee /etc/dnsmasq.d/99-tnp.conf`,
+      'pihole restartdns',
+    ].join('\n'),
+    adguard: `[/${tld}/]${ipText}`,
+    unboundInsecure: `server:\n  domain-insecure: "${tld}"`,
+    dnsmasq: `server=${forward}`,
+    windowsAdd: [
+      `Add-DnsClientNrptRule -Namespace ".${tld}" -NameServers "${ipText}"`,
+      'Clear-DnsClientCache',
+    ].join('\n'),
+    windowsRemove: [
+      `Get-DnsClientNrptRule | Where-Object Namespace -eq '.${tld}' | Remove-DnsClientNrptRule -Force`,
+      'Clear-DnsClientCache',
+    ].join('\n'),
+    macosAdd: [
+      'sudo mkdir -p /etc/resolver',
+      `echo "nameserver ${ipText}" | sudo tee /etc/resolver/${tld}`,
+    ].join('\n'),
+    macosRemove: `sudo rm /etc/resolver/${tld}`,
+    linuxDelegateFile: ['[Delegate]', `DNS=${ipText}`, `Domains=~${tld}`, 'DefaultRoute=no'].join(
+      '\n',
+    ),
+    linuxDelegateApply: [
+      'sudo mkdir -p /etc/systemd/dns-delegate.d',
+      `printf '%s\\n' '[Delegate]' 'DNS=${ipText}' 'Domains=~${tld}' 'DefaultRoute=no' | sudo tee /etc/systemd/dns-delegate.d/tnp.dns-delegate`,
+      'sudo systemctl restart systemd-resolved',
+    ].join('\n'),
+    linuxDelegateRemove: [
+      'sudo rm /etc/systemd/dns-delegate.d/tnp.dns-delegate',
+      'sudo systemctl restart systemd-resolved',
+    ].join('\n'),
+  };
+
+  const tabClass = (active: boolean) =>
+    `cursor-pointer rounded-md px-3 py-1.5 font-mono text-sm transition-colors ${
+      active
+        ? 'border border-primary/30 bg-primary/10 text-primary-text'
+        : 'border border-border text-muted-foreground/70 hover:text-muted-foreground'
+    }`;
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-16 lg:px-6">
@@ -77,7 +215,7 @@ export default function Install() {
       <h1 className="mb-2 font-pixel text-xl text-primary-text">{t('install:title')}</h1>
       <p className="mb-8 font-mono text-sm text-muted-foreground/70">{t('install:subtitle')}</p>
 
-      <div className="mb-8 flex gap-3">
+      <div className="mb-8 flex flex-wrap gap-3">
         {methodKeys.map((key) => (
           <button
             type="button"
@@ -96,245 +234,152 @@ export default function Install() {
 
       {method === 'dns' && (
         <>
-          <p className="mb-6 font-mono text-xs text-muted-foreground/70">
-            {t('install:dns.intro', { dnsPort: DNS_PORT, dnsIp: DNS_IP })}
-          </p>
+          <div className="mb-6 space-y-3">
+            {richList('install:dns.facts')}
+            <p className={proseClass}>{rich('install:dns.clientHint')}</p>
+            {!ip && (
+              <p className={proseClass}>
+                {loadFailed || clientInfo ? t('install:dns.ipError') : t('install:dns.ipLoading')}
+              </p>
+            )}
+          </div>
 
           <div className="mb-6 flex flex-wrap gap-2">
-            {dnsPlatforms.map((p) => (
+            {dnsPlatforms.map((id) => (
               <button
                 type="button"
-                key={p.id}
-                onClick={() => setDnsPlatform(p.id)}
-                className={`cursor-pointer rounded-md px-3 py-1.5 font-mono text-sm transition-colors ${
-                  dnsPlatform === p.id
-                    ? 'border border-primary/30 bg-primary/10 text-primary-text'
-                    : 'border border-border text-muted-foreground/70 hover:text-muted-foreground'
-                }`}
+                key={id}
+                onClick={() => setDnsPlatform(id)}
+                className={tabClass(dnsPlatform === id)}
               >
-                {p.label}
+                {t(`install:dns.tabs.${id}`)}
               </button>
             ))}
           </div>
 
-          <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-            {dnsPlatform === 'android' && (
-              <>
-                <h3 className="font-mono text-sm font-medium text-foreground">
-                  {t('install:dns.android.title')}
-                </h3>
-                <ol className="list-decimal pl-5 space-y-2 font-mono text-xs text-muted-foreground/70">
-                  {(
-                    t('install:dns.android.steps', {
-                      returnObjects: true,
-                      dnsHost: DNS_HOST,
-                      dnsIp: DNS_IP,
-                    }) as string[]
-                  ).map((step, i) => (
-                    <li key={step}>
-                      <Trans
-                        i18nKey={`install:dns.android.steps.${i}`}
-                        t={t}
-                        values={{ dnsHost: DNS_HOST, dnsIp: DNS_IP }}
-                        components={{
-                          accent: <span className="text-muted-foreground" />,
-                          code: (
-                            <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />
-                          ),
-                        }}
-                      />
-                    </li>
-                  ))}
-                </ol>
-                <p className="font-mono text-xs text-muted-foreground/70">
-                  <Trans
-                    i18nKey="install:dns.android.note"
-                    t={t}
-                    values={{ dnsIp: DNS_IP }}
-                    components={{
-                      code: (
-                        <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />
-                      ),
-                    }}
-                  />
-                </p>
-              </>
-            )}
-            {dnsPlatform === 'ios' && (
-              <>
-                <h3 className="font-mono text-sm font-medium text-foreground">
-                  {t('install:dns.ios.title')}
-                </h3>
-                <ol className="list-decimal pl-5 space-y-2 font-mono text-xs text-muted-foreground/70">
-                  {(
-                    t('install:dns.ios.steps', { returnObjects: true, dnsIp: DNS_IP }) as string[]
-                  ).map((step, i) => (
-                    <li key={step}>
-                      <Trans
-                        i18nKey={`install:dns.ios.steps.${i}`}
-                        t={t}
-                        values={{ dnsIp: DNS_IP }}
-                        components={{
-                          accent: <span className="text-muted-foreground" />,
-                          code: (
-                            <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />
-                          ),
-                        }}
-                      />
-                    </li>
-                  ))}
-                </ol>
-                <p className="font-mono text-xs text-muted-foreground/70">
-                  {t('install:dns.ios.note')}
-                </p>
-              </>
-            )}
-            {dnsPlatform === 'windows' && (
-              <>
-                <h3 className="font-mono text-sm font-medium text-foreground">
-                  {t('install:dns.windows.title')}
-                </h3>
-                <ol className="list-decimal pl-5 space-y-2 font-mono text-xs text-muted-foreground/70">
-                  {(
-                    t('install:dns.windows.steps', {
-                      returnObjects: true,
-                      dnsIp: DNS_IP,
-                    }) as string[]
-                  ).map((step, i) => (
-                    <li key={step}>
-                      <Trans
-                        i18nKey={`install:dns.windows.steps.${i}`}
-                        t={t}
-                        values={{ dnsIp: DNS_IP }}
-                        components={{
-                          accent: <span className="text-muted-foreground" />,
-                          code: (
-                            <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />
-                          ),
-                        }}
-                      />
-                    </li>
-                  ))}
-                </ol>
-              </>
-            )}
-            {dnsPlatform === 'macos' && (
-              <>
-                <h3 className="font-mono text-sm font-medium text-foreground">
-                  {t('install:dns.macos.title')}
-                </h3>
-                <ol className="list-decimal pl-5 space-y-2 font-mono text-xs text-muted-foreground/70">
-                  {(
-                    t('install:dns.macos.steps', { returnObjects: true, dnsIp: DNS_IP }) as string[]
-                  ).map((step, i) => (
-                    <li key={step}>
-                      <Trans
-                        i18nKey={`install:dns.macos.steps.${i}`}
-                        t={t}
-                        values={{ dnsIp: DNS_IP }}
-                        components={{
-                          accent: <span className="text-muted-foreground" />,
-                          code: (
-                            <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />
-                          ),
-                        }}
-                      />
-                    </li>
-                  ))}
-                </ol>
-              </>
-            )}
-            {dnsPlatform === 'linux' && (
-              <>
-                <h3 className="font-mono text-sm font-medium text-foreground">
-                  {t('install:dns.linux.title')}
-                </h3>
-                <div className="space-y-3">
-                  <div>
-                    <p className="mb-1 font-medium text-muted-foreground">
-                      systemd-resolved (Ubuntu, Fedora, Debian):
-                    </p>
-                    <p className="mb-2 text-xs text-muted-foreground/70">
-                      If{' '}
-                      <code className="rounded bg-background px-1.5 py-0.5 text-primary-text">
-                        resolvectl
-                      </code>{' '}
-                      is not found, install it first:
-                    </p>
-                    <code className="block rounded bg-background px-3 py-2 text-xs text-primary-text mb-2">
-                      sudo apt install systemd-resolved # Debian/Ubuntu
-                    </code>
-                    <p className="mb-1 text-xs text-muted-foreground/70">Then configure DNS:</p>
-                    <code className="block rounded bg-background px-3 py-2 text-xs text-primary-text">
-                      sudo resolvectl dns eth0 {DNS_IP} && sudo resolvectl dnsovertls eth0 no
-                    </code>
-                  </div>
-                  <div>
-                    <p className="mb-1 font-medium text-muted-foreground">
-                      resolv.conf (any distro):
-                    </p>
-                    <code className="block rounded bg-background px-3 py-2 text-xs text-primary-text">
-                      echo "nameserver {DNS_IP}" | sudo tee /etc/resolv.conf # port 53 only
-                    </code>
-                  </div>
-                  <div>
-                    <p className="mb-1 font-medium text-muted-foreground">NetworkManager (GUI):</p>
-                    <p className="text-xs text-muted-foreground/70">
-                      <Trans
-                        i18nKey="install:dns.linux.networkManagerDesc"
-                        t={t}
-                        values={{ dnsIp: DNS_IP }}
-                        components={{
-                          code: (
-                            <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />
-                          ),
-                        }}
-                      />
-                    </p>
-                  </div>
-                </div>
-              </>
-            )}
+          <div className="space-y-5 rounded-lg border border-border bg-card p-5">
             {dnsPlatform === 'router' && (
               <>
                 <h3 className="font-mono text-sm font-medium text-foreground">
                   {t('install:dns.router.title')}
                 </h3>
-                <p className="font-mono text-xs text-muted-foreground/70">
-                  {t('install:dns.router.intro')}
-                </p>
-                <ol className="list-decimal pl-5 space-y-2 font-mono text-xs text-muted-foreground/70">
-                  {(
-                    t('install:dns.router.steps', {
-                      returnObjects: true,
-                      dnsIp: DNS_IP,
-                    }) as string[]
-                  ).map((step, i) => (
-                    <li key={step}>
-                      <Trans
-                        i18nKey={`install:dns.router.steps.${i}`}
-                        t={t}
-                        values={{ dnsIp: DNS_IP }}
-                        components={{
-                          accent: <span className="text-muted-foreground" />,
-                          code: (
-                            <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />
-                          ),
-                          code1: (
-                            <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />
-                          ),
-                          code2: (
-                            <code className="rounded bg-background px-1.5 py-0.5 text-primary-text" />
-                          ),
-                        }}
-                      />
-                    </li>
-                  ))}
-                </ol>
-                <p className="font-mono text-xs text-muted-foreground/70">
-                  {t('install:dns.router.note')}
-                </p>
+                <p className={proseClass}>{t('install:dns.router.intro')}</p>
+
+                <div className="space-y-2">
+                  <h4 className={subheadClass}>{t('install:dns.router.openwrt.title')}</h4>
+                  <p className={proseClass}>{t('install:dns.router.openwrt.cli')}</p>
+                  {command('openwrt-add', commands.openwrtAdd)}
+                  <p className={proseClass}>{rich('install:dns.router.openwrt.luci')}</p>
+                  <p className={proseClass}>{t('install:dns.router.openwrt.rebind')}</p>
+                  {command('openwrt-rebind', commands.openwrtRebind, false)}
+                  <p className={proseClass}>{t('install:dns.undo')}</p>
+                  {command('openwrt-remove', commands.openwrtRemove)}
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className={subheadClass}>{t('install:dns.router.pihole.title')}</h4>
+                  <p className={proseClass}>{rich('install:dns.router.pihole.v6')}</p>
+                  {command('pihole-v6', commands.piholeV6)}
+                  <p className={proseClass}>{t('install:dns.router.pihole.v5')}</p>
+                  {command('pihole-v5', commands.piholeV5)}
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className={subheadClass}>{t('install:dns.router.adguard.title')}</h4>
+                  <p className={proseClass}>{rich('install:dns.router.adguard.desc')}</p>
+                  {command('adguard', commands.adguard)}
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className={subheadClass}>{t('install:dns.router.unbound.title')}</h4>
+                  <p className={proseClass}>{rich('install:dns.router.unbound.pfsense')}</p>
+                  <p className={proseClass}>{rich('install:dns.router.unbound.opnsense')}</p>
+                  <p className={proseClass}>{rich('install:dns.router.unbound.dnssec')}</p>
+                  {command('unbound-insecure', commands.unboundInsecure, false)}
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className={subheadClass}>{t('install:dns.router.dnsmasq.title')}</h4>
+                  <p className={proseClass}>{rich('install:dns.router.dnsmasq.desc')}</p>
+                  {command('router-dnsmasq', commands.dnsmasq)}
+                </div>
+
+                <div className="space-y-2 rounded-md border border-warning-subtle px-4 py-3">
+                  <h4 className="font-mono text-xs font-medium text-warning-text">
+                    {t('install:dns.router.basic.title')}
+                  </h4>
+                  <p className={proseClass}>{t('install:dns.router.basic.desc')}</p>
+                </div>
               </>
+            )}
+
+            {dnsPlatform === 'windows' && (
+              <>
+                <h3 className="font-mono text-sm font-medium text-foreground">
+                  {t('install:dns.windows.title')}
+                </h3>
+                <p className={proseClass}>{t('install:dns.windows.desc')}</p>
+                {command('windows-add', commands.windowsAdd)}
+                <p className={proseClass}>{t('install:dns.undo')}</p>
+                {command('windows-remove', commands.windowsRemove, false)}
+              </>
+            )}
+
+            {dnsPlatform === 'macos' && (
+              <>
+                <h3 className="font-mono text-sm font-medium text-foreground">
+                  {t('install:dns.macos.title')}
+                </h3>
+                <p className={proseClass}>{t('install:dns.macos.desc')}</p>
+                {command('macos-add', commands.macosAdd)}
+                <p className={proseClass}>{rich('install:dns.macos.test')}</p>
+                <p className={proseClass}>{t('install:dns.undo')}</p>
+                {command('macos-remove', commands.macosRemove, false)}
+              </>
+            )}
+
+            {dnsPlatform === 'linux' && (
+              <>
+                <h3 className="font-mono text-sm font-medium text-foreground">
+                  {t('install:dns.linux.title')}
+                </h3>
+
+                <div className="space-y-2">
+                  <h4 className={subheadClass}>{t('install:dns.linux.delegate.title')}</h4>
+                  <p className={proseClass}>{rich('install:dns.linux.delegate.desc')}</p>
+                  {command('linux-delegate-file', commands.linuxDelegateFile)}
+                  <p className={proseClass}>{t('install:dns.linux.delegate.apply')}</p>
+                  {command('linux-delegate-apply', commands.linuxDelegateApply)}
+                  <p className={proseClass}>{t('install:dns.undo')}</p>
+                  {command('linux-delegate-remove', commands.linuxDelegateRemove, false)}
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className={subheadClass}>{t('install:dns.linux.dnsmasq.title')}</h4>
+                  <p className={proseClass}>{rich('install:dns.linux.dnsmasq.desc')}</p>
+                  {command('linux-dnsmasq', commands.dnsmasq)}
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className={subheadClass}>{t('install:dns.linux.other.title')}</h4>
+                  <p className={proseClass}>{rich('install:dns.linux.other.desc')}</p>
+                </div>
+              </>
+            )}
+
+            {dnsPlatform === 'mobile' && (
+              <>
+                <h3 className="font-mono text-sm font-medium text-foreground">
+                  {t('install:dns.mobile.title')}
+                </h3>
+                {richList('install:dns.mobile.points')}
+              </>
+            )}
+
+            {dnsPlatform !== 'mobile' && dnsPlatform !== 'router' && (
+              <p className={`border-t border-border pt-4 ${proseClass}`}>
+                {t('install:dns.clientNote')}
+              </p>
             )}
           </div>
         </>
@@ -353,107 +398,49 @@ export default function Install() {
               <p className="mb-2 font-mono text-xs font-medium text-muted-foreground">
                 macOS / Linux
               </p>
-              <div className="flex items-center justify-between">
-                <code className="font-mono text-sm text-primary-text">{INSTALL_CMD_UNIX}</code>
-                <button
-                  type="button"
-                  onClick={() => copyCommand(INSTALL_CMD_UNIX, 'unix')}
-                  className="ml-3 shrink-0 cursor-pointer font-mono text-xs text-muted-foreground/70 transition-colors hover:text-muted-foreground"
-                >
-                  [{copied === 'unix' ? t('common:copied') : t('common:copy')}]
-                </button>
-              </div>
+              {command('unix', INSTALL_CMD_UNIX, false)}
             </div>
 
             <div className="rounded-lg border border-border bg-card px-4 py-3">
               <p className="mb-2 font-mono text-xs font-medium text-muted-foreground">
                 Windows (PowerShell)
               </p>
-              <div className="flex items-center justify-between">
-                <code className="font-mono text-sm text-primary-text">{INSTALL_CMD_WINDOWS}</code>
-                <button
-                  type="button"
-                  onClick={() => copyCommand(INSTALL_CMD_WINDOWS, 'windows')}
-                  className="ml-3 shrink-0 cursor-pointer font-mono text-xs text-muted-foreground/70 transition-colors hover:text-muted-foreground"
-                >
-                  [{copied === 'windows' ? t('common:copied') : t('common:copy')}]
-                </button>
-              </div>
+              {command('windows', INSTALL_CMD_WINDOWS, false)}
             </div>
           </div>
 
           <div className="mb-6 flex gap-2">
-            {clientPlatforms.map((p) => (
+            {clientPlatforms.map((id) => (
               <button
                 type="button"
-                key={p.id}
-                onClick={() => setClientPlatform(p.id)}
-                className={`cursor-pointer rounded-md px-3 py-1.5 font-mono text-sm transition-colors ${
-                  clientPlatform === p.id
-                    ? 'border border-primary/30 bg-primary/10 text-primary-text'
-                    : 'border border-border text-muted-foreground/70 hover:text-muted-foreground'
-                }`}
+                key={id}
+                onClick={() => setClientPlatform(id)}
+                className={tabClass(clientPlatform === id)}
               >
-                {p.label}
+                {OS_LABELS[id]}
               </button>
             ))}
           </div>
 
-          <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-            {clientPlatform === 'macos' && (
-              <>
-                <h3 className="font-mono text-sm font-medium text-foreground">
-                  {t('install:client.macos.title')}
-                </h3>
-                <p className="font-mono text-xs text-muted-foreground/70">
-                  {t('install:client.macos.description')}
-                </p>
-                <div className="space-y-1 font-mono text-xs text-muted-foreground/70">
-                  <p className="font-medium text-muted-foreground">
-                    {t('install:client.macos.requirementsTitle')}
-                  </p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    {(
-                      t('install:client.macos.requirements', { returnObjects: true }) as string[]
-                    ).map((req) => (
-                      <li key={req}>{req}</li>
-                    ))}
-                  </ul>
-                </div>
-              </>
-            )}
-            {clientPlatform === 'linux' && (
-              <>
-                <h3 className="font-mono text-sm font-medium text-foreground">
-                  {t('install:client.linux.title')}
-                </h3>
-                <p className="font-mono text-xs text-muted-foreground/70">
-                  {t('install:client.linux.description')}
-                </p>
-                <div className="space-y-1 font-mono text-xs text-muted-foreground/70">
-                  <p className="font-medium text-muted-foreground">
-                    {t('install:client.linux.requirementsTitle')}
-                  </p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    {(
-                      t('install:client.linux.requirements', { returnObjects: true }) as string[]
-                    ).map((req) => (
-                      <li key={req}>{req}</li>
-                    ))}
-                  </ul>
-                </div>
-              </>
-            )}
-            {clientPlatform === 'windows' && (
-              <>
-                <h3 className="font-mono text-sm font-medium text-foreground">
-                  {t('install:client.windows.title')}
-                </h3>
-                <p className="font-mono text-xs text-muted-foreground/70">
-                  {t('install:client.windows.description')}
-                </p>
-              </>
-            )}
+          <div className="space-y-4 rounded-lg border border-border bg-card p-5">
+            <h3 className="font-mono text-sm font-medium text-foreground">
+              {t(`install:client.${clientPlatform}.title`)}
+            </h3>
+            <p className={proseClass}>{t(`install:client.${clientPlatform}.description`)}</p>
+            <div className={`space-y-1 ${proseClass}`}>
+              <p className="font-medium text-muted-foreground">
+                {t(`install:client.${clientPlatform}.requirementsTitle`)}
+              </p>
+              <ul className="list-disc space-y-1 pl-5">
+                {(
+                  t(`install:client.${clientPlatform}.requirements`, {
+                    returnObjects: true,
+                  }) as string[]
+                ).map((req) => (
+                  <li key={req}>{req}</li>
+                ))}
+              </ul>
+            </div>
           </div>
 
           <p className="mt-4 font-mono text-xs text-muted-foreground/70">
