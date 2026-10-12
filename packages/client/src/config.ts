@@ -37,11 +37,57 @@ export interface DnsProxyConfig {
   cacheMaxEntries?: number;
   /**
    * Upstream resolvers for public-DNS names, comma-separated and tried in
-   * order. An entry is an address (`1.1.1.1`, `1.1.1.1:5353`, `[2606:4700::1111]`)
-   * or an RFC 8484 DoH URL (`https://cloudflare-dns.com/dns-query`).
+   * order. An entry is an RFC 8484 DoH URL (`https://1.1.1.1/dns-query`) or a
+   * plaintext address (`1.1.1.1:53`, `[2606:4700::1111]`). See
+   * `DEFAULT_UPSTREAM_DNS`.
    */
   upstreamDns: string;
+  /**
+   * Where the last TLD policy table fetched from the registry is kept, so a
+   * restart without network still classifies every native TLD it has seen.
+   * Unset means "do not persist" (tests). Built-in native TLDs never depend on
+   * this file.
+   */
+  tldCachePath?: string;
+  /**
+   * Per-source response rate limit for the UDP listener. Loopback sources are
+   * exempt. `null` disables it; unset uses the default.
+   */
+  rateLimit?: { perSecond: number; burst: number } | null;
+  /** Concurrent TCP client connections. Further connections are closed at once. */
+  maxTcpConnections?: number;
+  /**
+   * Queries being resolved at once (upstream or registry). A query beyond the
+   * limit gets SERVFAIL immediately instead of opening yet another socket.
+   */
+  maxInflight?: number;
 }
+
+/**
+ * Default upstream resolvers for public names: DNS-over-HTTPS, two operators.
+ *
+ * Encrypted because the plaintext default this replaces (`1.1.1.1` over UDP)
+ * handed every public name the device looked up to anyone on the path, who
+ * could also answer in Cloudflare's place. Addressed by IP literal, not
+ * hostname, so reaching the upstream needs no plaintext bootstrap lookup and
+ * sends no SNI naming it, and so the resolver can never loop through itself.
+ * Both certificates carry the IP as a subject alternative name.
+ *
+ * Cloudflare first, Google as a different-operator fallback. Quad9 was the
+ * natural second choice but its DoH endpoint requires HTTP/2 and answers
+ * Bun's HTTP/1.1 `fetch` with 505, so it cannot work here today.
+ */
+export const DEFAULT_UPSTREAM_DNS = 'https://1.1.1.1/dns-query,https://8.8.8.8/dns-query';
+
+/**
+ * The upstream value earlier releases wrote into every saved config.
+ *
+ * `saveConfig` writes the whole object, so a config file holding exactly this
+ * string almost always means "never chosen" rather than "chose plaintext". It
+ * is migrated to the encrypted default; a user who really wants plaintext
+ * Cloudflare can say so unambiguously with `1.1.1.1:53`.
+ */
+export const LEGACY_DEFAULT_UPSTREAM_DNS = '1.1.1.1';
 
 /**
  * Privacy levels the client can actually provide.
@@ -156,8 +202,9 @@ const DEFAULT_CONFIG: TnpConfig = {
   listenAddr: '127.0.0.1',
   listenPort: 5354,
   apiBaseUrl: 'https://api.tnp.network',
-  upstreamDns: '1.1.1.1',
+  upstreamDns: DEFAULT_UPSTREAM_DNS,
   cacheMaxEntries: 10_000,
+  tldCachePath: join(dataDir(), 'tlds.json'),
   privacyLevel: 'access',
   socksPort: 1080,
   relayPreference: 'oxy',
@@ -191,6 +238,17 @@ export function applyStoredConfig(saved: Partial<TnpConfig>): TnpConfig {
   if (!privacy.ok) {
     console.warn(`[tnp] stored ${privacy.error} Falling back to "${DEFAULT_CONFIG.privacyLevel}".`);
     merged.privacyLevel = DEFAULT_CONFIG.privacyLevel;
+  }
+
+  if (typeof merged.upstreamDns !== 'string' || merged.upstreamDns.trim() === '') {
+    merged.upstreamDns = DEFAULT_CONFIG.upstreamDns;
+  } else if (merged.upstreamDns.trim() === LEGACY_DEFAULT_UPSTREAM_DNS) {
+    console.warn(
+      `[tnp] upstream DNS was the old plaintext default (${LEGACY_DEFAULT_UPSTREAM_DNS}); ` +
+        `now using encrypted DNS-over-HTTPS (${DEFAULT_UPSTREAM_DNS}). ` +
+        `Set upstreamDns to "${LEGACY_DEFAULT_UPSTREAM_DNS}:53" to keep plaintext on purpose.`,
+    );
+    merged.upstreamDns = DEFAULT_CONFIG.upstreamDns;
   }
 
   return merged;

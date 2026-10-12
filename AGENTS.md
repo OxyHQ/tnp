@@ -50,7 +50,7 @@ Still uses `apps/` layout (not yet migrated to the `packages/` standard):
 apps/
   api/            @tnp/api          Bun + Express 5.2 / drizzle-orm + PostgreSQL / @oxy.so/core
   web/            @tnp/web          Vite 8 / React 19 / TailwindCSS 4.2 / React Router 7 / react-i18next
-  dns-server/     @tnp/dns-server   DNS daemon (dns2 library)
+  dns-server/     @tnp/dns-server   Public DNS resolver (runs the client DnsProxy)
   relay/          @tnp/relay        WebSocket relay server for overlay network
 packages/
   client/         @tnp/client       Interactive CLI, DNS proxy, SOCKS5 proxy, tunnel manager,
@@ -118,4 +118,4 @@ Key modules in `packages/client/src/`:
 - **A request body is a contract, and a contract lives in `@tnp/shared-types`.** Never write a request shape twice. An API route validates with the package's parser and destructures the parsed value; the client builds a value of the same declared type. Both hold for the relay, service-node and DNS-record endpoints; move any other endpoint the same way when you touch it, rather than hand-matching a new literal against a route you read once — that is exactly how `registerRelay` came to send `{port, location}` to an endpoint requiring `{endpoint, publicKey, operator, capacity}` for the whole life of the feature (audit B2). The gate is two-sided and both halves are needed: `packages/client/src/api.contract.test.ts` captures the bytes the real client sends and feeds them to the real parser, `apps/api/src/routes/*.contract.test.ts` drives the real router over HTTP with no database (a rejected body is a 400 from the contract, an accepted one reaches the handler and 500s at `getDb()`).
 - **A new workspace package must be added to every Dockerfile that installs the graph containing it.** Bun resolves the whole workspace before installing anything, so one missing `COPY <pkg>/package.json` fails the install with `@tnp/<name>@workspace:* failed to resolve` no matter how unrelated that package is to the image. Only `Dockerfile.api` is built in CI, so `Dockerfile.dns` silently broke this way once already.
 - **The API is assembled in `apps/api/src/app.ts`** (headers, per-address then per-account rate limits, request timeout, auth); `index.ts` only builds the services router and starts it. Relay `operator` is decided by the API from `TNP_OXY_RELAY_OPERATORS`, never by the relay. API env vars: `docs/api.mdx`.
-- **Key deps**: `tweetnacl` (X25519/XSalsa20 in client), `dns2` (DNS encoding in client), `react-i18next` + `i18next` + `i18next-http-backend` + `i18next-browser-languagedetector` (web i18n).
+- **Key deps**: `tweetnacl` (X25519/XSalsa20 in client), `dns-packet` (DNS wire format in client), `react-i18next` + `i18next` + `i18next-http-backend` + `i18next-browser-languagedetector` (web i18n).

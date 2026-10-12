@@ -28,11 +28,12 @@ export type NamespaceType = 'tnp-native' | 'public-dns';
 /**
  * Names reserved by the IETF for special use, which no registry may delegate.
  *
- * RFC 6761 §6, RFC 8375 (`home.arpa`), RFC 7686 (`.onion`), and the IANA
- * private-use TLD `.internal`. These do not appear in the root zone, so the
- * IANA snapshot alone would leave them registrable.
+ * RFC 6761 §6, RFC 8375 (`home.arpa`), RFC 7686 (`.onion`), RFC 9476 (`.alt`),
+ * and the IANA private-use TLD `.internal`. These do not appear in the root
+ * zone, so the IANA snapshot alone would leave them registrable.
  */
 export const SPECIAL_USE_TLDS: readonly string[] = [
+  'alt',
   'example',
   'internal',
   'invalid',
@@ -43,11 +44,51 @@ export const SPECIAL_USE_TLDS: readonly string[] = [
 ];
 
 /**
+ * Labels in widespread private use on home and corporate networks.
+ *
+ * None is delegated by the root, so neither list above covers them, yet each
+ * is already answered by somebody's router, Active Directory or mDNS stack:
+ * `.home`, `.corp` and `.mail` are the names ICANN indefinitely deferred over
+ * collision risk (Board resolution 2018.02.04.12), `.lan`, `.localdomain`,
+ * `.intranet`, `.private` and `.workgroup` are router and OS defaults. A TNP
+ * TLD with one of these names would silently re-point a printer, a NAS or a
+ * domain controller on every network that already uses it, so they are refused
+ * exactly like a public TLD.
+ */
+export const PRIVATE_USE_TLDS: readonly string[] = [
+  'corp',
+  'home',
+  'intranet',
+  'lan',
+  'localdomain',
+  'mail',
+  'private',
+  'workgroup',
+];
+
+/**
  * Every label TNP refuses to serve, as a Set for O(1) membership.
  *
  * `arpa` is in the IANA snapshot, which covers `home.arpa` at the TLD level.
  */
-const RESERVED_TLDS: ReadonlySet<string> = new Set([...IANA_ROOT_ZONE_TLDS, ...SPECIAL_USE_TLDS]);
+const RESERVED_TLDS: ReadonlySet<string> = new Set([
+  ...IANA_ROOT_ZONE_TLDS,
+  ...SPECIAL_USE_TLDS,
+  ...PRIVATE_USE_TLDS,
+]);
+
+/**
+ * TNP-native TLDs this code base ships with.
+ *
+ * The one list every consumer reads: the resolver seeds its policy table from
+ * it so a native name is never forwarded upstream before (or without) a TLD
+ * sync, the installers route exactly these labels to the local resolver, and
+ * the SOCKS proxy refuses everything else without asking the API. The registry
+ * may approve more TLDs (rule N3); it can never remove one of these from a
+ * client, because a client that "forgot" `.ox` would send `.ox` lookups to the
+ * public resolver — to the ISP, in the clear.
+ */
+export const BUILTIN_NATIVE_TLDS: readonly string[] = ['ox'];
 
 /** Number of reserved labels. Exported so callers can assert the set is populated. */
 export const RESERVED_TLD_COUNT = RESERVED_TLDS.size;

@@ -13,7 +13,8 @@ import type {
 
 // The `/dns/resolve` response is declared once, in @tnp/shared-types, next to
 // the other registry contracts. `rcode` is optional there because an older API
-// image omits it; this client still treats empty `answers` as NXDOMAIN.
+// image omits it. The resolver honours it (NOERROR + no answers = NODATA) and
+// falls back to reading empty `answers` as NXDOMAIN only when it is absent.
 export type DnsAnswer = DnsResolveAnswer;
 export type OverlayInfo = DnsResolveOverlay;
 export type ResolveResponse = DnsResolveResponse;

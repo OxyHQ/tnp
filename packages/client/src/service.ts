@@ -1,60 +1,57 @@
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-  unlinkSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import type { TnpConfig } from './config';
-import { logPath, getDefaultInterface } from './config';
-import { isReservedTld } from '@tnp/namespace';
+import { dataDir, logPath, saveConfig } from './config';
+import {
+  applyNativeRouting,
+  readRoutingState,
+  removeNativeRouting,
+  repairLegacyWindowsAdapters,
+  ROUTED_TLDS,
+  routingStatePath,
+  type RoutingState,
+} from './dns-routing';
 
 const LAUNCHD_LABEL = 'so.oxy.tnp.resolver';
 const SYSTEMD_UNIT = 'tnp-resolver.service';
 const WIN_TASK_NAME = 'TnpResolver';
 
 /**
- * TLDs the installer routes to the local resolver.
- *
- * Only TNP-native labels. Earlier versions also captured `.app` and `.com`,
- * which pointed every lookup under those TLDs at TNP and is the namespace
- * violation in docs/architecture/naming.md rule N1 (audit S4).
+ * TLDs the installer routes to the local resolver: `BUILTIN_NATIVE_TLDS` from
+ * `@tnp/namespace`, the one list the resolver, the installers and the SOCKS
+ * proxy all read. Earlier versions also captured `.app` and `.com` (audit S4).
  *
  * Static rather than fetched: install must work offline, and a device that
  * routes a TLD to TNP because an API said so is the same trust problem in a
  * different place. New native TLDs are picked up by the running resolver's TLD
  * sync; adding one to the *routing* layer is deliberately a release decision.
  */
-export const NATIVE_TLDS = ['ox'] as const;
+export const NATIVE_TLDS = ROUTED_TLDS;
+
+const installStatePath = () => routingStatePath(dataDir(), 'install');
 
 /**
- * Delete `/etc/resolver` entries an earlier version wrote for reserved TLDs.
- *
- * Upgrades must repair the machine, not merely stop making it worse: a user who
- * installed before this change has `/etc/resolver/com` on disk, and until it is
- * removed every `.com` lookup on that Mac still goes to TNP.
+ * Record exactly what install added to the OS DNS configuration, so uninstall
+ * removes that and nothing else.
  */
-export function removeReservedResolverFiles(): void {
-  if (!existsSync('/etc/resolver')) return;
-
-  for (const entry of readdirSync('/etc/resolver')) {
-    if (!isReservedTld(entry)) continue;
-
-    const path = join('/etc/resolver', entry);
-    // Only remove files this client wrote — a resolver entry pointing somewhere
-    // else belongs to another tool and is not ours to delete.
-    try {
-      if (!readFileSync(path, 'utf-8').includes('nameserver 127.0.0.1')) continue;
-    } catch {
-      continue;
-    }
-
-    safeUnlink(path);
-    console.log(`[tnp] removed /etc/resolver/${entry} — .${entry} is public DNS, not TNP's`);
+function saveInstallState(state: RoutingState): void {
+  const path = installStatePath();
+  try {
+    mkdirSync(dataDir(), { recursive: true });
+    writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+  } catch (err) {
+    console.warn(
+      `[tnp] could not record DNS routing state at ${path}: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
+}
+
+/** Remove the DNS routing a previous install recorded, and legacy leftovers. */
+function removeInstalledRouting(): void {
+  const path = installStatePath();
+  removeNativeRouting(readRoutingState(path));
+  safeUnlink(path);
 }
 
 const platform = process.platform;
@@ -111,15 +108,13 @@ function installDarwin(binaryPath: string, cfg: TnpConfig): void {
 </plist>`,
   );
 
-  removeReservedResolverFiles();
-
-  mkdirSync('/etc/resolver', { recursive: true });
-  for (const tld of NATIVE_TLDS) {
-    writeFileSync(
-      join('/etc/resolver', tld),
-      `nameserver ${cfg.listenAddr}\nport ${cfg.listenPort}\n`,
-    );
-  }
+  removeInstalledRouting();
+  saveInstallState(
+    applyNativeRouting({
+      owner: 'install',
+      target: { address: cfg.listenAddr, port: cfg.listenPort },
+    }).state,
+  );
 
   run(`launchctl load ${plistPath}`);
 }
@@ -127,10 +122,7 @@ function installDarwin(binaryPath: string, cfg: TnpConfig): void {
 function uninstallDarwin(): void {
   runSilent(`launchctl unload /Library/LaunchDaemons/${LAUNCHD_LABEL}.plist`);
   safeUnlink(`/Library/LaunchDaemons/${LAUNCHD_LABEL}.plist`);
-  for (const tld of NATIVE_TLDS) {
-    safeUnlink(join('/etc/resolver', tld));
-  }
-  removeReservedResolverFiles();
+  removeInstalledRouting();
 }
 
 function statusDarwin(): boolean {
@@ -144,73 +136,64 @@ function statusDarwin(): boolean {
 
 // ── Linux (systemd) ──
 
-function installLinux(binaryPath: string, cfg: TnpConfig): void {
-  writeFileSync(
-    `/etc/systemd/system/${SYSTEMD_UNIT}`,
-    `[Unit]
-Description=TNP DNS Resolver
-After=network.target
-Wants=network-online.target
-Before=systemd-resolved.service
-
-[Service]
-Type=simple
-ExecStart=${binaryPath} run
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-`,
-  );
-
-  if (existsSync('/etc/systemd/resolved.conf') || existsSync('/run/systemd/resolve')) {
-    const dir = '/etc/systemd/resolved.conf.d';
-    mkdirSync(dir, { recursive: true });
-    // Route only TNP-native TLDs. This drop-in used to say `Domains=~.`, which
-    // makes TNP the routing domain for ALL DNS on the machine — every public
-    // name resolved through TNP (audit S4). An upgrade overwrites the old file,
-    // so the repair happens without extra cleanup here.
-    const routingDomains = NATIVE_TLDS.map((tld) => `~${tld}`).join(' ');
-    writeFileSync(
-      join(dir, 'tnp.conf'),
-      `[Resolve]
-DNS=${cfg.listenAddr}
-Domains=${routingDomains}
-DNSStubListener=yes
-`,
-    );
-    runSilent('systemctl restart systemd-resolved');
+/**
+ * The resolver's systemd unit.
+ *
+ * With `link` (systemd-resolved older than 258), the unit itself brings the
+ * dedicated `tnp0` routing link up after the resolver starts and takes it
+ * down when it stops, so the routing survives reboots and never outlives the
+ * resolver it points at. The leading `-` makes a failure non-fatal: the
+ * resolver still runs, `.ox` simply is not routed — and no other name is
+ * affected either way.
+ */
+export function buildSystemdUnit(
+  binaryPath: string,
+  link?: { up: string[]; down: string[] },
+): string {
+  const lines = [
+    '[Unit]',
+    'Description=TNP DNS Resolver',
+    'After=network.target systemd-resolved.service',
+    'Wants=network-online.target',
+    '',
+    '[Service]',
+    'Type=simple',
+    `ExecStart=${binaryPath} run`,
+  ];
+  if (link) {
+    lines.push(`ExecStartPost=-/bin/sh -c '${link.up.join('; ')}'`);
+    lines.push(`ExecStopPost=-/bin/sh -c '${link.down.join('; ')}'`);
   }
+  lines.push('Restart=always', 'RestartSec=5', '', '[Install]', 'WantedBy=multi-user.target', '');
+  return lines.join('\n');
+}
+
+function installLinux(binaryPath: string, cfg: TnpConfig): void {
+  // Route only TNP-native TLDs, through a resolved DNS delegate or a dedicated
+  // link — never the global section or the user's own interface. See
+  // dns-routing.ts for why a global `DNS=` entry captures every lookup.
+  removeInstalledRouting();
+  const { state, unitLink } = applyNativeRouting({
+    owner: 'install',
+    target: { address: cfg.listenAddr, port: cfg.listenPort },
+    linkCommandsInUnit: true,
+  });
+  saveInstallState(state);
+
+  writeFileSync(`/etc/systemd/system/${SYSTEMD_UNIT}`, buildSystemdUnit(binaryPath, unitLink));
 
   run('systemctl daemon-reload');
   run(`systemctl enable ${SYSTEMD_UNIT}`);
-  run(`systemctl start ${SYSTEMD_UNIT}`);
-
-  const iface = getDefaultInterface();
-  if (iface) {
-    runSilent(`resolvectl dns ${iface} ${cfg.listenAddr}`);
-    // Per-TLD routing domains, not `~.` — see the drop-in above.
-    runSilent(`resolvectl domain ${iface} ${NATIVE_TLDS.map((t) => `'~${t}'`).join(' ')}`);
-  } else {
-    console.warn('[tnp] could not detect default network interface; resolvectl DNS not configured');
-  }
+  run(`systemctl restart ${SYSTEMD_UNIT}`);
 }
 
 function uninstallLinux(): void {
+  // Stopping runs ExecStopPost, which removes the tnp0 link if there is one.
   runSilent(`systemctl stop ${SYSTEMD_UNIT}`);
   runSilent(`systemctl disable ${SYSTEMD_UNIT}`);
   safeUnlink(`/etc/systemd/system/${SYSTEMD_UNIT}`);
-  safeUnlink('/etc/systemd/resolved.conf.d/tnp.conf');
   runSilent('systemctl daemon-reload');
-  runSilent('systemctl restart systemd-resolved');
-
-  const iface = getDefaultInterface();
-  if (iface) {
-    runSilent(`resolvectl revert ${iface}`);
-  } else {
-    console.warn('[tnp] could not detect default network interface; resolvectl DNS not reverted');
-  }
+  removeInstalledRouting();
 }
 
 function statusLinux(): boolean {
@@ -224,9 +207,23 @@ function statusLinux(): boolean {
 
 // ── Windows (Scheduled Task + DNS config) ──
 
-// Windows adapter DNS has no port setting, so the resolver address is fixed at
-// 127.0.0.1:53 and the listen settings in the config do not apply here.
-function installWindows(binaryPath: string, _cfg: TnpConfig): void {
+function installWindows(binaryPath: string, cfg: TnpConfig): void {
+  // NRPT rules carry no port, so the resolver must answer on 53. `tnp install`
+  // already forces this; the interactive menu's install passes the config as
+  // loaded, so enforce it here for every entry point.
+  if (cfg.listenPort !== 53 || cfg.listenAddr !== '127.0.0.1') {
+    cfg.listenPort = 53;
+    cfg.listenAddr = '127.0.0.1';
+    saveConfig(cfg);
+    console.log(
+      '[tnp] Windows: resolver set to listen on 127.0.0.1:53 (NRPT cannot use another port)',
+    );
+  }
+
+  // An install from before this version prepended 127.0.0.1 to every adapter
+  // and recorded nothing. Its task exists and our state file does not.
+  const legacyInstall = !existsSync(installStatePath()) && windowsTaskExists();
+
   // Create a scheduled task that runs at startup (as SYSTEM)
   const taskXml = `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -278,24 +275,38 @@ function installWindows(binaryPath: string, _cfg: TnpConfig): void {
   // Start it now
   runSilent(`schtasks /Run /TN "${WIN_TASK_NAME}"`);
 
-  // Configure Windows DNS: add 127.0.0.1 as DNS for the primary adapter.
-  // We use PowerShell to find the active adapter and prepend our resolver.
-  runSilent(
-    `powershell -Command "Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses ('127.0.0.1',(Get-DnsClientServerAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4).ServerAddresses) }"`,
-  );
+  // Route .ox (only) to the local resolver with an NRPT rule. Adapter DNS
+  // servers are left exactly as the user set them. NRPT has no port, which is
+  // why `tnp install` makes the resolver listen on 53.
+  removeInstalledRouting();
+  const { state } = applyNativeRouting({
+    owner: 'install',
+    target: { address: cfg.listenAddr, port: cfg.listenPort },
+  });
+  if (legacyInstall) state.adapterSnapshot = repairLegacyWindowsAdapters();
+  saveInstallState(state);
+}
 
-  console.log('[tnp] note: on Windows the resolver listens on port 53 if possible,');
-  console.log('[tnp] otherwise configure your DNS to 127.0.0.1 manually in network settings.');
+function windowsTaskExists(): boolean {
+  try {
+    run(`schtasks /Query /TN "${WIN_TASK_NAME}"`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function uninstallWindows(): void {
+  const legacyInstall = !existsSync(installStatePath()) && windowsTaskExists();
   runSilent(`schtasks /End /TN "${WIN_TASK_NAME}"`);
   runSilent(`schtasks /Delete /TN "${WIN_TASK_NAME}" /F`);
 
-  // Restore DNS -- remove 127.0.0.1 from adapter DNS
-  runSilent(
-    `powershell -Command "Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ResetServerAddresses }"`,
-  );
+  // Remove TNP's NRPT rules (and only those). Adapter DNS is never reset: the
+  // old -ResetServerAddresses threw away a user's own static resolver and
+  // reverted them to the ISP's. An install from before this version is undone
+  // gently: only the 127.0.0.1 it prepended is taken out.
+  removeInstalledRouting();
+  if (legacyInstall) repairLegacyWindowsAdapters();
 }
 
 function statusWindows(): boolean {

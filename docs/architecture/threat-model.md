@@ -32,12 +32,15 @@ Per mode. "Content" means the payload; "destination" means the name or address.
 | Party | Sees |
 |---|---|
 | TNP API | Every **TNP-native** name the user resolves, and their IP. |
-| Configured public upstream | Every **public** name the user resolves, and their IP. |
-| Local network observer | That DNS is happening; the names, if classic DNS is used upstream. |
+| The user's own resolver | Every **public** name, exactly as without TNP: the OS routes only native TLDs to TNP (resolution.md §10). |
+| Configured public upstream (DoH by default) | Public names the TNP resolver itself forwards — the public resolver's users, or apps pointed straight at the local resolver — and the forwarding resolver's IP. |
+| Local network observer | That DNS is happening; a TLS connection to the API for native names. Public names only as visible as the user's own resolver makes them. |
 
-Today's client sends public queries to a hardcoded Google DoH endpoint regardless
-of configuration (audit B4), and asks the TNP API about names under non-native
-TLDs (audit S4/N4). Both leak more than this table says. Phase 2 fixes both.
+The client no longer asks the TNP API about names under non-native TLDs
+(audit S4/N4), no longer forwards native names upstream when the registry is
+unreachable, and its default upstream is encrypted (audit B4). A user of the
+**public resolver** without the client sends all lookups to Oxy in plaintext:
+for them the local observer sees, and can forge, every name.
 
 ### Access / proxy mode (single hop, today)
 
@@ -90,17 +93,19 @@ in the exit picker and in the operator consent flow.
 | 12 | Replay | Re-inject recorded frames | Counter inside the AEAD envelope | **None today** (S5) |
 | 13 | Downgrade | Force a weaker version or capability set | Transcript signature; security capabilities non-negotiable downward | **None today** (S5) |
 | 14 | Key substitution | Swap a key mid-flight | Grant chains; no unchained key is usable | **None today** (S3) |
-| 15 | DNS poisoning / impersonation | Answer with attacker records | DNSSEC for public; signed record sets for native | **None today** (S8) |
-| 16 | Malformed input | Crash or corrupt a parser | Bounds, fuzzing, structured errors | Partial — frame decode has a minimum, no maximum (S6) |
-| 17 | Memory exhaustion | Unbounded frames, queues, caches | Hard limits everywhere | **None today** (S6, S9) |
-| 18 | Connection exhaustion | Open connections until the relay dies | Per-IP and per-identity limits | **None today** |
+| 15 | DNS poisoning / impersonation | Answer with attacker records | DNSSEC for public; signed record sets for native | Partial — DoH upstream by default; classic answers must match a random ID, the question and the connected source. No DNSSEC validation (S8), no signed native records |
+| 16 | Malformed input | Crash or corrupt a parser | Bounds, fuzzing, structured errors | Partial — the resolver vets raw DNS packets before decoding; frame decode has a minimum, no maximum (S6) |
+| 17 | Memory exhaustion | Unbounded frames, queues, caches | Hard limits everywhere | Partial — resolver cache, rate-limit table, TCP buffers and in-flight work are bounded; relay frames are not (S6) |
+| 18 | Connection exhaustion | Open connections until the relay dies | Per-IP and per-identity limits | Partial — resolver caps TCP connections with an absolute deadline; the relay has none |
 | 19 | Exit abuse | Use TNP to attack third parties; expose the operator legally | Port policy, rate limits, private-range blocking, abuse handling | Not implemented |
 | 20 | Update compromise | Ship malicious code to every device | Signed artefacts, channel separation, downgrade protection | **Partial** — releases are Ed25519-signed; `tnp update` verifies and refuses downgrades; installers verify (the signature only where OpenSSL 3 exists); the key is an online CI secret; no channels or signed metadata ([security.md §7](./security.md#7-update-security)) |
 | 21 | Local privilege attack | Unprivileged local process reconfigures the daemon | Authenticated owner-only IPC; `0600` config | Partial |
-| 22 | DNS leak | Names resolved outside the tunnel | Remote resolution, port-53 capture, encrypted-DNS capture | Not implemented |
+| 22 | DNS leak | Names resolved outside the tunnel | Remote resolution, port-53 capture, encrypted-DNS capture | Partial — native names are never forwarded upstream and the OS routes only native TLDs to TNP; tunnel-mode capture not implemented |
 | 23 | IPv6 leak | v6 escapes a v4-only tunnel | Full dual-stack capture or explicit v6 block | Not implemented |
 | 24 | WebRTC leak | Browser reveals the local IP | Documented; browser-side guidance; cannot be fixed by the tunnel alone | Documented only |
-| 25 | Accidental logging | Domains, IPs, tokens in logs | Redaction at generation; explicit logging policy | Partial |
+| 25 | Accidental logging | Domains, IPs, tokens in logs | Redaction at generation; explicit logging policy | Partial — the resolver and SOCKS proxy do not log queried names |
+| 26 | Reflection / amplification | Spoof a victim's address at the public resolver | Per-source response rate limiting with slip, 1232-byte UDP cap, DO never forwarded, QR=1 never answered | Implemented in the resolver; not yet load-tested |
+| 27 | Browsing disclosure to the registry | Learn public browsing from client lookups | Classify locally; never query the API for a non-native name (DNS and SOCKS) | Implemented |
 
 ## 4. Trust boundaries
 

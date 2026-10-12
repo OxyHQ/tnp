@@ -20,8 +20,11 @@ const proxy = new DnsProxy({
   listenAddr: "0.0.0.0",
   listenPort: 5353,
   apiBaseUrl: "https://api.tnp.network",
-  upstreamDns: "1.1.1.1,8.8.8.8",
+  upstreamDns: "https://1.1.1.1/dns-query,https://8.8.8.8/dns-query",
   cacheMaxEntries: 10_000,
+  rateLimit: { perSecond: 20, burst: 100 },
+  maxTcpConnections: 256,
+  maxInflight: 512,
 });
 
 proxy.startTldSync(5 * 60_000);
@@ -29,7 +32,21 @@ await proxy.syncTlds();
 await proxy.start();
 ```
 
-UDP handles DNS-over-UDP. TCP uses the two-byte message-length prefix from RFC 1035. A TCP client has a 10-second idle timeout, and the server refuses a buffer larger than the DNS message maximum plus that prefix. DNS-over-TLS is not implemented or advertised by this runtime.
+UDP handles DNS-over-UDP. TCP uses the two-byte message-length prefix from RFC 1035, answers one query at a time per connection and in order, and closes a connection after 10 seconds idle, 30 seconds after it was accepted however busy it is, or when a client buffers more than 4 KB without completing a message. Connections beyond `maxTcpConnections` are closed on accept. DNS-over-TLS is not implemented or advertised by this runtime.
+
+## Query validation and abuse limits
+
+The resolver answers anyone who can reach it, so a packet is vetted from its raw bytes before it is decoded (`packages/client/src/dns/guard.ts`). Decoding first would let a 64 KB packet of chained compression pointers cost hundreds of milliseconds each.
+
+| Packet | Answer |
+|---|---|
+| Shorter than a header, larger than 1232 bytes, or a response (QR=1) | none — dropped |
+| UDP query over 512 bytes, unless its OPT record advertises at least that size | none — dropped |
+| Opcode other than QUERY | `NOTIMP` |
+| Not exactly one question, any answer or authority record, an additional record that is not OPT, a compression pointer in the question, trailing bytes | `FORMERR` |
+| AXFR/IXFR, or a class other than IN | `REFUSED` |
+
+UDP responses are capped at **1232 bytes** whatever the client advertises; a larger answer is sent as header plus question with TC set, and the client retries over TCP. Each non-loopback source (an IPv4 address, or an IPv6 /64) has a token bucket (`rateLimit`, 20 per second with a burst of 100 by default); over the limit, queries are dropped, except that every second one gets a TC reply no larger than the query, so a real client behind a busy NAT can still get through over TCP and a spoofed source gains no amplification. At most `maxInflight` queries are resolved at once; beyond that the answer is `SERVFAIL` immediately.
 
 ## Resolution decision tree
 
@@ -51,17 +68,19 @@ Public and special-use TLDs always use public DNS, even if a stale or compromise
 
 ## Upstream forwarding
 
-The proxy forwards the original DNS wire message to the configured upstreams in failover order. A classic address uses UDP first and retries over TCP when the response is truncated; an HTTPS URL uses RFC 8484 DNS-over-HTTPS. The wire response is preserved, including response codes and record sections. If every upstream fails, the proxy returns `SERVFAIL`.
+The default upstreams are DNS-over-HTTPS (RFC 8484, POST, wire format) to Cloudflare and Google, addressed by IP so that reaching them needs no plaintext bootstrap lookup: `https://1.1.1.1/dns-query,https://8.8.8.8/dns-query`. A classic (plaintext UDP/TCP) upstream must be configured explicitly and is warned about at startup, because everyone on the path can read and forge every public name it carries. Quad9 is not a default: its DoH endpoint requires HTTP/2, which Bun's `fetch` does not speak (it answers HTTP 505).
+
+What goes upstream is rebuilt from the client's question rather than forwarded byte for byte: DO and CD are cleared (this resolver does not validate DNSSEC), every client EDNS option — Client Subnet, cookies, device IDs — is dropped, the advertised buffer is 1232 bytes, and DoH queries are padded to a 128-byte block (RFC 8467) so the encrypted size does not reveal the name's length. Each attempt uses a fresh random transaction ID and a connected UDP socket, and an answer is accepted only if its ID and question match the query; anything else is ignored until the attempt times out. A truncated classic answer is retried over TCP. The AD bit is cleared on relayed answers. Response codes and record sections are otherwise preserved. If every upstream fails, the proxy returns `SERVFAIL`.
 
 ## Caching
 
-A bounded in-memory LRU cache is keyed by normalized `name:type`. Positive answers expire at the shortest record TTL, within safe floors and ceilings; NXDOMAIN answers use bounded negative caching. Restarts begin with an empty cache.
+A bounded in-memory LRU cache is keyed by normalized `name:type`. Positive answers expire at the shortest record TTL, within safe floors and ceilings; NXDOMAIN and NODATA (the registry's `NOERROR` with no answers) are cached separately for a bounded negative lifetime, so "exists, no AAAA" is never turned into "does not exist". Restarts begin with an empty cache.
 
 Overlay metadata (`{ serviceNodePubKey, relay }`) is kept separately in `overlayCache` and read synchronously by the local SOCKS5 proxy.
 
 ## TLD sync
 
-Every five minutes the proxy calls `GET /dns/tlds` and replaces its internal policy table. The current seed contains only the native `.ox` TLD:
+The policy table starts with the built-in native TLDs (`BUILTIN_NATIVE_TLDS` in `@tnp/namespace`, currently `.ox`) before any network call. Every five minutes the proxy calls `GET /dns/tlds` and adds the registry-approved TLDs to it. The current seed contains only the native `.ox` TLD:
 
 ```ts
 {
@@ -69,7 +88,7 @@ Every five minutes the proxy calls `GET /dns/tlds` and replaces its internal pol
 }
 ```
 
-The proxy independently drops every public-root or special-use TLD from this response, so stale rows such as `.com` or `.app` cannot shadow public DNS. Callers perform an initial sync before accepting queries. If the API is unavailable, the empty table fails closed: names use public DNS until a later sync succeeds.
+The proxy independently drops every public-root, special-use or private-use TLD (`.lan`, `.home`, `.corp`, …) from this response, so stale rows such as `.com` or `.app` cannot shadow public DNS. No response — empty, malformed or failed — can remove a built-in TLD, and the last good list is saved (`tldCachePath`) so a restart without network still knows it. A native name is therefore never forwarded upstream: when the registry cannot answer it, the answer is `SERVFAIL`.
 
 ## Public resolver image
 
@@ -84,8 +103,14 @@ The publisher does not move `latest`, register a task definition, scale a servic
 | `TNP_LISTEN_ADDR` | `0.0.0.0` | Bind address for UDP and TCP listeners. |
 | `TNP_LISTEN_PORT` | `5353` | Bind port. The ECS task definition supplies the production container port; no host NAT is assumed here. |
 | `TNP_API_URL` | `https://api.tnp.network` | Registry used for the TLD policy and native-name answers. |
-| `TNP_UPSTREAM_DNS` | `1.1.1.1,8.8.8.8` | Comma-separated classic DNS addresses or RFC 8484 HTTPS URLs, in failover order. |
+| `TNP_UPSTREAM_DNS` | `https://1.1.1.1/dns-query,https://8.8.8.8/dns-query` | Comma-separated RFC 8484 HTTPS URLs or plaintext DNS addresses, in failover order. A plaintext entry is logged as a warning. |
 | `TNP_CACHE_MAX_ENTRIES` | `10000` | Maximum DNS answers retained in the in-memory LRU cache. |
+| `TNP_TLD_CACHE_PATH` | unset | File for the last good TLD list. Unset: built-ins plus whatever the current process synced. |
+| `TNP_RATE_LIMIT_QPS` / `TNP_RATE_LIMIT_BURST` | `20` / `100` | Per-source UDP token bucket. |
+| `TNP_MAX_TCP_CONNECTIONS` | `256` | Concurrent TCP clients. |
+| `TNP_MAX_INFLIGHT` | `512` | Queries resolved at once before answering `SERVFAIL`. |
+
+`TNP_CACHE_TTL` is read by nothing: answers expire on their own record TTLs. If an infrastructure definition still sets it, it can be removed.
 
 ## Parking page hand-off
 

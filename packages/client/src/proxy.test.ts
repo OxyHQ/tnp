@@ -59,12 +59,28 @@ describe('DnsProxy.classify', () => {
     expect(proxy.classify('never-registered-anywhere.ox')).toBe('tnp-native');
   });
 
-  test('setTlds replaces the previous table rather than merging', () => {
-    proxy.setTlds(['ox']);
+  test('setTlds replaces registry-approved TLDs rather than merging', () => {
+    proxy.setTlds(['zzt']);
+    expect(proxy.classify('hello.zzt')).toBe('tnp-native');
+    proxy.setTlds(['qqv']);
+    expect(proxy.classify('hello.zzt')).toBe('public-dns');
+    expect(proxy.classify('hello.qqv')).toBe('tnp-native');
+  });
+
+  test('a built-in native TLD is native before any sync', () => {
+    // The table used to start empty and be filled only by a TLD sync the
+    // startup path did not wait for, so `.ox` went to the public upstream
+    // until (and unless) the API answered.
+    expect(proxy.classify('hello.ox')).toBe('tnp-native');
+  });
+
+  test('no API response can remove a built-in native TLD', () => {
+    proxy.setTlds([]);
     expect(proxy.classify('hello.ox')).toBe('tnp-native');
     proxy.setTlds(['zzt']);
-    expect(proxy.classify('hello.ox')).toBe('public-dns');
-    expect(proxy.classify('hello.zzt')).toBe('tnp-native');
+    expect(proxy.classify('hello.ox')).toBe('tnp-native');
+    proxy.setTlds([{ name: 'ox', custom: false }]);
+    expect(proxy.classify('hello.ox')).toBe('tnp-native');
   });
 });
 
@@ -103,11 +119,12 @@ describe('DnsProxy namespace policy', () => {
     expect(proxy.classify('foo.ox')).toBe('tnp-native');
   });
 
-  test('an all-reserved table leaves the client resolving nothing as TNP', () => {
-    proxy.setTlds(['com', 'app', 'net', 'org', 'dev']);
-    for (const name of ['a.com', 'a.app', 'a.net', 'a.org', 'a.dev']) {
+  test('an all-reserved table leaves only the built-ins as TNP', () => {
+    proxy.setTlds(['com', 'app', 'net', 'org', 'dev', 'lan', 'home', 'corp']);
+    for (const name of ['a.com', 'a.app', 'a.net', 'a.org', 'a.dev', 'a.lan', 'a.home', 'a.corp']) {
       expect(proxy.classify(name)).toBe('public-dns');
     }
+    expect(proxy.getNativeTlds()).toEqual(['ox']);
   });
 });
 

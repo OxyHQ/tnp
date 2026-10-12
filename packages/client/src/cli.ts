@@ -1,13 +1,29 @@
 #!/usr/bin/env bun
-import { existsSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
 import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname } from 'node:path';
+import {
+  dataDir,
   loadConfig,
   saveConfig,
   parsePrivacyLevel,
   KILLSWITCH_MARKER_PATH,
-  getDefaultInterface,
   type TnpConfig,
 } from './config';
+import {
+  applyNativeRouting,
+  readRoutingState,
+  removeNativeRouting,
+  routingStatePath,
+  type RoutingState,
+  type RoutingTarget,
+} from './dns-routing';
 import { parseLocalTarget } from './parse-input';
 import { DnsProxy } from './proxy';
 import {
@@ -16,7 +32,6 @@ import {
   serviceStatus,
   stopService,
   startService,
-  removeReservedResolverFiles,
   NATIVE_TLDS,
 } from './service';
 import {
@@ -104,8 +119,8 @@ async function cmdRun() {
   // to be able to forward non-TNP queries before syncing TLDs from the API.
   await proxy.start();
 
-  // Now sync TLDs from API (this uses fetch which goes through system DNS,
-  // which now routes through us and we forward to upstream 1.1.1.1)
+  // Now sync TLDs from the API. Native TLDs are already classified from the
+  // built-in list, so a slow or failed sync never sends a native name upstream.
   await proxy.syncTlds().catch((err: unknown) => {
     console.warn(`[tnp] initial TLD sync failed, will retry: ${err}`);
   });
@@ -200,6 +215,7 @@ async function cmdConnect() {
     tunnelManager,
     apiClient: proxy.getApiClient(),
     getOverlayInfo: (domain: string) => proxy.getOverlayInfo(domain),
+    classify: (domain: string) => proxy.classify(domain),
   });
 
   console.log(`[tnp] overlay client ready — TNP domains now resolve on this device`);
@@ -223,155 +239,107 @@ async function cmdConnect() {
   process.on('SIGTERM', shutdown);
 }
 
-/** Configure system DNS to use the local TNP proxy. Returns true if configured. */
+const connectStatePath = () => routingStatePath(dataDir(), 'connect');
+
+/** What this session added to the OS DNS configuration, for teardown. */
+let connectRouting: RoutingState | null = null;
+
+/**
+ * Where `tnp connect` sends native-name queries: the local proxy. Windows NRPT
+ * rules carry no port, so there the proxy must listen on 53.
+ *
+ * Earlier releases pointed Windows at the TNP public resolver instead. That
+ * is plaintext DNS across the user's network — the ISP reads (and can forge)
+ * every TNP name looked up — so it is not done; the user is told how to keep
+ * resolution local instead.
+ */
+function connectRoutingTarget(config: TnpConfig): RoutingTarget | null {
+  if (process.platform !== 'win32' || config.listenPort === 53) {
+    return { address: config.listenAddr, port: config.listenPort };
+  }
+  console.warn(
+    `[tnp] Windows cannot route DNS to port ${config.listenPort}. DNS left unchanged: ` +
+      `${NATIVE_TLDS.map((t) => `.${t}`).join(' ')} will not resolve system-wide in this session. ` +
+      `Set "listenPort": 53 in the config and run tnp connect as Administrator to route it to this device.`,
+  );
+  return null;
+}
+
+/**
+ * Route TNP-native names — and only those — to the local proxy. Returns true
+ * if routing was set up.
+ *
+ * Public names keep going to whatever resolver the user already has. This
+ * used to replace every Windows adapter's servers with the TNP resolver plus
+ * 1.1.1.1, and on Linux to prepend the TNP resolver to /etc/resolv.conf:
+ * both sent every lookup on the machine to TNP. See dns-routing.ts.
+ */
 function configureDns(config: TnpConfig): boolean {
-  const addr = `${config.listenAddr}:${config.listenPort}`;
-  const dnsIp = config.publicDnsIp;
+  // A previous session that died without restoring left its routing behind.
+  restoreDns();
+
+  const target = connectRoutingTarget(config);
+  if (!target) return false;
 
   try {
-    if (process.platform === 'win32') {
-      // Windows: set DNS on all active adapters to TNP public resolver.
-      // The proxy listens on port 5354, but Windows only supports port 53 for DNS.
-      if (!dnsIp) {
-        console.warn(
-          '[tnp] no public DNS resolver configured (TNP_PUBLIC_DNS); skipping system DNS setup on Windows',
-        );
-        return false;
-      }
-      const { execSync } = require('node:child_process');
-      execSync(
-        `powershell -Command "Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses ('${dnsIp}','1.1.1.1') }"`,
-        { stdio: 'pipe' },
+    const { state } = applyNativeRouting({ owner: 'connect', target });
+    if (state.mechanism === 'none') return false;
+    connectRouting = state;
+    // Also on disk, so the next session can clean up after a crash.
+    try {
+      const path = connectStatePath();
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+    } catch (err) {
+      console.warn(
+        `[tnp] could not record DNS routing state: ${err instanceof Error ? err.message : String(err)}`,
       );
-      console.log(`[tnp] DNS configured: using TNP resolver (${dnsIp}) + Cloudflare fallback`);
-      return true;
-    } else if (process.platform === 'darwin') {
-      // macOS: create resolver files for TNP TLDs
-      const { mkdirSync: mkdirSyncFs, writeFileSync: writeFileSyncFs } = require('node:fs');
-      removeReservedResolverFiles();
-      mkdirSyncFs('/etc/resolver', { recursive: true });
-      for (const tld of NATIVE_TLDS) {
-        writeFileSyncFs(
-          `/etc/resolver/${tld}`,
-          `nameserver ${config.listenAddr}\nport ${config.listenPort}\n`,
-        );
-      }
-      console.log(
-        `[tnp] DNS configured: ${NATIVE_TLDS.map((t) => `/etc/resolver/${t}`).join(', ')} -> ${addr}`,
-      );
-      return true;
-    } else {
-      // Linux: try systemd-resolved split DNS, then resolv.conf
-      return configureLinuxDns(config, addr, dnsIp);
     }
-  } catch (err) {
-    console.log(`[tnp] could not auto-configure DNS: ${err instanceof Error ? err.message : err}`);
-    console.log(`[tnp] set your DNS to ${dnsIp} manually to resolve TNP domains`);
-    return false;
-  }
-}
-
-/** Linux-specific DNS configuration with systemd-resolved or resolv.conf fallback. */
-function configureLinuxDns(config: TnpConfig, addr: string, dnsIp: string): boolean {
-  const { execSync } = require('node:child_process');
-
-  const iface = getDefaultInterface();
-  if (!iface) {
-    console.warn('[tnp] could not detect network interface, falling back to resolv.conf');
-    return configureLinuxResolvConf(dnsIp);
-  }
-
-  try {
-    execSync(`resolvectl dns ${iface} ${config.listenAddr}`, { stdio: 'pipe' });
-    execSync(`resolvectl domain ${iface} ${NATIVE_TLDS.map((t) => `~${t}`).join(' ')}`, {
-      stdio: 'pipe',
-    });
-    console.log(
-      `[tnp] DNS configured: systemd-resolved split DNS on ${iface} for ${NATIVE_TLDS.map((t) => `.${t}`).join(' ')} -> ${addr}`,
-    );
-    return true;
-  } catch (err) {
-    console.warn(
-      `[tnp] systemd-resolved not available, trying resolv.conf: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return configureLinuxResolvConf(dnsIp);
-  }
-}
-
-/** Fallback Linux DNS configuration via /etc/resolv.conf. */
-function configureLinuxResolvConf(dnsIp: string): boolean {
-  if (!dnsIp) {
-    console.warn(
-      '[tnp] no public DNS resolver configured (TNP_PUBLIC_DNS); skipping /etc/resolv.conf setup',
-    );
-    return false;
-  }
-  try {
-    const { readFileSync: readFileSyncFs, writeFileSync: writeFileSyncFs } = require('node:fs');
-    const current = readFileSyncFs('/etc/resolv.conf', 'utf-8') as string;
-    if (!current.includes(dnsIp)) {
-      writeFileSyncFs('/etc/resolv.conf', `nameserver ${dnsIp}\n${current}`);
-      console.log(`[tnp] DNS configured: added TNP resolver to /etc/resolv.conf`);
-      return true;
-    }
-    console.log(`[tnp] DNS already configured`);
     return true;
   } catch (err) {
     console.log(
-      `[tnp] could not auto-configure DNS (need sudo): ${err instanceof Error ? err.message : String(err)}`,
+      `[tnp] could not configure DNS routing: ${err instanceof Error ? err.message : err}`,
     );
-    console.log(`[tnp] fix: sudo resolvectl dns <iface> 127.0.0.1  OR  set DNS to ${dnsIp}`);
+    console.log(
+      `[tnp] TNP-native names will not resolve until ${NATIVE_TLDS.map((t) => `.${t}`).join(' ')} is routed to ${target.address}:${target.port}`,
+    );
     return false;
   }
 }
 
-/** Restore DNS settings when disconnecting. */
+/** Undo exactly the routing `configureDns` recorded, plus legacy leftovers. */
 function restoreDns(): void {
-  const dnsIp = loadConfig().publicDnsIp;
-  const escapedIp = dnsIp.replace(/\./g, '\\.');
-
+  const path = connectStatePath();
   try {
-    if (process.platform === 'win32') {
-      const { execSync } = require('node:child_process');
-      execSync(
-        `powershell -Command "Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ResetServerAddresses }"`,
-        { stdio: 'pipe' },
-      );
-      console.log('[tnp] DNS restored to default');
-    } else if (process.platform === 'darwin') {
-      for (const tld of NATIVE_TLDS) {
-        try {
-          unlinkSync(`/etc/resolver/${tld}`);
-        } catch (err) {
-          console.warn(
-            `[tnp] could not remove /etc/resolver/${tld}: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
-      removeReservedResolverFiles();
-      console.log(
-        `[tnp] DNS restored: removed ${NATIVE_TLDS.map((t) => `/etc/resolver/${t}`).join(', ')}`,
-      );
-    } else {
-      // Linux: remove our entry from resolv.conf if we added it
-      try {
-        const { readFileSync: readFileSyncFs, writeFileSync: writeFileSyncFs } = require('node:fs');
-        const current = readFileSyncFs('/etc/resolv.conf', 'utf-8') as string;
-        const restored = current.replace(new RegExp(`nameserver ${escapedIp}\\n?`), '');
-        if (restored !== current) {
-          writeFileSyncFs('/etc/resolv.conf', restored);
-          console.log('[tnp] DNS restored: removed TNP resolver from /etc/resolv.conf');
-        }
-      } catch (err) {
-        console.warn(
-          `[tnp] could not restore Linux DNS: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
+    removeNativeRouting(connectRouting ?? readRoutingState(path));
+    connectRouting = null;
   } catch (err) {
     console.warn(
-      `[tnp] could not restore DNS automatically: ${err instanceof Error ? err.message : String(err)}`,
+      `[tnp] could not remove DNS routing automatically: ${err instanceof Error ? err.message : String(err)}`,
     );
+  }
+  try {
+    unlinkSync(path);
+  } catch {
+    // No recorded session -- nothing to remove.
+  }
+
+  // Earlier releases prepended the TNP public resolver to /etc/resolv.conf.
+  // Remove that exact line if it is still there; nothing else in the file is
+  // touched.
+  if (process.platform === 'linux') {
+    const dnsIp = loadConfig().publicDnsIp;
+    if (!dnsIp) return;
+    try {
+      const current = readFileSync('/etc/resolv.conf', 'utf-8');
+      const line = `nameserver ${dnsIp}\n`;
+      if (current.startsWith(line)) {
+        writeFileSync('/etc/resolv.conf', current.slice(line.length));
+        console.log('[tnp] removed the TNP resolver an older release added to /etc/resolv.conf');
+      }
+    } catch {
+      // Unreadable or not writable without sudo: nothing we can repair here.
+    }
   }
 }
 

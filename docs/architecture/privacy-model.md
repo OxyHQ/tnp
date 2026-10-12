@@ -18,8 +18,21 @@ Concretely, right now:
 - The TNP API **can** transparently decrypt your traffic by substituting the
   service node's public key, because nothing signs it and the client verifies
   nothing (audit S3).
-- Your public DNS queries currently go to a hardcoded third-party DoH endpoint
-  regardless of your configured upstream (audit B4).
+- With `tnp install` or `tnp connect`, the operating system sends TNP only
+  TNP-native names (`.ox`). Public names keep going to whatever resolver you
+  already use; TNP does not see them and does not change how private they are.
+- TNP-native names travel from the local resolver to the TNP API over HTTPS:
+  your network sees a connection to the API, not the names. Oxy sees every
+  native name you resolve, and your IP.
+- When the TNP resolver forwards a public name (the public resolver, or an
+  application pointed straight at the local one), it uses DNS-over-HTTPS by
+  default — Cloudflare, then Google — so the network path does not see the
+  name; the upstream operator does. A plaintext upstream is a stated, warned
+  choice.
+- Using TNP's **public resolver** directly sends every lookup to Oxy in
+  plaintext DNS: your network and ISP can read and forge all of it.
+- Neither the resolver nor the SOCKS proxy logs the names you look up, and
+  the SOCKS proxy never asks the API about non-TNP destinations.
 - Multi-hop routing does not exist. `--privacy private` is rejected rather than
   silently downgraded to single-hop, which is what it used to do (audit B5).
 
@@ -122,7 +135,8 @@ what it does and does not do at the point of selection.
 
 | Mode | Hides from your ISP | Hides from the relay | Hides from the destination | Hides from Oxy |
 |---|---|---|---|---|
-| Resolver | Nothing | n/a | Nothing | Nothing — Oxy sees native lookups |
+| Resolver | Native names (sent to the API over HTTPS). Public names: unchanged — as private as your own resolver | n/a | Nothing | Nothing — Oxy sees native lookups |
+| Public resolver (no client) | Nothing — plaintext DNS | n/a | Nothing | Nothing — Oxy sees every lookup |
 | Access | The destination | Content only | Nothing | Which domain you resolved |
 | Proxy | The destination, for proxied apps | Content only | Nothing | As above |
 | Private (Phase 6) | The destination | Client↔destination linkage | Nothing | Should be nothing — pending §7 of the threat model |

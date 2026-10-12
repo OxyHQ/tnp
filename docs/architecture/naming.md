@@ -59,8 +59,14 @@ The reserved set is, at minimum:
 - Every TLD in the current IANA root zone (`.com`, `.app`, `.net`, `.org`,
   `.dev`, `.io`, …).
 - Every special-use name from RFC 6761 and RFC 8375: `.local`, `.localhost`,
-  `.invalid`, `.test`, `.example`, `.onion`, `.home.arpa`, `.arpa`.
+  `.invalid`, `.test`, `.example`, `.onion`, `.home.arpa`, `.arpa`, and `.alt`
+  (RFC 9476).
 - The IANA private-use TLD `.internal`.
+- Names in widespread private use on home and corporate networks, which some
+  router, Active Directory domain or mDNS stack already answers: `.lan`,
+  `.home`, `.corp`, `.mail` (the three ICANN deferred indefinitely over
+  collision risk), `.localdomain`, `.intranet`, `.private`, `.workgroup`
+  (`PRIVATE_USE_TLDS` in `@tnp/namespace`).
 
 A registration request for a reserved TLD is rejected at the registry with a
 `TLD_RESERVED` error. This is enforced server-side in the API, not only in the
@@ -225,7 +231,13 @@ writes `/etc/resolver/<native-tld>` and nothing else, and removes any
 points at TNP's own loopback resolver, since an entry pointing elsewhere belongs
 to another tool. Linux writes per-TLD routing domains instead of `Domains=~.`,
 and the drop-in is overwritten on upgrade. *(Public names stop being routed
-through TNP. This is the fix.)*
+through TNP. This is the fix.)* That drop-in still put `DNS=127.0.0.1` in
+resolved's global section, which receives every lookup that matches no
+routing domain, and the installers still replaced the default interface's
+servers (Linux) or prepended 127.0.0.1 to every adapter (Windows). Since
+then, routing is a resolved DNS delegate or a dedicated link on Linux and an
+NRPT rule on Windows, scoped to the native TLDs, and the user's own DNS
+settings are never written (resolution.md §10).
 
 **M3 — Enforce classification. ✅ Done.** `classifyName` is pure and offline.
 Reserved-TLD names never reach the registry — which is both the namespace

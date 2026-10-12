@@ -5,6 +5,8 @@ import {
   normalizeName,
   tldOf,
   validateNativeTld,
+  BUILTIN_NATIVE_TLDS,
+  PRIVATE_USE_TLDS,
   RESERVED_TLD_COUNT,
   SPECIAL_USE_TLDS,
 } from './policy.js';
@@ -39,6 +41,39 @@ describe('reserved TLD set', () => {
     expect(isReservedTld('localhost')).toBe(true);
     expect(isReservedTld('onion')).toBe(true);
     expect(isReservedTld('internal')).toBe(true);
+  });
+
+  test('covers private-use names already answered by routers, AD and mDNS', () => {
+    // A TNP TLD called `.lan` or `.home` would re-point printers, NAS boxes
+    // and domain controllers on every network that already uses the name.
+    for (const tld of [
+      'lan',
+      'home',
+      'corp',
+      'mail',
+      'internal',
+      'local',
+      'localhost',
+      'localdomain',
+      'intranet',
+      'private',
+      'alt',
+    ]) {
+      expect(isReservedTld(tld)).toBe(true);
+      expect(validateNativeTld(tld).ok).toBe(false);
+      expect(classifyName(`printer.${tld}`, [tld])).toBe('public-dns');
+    }
+    for (const tld of PRIVATE_USE_TLDS) expect(isReservedTld(tld)).toBe(true);
+    // home.arpa (RFC 8375) is covered through the root-zone `arpa`.
+    expect(classifyName('nas.home.arpa', ['arpa', 'home'])).toBe('public-dns');
+  });
+
+  test('the built-in native TLDs are servable and not reserved', () => {
+    expect(BUILTIN_NATIVE_TLDS).toContain('ox');
+    for (const tld of BUILTIN_NATIVE_TLDS) {
+      expect(isReservedTld(tld)).toBe(false);
+      expect(validateNativeTld(tld).ok).toBe(true);
+    }
   });
 
   test("does not reserve TNP's own native TLD", () => {

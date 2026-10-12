@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { applyStoredConfig, parsePrivacyLevel, type TnpConfig } from './config';
+import {
+  applyStoredConfig,
+  DEFAULT_UPSTREAM_DNS,
+  parsePrivacyLevel,
+  type TnpConfig,
+} from './config';
 
 describe('parsePrivacyLevel', () => {
   test('accepts the level the client can actually provide', () => {
@@ -79,5 +84,38 @@ describe('applyStoredConfig', () => {
 
   test('leaves a valid stored level alone', () => {
     expect(applyStoredConfig({ privacyLevel: 'access' }).privacyLevel).toBe('access');
+  });
+});
+
+describe('upstream DNS default and migration', () => {
+  test('the default upstream is DNS-over-HTTPS', () => {
+    const config = applyStoredConfig({});
+    expect(config.upstreamDns).toBe(DEFAULT_UPSTREAM_DNS);
+    for (const entry of config.upstreamDns.split(','))
+      expect(entry.startsWith('https://')).toBe(true);
+  });
+
+  test('the old implicit plaintext default migrates to the encrypted one', () => {
+    // Earlier releases wrote `"upstreamDns": "1.1.1.1"` into every saved
+    // config, so its presence says nothing about the user's choice.
+    expect(applyStoredConfig({ upstreamDns: '1.1.1.1' }).upstreamDns).toBe(DEFAULT_UPSTREAM_DNS);
+    expect(applyStoredConfig({ upstreamDns: ' 1.1.1.1 ' }).upstreamDns).toBe(DEFAULT_UPSTREAM_DNS);
+  });
+
+  test('an explicit choice is respected, including deliberate plaintext', () => {
+    for (const choice of [
+      '1.1.1.1:53',
+      '9.9.9.9',
+      'https://dns.example/dns-query',
+      '1.1.1.1,8.8.8.8',
+    ]) {
+      expect(applyStoredConfig({ upstreamDns: choice }).upstreamDns).toBe(choice);
+    }
+  });
+
+  test('an empty or non-string value falls back to the default', () => {
+    expect(applyStoredConfig({ upstreamDns: '' }).upstreamDns).toBe(DEFAULT_UPSTREAM_DNS);
+    const bogus = { upstreamDns: 42 } as unknown as Partial<TnpConfig>;
+    expect(applyStoredConfig(bogus).upstreamDns).toBe(DEFAULT_UPSTREAM_DNS);
   });
 });
