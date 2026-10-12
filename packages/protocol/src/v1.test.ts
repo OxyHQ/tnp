@@ -8,19 +8,20 @@ import {
   HEADER_SIZE,
   MAX_ERROR_DETAIL,
   MAX_FRAME_PAYLOAD,
+  MAX_FRAME_SIZE,
   PROTOCOL_VERSION,
   REQUIRED_CAPABILITIES,
 } from './constants';
 import { decodeError, decodeFrame, encodeError, encodeFrame, FrameDecodeError } from './frame';
 import { CircuitTable, generateCircuitId, generateStreamId } from './circuit-id';
-import { createCircuitWindow, FlowWindow, StreamFlow } from './flow-control';
+import { createCircuitWindow, FlowWindow, MAX_WINDOW_CREDIT, StreamFlow } from './flow-control';
 
 describe('frame codec', () => {
   test('round-trips every field', () => {
     const payload = new Uint8Array([1, 2, 3, 4, 5]);
     const frame = decodeFrame(
       encodeFrame({
-        type: FrameType.STREAM_DATA,
+        type: FrameType.STREAM_CLOSE,
         circuitId: 0x0123456789abcdefn,
         streamId: 0xdeadbeef,
         flags: Flags.CLOSE_WRITE,
@@ -29,7 +30,7 @@ describe('frame codec', () => {
     );
 
     expect(frame.version).toBe(PROTOCOL_VERSION);
-    expect(frame.type).toBe(FrameType.STREAM_DATA);
+    expect(frame.type).toBe(FrameType.STREAM_CLOSE);
     expect(frame.circuitId).toBe(0x0123456789abcdefn);
     expect(frame.streamId).toBe(0xdeadbeef);
     expect(frame.flags).toBe(Flags.CLOSE_WRITE);
@@ -51,6 +52,32 @@ describe('frame codec', () => {
 
   test('header is exactly HEADER_SIZE bytes', () => {
     expect(encodeFrame({ type: FrameType.PING }).byteLength).toBe(HEADER_SIZE);
+  });
+
+  test('HEADER_SIZE is exactly the sum of the fields: no unwritten bytes to tag frames with', () => {
+    // version(1) type(1) flags(2) circuitId(8) streamId(4) length(4). An
+    // earlier draft declared 22 and left bytes 20-21 unwritten and unchecked.
+    expect(HEADER_SIZE).toBe(1 + 1 + 2 + 8 + 4 + 4);
+    expect(MAX_FRAME_SIZE).toBe(HEADER_SIZE + MAX_FRAME_PAYLOAD);
+  });
+
+  test('every header byte is written: payload starts right after the length field', () => {
+    const frame = encodeFrame({
+      type: FrameType.STREAM_DATA,
+      circuitId: 1n,
+      streamId: 2,
+      payload: new Uint8Array([0xaa, 0xbb]),
+    });
+    expect(frame.byteLength).toBe(HEADER_SIZE + 2);
+    expect(new DataView(frame.buffer).getUint32(16, false)).toBe(2);
+    expect([...frame.subarray(20)]).toEqual([0xaa, 0xbb]);
+  });
+
+  test('a payload of exactly MAX_FRAME_PAYLOAD round-trips', () => {
+    const payload = new Uint8Array(MAX_FRAME_PAYLOAD).fill(1);
+    const frame = encodeFrame({ type: FrameType.STREAM_DATA, payload });
+    expect(frame.byteLength).toBe(MAX_FRAME_SIZE);
+    expect(decodeFrame(frame).payload.byteLength).toBe(MAX_FRAME_PAYLOAD);
   });
 });
 
@@ -123,6 +150,27 @@ describe('frame decoding rejects malformed input', () => {
 
   test('encoding refuses an unknown flag bit locally', () => {
     expect(() => encodeFrame({ type: FrameType.PING, flags: 0x8000 })).toThrow(/Unknown flag bits/);
+    expect(() => encodeFrame({ type: FrameType.PING, flags: Number.NaN })).toThrow(RangeError);
+  });
+
+  test('flags are checked per frame type, not against the union of all flags', () => {
+    // CLOSE_WRITE means something only on STREAM_CLOSE. Anywhere else it is
+    // refused on the way out and on the way in, so peers cannot disagree on it.
+    for (const type of [FrameType.PING, FrameType.STREAM_DATA, FrameType.CIRCUIT_CREATE]) {
+      expect(() => encodeFrame({ type, flags: Flags.CLOSE_WRITE })).toThrow(/flag bits/);
+      const frame = encodeFrame({ type });
+      new DataView(frame.buffer).setUint16(2, Flags.CLOSE_WRITE, false);
+      expect(() => decodeFrame(frame)).toThrow(FrameDecodeError);
+    }
+    const close = encodeFrame({
+      type: FrameType.STREAM_CLOSE,
+      flags: Flags.CLOSE_WRITE | Flags.CLOSE_READ,
+    });
+    expect(decodeFrame(close).flags).toBe(Flags.CLOSE_WRITE | Flags.CLOSE_READ);
+  });
+
+  test('encoding refuses an unknown frame type locally', () => {
+    expect(() => encodeFrame({ type: 0xff as never })).toThrow(/Unknown frame type/);
   });
 });
 
@@ -167,6 +215,11 @@ describe('structured errors', () => {
     );
     expect(decoded.detail).not.toContain('�');
     expect(decoded.detail.startsWith('é')).toBe(true);
+  });
+
+  test('an oversized ERROR detail is rejected on decode, not just capped on encode', () => {
+    expect(() => decodeError(new Uint8Array(3 + MAX_ERROR_DETAIL + 1))).toThrow(FrameDecodeError);
+    expect(decodeError(new Uint8Array(3 + MAX_ERROR_DETAIL)).detail.length).toBe(MAX_ERROR_DETAIL);
   });
 
   test('a truncated error payload is rejected', () => {
@@ -299,6 +352,45 @@ describe('flow control', () => {
     const window = new FlowWindow(100);
     expect(() => window.consume(-50)).toThrow(RangeError);
     expect(() => window.grant(-50)).toThrow(RangeError);
+  });
+
+  test('NaN, Infinity, fractions and out-of-range amounts are rejected and leave the window intact', () => {
+    // grant(NaN) used to make the window NaN, after which `bytes > NaN` was
+    // false for every bytes and the window stopped limiting anything.
+    const bad = [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      0.5,
+      MAX_WINDOW_CREDIT + 1,
+      Number.MAX_SAFE_INTEGER,
+    ];
+    for (const amount of bad) {
+      const window = new FlowWindow(100);
+      window.consume(40);
+      expect(() => window.grant(amount)).toThrow(RangeError);
+      expect(() => window.consume(amount)).toThrow(RangeError);
+      expect(window.remaining).toBe(60);
+      expect(window.consume(61)).toBe(false);
+
+      const flow = new StreamFlow(createCircuitWindow(100), 100);
+      expect(() => flow.grant(amount)).toThrow(RangeError);
+      expect(() => flow.consume(amount)).toThrow(RangeError);
+      expect(flow.sendable).toBe(100);
+    }
+  });
+
+  test('a maximal grant clamps without overflow', () => {
+    const window = new FlowWindow(MAX_WINDOW_CREDIT);
+    window.consume(MAX_WINDOW_CREDIT);
+    window.grant(MAX_WINDOW_CREDIT);
+    expect(window.remaining).toBe(MAX_WINDOW_CREDIT);
+  });
+
+  test('an invalid initial window is refused', () => {
+    for (const initial of [0, -1, Number.NaN, 1.5, MAX_WINDOW_CREDIT + 1]) {
+      expect(() => new FlowWindow(initial)).toThrow(RangeError);
+    }
   });
 });
 

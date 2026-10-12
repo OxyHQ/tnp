@@ -1,9 +1,14 @@
 # Security architecture
 
-**Status: specification. Largely not implemented.** The code uses correct
-primitives (NaCl via tweetnacl) but has no identity binding, no signatures, no
-replay defence, no rotation and no revocation. Findings S1–S3 and S5 in the
-[audit](./audit-2026-08-06.md) are the concrete gaps.
+**Status: specification. Largely not implemented in the running system.** The
+deployed code uses correct primitives (NaCl via tweetnacl) but has no identity
+binding, no signatures, no replay defence, no rotation and no revocation.
+Findings S1–S3 and S5 in the [audit](./audit-2026-08-06.md) are the concrete
+gaps. Grant chains, key-agreement certificates (`@tnp/crypto`) and the
+end-to-end session ([`transport.md`](./transport.md) §9, `@tnp/protocol/v1`)
+are implemented as libraries, exactly as specified below, but **no component
+uses them yet** — none of their protection is in effect until the Phase 3
+cutover.
 
 ---
 
@@ -45,8 +50,95 @@ purposes, until this time.* It carries the parent public key, the child public
 key, a purpose set, a validity window, a monotonic serial and a signature.
 
 A verifier walks the chain to the Oxy identity, checks every signature, every
-validity window, every purpose, and the revocation state of every link. A chain
-with one unverifiable link is rejected — never partially trusted.
+validity window, every purpose, every scope, and the revocation state of every
+link — and that **each link is no broader than the one above it**. A chain with
+one unverifiable link is rejected — never partially trusted. Implementation:
+`verifyChain` in `@tnp/crypto` (`packages/crypto/src/grants.ts`).
+
+**Purposes.** `delegate` (may sign further grants), `service-node` (terminates
+end-to-end sessions for a name; may certify key-agreement keys for it),
+`domain-records` (signs a record set), `relay` (a directory relay; may certify
+key-agreement keys for its hostname), `client`. The first three after
+`delegate` are **scoped purposes**.
+
+**Scope.** A scope is a name in canonical form — lowercase ASCII LDH labels of
+1–63 bytes joined by single dots, no leading or trailing dot, at most 253 bytes;
+uppercase is refused, not folded, because a signature covers exact bytes. One
+scope *covers* another when it is equal to it or a parent of it **at a label
+boundary** (`example.ox` covers `www.example.ox`, not `badexample.ox`). A
+non-delegating grant that carries a scoped purpose must have a scope; a
+delegating grant may omit it, meaning unrestricted within what its own issuer
+holds. Verifying a scoped purpose requires naming the scope being connected to
+(`requireScope`) — enforced by the type of `VerifyOptions` and again at run time
+— and the leaf's scope must **equal** it exactly: covering is for narrowing
+between links, not for the key that is finally used.
+
+**Narrowing.** For every grant `P` directly above a grant `C` in the chain:
+
+1. `P` carries `delegate`.
+2. `C`'s purposes are a subset of `P`'s — a device delegated for `client` use
+   cannot mint a `service-node` key.
+3. If `P` has a scope, `C` has one and `P`'s covers it — an intermediate scoped
+   to `a.ox` cannot authorize a key for `b.ox`, and cannot authorize an
+   unscoped (broader) key either.
+4. `C`'s validity window lies inside `P`'s.
+
+No key may appear twice in a chain, and a chain is at most `MAX_CHAIN_DEPTH` (4)
+grants.
+
+**Canonical encoding.** The wire form is JSON with keys and signatures in
+base64. It is parsed strictly before anything is compared: keys must be
+canonical standard base64 (decoding and re-encoding must give back the same
+string — no URL-safe alphabet, missing padding, whitespace or non-zero trailing
+bits) of exactly 32 bytes; signatures exactly 64; times and serials
+non-negative safe integers (a fractional time is refused, never truncated);
+purposes known, non-empty and without duplicates; unknown fields refused. Every
+comparison — trusted roots, revocation, linkage, rollback serials — is on the
+32 key bytes, never on a string spelling, and a malformed entry in the
+verifier's own root or revocation list throws rather than silently not
+matching. The signed bytes are:
+
+```
+u32 len ‖ "tnp-grant-v2"
+issuer (32 raw bytes) ‖ subject (32 raw bytes)
+u32 len ‖ purposes, sorted, joined with ","
+u64 notBefore ‖ u64 notAfter ‖ u64 serial          (big-endian)
+u32 len ‖ scope                                    ("" when absent)
+```
+
+(`tnp-grant-v1`, which signed the base64 strings, never shipped and is not
+accepted.)
+
+### Key-agreement certificates
+
+Grants authorize Ed25519 keys; the session handshake is X25519. The binding
+between them is explicit: a **key-agreement certificate** is signed by a node
+key (the leaf of a grant chain) and certifies a *separate* X25519 key — not the
+node key converted to Curve25519 — so that the node can rotate it on a short
+schedule without touching the chain, and a stolen key-agreement secret is useful
+only until its certificate expires. Implementation:
+`signKeyAgreementCertificate` / `verifyKeyAgreementCertificate` in
+`packages/crypto/src/key-agreement.ts`.
+
+```
+u32 len ‖ "tnp-key-agreement-v1"
+signer (32 raw bytes, Ed25519) ‖ key (32 raw bytes, X25519)
+u32 len ‖ role             ("service-node" | "relay")
+u32 len ‖ scope
+u64 notBefore ‖ u64 notAfter ‖ u64 serial
+```
+
+The distinct context string means a grant signature can never stand in for a
+certificate signature or vice versa. A certificate verifies only when its chain
+verifies to a trusted root with a leaf that is the certificate's signer and
+holds the purpose matching the role (`service-node` → `service-node`, `relay` →
+`relay`); its scope equals the name being connected to and lies within the leaf
+grant's scope; its role is the one requested; its window lies inside the leaf
+grant's, contains now, and is at most `MAX_KEY_AGREEMENT_LIFETIME` (7 days)
+long; neither the signer nor the X25519 key is revoked; its serial is not below
+the verifier's high-water mark for that signer and key; and the X25519 key is
+canonically encoded and not of small order. The result is a
+`VerifiedKeyAgreementKey`, the only form of key the session handshake accepts.
 
 ### What this replaces
 
@@ -79,19 +171,27 @@ on Android.
 
 ## 3. Cryptographic primitives
 
-| Purpose | Primitive |
-|---|---|
-| Signatures | Ed25519 |
-| Key agreement | X25519 |
-| AEAD | XChaCha20-Poly1305 |
-| KDF | HKDF-SHA256, with a distinct `info` string per purpose |
-| Hash | SHA-256 |
-| Randomness | Platform CSPRNG only |
+| Purpose | Primitive | Implementation |
+|---|---|---|
+| Signatures | Ed25519 | tweetnacl |
+| Key agreement | X25519, refusing non-canonical and small-order keys | tweetnacl, checks in `@tnp/crypto/primitives` |
+| AEAD, counter nonce | ChaCha20-Poly1305 (RFC 8439) | `@noble/ciphers` 1.3.0 |
+| AEAD, random nonce | XChaCha20-Poly1305 (none in use yet) | — |
+| KDF | HKDF-SHA256 | `@noble/hashes` 1.8.0 |
+| Hash | SHA-256 | `@noble/hashes` 1.8.0 |
+| Randomness | Platform CSPRNG only | tweetnacl → `crypto.getRandomValues` |
+
+All are pure JavaScript, so one implementation serves Bun, browsers and React
+Native. The `@noble` packages are pinned to exact versions.
 
 Rules:
 
 - **Key separation by purpose.** Every derived key comes from HKDF with an
   explicit purpose label. The same bytes are never reused for two purposes.
+  Inside the Noise handshake ([`transport.md`](./transport.md) §9) separation
+  comes from Noise's own chaining key and handshake hash, with the TNP context
+  bound in the prologue, rather than from `info` strings; signatures are
+  separated by a distinct context string per signed structure.
 - **Never reuse a nonce under a key.** Where a counter is used it is per-direction
   and monotonic; where a random nonce is used the nonce space must be large
   enough that birthday collisions are negligible (XChaCha20's 192-bit nonce
@@ -101,7 +201,9 @@ Rules:
 - **Constant-time comparison** for every secret comparison. `!==` on a token is a
   timing oracle.
 - **Versioned envelopes.** Every ciphertext carries the algorithm version it was
-  produced under, so rotating an algorithm does not require guessing.
+  produced under, so rotating an algorithm does not require guessing. For
+  session records this is the frame's `version` byte, which is authenticated as
+  associated data, and the Noise protocol name, which is fixed per version.
 
 ## 4. Authentication
 
@@ -126,14 +228,21 @@ resolved before private mode ships — not after.
 
 | Attack | Defence |
 |---|---|
-| Replay of a recorded frame | Per-direction monotonic counter inside the AEAD envelope; a repeat is `REPLAY_DETECTED`. |
-| Replay of a handshake | 32-byte CSPRNG nonces from both peers, bound into the signed transcript. |
-| Downgrade of version or capabilities | The handshake signature covers the whole transcript, so any modification breaks it. Security capabilities are never negotiable downward. |
-| Key substitution | Every key is used only via a verified grant chain to an Oxy identity. An unchained key is not usable. |
+| Replay of a recorded frame | Per-direction 64-bit counter used as the AEAD nonce, strict in-order acceptance; a repeat is `REPLAY_DETECTED`, a gap or reordering `PROTOCOL_VIOLATION` ([`transport.md`](./transport.md) §9.3). |
+| Reflection of a frame to its sender | Separate keys per direction; the reflected record fails authentication (`DECRYPT_FAILED`). |
+| Truncation of a stream | Authenticated `CLOSE` record; an end without it is `TRUNCATED` (§9.4). |
+| Replay of a connection handshake | 32-byte CSPRNG nonces from both peers, bound into the signed transcript. |
+| Replay of a session handshake | Fresh ephemerals on both sides; a replayed message 1 yields a session the replayer cannot use (§9.2). |
+| Downgrade of version or capabilities | The handshake signature covers the whole transcript, so any modification breaks it. The session handshake binds version, role and name in its prologue and has no negotiable suite. Security capabilities are never negotiable downward. |
+| Key substitution | Every key is used only via a verified grant chain to an Oxy identity. An unchained key is not usable: the session handshake accepts only a `VerifiedKeyAgreementKey`, checked at run time. |
 | Directory substitution | The directory is signed; clients pin the directory signing key and reject an unsigned or stale directory rather than falling back. |
 | Rollback to an old signed record set | Monotonic serials; a client refuses a serial lower than the highest it has seen for that name. |
 
-None of these defences exist today.
+None of these defences is in effect in the deployed system. The replay,
+reflection, truncation, session-handshake and key-substitution rows are
+implemented in `@tnp/crypto` and `@tnp/protocol/v1` and wait on the Phase 3
+cutover; the connection handshake, signed directory and signed record sets are
+not implemented.
 
 ## 6. Rotation and revocation
 
