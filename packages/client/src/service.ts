@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import type { TnpConfig } from './config';
-import { dataDir, logPath } from './config';
+import { dataDir, logPath, saveConfig } from './config';
 import {
   applyNativeRouting,
   readRoutingState,
@@ -208,6 +208,18 @@ function statusLinux(): boolean {
 // ── Windows (Scheduled Task + DNS config) ──
 
 function installWindows(binaryPath: string, cfg: TnpConfig): void {
+  // NRPT rules carry no port, so the resolver must answer on 53. `tnp install`
+  // already forces this; the interactive menu's install passes the config as
+  // loaded, so enforce it here for every entry point.
+  if (cfg.listenPort !== 53 || cfg.listenAddr !== '127.0.0.1') {
+    cfg.listenPort = 53;
+    cfg.listenAddr = '127.0.0.1';
+    saveConfig(cfg);
+    console.log(
+      '[tnp] Windows: resolver set to listen on 127.0.0.1:53 (NRPT cannot use another port)',
+    );
+  }
+
   // An install from before this version prepended 127.0.0.1 to every adapter
   // and recorded nothing. Its task exists and our state file does not.
   const legacyInstall = !existsSync(installStatePath()) && windowsTaskExists();

@@ -154,6 +154,19 @@ describe('SOCKS5 proxy', () => {
     expect(Buffer.concat(f.tunnels[0].circuit.sent).toString()).toBe(early.toString());
   });
 
+  test('a CONNECT followed by more than 1 KB of early data in one write still connects', async () => {
+    const f = fakes();
+    const proxy = await startSocks(f, { overlay: true });
+    const early = Buffer.alloc(4000, 0x41);
+    const reply = await exchange(
+      proxy.port,
+      Buffer.concat([GREETING, connectDomain('cached.ox'), early]),
+      400,
+    );
+    expect([...reply.subarray(0, 4)]).toEqual([0x05, 0x00, 0x05, 0x00]);
+    expect(Buffer.concat(f.tunnels[0].circuit.sent).byteLength).toBe(4000);
+  });
+
   test('the overlay cache is used before the API', async () => {
     const f = fakes();
     const proxy = await startSocks(f, { overlay: true });

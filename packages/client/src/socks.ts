@@ -197,15 +197,19 @@ export class SocksProxy {
     const onData = (chunk: Buffer) => {
       if (state === 'done') return;
       buffer = Buffer.concat([buffer, chunk]);
-      if (buffer.length > MAX_HANDSHAKE_BYTES) {
+
+      // Only an INCOMPLETE handshake is bounded: a complete CONNECT may arrive
+      // in the same chunk as any amount of application data, which is early
+      // data for the tunnel, not handshake.
+      const stillIncomplete = () => {
+        if (buffer.length <= MAX_HANDSHAKE_BYTES) return;
         finishHandshake();
         socket.destroy();
-        return;
-      }
+      };
 
       if (state === 'greeting') {
         const greeting = parseGreeting(buffer);
-        if (greeting.kind === 'incomplete') return;
+        if (greeting.kind === 'incomplete') return stillIncomplete();
         if (greeting.kind === 'bad-version') {
           finishHandshake();
           socket.destroy();
@@ -225,7 +229,7 @@ export class SocksProxy {
 
       if (state === 'request') {
         const request = parseRequest(buffer);
-        if (request.kind === 'incomplete') return;
+        if (request.kind === 'incomplete') return stillIncomplete();
         finishHandshake();
         if (request.kind === 'reject') {
           this.refuse(socket, request.rep);

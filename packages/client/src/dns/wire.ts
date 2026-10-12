@@ -192,6 +192,7 @@ const QUERY_PADDING_BLOCK = 128;
  * Rebuilt from the decoded question rather than forwarded byte for byte, so
  * nothing the client put in its packet travels further than it has to:
  *
+ * - **RD is the client's**; nothing else from its header is copied.
  * - **DO and CD are cleared and AD is not asked for.** This resolver does not
  *   validate DNSSEC. Forwarding DO would fetch signatures we never check (and
  *   bigger answers to amplify with); passing an upstream's AD bit on would let
@@ -214,7 +215,8 @@ export function upstreamQuery(query: DecodedPacket, options: { pad: boolean }): 
     dnsPacket.encode({
       type: 'query',
       id: query.id ?? 0,
-      flags: RECURSION_DESIRED,
+      // Mirror the client's RD: a non-recursive query stays non-recursive.
+      flags: query.flag_rd ? RECURSION_DESIRED : 0,
       questions: [{ name: question.name, type: question.type, class: question.class }],
       additionals: [
         {

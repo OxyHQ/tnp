@@ -336,6 +336,23 @@ describe('applyNativeRouting / removeNativeRouting', () => {
     expect(f.files.get('/etc/resolver/test')).toBe('nameserver 127.0.0.1\n');
   });
 
+  test('macOS: install and connect share /etc/resolver/ox without tearing down each other', () => {
+    const f = fake('darwin');
+    const install = applyNativeRouting({ owner: 'install', target: LOCAL }, f.deps).state;
+    const connect = applyNativeRouting({ owner: 'connect', target: LOCAL_5354 }, f.deps).state;
+    expect(f.files.get('/etc/resolver/ox')).toBe(macResolverFile(LOCAL_5354));
+
+    // Uninstalling while the session runs must not cut the session off.
+    removeNativeRouting(install, f.deps);
+    expect(f.files.get('/etc/resolver/ox')).toBe(macResolverFile(LOCAL_5354));
+
+    // Ending the session restores what was there before it. (Install is gone
+    // by now, so this points at a loopback port nothing listens on: `.ox`
+    // fails closed until the next install or connect — it never leaks.)
+    removeNativeRouting(connect, f.deps);
+    expect(f.files.get('/etc/resolver/ox')).toBe(macResolverFile(LOCAL));
+  });
+
   test('Windows: an NRPT rule and nothing else; teardown removes only NRPT', () => {
     const f = fake('win32');
     const { state } = applyNativeRouting({ owner: 'install', target: LOCAL }, f.deps);

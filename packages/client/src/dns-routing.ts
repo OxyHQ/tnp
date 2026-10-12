@@ -271,6 +271,12 @@ export interface RoutingState {
   files: string[];
   /** Pre-existing content of a file TNP overwrote, restored on teardown. */
   backups: Record<string, string>;
+  /**
+   * What TNP wrote to each file. Teardown leaves a file alone if it no longer
+   * holds this — another owner (an install vs a connect session sharing
+   * `/etc/resolver/ox` on macOS) or another tool has replaced it since.
+   */
+  written?: Record<string, string>;
   /** Commands that undo `resolved-link`, when TNP ran them itself. */
   down: string[];
   /** Adapter DNS before a legacy repair, kept for the record (Windows). */
@@ -373,6 +379,7 @@ export function applyNativeRouting(
     tlds,
     files: [],
     backups: {},
+    written: {},
     down: [],
   };
   const where = tlds.map((t) => `.${t}`).join(' ');
@@ -389,6 +396,7 @@ export function applyNativeRouting(
         }
         deps.write(path, content);
         state.files.push(path);
+        if (state.written) state.written[path] = content;
       }
       state.mechanism = 'macos-resolver';
       deps.log(
@@ -434,8 +442,10 @@ export function applyNativeRouting(
           const existing = deps.read(names.delegate);
           if (!existing.startsWith('# Written by TNP')) state.backups[names.delegate] = existing;
         }
-        deps.write(names.delegate, dnsDelegateFile(target, tlds));
+        const delegate = dnsDelegateFile(target, tlds);
+        deps.write(names.delegate, delegate);
         state.files.push(names.delegate);
+        if (state.written) state.written[names.delegate] = delegate;
         tryRun(deps, 'systemctl try-reload-or-restart systemd-resolved');
         state.mechanism = 'dns-delegate';
         deps.log(
@@ -492,6 +502,19 @@ export function removeNativeRouting(
 ): void {
   if (state) {
     for (const path of state.files) {
+      const ours = state.written?.[path];
+      if (ours !== undefined && deps.exists(path)) {
+        let current: string | null = null;
+        try {
+          current = deps.read(path);
+        } catch {
+          current = null;
+        }
+        if (current !== ours) {
+          deps.log(`[tnp] left ${path} alone: it was changed after TNP wrote it`);
+          continue;
+        }
+      }
       const backup = state.backups[path];
       if (backup !== undefined) deps.write(path, backup);
       else deps.remove(path);
