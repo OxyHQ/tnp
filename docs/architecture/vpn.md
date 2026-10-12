@@ -197,7 +197,11 @@ browser / tnp CLI ── POST /me/vpn/devices ──► TNP API ── vpn_devic
   `vpn.ts`.
 - **Config.** `{ exits, dns, allowedIPs }` come from API configuration; the
   device writes the WireGuard config itself, so the private key is only ever in
-  the page's memory or a `0600` file. Full tunnel: `0.0.0.0/0, ::/0`.
+  the page's memory or a `0600` file. Full tunnel: `0.0.0.0/0, ::/0`. A config
+  is **per exit**: the device is a peer on every exit, and switching exits means
+  a different endpoint, public key and resolver (§10.3). The dashboard and
+  `tnp vpn add` offer the exit nearest the user's time zone first and show every
+  exit's region (`tnp vpn exits` lists them); the user can pick any.
 - **Exit.** Kernel WireGuard, nftables policy (exit-nodes.md §9), and the
   `apps/exit` agent, which polls `GET /exit/peers` and reconciles peers with
   `wg set` argument arrays. A revoked device is removed, and its flows
@@ -207,25 +211,36 @@ browser / tnp CLI ── POST /me/vpn/devices ──► TNP API ── vpn_devic
 - **Off by default.** Without `TNP_VPN_EXITS`, every `/me/vpn` route except
   DELETE answers 503 `vpn_not_configured` and the dashboard says the VPN is not
   available yet.
+- **Allowlisted accounts only.** `TNP_VPN_ALLOWED_USERS` names the Oxy accounts
+  that may use the VPN; anyone else gets 403 `vpn_not_available` (the dashboard
+  says it is not available for their account) and their devices are left out of
+  `/exit/peers`, so no exit carries their traffic. **In production an unset
+  list means the VPN is off for everyone** — an exit's cost must not grow with
+  who finds the page (exit-nodes.md §9, §9.9 for the exit-side cap).
 
 ### 10.3 DNS
 
-Device configs name TNP's public resolver (`TNP_VPN_DNS`, defaulting to the
-`TNP_PARKING_IP` the public resolver answers on), reached through the tunnel:
-TNP-native names resolve natively and public names are forwarded upstream over
-DoH, exactly as for any other public-resolver user
-([`resolution.md`](./resolution.md)). The exit rate-limits each peer's DNS
-packets to it, because every peer reaches the resolver from the exit's one
-address. For the same reason the resolver exempts exit addresses from its
-own per-source limit (`TNP_DNS_RATE_LIMIT_EXEMPT`, exit-nodes.md §9.6), which
-would otherwise throttle all of an exit's users together; the global in-flight
-caps still apply to them.
+**Each exit answers its own peers' DNS.** A config names the resolver of the
+exit it tunnels to: the exit's `dns` in `TNP_VPN_EXITS`, which is the tunnel
+gateway address `10.77.0.1` on every exit, where the exit runs TNP's resolver
+(`tnp-exit-dns`, exit-nodes.md §9.7). TNP-native names resolve natively and
+public names go upstream over DoH from the exit, so lookups take one tunnel
+round trip and CDNs answer with edges near the exit — measured as the problem
+when every exit's users went to one resolver in us-west-2. The resolver sees
+each device's tunnel address, so its per-source limit is per device; the
+exit's packet filter adds a per-peer packet limit in front of it.
 
-Between the exit and the resolver, queries are ordinary DNS packets the exit
-forwards like any other traffic. Oxy runs both, so it can see every name a
-device looks up — the same position it holds as exit operator for every
-destination. The resolver sees the exit's address, not the device's, and does
-not log names ([`privacy-model.md`](./privacy-model.md) §1).
+An exit without its own `dns` falls back to `TNP_VPN_DNS` (TNP's public
+resolver, defaulting to the `TNP_PARKING_IP` it answers on), reached through
+the tunnel and forwarded by the exit like any other traffic, rate-limited per
+peer at the exit; the public resolver exempts exit addresses from its own
+per-source limit (`TNP_DNS_RATE_LIMIT_EXEMPT`, exit-nodes.md §9.6). Clients
+that predate per-exit DNS use `TNP_VPN_DNS` for every exit.
+
+Oxy runs the exit and its resolver, so it can see every name a device looks
+up — the same position it holds as exit operator for every destination. The
+resolver keeps no query log, only aggregate counters and a cache
+([`privacy-model.md`](./privacy-model.md) §8).
 
 ### 10.4 IPv6
 

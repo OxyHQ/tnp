@@ -8,7 +8,7 @@ order: 5
 
 TNP's standard-tier VPN is a **WireGuard** tunnel from your router, phone or computer to an exit run by TNP. Your device runs the official WireGuard client; TNP gives it a configuration and keeps the exit in sync. The keys are made on your device, and TNP only ever receives the public key.
 
-> **Status:** implemented, not yet switched on. Until TNP deploys its first exit, the dashboard page says "Not available yet" and nothing can be added. Design: [`architecture/vpn.md` §10](./architecture/vpn.md); exits: [`architecture/exit-nodes.md` §9](./architecture/exit-nodes.md).
+> **Status:** implemented, not yet switched on. Until TNP deploys its first exit, the dashboard page says "Not available yet" and nothing can be added. While exits' capacity is fixed, the VPN is open to a limited group of accounts; for any other account the page says it is not available for that account. Design: [`architecture/vpn.md` §10](./architecture/vpn.md); exits: [`architecture/exit-nodes.md` §9](./architecture/exit-nodes.md).
 
 ## What it protects, and what it does not
 
@@ -21,7 +21,7 @@ Read this before you rely on it.
 
 **It does not protect**
 
-- **From TNP.** Oxy operates the exit, so it can technically see which addresses and ports you connect to, and the content of anything the site itself does not encrypt. HTTPS hides the content, not which site you reach. The exit keeps only totals, never per-connection records ([exit-nodes.md §9.3](./architecture/exit-nodes.md)) — but that is a promise about how we run it, and you are trusting us on it.
+- **From TNP.** Oxy operates the exit, so it can technically see which addresses and ports you connect to, and the content of anything the site itself does not encrypt. HTTPS hides the content, not which site you reach. Your DNS lookups go to TNP's resolver on that same exit, so the same operator sees the names you look up; it keeps no record of them. The exit keeps only totals, never per-connection records ([exit-nodes.md §9.3](./architecture/exit-nodes.md)) — but that is a promise about how we run it, and you are trusting us on it.
 - **Your identity.** This is not anonymity. One company runs the exit and knows which account each device belongs to, and someone able to watch both your connection and the exit can match them up by timing.
 - **What you tell a site.** Signing in to an account identifies you, VPN or not.
 - **From the hosting provider** (AWS), which can observe the exit's traffic like any network operator.
@@ -32,11 +32,17 @@ Read this before you rely on it.
 
 **IPv6** is not carried yet. On phones and computers, every configuration routes IPv6 into the tunnel so it cannot leak around it, and the exit refuses it with an immediate error, so apps that also speak IPv4 use that. On a router, the setup below adds the router-side rules this needs.
 
+## Pick the nearest exit
+
+TNP runs exits in more than one region, each shown with its place and region code — for example *Oregon (us-west-2)* or *N. Virginia (us-east-1)*. **Choose the one nearest you**: every packet makes the round trip to the exit, and your DNS is answered by TNP's resolver on that exit, so websites hand you servers near it. The page and `tnp vpn add` suggest the exit nearest your time zone; you can pick another.
+
+A device is accepted at every exit, but each configuration names one exit (its address, key and resolver). To be able to switch, download or scan the configuration for each exit you want while the page shows the new device — the private key is only shown then.
+
 ## Add a device
 
 1. Sign in at [tnp.network](https://tnp.network) and open **Dashboard → VPN** (`/dashboard/vpn`).
 2. Type a name (for example *Home router*) and choose **Add device**. Your browser generates a WireGuard key pair and sends only the public key.
-3. The configuration appears **once**: as a downloadable `.conf` file, as a QR code and as text. It contains the private key, which TNP never had and cannot show again. If you lose it, revoke the device and add a new one.
+3. Choose the exit (above). The configuration appears **once**: as a downloadable `.conf` file, as a QR code and as text. It contains the private key, which TNP never had and cannot show again. If you lose it, revoke the device and add a new one.
 
 **Prefer the download or the QR code to copying.** Copying puts the private key in your clipboard, where clipboard history or sync can keep it; if you do copy, the page overwrites the clipboard after 60 seconds where the browser allows it.
 
@@ -45,10 +51,14 @@ An account can have up to 10 devices. To stop a device — a lost phone, an old 
 From a terminal, the CLI does the same with the key generated on that machine:
 
 ```bash
-TNP_TOKEN=… tnp vpn add laptop        # writes ./tnp-laptop.conf, mode 0600
+TNP_TOKEN=… tnp vpn exits             # every exit, its region and resolver; the nearest is marked
+TNP_TOKEN=… tnp vpn add laptop        # writes ./tnp-laptop.conf, mode 0600, for the nearest exit
+TNP_TOKEN=… tnp vpn add laptop-us --exit use1-1   # or name the exit
 tnp vpn list
 tnp vpn revoke <id>
 ```
+
+**Fair use.** Each exit has a fixed monthly transfer allowance. When an exit has used it up, it slows to a few megabits per second for everyone on it until the first of the next month (UTC) — browsing still works, large downloads crawl. Another exit may be faster then.
 
 ## OpenWrt router (recommended for a home)
 
@@ -183,7 +193,8 @@ sudo systemctl enable --now wg-quick@tnp-laptop   # start at every boot
 |---|---|
 | No handshake | UDP 51820 outbound may be blocked on your network. The device's clock must be roughly right. Was the device revoked? |
 | Router never connects after a reboot | The router's peer must dial the exit by **IP address** (the dashboard's router configuration does). With a hostname and `peerdns` off, it cannot resolve the exit before the tunnel is up. |
-| Handshake, but no sites load | DNS: is the configured resolver set (Linux: resolvconf/systemd-resolved)? On OpenWrt, is `peerdns` off on `wan` and the LAN forwarding to `tnp`? |
+| Handshake, but no sites load | DNS: is the configured resolver set (Linux: resolvconf/systemd-resolved)? On OpenWrt, is `peerdns` off on `wan` and the LAN forwarding to `tnp`? The resolver is `10.77.0.1`, inside the tunnel. |
+| Everything is slow | The exit may be far away — pick the nearest one — or it may have used its monthly allowance and be throttled until the 1st (UTC). |
 | Some sites hang | Lower the MTU (1380 is safe everywhere). |
 | Mail will not send on port 25 | Exits refuse outbound SMTP on port 25 (spam). Use your provider's submission port, 587 or 465, which are open. |
 | Your own LAN (192.168.x.x, 10.x) is unreachable while the tunnel is on a phone or computer | The full tunnel sends it to the exit, which refuses private, link-local and other non-public ranges by design ([exit-nodes.md §3](./architecture/exit-nodes.md)). Use the Android app's *Exclude private IPs* option, or edit `AllowedIPs` to leave your LAN out. Not an issue when the VPN runs on the router. |

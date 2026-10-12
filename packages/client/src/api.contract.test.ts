@@ -443,6 +443,8 @@ describe('VPN devices', () => {
               endpoint: 'usw2-1.exit.example:51820',
               endpointIp: '203.0.113.10',
               publicKey: generateWireGuardKeyPair().publicKey,
+              // The exit's own resolver, in the array form the API serves.
+              dns: ['10.77.0.1'],
             },
           ],
           dns: ['198.51.100.53'],
@@ -459,6 +461,29 @@ describe('VPN devices', () => {
     expect(file).toBe(resolve('/tmp/tnp-contract', 'tnp-My-laptop.conf'));
     expect(written).toContain(`PrivateKey = ${keys.privateKey}\n`);
     expect(written).toContain('AllowedIPs = 0.0.0.0/0, ::/0\n');
+    // A config is per exit: the exit's own resolver wins over the network's.
+    expect(written).toContain('DNS = 10.77.0.1\n');
+    expect(written).not.toContain('198.51.100.53');
+  });
+
+  test("an account outside the allowlist sees the API's reason, not a bare status", async () => {
+    // The body `routes/vpn.ts` answers with (vpn.contract.test.ts asserts its side).
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          error: 'The VPN is not available for your account yet.',
+          code: 'vpn_not_available',
+        }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } },
+      )) as unknown as typeof fetch;
+    try {
+      await expect(new TnpApiClient(BASE_URL).listVpnDevices(AUTH_TOKEN)).rejects.toThrow(
+        'not available for your account',
+      );
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 });
 

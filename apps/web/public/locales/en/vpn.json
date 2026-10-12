@@ -16,6 +16,10 @@
     "heading": "Not available yet",
     "body": "TNP has not switched on its first exit yet, so devices cannot be added. This page will let you add them as soon as it does. Nothing has been stored for your account."
   },
+  "notAllowed": {
+    "heading": "Not available for your account",
+    "body": "The VPN is open to a limited group of accounts for now, while TNP keeps the exits' capacity and cost fixed, and yours is not in it yet. Nothing has been stored for your account. No exit accepts devices added earlier while your account is not in the group."
+  },
   "honesty": {
     "heading": "What this VPN protects, and what it does not",
     "protectsHeading": "It protects",
@@ -46,7 +50,11 @@
     "once": "This is the only time the private key is shown. TNP never received it and cannot show it again. Download the configuration or scan the code now; if you lose it, revoke the device and add a new one.",
     "clipboard": "Copying puts the private key in your clipboard, where clipboard history or sync can keep it. Prefer the download or the QR code. If you do copy, this page overwrites the clipboard after 60 seconds where the browser allows it.",
     "exit": "Exit",
-    "exitOption": "{{id}} ({{region}})",
+    "exitOption": "{{place}} ({{region}})",
+    "exitHelp": "Choose the exit nearest you: it is faster, and websites answer from servers near it. This device is accepted at every exit, but each configuration names one, so to switch exits, choose another here and download or scan its configuration too.",
+    "exitSingle": "Exit: {{exit}}",
+    "dnsOnExit": "DNS: <code>{{dns}}</code>, the TNP resolver on the exit itself, reached through the tunnel. It answers from near the exit and keeps no record of the names you look up.",
+    "dnsVia": "DNS: <code>{{dns}}</code>, the TNP resolver, reached through the tunnel. It keeps no record of the names you look up.",
     "file": "WireGuard configuration ({{file}})",
     "download": "Download {{file}}",
     "qr": "Scan with the WireGuard app",
@@ -119,5 +127,15 @@
     "revokeConfirm": "Revoke {{name}}? Exits stop accepting it at their next sync (normally within a minute, at most about 10 minutes) and its configuration cannot be used again.",
     "revokeButton": "Revoke device",
     "revoked": "{{name}} was revoked."
+  },
+  "regions": {
+    "us-east-1": "N. Virginia",
+    "us-west-2": "Oregon",
+    "eu-central-1": "Frankfurt",
+    "eu-west-1": "Ireland",
+    "eu-west-2": "London",
+    "ap-northeast-1": "Tokyo",
+    "ap-southeast-1": "Singapore",
+    "sa-east-1": "São Paulo"
   }
 }

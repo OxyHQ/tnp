@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { KNOWN_EXIT_REGIONS } from '../src/lib/vpn';
 
 // Every locale's vpn.json must carry exactly the keys en does, with the same
 // interpolation variables and markup tags in each string, and every key en
@@ -87,6 +88,17 @@ describe('vpn.json locale parity', () => {
           vpn: 'VPN',
         });
       }
+    }
+  });
+});
+
+describe('exit regions', () => {
+  test('every region the page names has a city in every locale, and no other', () => {
+    for (const lng of locales) {
+      const regions = Object.keys(
+        (load(lng) as { regions: Record<string, string> }).regions ?? {},
+      ).sort();
+      expect({ lng, regions }).toEqual({ lng, regions: [...KNOWN_EXIT_REGIONS].sort() });
     }
   });
 });

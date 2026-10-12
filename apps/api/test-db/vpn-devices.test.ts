@@ -200,6 +200,20 @@ describe('rename, delete and isolation', () => {
     expect(await deleteVpnDevice(t.db, 'alice', id)).toBe(false);
     expect(await listExitPeers(t.db)).toEqual([]);
   });
+
+  test("the exits' peer list holds only allowlisted accounts' devices", async () => {
+    const a = await createVpnDevice(t.db, 'alice', device('a'), CAP);
+    const b = await createVpnDevice(t.db, 'bob', device('b'), CAP);
+    if (!a.ok || !b.ok) throw new Error('create failed');
+    const keys = async (allowed: string[] | null) =>
+      (await listExitPeers(t.db, allowed)).map((p) => p.publicKey).sort();
+    expect(await keys(null)).toEqual([a.device.publicKey, b.device.publicKey].sort());
+    expect(await keys(['alice'])).toEqual([a.device.publicKey]);
+    expect(await keys(['carol'])).toEqual([]);
+    expect(await keys([])).toEqual([]);
+    await deleteVpnDevice(t.db, 'alice', a.device.id);
+    await deleteVpnDevice(t.db, 'bob', b.device.id);
+  });
 });
 
 describe('through the real routers', () => {
@@ -217,6 +231,7 @@ describe('through the real routers', () => {
     dns: ['198.51.100.53'],
     exitTokenDigests: [digestToken(EXIT_TOKEN)],
     maxDevices: 2,
+    allowedUsers: null,
   };
   let server: Server;
   let base: string;

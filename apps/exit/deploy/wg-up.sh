@@ -1,22 +1,41 @@
 #!/bin/sh
 # Bring up wg0 on a TNP exit, as root, at every boot (tnp-exit-wg.service).
 #
-# The exit's WireGuard private key and the agent's API token are read from
-# SSM Parameter Store with the instance role, into /run (tmpfs), and never
-# written to persistent storage, user-data or the AMI. The private key file is
-# deleted as soon as the kernel has it; the token file stays in /run for
-# systemd to hand to the agent as a credential, readable by root only.
+# The exit's WireGuard private key and the agent's API token come from one of
+# two sources (TNP_EXIT_SECRETS in exit.env):
+#
+#   ssm   (default, EC2) read from SSM Parameter Store with the instance role,
+#         into /run (tmpfs); never written to persistent storage, user-data or
+#         the AMI.
+#   file  (Lightsail, no instance role) read from /etc/tnp-exit/secrets/, which
+#         the operator copied in over SSH; refused unless root-only (secrets.sh).
+#         The files stay on disk so the exit comes back after a reboot: the key
+#         is then on the instance's volume, readable by root, which is the price
+#         of having no role to fetch it with (exit-nodes.md §9.8).
+#
+# Either way the key passes through a /run copy that is deleted as soon as the
+# kernel has it, and the token is copied to /run for systemd to hand to the
+# agent as a credential, readable by root only.
 #
 # Forwarding is switched on HERE, last, and only once the packet filter is
 # verified loaded — never by sysctl.d at boot, where it could come up before
 # the filter. Any failure switches it back off.
 #
 # Settings come from /etc/tnp-exit/exit.env, written by bootstrap.sh:
-#   AWS_REGION, TNP_EXIT_SSM_PREFIX
+#   TNP_EXIT_SECRETS, and for ssm: AWS_REGION, TNP_EXIT_SSM_PREFIX
 set -eu
 
 . /etc/tnp-exit/exit.env
-: "${AWS_REGION:?}" "${TNP_EXIT_SSM_PREFIX:?}"
+TNP_EXIT_SECRETS="${TNP_EXIT_SECRETS:-ssm}"
+. "$(dirname "$0")/secrets.sh"
+case "$TNP_EXIT_SECRETS" in
+  ssm) : "${AWS_REGION:?}" "${TNP_EXIT_SSM_PREFIX:?}" ;;
+  file) ;;
+  *)
+    echo "tnp-exit: TNP_EXIT_SECRETS must be ssm or file" >&2
+    exit 1
+    ;;
+esac
 
 IFACE=wg0
 PORT=51820
@@ -63,17 +82,25 @@ get_parameter() {
   done
 }
 
-get_parameter "$TNP_EXIT_SSM_PREFIX/wg-private-key" "$KEY"
-if ! grep -Eqx '[A-Za-z0-9+/]{43}=' "$KEY"; then
-  echo "tnp-exit: $TNP_EXIT_SSM_PREFIX/wg-private-key is not a WireGuard key" >&2
-  exit 1
+if [ "$TNP_EXIT_SECRETS" = file ]; then
+  SOURCE="$TNP_EXIT_SECRETS_DIR"
+  check_file_secrets "$TNP_EXIT_SECRETS_DIR" 0
+  cat "$TNP_EXIT_SECRETS_DIR/wg-private-key" >"$KEY"
+  cat "$TNP_EXIT_SECRETS_DIR/agent-token" >"$RUN/agent-token.new"
+else
+  SOURCE="$TNP_EXIT_SSM_PREFIX"
+  get_parameter "$TNP_EXIT_SSM_PREFIX/wg-private-key" "$KEY"
+  get_parameter "$TNP_EXIT_SSM_PREFIX/agent-token" "$RUN/agent-token.new"
 fi
 
-get_parameter "$TNP_EXIT_SSM_PREFIX/agent-token" "$RUN/agent-token.new"
+if ! grep -Eqx '[A-Za-z0-9+/]{43}=' "$KEY"; then
+  echo "tnp-exit: $SOURCE/wg-private-key is not a WireGuard key" >&2
+  exit 1
+fi
 # At least 43 base64url characters (256 bits); the agent also refuses
 # visibly low-entropy values (isStrongExitToken).
 if ! grep -Eqx '[A-Za-z0-9_-]{43,512}' "$RUN/agent-token.new"; then
-  echo "tnp-exit: $TNP_EXIT_SSM_PREFIX/agent-token must be at least 43 base64url characters" >&2
+  echo "tnp-exit: $SOURCE/agent-token must be at least 43 base64url characters" >&2
   exit 1
 fi
 mv -f "$RUN/agent-token.new" "$RUN/agent-token"

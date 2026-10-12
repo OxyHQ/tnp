@@ -11,20 +11,30 @@ import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
 import { Trans, useTranslation } from 'react-i18next';
 import { toast } from '@oxy.so/bloom/toast';
-import { VPN_DEVICE_NAME_MAX_LENGTH, type VpnDevice, type VpnNetwork } from '@tnp/shared-types';
+import {
+  VPN_DEVICE_NAME_MAX_LENGTH,
+  VPN_EXIT_TUNNEL_IPV4,
+  type VpnDevice,
+  type VpnExit,
+  type VpnNetwork,
+} from '@tnp/shared-types';
 import { apiRequest, errorBody, errorMessage, errorStatus } from '../lib/api';
 import { qrMatrix, qrPath, QR_MARGIN } from '../lib/qr';
 import { useLocaleFormatter } from '../lib/useLocaleFormatter';
 import {
   addDevice,
+  classifyLoadFailure,
+  configDns,
   copyText,
   type DeviceConfigInput,
   httpVpnApi,
+  isKnownExitRegion,
   type NewDevice,
   OPENWRT_ALLOW_FALLBACK,
   OPENWRT_REMOVE,
   openWrtCommands,
   routerWireGuardConfig,
+  suggestVpnExit,
   tunnelFileName,
   wireGuardConfig,
 } from '../lib/vpn';
@@ -35,6 +45,7 @@ type Phase =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
   | { kind: 'unavailable' }
+  | { kind: 'notAllowed' }
   | { kind: 'ready'; devices: VpnDevice[]; network: VpnNetwork };
 
 const INPUT =
@@ -62,11 +73,12 @@ export default function Vpn() {
       const list = await api.list();
       setPhase({ kind: 'ready', devices: list.devices, network: list.network });
     } catch (err) {
-      if (errorStatus(err) === 503 && errorBody(err).code === 'vpn_not_configured') {
-        setPhase({ kind: 'unavailable' });
-      } else {
-        setPhase({ kind: 'error', message: errorMessage(err, t('vpn:loadError')) });
-      }
+      const failure = classifyLoadFailure(errorStatus(err), errorBody(err).code);
+      setPhase(
+        failure === 'error'
+          ? { kind: 'error', message: errorMessage(err, t('vpn:loadError')) }
+          : { kind: failure },
+      );
     }
   }, [t]);
 
@@ -153,6 +165,13 @@ export default function Vpn() {
             <p className="font-mono text-xs text-muted-foreground/70">
               {t('vpn:unavailable.body')}
             </p>
+          </section>
+        )}
+
+        {phase.kind === 'notAllowed' && (
+          <section role="status" className={`${CARD} space-y-2`}>
+            <h2 className="font-pixel text-lg text-primary-text">{t('vpn:notAllowed.heading')}</h2>
+            <p className="font-mono text-xs text-muted-foreground/70">{t('vpn:notAllowed.body')}</p>
           </section>
         )}
 
@@ -313,6 +332,23 @@ function AddDeviceForm({
 const GUIDES = ['phone', 'desktop', 'linux', 'openwrt'] as const;
 type Guide = (typeof GUIDES)[number];
 
+function browserTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return undefined;
+  }
+}
+
+/** "Frankfurt (eu-central-1)" for a region the page can name, else the region as configured. */
+function useExitLabel(): (exit: Pick<VpnExit, 'region'>) => string {
+  const { t } = useTranslation('vpn');
+  return (exit) =>
+    isKnownExitRegion(exit.region)
+      ? t('config.exitOption', { place: t(`regions.${exit.region}`), region: exit.region })
+      : exit.region;
+}
+
 function NewDevicePanel({
   created,
   network,
@@ -324,11 +360,18 @@ function NewDevicePanel({
 }) {
   const { t } = useTranslation('vpn');
   const id = useId();
-  const [exitId, setExitId] = useState(network.exits[0]?.id ?? '');
+  const exitLabel = useExitLabel();
+  // Offer the exit nearest the browser's time zone first: nearer is faster, and
+  // its resolver gets answers (CDN edges) near it. The user can pick another.
+  const [exitId, setExitId] = useState(
+    () => suggestVpnExit(network.exits, browserTimeZone())?.id ?? '',
+  );
   const [guide, setGuide] = useState<Guide>('phone');
   const exit = network.exits.find((e) => e.id === exitId) ?? network.exits[0];
   const device = created.response.device;
-  const fileName = `${tunnelFileName(device.name)}.conf`;
+  // One file per exit when there is a choice, so configs for two exits never
+  // overwrite each other (and the tunnel name says which exit it reaches).
+  const fileName = `${tunnelFileName(network.exits.length > 1 && exit ? exit.id : device.name)}.conf`;
 
   const input = useMemo(
     () =>
@@ -344,6 +387,7 @@ function NewDevicePanel({
     [created, device, exit, network],
   );
   const config = useMemo(() => (input ? wireGuardConfig(input) : ''), [input]);
+  const dns = useMemo(() => (input ? configDns(input) : []), [input]);
 
   const download = () => {
     const url = URL.createObjectURL(new Blob([config], { type: 'text/plain' }));
@@ -373,23 +417,38 @@ function NewDevicePanel({
         {t('config.once')}
       </p>
 
-      {network.exits.length > 1 && (
-        <label className="block max-w-sm space-y-1" htmlFor={`${id}-exit`}>
-          <span className={LABEL}>{t('config.exit')}</span>
-          <select
-            id={`${id}-exit`}
-            value={exit.id}
-            onChange={(e) => setExitId(e.target.value)}
-            className={INPUT}
-          >
-            {network.exits.map((e) => (
-              <option key={e.id} value={e.id}>
-                {t('config.exitOption', { id: e.id, region: e.region })}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
+      <div className="space-y-2">
+        {network.exits.length > 1 ? (
+          <>
+            <label className="block max-w-sm space-y-1" htmlFor={`${id}-exit`}>
+              <span className={LABEL}>{t('config.exit')}</span>
+              <select
+                id={`${id}-exit`}
+                value={exit.id}
+                onChange={(e) => setExitId(e.target.value)}
+                className={INPUT}
+              >
+                {network.exits.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {exitLabel(e)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="max-w-3xl font-mono text-xs text-muted-foreground/70">
+              {t('config.exitHelp')}
+            </p>
+          </>
+        ) : (
+          <p className="font-mono text-xs text-muted-foreground">
+            {t('config.exitSingle', { exit: exitLabel(exit) })}
+          </p>
+        )}
+        <Note
+          k={dns.every((ip) => ip === VPN_EXIT_TUNNEL_IPV4) ? 'config.dnsOnExit' : 'config.dnsVia'}
+          values={{ dns: dns.join(', ') }}
+        />
+      </div>
 
       <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto]">
         <div className="min-w-0 space-y-2">
@@ -433,7 +492,7 @@ function NewDevicePanel({
           {guide === 'desktop' && <DesktopGuide />}
           {guide === 'linux' && <LinuxGuide fileName={fileName} />}
           {guide === 'openwrt' && (
-            <OpenWrtGuide input={input} ipv4={device.ipv4} dns={network.dns.join(', ')} />
+            <OpenWrtGuide input={input} ipv4={device.ipv4} dns={dns.join(', ')} />
           )}
         </div>
       </div>

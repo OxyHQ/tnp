@@ -37,6 +37,9 @@
  *   fails, it is charged to the exit's shared tier like any anonymous request.
  * - Every other request from an exit address spends from the exit's shared
  *   tier: twenty addresses' worth, for all its anonymous users together.
+ *   That includes the exit's own resolver's `/dns/resolve` calls (native
+ *   names only; exit-nodes.md §9.7), for which the shared `resolve` tier is
+ *   ample. Exempting them would exempt every peer behind the exit too.
  */
 
 import type { Request, RequestHandler } from 'express';

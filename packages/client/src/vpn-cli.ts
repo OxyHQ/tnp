@@ -15,9 +15,12 @@ import { generateWireGuardKeyPair, type WireGuardKeyPair } from '@tnp/crypto/wir
 import {
   type CreateVpnDeviceRequest,
   renderWireGuardConfig,
+  suggestVpnExit,
   tunnelFileName,
   type VpnDeviceList,
   type VpnDeviceResponse,
+  type VpnNetwork,
+  vpnExitDns,
 } from '@tnp/shared-types';
 import { TnpApiClient } from './api';
 import { loadConfig } from './config';
@@ -25,10 +28,12 @@ import { resolveToken } from './token';
 
 const USAGE = `
 Usage:
+  tnp vpn exits           The exits, with their regions: pick the nearest
   tnp vpn add <name> [--exit <id>] [--out <file>] [--print]
       Generate a WireGuard key pair on this machine, register its public key,
       and write a wg-quick config (mode 0600) to <file>, default ./tnp-<name>.conf.
-      --print also prints the config, private key included.
+      The config is for one exit: --exit <id> (see tnp vpn exits), default the
+      exit nearest your time zone. --print also prints the config, private key included.
   tnp vpn list            Your devices
   tnp vpn revoke <id>     Revoke a device; exits drop it at their next sync (normally
                           within a minute; an exit cut off from TNP drops every
@@ -56,6 +61,25 @@ export interface VpnCliDeps {
   exists?: (path: string) => boolean;
   log?: (line: string) => void;
   cwd?: string;
+  /** IANA time zone the default exit is guessed from; default this machine's. */
+  timeZone?: string;
+}
+
+function localTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return undefined;
+  }
+}
+
+/** One line per exit: id, region, endpoint and the resolver its configs name. */
+export function describeExits(network: VpnNetwork, timeZone?: string): string[] {
+  const suggested = suggestVpnExit(network.exits, timeZone);
+  return network.exits.map(
+    (exit) =>
+      `${exit.id.padEnd(10)}  ${exit.region.padEnd(16)}  ${exit.endpoint}  DNS ${vpnExitDns(exit, network.dns).join(', ')}${exit === suggested && network.exits.length > 1 ? '  (nearest your time zone)' : ''}`,
+  );
 }
 
 /** Create the file only if it does not exist, readable by its owner only. */
@@ -88,7 +112,9 @@ export async function vpnAdd(argv: readonly string[], deps: VpnCliDeps): Promise
   // registered, so a typo never leaves an orphaned device on the account.
   const { network: current } = await deps.api.listVpnDevices(deps.token);
   const exitId = option(argv, '--exit');
-  const chosen = exitId ? current.exits.find((e) => e.id === exitId) : current.exits[0];
+  const chosen = exitId
+    ? current.exits.find((e) => e.id === exitId)
+    : suggestVpnExit(current.exits, deps.timeZone ?? localTimeZone());
   if (!chosen) {
     throw new Error(
       exitId
@@ -120,7 +146,17 @@ export async function vpnAdd(argv: readonly string[], deps: VpnCliDeps): Promise
   });
   (deps.writeFile ?? writePrivate)(file, config);
 
-  log(`[tnp] added ${device.name}: ${device.ipv4}, exit ${exit.id} (${exit.region})`);
+  log(
+    `[tnp] added ${device.name}: ${device.ipv4}, exit ${exit.id} (${exit.region}), DNS ${vpnExitDns(exit, network.dns).join(', ')}`,
+  );
+  if (network.exits.length > 1 && !exitId) {
+    log(
+      `[tnp] other exits: ${network.exits
+        .filter((e) => e.id !== exit.id)
+        .map((e) => `${e.id} (${e.region})`)
+        .join(', ')} — choose one with --exit (tnp vpn exits)`,
+    );
+  }
   log(`[tnp] wrote ${file} (mode 0600). It holds the private key; TNP never received it.`);
   log(
     '[tnp] the exit operator (TNP) can see which addresses you connect to. This is not anonymity.',
@@ -151,6 +187,14 @@ export async function runVpnCommand(argv: readonly string[]): Promise<number> {
     const deps: VpnCliDeps = { api, token: token.token };
 
     switch (sub) {
+      case 'exits': {
+        const { network } = await api.listVpnDevices(token.token);
+        for (const line of describeExits(network, localTimeZone())) console.log(line);
+        console.log(
+          '[tnp] a device is accepted at every exit; its config names one. Nearer is faster.',
+        );
+        return 0;
+      }
       case 'add':
         await vpnAdd(
           rest.filter((a) => a !== '--token-stdin'),

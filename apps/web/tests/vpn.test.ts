@@ -21,6 +21,8 @@ import {
 import { QR_MARGIN, qrMatrix, qrPath } from '../src/lib/qr';
 import {
   addDevice,
+  classifyLoadFailure,
+  configDns,
   httpVpnApi,
   CLIPBOARD_CLEAR_MS,
   copyText,
@@ -28,6 +30,7 @@ import {
   OPENWRT_REMOVE,
   openWrtCommands,
   routerWireGuardConfig,
+  suggestVpnExit,
   tunnelFileName,
   type VpnApi,
   wireGuardConfig,
@@ -157,6 +160,47 @@ describe('wireGuardConfig', () => {
     expect(text).toContain('Endpoint = usw2-1.exit.example:51820\n');
     expect(text).toContain('AllowedIPs = 0.0.0.0/0, ::/0\n');
     expect(text).toContain('PersistentKeepalive = 25\n');
+  });
+});
+
+describe("a config per exit, with that exit's resolver", () => {
+  const EU = {
+    id: 'euc1-1',
+    region: 'eu-central-1',
+    endpoint: 'euc1-1.exit.example:51820',
+    endpointIp: '203.0.113.20',
+    publicKey: 'Hq4JkVtCzIhSOrYnh2Gu9zHwwA2tbXdn/VvjBGPcRk4=',
+    dns: ['10.77.0.1'],
+  };
+  const EU_INPUT = { ...INPUT, exit: EU };
+
+  test('wg-quick (file and QR code), router and uci all name the exit resolver', () => {
+    expect(configDns(EU_INPUT)).toEqual(['10.77.0.1']);
+    expect(configDns(INPUT)).toEqual(['198.51.100.53']);
+    for (const text of [wireGuardConfig(EU_INPUT), routerWireGuardConfig(EU_INPUT)]) {
+      expect(text).toContain('DNS = 10.77.0.1\n');
+      expect(text).not.toContain('198.51.100.53');
+      expect(text).toContain(`PublicKey = ${EU.publicKey}\n`);
+    }
+    expect(routerWireGuardConfig(EU_INPUT)).toContain('Endpoint = 203.0.113.20:51820\n');
+    const uci = openWrtCommands(EU_INPUT);
+    expect(uci).toContain("uci add_list network.wg0.dns='10.77.0.1'\n");
+    expect(uci).not.toContain('198.51.100.53');
+    expect(uci).toContain("uci set network.wg0_tnp.endpoint_host='203.0.113.20'\n");
+  });
+
+  test('a 403 vpn_not_available is "not for your account", a 503 is "not yet", the rest errors', () => {
+    expect(classifyLoadFailure(403, 'vpn_not_available')).toBe('notAllowed');
+    expect(classifyLoadFailure(503, 'vpn_not_configured')).toBe('unavailable');
+    expect(classifyLoadFailure(403, undefined)).toBe('error');
+    expect(classifyLoadFailure(503, 'vpn_not_available')).toBe('error');
+    expect(classifyLoadFailure(undefined, undefined)).toBe('error');
+  });
+
+  test('the page offers the exit nearest the time zone first', () => {
+    const exits = [NETWORK.exits[0], EU];
+    expect(suggestVpnExit(exits, 'Europe/Paris')?.id).toBe('euc1-1');
+    expect(suggestVpnExit(exits, 'America/Los_Angeles')?.id).toBe('usw2-1');
   });
 });
 

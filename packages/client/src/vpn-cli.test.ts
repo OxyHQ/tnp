@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateWireGuardKeyPair } from '@tnp/crypto/wireguard';
 import type { VpnDeviceResponse, VpnNetwork } from '@tnp/shared-types';
-import { type VpnCliApi, vpnAdd } from './vpn-cli';
+import { describeExits, type VpnCliApi, vpnAdd } from './vpn-cli';
 
 const dir = mkdtempSync(join(tmpdir(), 'tnp-vpn-cli-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -24,7 +24,22 @@ const NETWORK: VpnNetwork = {
   maxDevices: 10,
 };
 
-function api(registered: string[] = []): VpnCliApi {
+const TWO_EXITS: VpnNetwork = {
+  ...NETWORK,
+  exits: [
+    ...NETWORK.exits,
+    {
+      id: 'euc1-1',
+      region: 'eu-central-1',
+      endpoint: 'euc1-1.exit.example:51820',
+      endpointIp: '203.0.113.20',
+      publicKey: generateWireGuardKeyPair().publicKey,
+      dns: ['10.77.0.1'],
+    },
+  ],
+};
+
+function api(registered: string[] = [], network: VpnNetwork = NETWORK): VpnCliApi {
   return {
     async registerVpnDevice(request): Promise<VpnDeviceResponse> {
       registered.push(request.name);
@@ -37,11 +52,11 @@ function api(registered: string[] = []): VpnCliApi {
           ipv6: 'fd85:d596:af02::a4d:102',
           createdAt: new Date().toISOString(),
         },
-        network: NETWORK,
+        network,
       };
     },
     async listVpnDevices() {
-      return { devices: [], network: NETWORK };
+      return { devices: [], network };
     },
     async revokeVpnDevice() {},
   };
@@ -96,5 +111,58 @@ describe('tnp vpn add', () => {
     await expect(vpnAdd([], { api: api(), token: 't', log: () => {}, cwd: dir })).rejects.toThrow(
       'usage',
     );
+  });
+
+  test("the config is for one exit and names that exit's resolver", async () => {
+    const lines: string[] = [];
+    const file = await vpnAdd(['eu', '--exit', 'euc1-1'], {
+      api: api([], TWO_EXITS),
+      token: 't',
+      log: (line) => lines.push(line),
+      cwd: dir,
+    });
+    const config = readFileSync(file, 'utf8');
+    expect(config).toContain('DNS = 10.77.0.1\n');
+    expect(config).toContain('Endpoint = euc1-1.exit.example:51820\n');
+    expect(config).toContain('# TNP exit euc1-1 (eu-central-1)');
+    expect(lines.join('\n')).toContain('exit euc1-1 (eu-central-1), DNS 10.77.0.1');
+
+    // An exit without its own falls back to the network resolver.
+    const us = readFileSync(
+      await vpnAdd(['us', '--exit', 'usw2-1'], {
+        api: api([], TWO_EXITS),
+        token: 't',
+        log: () => {},
+        cwd: dir,
+      }),
+      'utf8',
+    );
+    expect(us).toContain('DNS = 198.51.100.53\n');
+  });
+
+  test('without --exit, the exit nearest the time zone, and the others are named', async () => {
+    const lines: string[] = [];
+    const file = await vpnAdd(['madrid'], {
+      api: api([], TWO_EXITS),
+      token: 't',
+      log: (line) => lines.push(line),
+      cwd: dir,
+      timeZone: 'Europe/Madrid',
+    });
+    expect(readFileSync(file, 'utf8')).toContain('# TNP exit euc1-1 (eu-central-1)');
+    expect(lines.join('\n')).toContain('other exits: usw2-1 (us-west-2)');
+  });
+});
+
+describe('tnp vpn exits', () => {
+  test('lists every exit with its region and resolver, marking the nearest', () => {
+    const lines = describeExits(TWO_EXITS, 'Europe/Berlin');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatch(
+      /^usw2-1 +us-west-2 +usw2-1\.exit\.example:51820 {2}DNS 198\.51\.100\.53$/,
+    );
+    expect(lines[1]).toContain('euc1-1');
+    expect(lines[1]).toContain('eu-central-1');
+    expect(lines[1]).toContain('DNS 10.77.0.1  (nearest your time zone)');
   });
 });

@@ -9,6 +9,7 @@
 
 import { createConntrackRunner, createPeerFetcher, createWgRunner, ExitAgent } from './agent.js';
 import { AgentConfigError, readAgentConfig } from './config.js';
+import { createNftRunner, stateFile, sysfsCounters, TrafficCap } from './traffic-cap.js';
 
 let config: ReturnType<typeof readAgentConfig>;
 try {
@@ -52,7 +53,32 @@ console.log(
 );
 agent.start();
 
+// The monthly traffic cap (traffic-cap.ts): counted every minute, persisted
+// every minute, so a restart or reboot loses at most nothing — the next reading
+// takes its difference from the persisted counters.
+let capTimer: ReturnType<typeof setInterval> | null = null;
+if (config.cap) {
+  const { cap } = config;
+  const trafficCap = new TrafficCap({
+    settings: { capBytes: cap.capBytes, throttleMbit: cap.throttleMbit },
+    wgInterface: config.iface,
+    readCounters: sysfsCounters(cap.uplink),
+    ...stateFile(cap.stateDir),
+    runNft: createNftRunner(cap.nftBin),
+  });
+  const tick = () =>
+    trafficCap.tick().catch((err) => {
+      console.error(`[tnp-exit] traffic cap: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  void tick();
+  capTimer = setInterval(tick, 60_000);
+  console.log(
+    `[tnp-exit] monthly cap ${cap.capBytes / 1e9} GB on ${cap.uplink} (in + out); throttle ${cap.throttleMbit} Mbit/s once reached`,
+  );
+}
+
 const shutdown = () => {
+  if (capTimer) clearInterval(capTimer);
   agent.stop();
   server?.stop();
   process.exit(0);

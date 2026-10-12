@@ -97,7 +97,19 @@ export interface VpnExit {
   endpointIp: string;
   /** The exit's WireGuard public key. */
   publicKey: string;
+  /**
+   * Resolvers for the `DNS =` line of a config for THIS exit, when it has its
+   * own. Every TNP exit runs TNP's resolver on its tunnel gateway address
+   * (`VPN_EXIT_TUNNEL_IPV4`, `10.77.0.1`), so lookups are answered — and CDNs
+   * pick edges — near the exit (exit-nodes.md §9.7). Absent: the network-wide
+   * `VpnNetwork.dns`. Configuration may spell it as a comma list
+   * (`"10.77.0.1"`); the API always serves an array.
+   */
+  dns?: string[];
 }
+
+/** Most resolvers a config's `DNS =` line may name. */
+export const VPN_MAX_DNS_SERVERS = 4;
 
 const HOSTNAME_RE =
   /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
@@ -145,16 +157,80 @@ export function parseVpnExit(value: unknown, label = 'exit'): ParseResult<VpnExi
   if (!isValidWireGuardPublicKey(r.publicKey)) {
     return { ok: false, error: `${label}.publicKey must be a WireGuard public key` };
   }
-  return {
-    ok: true,
-    value: {
-      id: r.id,
-      region: r.region,
-      endpoint: r.endpoint as string,
-      endpointIp: r.endpointIp,
-      publicKey: r.publicKey,
-    },
+  const exit: VpnExit = {
+    id: r.id,
+    region: r.region,
+    endpoint: r.endpoint as string,
+    endpointIp: r.endpointIp,
+    publicKey: r.publicKey,
   };
+  if (r.dns !== undefined) {
+    const dns = parseVpnDnsList(r.dns);
+    if (!dns) {
+      return {
+        ok: false,
+        error: `${label}.dns must be 1-${VPN_MAX_DNS_SERVERS} IP addresses (a comma list or an array)`,
+      };
+    }
+    exit.dns = dns;
+  }
+  return { ok: true, value: exit };
+}
+
+/**
+ * A resolver list from configuration or the wire: a comma (or whitespace)
+ * separated string, or an array of strings. Null unless it names 1 to
+ * `VPN_MAX_DNS_SERVERS` IP literals and nothing else.
+ */
+export function parseVpnDnsList(value: unknown): string[] | null {
+  let items: unknown[];
+  if (typeof value === 'string') items = value.split(/[\s,]+/).filter((item) => item !== '');
+  else if (Array.isArray(value)) items = value;
+  else return null;
+  if (items.length === 0 || items.length > VPN_MAX_DNS_SERVERS) return null;
+  const ips: string[] = [];
+  for (const item of items) {
+    if (typeof item !== 'string' || !(isValidIpv4(item) || isValidIpv6(item))) return null;
+    if (!ips.includes(item)) ips.push(item);
+  }
+  return ips;
+}
+
+/**
+ * The resolvers a config for `exit` names: the exit's own when it has them,
+ * else the network-wide list (`VpnNetwork.dns`, from `TNP_VPN_DNS`).
+ */
+export function vpnExitDns(
+  exit: Pick<VpnExit, 'dns'>,
+  networkDns: readonly string[],
+): readonly string[] {
+  return exit.dns && exit.dns.length > 0 ? exit.dns : networkDns;
+}
+
+/**
+ * The exit to offer first: the one nearest the user, guessed from the IANA
+ * time zone (`Intl.DateTimeFormat().resolvedOptions().timeZone`) against the
+ * cloud region's continent prefix. A guess, never a measurement — the user
+ * can always pick another; with no match, the first exit listed.
+ */
+export function suggestVpnExit<T extends Pick<VpnExit, 'region'>>(
+  exits: readonly T[],
+  timeZone: string | undefined,
+): T | undefined {
+  const zone = (timeZone ?? '').split('/')[0];
+  const prefixes: Record<string, readonly string[]> = {
+    America: ['us-', 'ca-', 'mx-', 'sa-'],
+    Europe: ['eu-', 'il-', 'me-'],
+    Africa: ['af-', 'eu-'],
+    Asia: ['ap-', 'me-', 'il-'],
+    Australia: ['ap-southeast-2', 'ap-southeast-4', 'ap-'],
+    Pacific: ['ap-southeast-2', 'ap-', 'us-'],
+  };
+  for (const prefix of prefixes[zone] ?? []) {
+    const match = exits.find((exit) => exit.region.startsWith(prefix));
+    if (match) return match;
+  }
+  return exits[0];
 }
 
 /** `endpointIp:port`, with the brackets an IPv6 literal needs. */
@@ -210,7 +286,12 @@ export interface VpnDevice {
 /** Everything a device needs besides its own key to write a WireGuard config. */
 export interface VpnNetwork {
   exits: VpnExit[];
-  /** Resolver addresses for the `DNS =` line: TNP's public resolver, reached through the tunnel. */
+  /**
+   * Resolver addresses for the `DNS =` line of an exit WITHOUT its own `dns`:
+   * TNP's public resolver, reached through the tunnel. An exit's own list
+   * takes precedence (`vpnExitDns`); this one is also what clients that
+   * predate per-exit DNS use for every exit.
+   */
   dns: string[];
   allowedIPs: string[];
   maxDevices: number;
@@ -230,6 +311,8 @@ export interface VpnDeviceResponse {
 
 export type VpnErrorCode =
   | 'vpn_not_configured'
+  /** The VPN runs, but not for this account (`TNP_VPN_ALLOWED_USERS`). */
+  | 'vpn_not_available'
   | 'device_limit'
   | 'public_key_in_use'
   | 'address_pool_exhausted';
@@ -360,19 +443,23 @@ export interface WireGuardConfigInput {
   useEndpointIp?: boolean;
   device: Pick<VpnDevice, 'ipv4' | 'ipv6'>;
   exit: VpnExit;
+  /** The network-wide resolvers (`VpnNetwork.dns`); the exit's own `dns` takes precedence. */
   dns: readonly string[];
   allowedIPs: readonly string[];
 }
 
 /**
  * The `wg-quick` / WireGuard-app config for one device and one exit — the
- * text the official apps import from a file or a QR code.
+ * text the official apps import from a file or a QR code. A config is per
+ * exit: the device is a peer on every exit, and switching exits means a
+ * different endpoint, public key and (`vpnExitDns`) resolver.
  *
  * Every value is validated before it is written: this text is a config file,
  * and a newline smuggled into any field would add a directive.
  */
 export function renderWireGuardConfig(input: WireGuardConfigInput): string {
-  const { privateKey, device, exit, dns, allowedIPs } = input;
+  const { privateKey, device, exit, allowedIPs } = input;
+  const dns = vpnExitDns(exit, input.dns);
   if (!/^[A-Za-z0-9+/]{43}=$/.test(privateKey)) throw new RangeError('invalid private key');
   if (!isVpnDeviceIpv4(device.ipv4) || device.ipv6 !== vpnIpv6ForIpv4(device.ipv4)) {
     throw new RangeError('invalid device address');

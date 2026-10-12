@@ -24,7 +24,7 @@
  */
 
 import { randomInt } from 'node:crypto';
-import { and, count, eq, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, sql } from 'drizzle-orm';
 import {
   type CreateVpnDeviceRequest,
   type ExitPeer,
@@ -180,11 +180,20 @@ export async function deleteVpnDevice(
   });
 }
 
-/** Every device an exit must accept: a key and its addresses, nothing that names an account. */
-export async function listExitPeers(db: Executor): Promise<ExitPeer[]> {
+/**
+ * Every device an exit must accept: a key and its addresses, nothing that
+ * names an account. With `allowedUsers`, only those accounts' devices (an
+ * empty list: none); null, every device.
+ */
+export async function listExitPeers(
+  db: Executor,
+  allowedUsers: readonly string[] | null = null,
+): Promise<ExitPeer[]> {
+  if (allowedUsers !== null && allowedUsers.length === 0) return [];
   const rows = await db
     .select({ publicKey: vpnDevices.publicKey, address: vpnDevices.address })
     .from(vpnDevices)
+    .where(allowedUsers === null ? undefined : inArray(vpnDevices.oxyUserId, [...allowedUsers]))
     .orderBy(vpnDevices.address);
   return rows.map((row) => ({
     publicKey: row.publicKey,

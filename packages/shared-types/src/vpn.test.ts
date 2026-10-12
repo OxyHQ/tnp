@@ -7,11 +7,15 @@ import {
   parseCreateVpnDeviceRequest,
   parseExitPeersResponse,
   parseRenameVpnDeviceRequest,
+  parseVpnDnsList,
   parseVpnExit,
   renderWireGuardConfig,
   isStrongExitToken,
   splitVpnEndpoint,
+  suggestVpnExit,
   VPN_ALLOWED_IPS,
+  VPN_EXIT_TUNNEL_IPV4,
+  vpnExitDns,
   vpnExitIpEndpoint,
   vpnIndexOfIpv4,
   vpnIpv4ForIndex,
@@ -96,6 +100,51 @@ describe('endpoints and exits', () => {
     expect(parseVpnExit({ ...EXIT, endpointIp: undefined }).ok).toBe(false);
     expect(parseVpnExit({ ...EXIT, endpointIp: 'usw2-1.exit.example' }).ok).toBe(false);
     expect(parseVpnExit({ ...EXIT, endpointIp: '2001:db8::10' }).ok).toBe(true);
+  });
+
+  test("an exit's own resolvers: a comma list or an array, served as an array", () => {
+    expect(parseVpnExit({ ...EXIT, dns: '10.77.0.1' })).toEqual({
+      ok: true,
+      value: { ...EXIT, dns: ['10.77.0.1'] },
+    });
+    expect(parseVpnExit({ ...EXIT, dns: '10.77.0.1, 198.51.100.53' }).ok).toBe(true);
+    expect(parseVpnDnsList('10.77.0.1, 198.51.100.53,10.77.0.1')).toEqual([
+      '10.77.0.1',
+      '198.51.100.53',
+    ]);
+    // What the API serves parses back to itself: the wire is the array form.
+    const served = { ...EXIT, dns: ['10.77.0.1', '2001:db8::53'] };
+    expect(parseVpnExit(JSON.parse(JSON.stringify(served)))).toEqual({ ok: true, value: served });
+    for (const bad of [
+      '',
+      [],
+      'resolver.example',
+      '10.77.0.1\nPostUp = x',
+      ['10.77.0.1', 53],
+      '1.1.1.1,1.0.0.1,8.8.8.8,8.8.4.4,9.9.9.9',
+      { ip: '10.77.0.1' },
+    ]) {
+      expect(parseVpnExit({ ...EXIT, dns: bad }).ok).toBe(false);
+    }
+  });
+
+  test("a config for an exit names the exit's resolvers, else the network's", () => {
+    expect(vpnExitDns({ dns: [VPN_EXIT_TUNNEL_IPV4] }, ['198.51.100.53'])).toEqual(['10.77.0.1']);
+    expect(vpnExitDns({}, ['198.51.100.53'])).toEqual(['198.51.100.53']);
+    expect(vpnExitDns({ dns: [] }, ['198.51.100.53'])).toEqual(['198.51.100.53']);
+  });
+
+  test('the suggested exit is the one on the time zone continent, else the first', () => {
+    const exits = [
+      { id: 'usw2-1', region: 'us-west-2' },
+      { id: 'euc1-1', region: 'eu-central-1' },
+    ];
+    expect(suggestVpnExit(exits, 'Europe/Madrid')?.id).toBe('euc1-1');
+    expect(suggestVpnExit(exits, 'Africa/Lagos')?.id).toBe('euc1-1');
+    expect(suggestVpnExit(exits, 'America/New_York')?.id).toBe('usw2-1');
+    expect(suggestVpnExit(exits, 'Asia/Tokyo')?.id).toBe('usw2-1');
+    expect(suggestVpnExit(exits, undefined)?.id).toBe('usw2-1');
+    expect(suggestVpnExit([], 'Europe/Paris')).toBeUndefined();
   });
 
   test('the IP endpoint keeps the port and brackets IPv6', () => {
@@ -239,6 +288,16 @@ describe('renderWireGuardConfig', () => {
         '',
       ].join('\n'),
     );
+  });
+
+  test("an exit with its own resolver gets it on the DNS line, not the network's", () => {
+    const config = renderWireGuardConfig({ ...input, exit: { ...EXIT, dns: ['10.77.0.1'] } });
+    expect(config).toContain('DNS = 10.77.0.1\n');
+    expect(config).not.toContain('198.51.100.53');
+    // Validated like every other field.
+    expect(() =>
+      renderWireGuardConfig({ ...input, exit: { ...EXIT, dns: ['1.1.1.1\nPostUp = x'] } }),
+    ).toThrow();
   });
 
   test('routers dial the exit by IP literal', () => {

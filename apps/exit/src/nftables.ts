@@ -9,8 +9,11 @@
  * What it enforces:
  *
  * - **Input**: only WireGuard on the uplink, replies, DHCP and the ICMP that
- *   keeps the path working. Nothing on the host is reachable from a peer — no
- *   SSH, no agent health port, no metadata service.
+ *   keeps the path working — and, when the exit runs its own resolver
+ *   (`localDnsAddress`), DNS (UDP/TCP 53) from peers on `wg0` to the tunnel
+ *   gateway address only, rate-limited per peer. Nothing else on the host is
+ *   reachable from a peer — no SSH, no agent health port, no metadata service —
+ *   and nothing at all from the internet but WireGuard.
  * - **Forward**: peers may reach the public internet and nothing else. Every
  *   loopback, private, CGNAT, link-local (including the cloud metadata service
  *   at 169.254.169.254 and fd00:ec2::254), unique-local, multicast, reserved
@@ -29,6 +32,51 @@
  */
 
 import { isCidr, isValidIpv4, VPN_TUNNEL_IPV4_CIDR, VPN_WIREGUARD_PORT } from '@tnp/shared-types';
+
+/**
+ * The network an interface address is on: `172.26.5.10/20` → `172.26.0.0/20`,
+ * `2600:1f18::5/64` → `2600:1f18::/64` (IPv6 in full, uncompressed form, which
+ * nft accepts). Null for anything but `address/length`.
+ */
+export function networkOf(addressWithPrefix: string): string | null {
+  if (!isCidr(addressWithPrefix)) return null;
+  const slash = addressWithPrefix.indexOf('/');
+  const address = addressWithPrefix.slice(0, slash);
+  const length = Number(addressWithPrefix.slice(slash + 1));
+  if (isValidIpv4(address)) {
+    const value = address.split('.').reduce((acc, octet) => (acc << 8n) | BigInt(octet), 0n);
+    const masked = length === 0 ? 0n : (value >> BigInt(32 - length)) << BigInt(32 - length);
+    const octets = [24n, 16n, 8n, 0n].map((shift) => String((masked >> shift) & 0xffn));
+    return `${octets.join('.')}/${length}`;
+  }
+  const groups = expandIpv6(address);
+  if (groups === null) return null;
+  const value = groups.reduce((acc, group) => (acc << 16n) | BigInt(group), 0n);
+  const masked = length === 0 ? 0n : (value >> BigInt(128 - length)) << BigInt(128 - length);
+  const out: string[] = [];
+  for (let shift = 112n; shift >= 0n; shift -= 16n)
+    out.push(((masked >> shift) & 0xffffn).toString(16));
+  return `${out.join(':')}/${length}`;
+}
+
+function expandIpv6(address: string): number[] | null {
+  if (address.includes('.')) return null; // embedded IPv4: never an interface address here
+  const halves = address.split('::');
+  if (halves.length > 2) return null;
+  const parse = (part: string) =>
+    part === '' ? [] : part.split(':').map((g) => Number.parseInt(g, 16));
+  const head = parse(halves[0]);
+  const tail = halves.length === 2 ? parse(halves[1]) : [];
+  const fill = 8 - head.length - tail.length;
+  if (halves.length === 1 ? fill !== 0 : fill < 1) return null;
+  const groups = [...head, ...Array(halves.length === 2 ? fill : 0).fill(0), ...tail];
+  return groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 0xffff) ? groups : null;
+}
+
+/** An IPv4 address inside the tunnel pool (`VPN_TUNNEL_IPV4_CIDR`, 10.77.0.0/16). */
+function isVpnTunnelIpv4(value: string): boolean {
+  return isValidIpv4(value) && value.startsWith('10.77.');
+}
 
 /** Destinations no peer may reach, IPv4. exit-nodes.md §3 plus the other special-use blocks. */
 export const BLOCKED_IPV4: readonly string[] = [
@@ -74,12 +122,34 @@ export interface ExitFirewallOptions {
   uplinkInterface: string;
   /** WireGuard UDP port. */
   listenPort?: number;
-  /** The operator's own networks — at least the VPC CIDR(s). Refused like private space. */
+  /**
+   * The operator's own networks — the VPC CIDR(s) on EC2. Refused like private
+   * space. At least one of this and `uplinkAddresses` must be given.
+   */
   operatorCidrs: readonly string[];
-  /** The resolvers device configs name. DNS to them is rate-limited per peer; IPv4 only is used. */
+  /**
+   * The uplink's own address(es) WITH their prefix length, as `ip addr` prints
+   * them (`172.26.5.10/20`). The network each one is on is refused like the
+   * operator's: on Lightsail, which has no VPC metadata to read, that is the
+   * instance's private network; on EC2 it is the subnet, inside the VPC CIDR.
+   */
+  uplinkAddresses?: readonly string[];
+  /** The network-wide resolvers (`TNP_VPN_DNS`) configs may name. DNS forwarded to them is rate-limited per peer; IPv4 only is used. */
   dnsServers: readonly string[];
-  /** Per-peer DNS packets per second to `dnsServers` before drops. */
+  /** Per-peer DNS packets per second to `dnsServers` (and the local resolver) before drops. */
   dnsPacketsPerSecond?: number;
+  /**
+   * The tunnel gateway address the exit's own resolver (`tnp-exit-dns`) listens
+   * on, normally `VPN_EXIT_TUNNEL_IPV4`. When set, peers on `wgInterface` may
+   * reach UDP/TCP 53 at this address and nothing else on the host.
+   */
+  localDnsAddress?: string;
+  /**
+   * Networks allowed to reach SSH (TCP 22) on the uplink — an operator's
+   * address on a host with no SSM Session Manager (Lightsail). Empty (the
+   * default): no SSH at all once the filter is loaded.
+   */
+  adminSshCidrs?: readonly string[];
 }
 
 const IFACE_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,14}$/;
@@ -104,6 +174,9 @@ export function renderExitRuleset(options: ExitFirewallOptions): string {
     operatorCidrs,
     dnsServers,
     dnsPacketsPerSecond = 50,
+    localDnsAddress,
+    uplinkAddresses = [],
+    adminSshCidrs = [],
   } = options;
   if (!IFACE_RE.test(wgInterface)) throw new FirewallConfigError('invalid WireGuard interface');
   if (!IFACE_RE.test(uplinkInterface)) throw new FirewallConfigError('invalid uplink interface');
@@ -111,15 +184,29 @@ export function renderExitRuleset(options: ExitFirewallOptions): string {
   if (!Number.isInteger(listenPort) || listenPort < 1 || listenPort > 65_535) {
     throw new FirewallConfigError('invalid listen port');
   }
-  if (operatorCidrs.length === 0) {
-    throw new FirewallConfigError('at least one operator CIDR (the VPC) is required');
-  }
   for (const cidr of operatorCidrs) {
     if (!isCidr(cidr)) throw new FirewallConfigError('invalid operator CIDR');
   }
+  for (const cidr of adminSshCidrs) {
+    if (!isCidr(cidr)) throw new FirewallConfigError('invalid admin SSH network');
+  }
+  const uplinkNetworks = uplinkAddresses.map((address) => {
+    const network = networkOf(address);
+    if (network === null) throw new FirewallConfigError('invalid uplink address');
+    return network;
+  });
+  if (operatorCidrs.length === 0 && uplinkNetworks.length === 0) {
+    throw new FirewallConfigError(
+      'at least one operator network (the VPC CIDR or the uplink address) is required',
+    );
+  }
+  const operator = [...operatorCidrs, ...uplinkNetworks];
   for (const ip of dnsServers) {
     if (!isValidIpv4(ip) && !isCidr(`${ip}/128`))
       throw new FirewallConfigError('invalid DNS server');
+  }
+  if (localDnsAddress !== undefined && !isVpnTunnelIpv4(localDnsAddress)) {
+    throw new FirewallConfigError('the local resolver address must be in the tunnel pool');
   }
   if (
     !Number.isInteger(dnsPacketsPerSecond) ||
@@ -129,8 +216,8 @@ export function renderExitRuleset(options: ExitFirewallOptions): string {
     throw new FirewallConfigError('invalid DNS rate');
   }
 
-  const operatorV4 = operatorCidrs.filter((c) => !c.includes(':'));
-  const operatorV6 = operatorCidrs.filter((c) => c.includes(':'));
+  const operatorV4 = operator.filter((c) => !c.includes(':'));
+  const operatorV6 = operator.filter((c) => c.includes(':'));
   const dnsV4 = dnsServers.filter((ip) => isValidIpv4(ip));
   const wg = JSON.stringify(wgInterface);
   const up = JSON.stringify(uplinkInterface);
@@ -160,6 +247,17 @@ export function renderExitRuleset(options: ExitFirewallOptions): string {
     '  }',
     '',
   ];
+  if (localDnsAddress !== undefined) {
+    lines.push(
+      '  set local_dns_rate {',
+      '    type ipv4_addr',
+      '    size 65536',
+      '    flags dynamic,timeout',
+      '    timeout 1m',
+      '  }',
+      '',
+    );
+  }
   if (dnsV4.length > 0) {
     lines.push(
       '  set dns_v4 {',
@@ -176,6 +274,21 @@ export function renderExitRuleset(options: ExitFirewallOptions): string {
       '',
     );
   }
+  // Rate limits sit BEFORE the established/related accept: conntrack calls a
+  // UDP 5-tuple "established" after its first reply, so a flood from one socket
+  // would otherwise pass every packet after the first.
+  const dnsRate = `limit rate over ${dnsPacketsPerSecond}/second burst ${dnsPacketsPerSecond * 4} packets`;
+  const localDns =
+    localDnsAddress === undefined
+      ? { limit: [], accept: [] }
+      : {
+          limit: [
+            `    iifname ${wg} ip daddr ${localDnsAddress} meta l4proto { tcp, udp } th dport 53 add @local_dns_rate { ip saddr ${dnsRate} } counter name refused_dns_rate drop`,
+          ],
+          accept: [
+            `    iifname ${wg} ip saddr ${VPN_TUNNEL_IPV4_CIDR} ip daddr ${localDnsAddress} meta l4proto { tcp, udp } th dport 53 accept`,
+          ],
+        };
   lines.push(
     '  counter forwarded {}',
     '  counter refused_private {}',
@@ -187,8 +300,14 @@ export function renderExitRuleset(options: ExitFirewallOptions): string {
     '    type filter hook input priority filter; policy drop;',
     '    iif "lo" accept',
     '    ct state invalid drop',
+    ...localDns.limit,
     '    ct state established,related accept',
+    ...localDns.accept,
     `    iifname ${up} udp dport ${listenPort} accept`,
+    ...adminSshCidrs.map(
+      (cidr) =>
+        `    iifname ${up} ${cidr.includes(':') ? 'ip6' : 'ip'} saddr ${cidr} tcp dport 22 accept`,
+    ),
     `    iifname ${up} udp sport 67 udp dport 68 accept`,
     `    iifname ${up} udp sport 547 udp dport 546 accept`,
     '    meta nfproto ipv4 icmp type { echo-request, destination-unreachable, time-exceeded, parameter-problem } limit rate 50/second accept',
@@ -200,6 +319,11 @@ export function renderExitRuleset(options: ExitFirewallOptions): string {
     // Clamp MSS to the path MTU so a large-MTU path cannot black-hole TCP.
     '    tcp flags syn tcp option maxseg size set rt mtu',
     '    ct state invalid drop',
+    ...(dnsV4.length > 0
+      ? [
+          `    iifname ${wg} ip daddr @dns_v4 udp dport 53 add @dns_rate { ip saddr ${dnsRate} } counter name refused_dns_rate drop`,
+        ]
+      : []),
     '    ct state established,related accept',
     `    iifname != ${wg} drop`,
     `    ip saddr != ${VPN_TUNNEL_IPV4_CIDR} drop`,
@@ -210,11 +334,6 @@ export function renderExitRuleset(options: ExitFirewallOptions): string {
     `    tcp dport { ${elements(BLOCKED_TCP_PORTS.map(String))} } counter name refused_port reject with tcp reset`,
     `    udp dport { ${elements(BLOCKED_UDP_PORTS.map(String))} } counter name refused_port reject with icmpx type admin-prohibited`,
   );
-  if (dnsV4.length > 0) {
-    lines.push(
-      `    ip daddr @dns_v4 udp dport 53 add @dns_rate { ip saddr limit rate over ${dnsPacketsPerSecond}/second burst ${dnsPacketsPerSecond * 4} packets } counter name refused_dns_rate drop`,
-    );
-  }
   lines.push(
     `    oifname ${up} counter name forwarded accept`,
     '  }',

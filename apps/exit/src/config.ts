@@ -17,11 +17,19 @@
  * - `TNP_EXIT_MAX_STALE_SECONDS` default 600, clamped to 60-3600: after this
  *                            long without a successful sync, every peer is
  *                            removed (fail closed; `agent.ts`).
+ * - `TNP_EXIT_MONTHLY_CAP_GB` the monthly traffic cap, in + out on the uplink,
+ *                            in decimal GB (`traffic-cap.ts`). Unset or 0: no cap.
+ * - `TNP_EXIT_THROTTLE_MBIT` default 2: forwarding rate once capped, 1-10000.
+ * - `TNP_EXIT_UPLINK`        the interface whose bytes are counted (required with a cap).
+ * - `STATE_DIRECTORY`        where the month's count is kept (systemd `StateDirectory=`;
+ *                            required with a cap).
+ * - `TNP_EXIT_NFT_BIN`       default `/usr/sbin/nft`.
  */
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isStrongExitToken } from '@tnp/shared-types';
+import { BYTES_PER_GB } from './traffic-cap.js';
 
 export interface AgentConfig {
   apiUrl: string;
@@ -32,6 +40,16 @@ export interface AgentConfig {
   wgBin: string;
   conntrackBin: string;
   maxStaleMs: number;
+  /** The monthly traffic cap; null when none is configured. */
+  cap: TrafficCapConfig | null;
+}
+
+export interface TrafficCapConfig {
+  capBytes: number;
+  throttleMbit: number;
+  uplink: string;
+  stateDir: string;
+  nftBin: string;
 }
 
 export class AgentConfigError extends Error {
@@ -111,5 +129,34 @@ export function readAgentConfig(
   const maxStaleMs =
     Math.min(3600, Math.max(60, Number.isFinite(stale) ? Math.round(stale) : 600)) * 1000;
 
-  return { apiUrl, token, iface, intervalMs, healthPort, wgBin, conntrackBin, maxStaleMs };
+  let cap: TrafficCapConfig | null = null;
+  const capGb = Number(env.TNP_EXIT_MONTHLY_CAP_GB?.trim() || '0');
+  if (!Number.isInteger(capGb) || capGb < 0 || capGb > 1_000_000) {
+    throw new AgentConfigError('TNP_EXIT_MONTHLY_CAP_GB must be a whole number of GB (0: no cap)');
+  }
+  if (capGb > 0) {
+    const throttleMbit = Number(env.TNP_EXIT_THROTTLE_MBIT?.trim() || '2');
+    if (!Number.isInteger(throttleMbit) || throttleMbit < 1 || throttleMbit > 10_000) {
+      throw new AgentConfigError('TNP_EXIT_THROTTLE_MBIT must be a whole number from 1 to 10000');
+    }
+    const uplink = env.TNP_EXIT_UPLINK?.trim() ?? '';
+    if (!IFACE_RE.test(uplink)) {
+      throw new AgentConfigError(
+        'TNP_EXIT_UPLINK must name the uplink interface when a cap is set',
+      );
+    }
+    const stateDir = env.STATE_DIRECTORY?.trim().split(':')[0] ?? '';
+    if (!stateDir.startsWith('/')) {
+      throw new AgentConfigError('a traffic cap needs STATE_DIRECTORY (systemd StateDirectory=)');
+    }
+    cap = {
+      capBytes: capGb * BYTES_PER_GB,
+      throttleMbit,
+      uplink,
+      stateDir,
+      nftBin: program('TNP_EXIT_NFT_BIN', '/usr/sbin/nft'),
+    };
+  }
+
+  return { apiUrl, token, iface, intervalMs, healthPort, wgBin, conntrackBin, maxStaleMs, cap };
 }

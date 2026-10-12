@@ -18,8 +18,12 @@ Environment=BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
 ExecStart=/opt/tnp-exit/bin/bun --no-install /opt/tnp-exit/src/apps/exit/src/index.ts
 Restart=always
 RestartSec=5
+# The monthly traffic count (traffic-cap.ts), kept across restarts and reboots,
+# writable by this service only.
+StateDirectory=tnp-exit
+StateDirectoryMode=0700
 
-# `wg set` needs CAP_NET_ADMIN and nothing else.
+# `wg set`, `conntrack -D` and the traffic cap's `nft` need CAP_NET_ADMIN and nothing else.
 AmbientCapabilities=CAP_NET_ADMIN
 CapabilityBoundingSet=CAP_NET_ADMIN
 NoNewPrivileges=yes
