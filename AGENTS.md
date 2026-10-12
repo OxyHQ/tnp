@@ -78,7 +78,7 @@ Web app: `react-i18next`, 5 languages (en, zh, es, hi, fr). Translation files: `
 
 ## Models
 
-`users`, `domains`, `dns_records`, `tlds`, `tld_proposals`, `service_nodes`, `relays`, `votes` (`apps/api/src/db/schema/`). DNS records are their own table, not a nested document: they are queried by `(domain_id, name, type)` on every resolve, and that is an index.
+`users`, `domains`, `dns_records`, `tlds`, `tld_proposals`, `service_nodes`, `relays`, `votes`, `dns_rule_sets` (`apps/api/src/db/schema/`). DNS records are their own table, not a nested document: they are queried by `(domain_id, name, type)` on every resolve, and that is an index.
 
 ## Deployment
 
@@ -124,4 +124,5 @@ Key modules in `packages/client/src/`:
 - **A new workspace package must be added to every Dockerfile that installs the graph containing it.** Bun resolves the whole workspace before installing anything, so one missing `COPY <pkg>/package.json` fails the install with `@tnp/<name>@workspace:* failed to resolve` no matter how unrelated that package is to the image. Only `Dockerfile.api` is built in CI, so `Dockerfile.dns` silently broke this way once already.
 - **The API is assembled in `apps/api/src/app.ts`** (headers, per-address then per-account rate limits, request timeout, auth); `index.ts` only builds the services router and starts it. Relay `operator` is decided by the API from `TNP_OXY_RELAY_OPERATORS`, never by the relay. API env vars: `docs/api.mdx`.
 - **Privileged client code never builds shell strings.** New system commands go through `system-cmd.ts` as argv with tools from system dirs (not `$PATH`); decide them in a pure function and unit-test it, since Windows/macOS paths cannot run in CI. The kill switch is DNS-only and fail-closed (`killswitch.ts`, `platforms.md` §4); services run an admin-only binary copy, never `process.argv[1]`.
+- **Personal DNS rules** (naming.md §3): `/me/dns-rules` holds one opaque envelope per user; never add a rule-shaped field.
 - **Key deps**: `tweetnacl`, `@noble/ciphers` + `@noble/hashes` (pinned, in `@tnp/crypto`), `dns-packet` (DNS wire format in client), `react-i18next` + `i18next` + `i18next-http-backend` + `i18next-browser-languagedetector` (web i18n).

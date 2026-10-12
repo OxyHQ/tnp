@@ -21,6 +21,7 @@ Scope: issue #13.
 | The relay/exit directory | Deciding who carries traffic | API, signed |
 | User traffic content | The user's data | In transit |
 | User traffic metadata | Who talks to whom, when, how much | Observable at every hop |
+| Personal DNS rules and their rules key | Reveal which names a user blocks or redirects; re-point names on their devices | Ciphertext on the API; key wrapped by the user's passphrase; decrypted only on the user's devices ([naming.md §3](./naming.md#3-overrides--the-only-way-a-public-name-changes-meaning)) |
 | Update signing keys | Ship code to every device | Target: offline custody. Today: a GitHub Actions secret ([security.md §7](./security.md#7-update-security)) |
 
 ## 2. Trust matrix — what each party can observe
@@ -109,6 +110,7 @@ in the exit picker and in the operator consent flow.
 | 25 | Accidental logging | Domains, IPs, tokens in logs | Redaction at generation; explicit logging policy | Partial — the resolver and SOCKS proxy do not log queried names |
 | 26 | Reflection / amplification | Spoof a victim's address at the public resolver | Per-source response rate limiting with slip, 1232-byte UDP cap, DO never forwarded, QR=1 never answered | Implemented in the resolver; not yet load-tested |
 | 27 | Browsing disclosure to the registry | Learn public browsing from client lookups | Classify locally; never query the API for a non-native name (DNS and SOCKS) | Implemented |
+| 28 | Compelled or compromised API vs. personal DNS rules | Read a user's block/redirect lists; push a rule that re-points a public name; serve an older rule set | End-to-end encryption under a passphrase-wrapped key the API never holds; user id and version authenticated; device refuses lower versions and same-version forks; redirects need per-device approval pinned to the target; the public resolver never applies personal rules | Implemented. Residual: the API sees that an account has rules, their size bucket and save times; it can withhold or delete them (blocks stop applying only after `tnp rules forget`); the web dashboard's code is served by the operator, so a hostile deploy could capture a passphrase typed afterwards — the signed CLI is not exposed to this, and a captured passphrase still cannot redirect a public name on a device without local approval |
 
 ## 4. Trust boundaries
 

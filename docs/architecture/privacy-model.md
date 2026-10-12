@@ -108,12 +108,25 @@ hand over everything in the "stores" column.
 | Domains | Name, TLD, owner's Oxy user id, status, created/updated/expiry times, `unlisted` | Listed names only (`GET /domains`, search): name, TLD, status, expiry. No owner, no created/updated time, ordered by name rather than by registration. `unlisted` names are left out of both but still resolve and still answer a lookup by exact name. |
 | DNS records | Every record and its created/updated time | The records, to anyone who resolves or looks up the name — that is what DNS is. |
 | Domain keys | Each name's domain key (public) and its signed rotation history (at most 32 statements) | Both (`GET /domain-keys/:name`, and the resolve overlay). The registry never holds a domain, node or session secret. |
+| Personal DNS rules | Per Oxy user id, one end-to-end encrypted envelope: `ciphertext` (padded to a power-of-two bucket, so its length does not count the rules), the rules key `wrappedKey` under the user's passphrase, Argon2id `kdfParams` and `salt`, `nonce`, a `version` counter and `updatedAt`. Overwritten on each save; no history. No rule, no name, no count, no passphrase, no key. | Nothing. `GET /me/dns-rules` returns the caller's own envelope only, `Cache-Control: no-store`. |
 | Service nodes | Owner's Oxy user id, node key, grant chain and current key-agreement certificate (public), current relay, time of the **last** heartbeat (overwritten, not a history) | Node key and `online: true/false`; the relay only while online. While online, `/dns/resolve` also publishes the chain, certificate and domain key. No timestamp. |
 | Relays | Endpoint, key, registering account, capacity, location label, last heartbeat | Endpoint, key, `operator`, location label, status — for relays that heartbeated in the last 90 s. No account, no timestamp. |
 | TLD proposals and votes | Proposer and each voter's local user id | Scores, and to the caller only whether they proposed or voted. |
 | Rate-limit buckets | Client address (IPv6 as its /64) or Oxy user id, a token count, a time — in memory, size-capped, evicted, never written to disk or logs | Nothing |
 | `/dns/resolve` cache | Public answers, in memory, 30 s at most | Nothing beyond the answer itself |
 | Error logs (CloudWatch) | In production: error class, SQLSTATE, constraint, stack frames. No query parameters, no names, no user ids, no row values. | Nothing |
+
+Compelled or compromised, the API can hand over the envelope above, and can
+serve an old one, a malformed one or none; it cannot decrypt one, edit one
+undetectably, move one to another account, or roll a device back to an older
+version it already accepted (naming.md §3). What it learns from the row itself
+is that the account uses personal rules, roughly how large the set is (to a
+power of two) and when it was last saved. One caveat is outside the envelope:
+the dashboard decrypts in the browser with code served from tnp.network, so an
+operator who can change that code can capture a passphrase typed after the
+change. The `tnp` client is a signed release and does not depend on the page,
+and no rule — however authored — redirects a public name on a device without
+that device's approval.
 
 Not addressed here: Cloudflare, and the load balancer if access logging is
 on, keep their own request logs (with client addresses and URLs, which for

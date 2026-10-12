@@ -307,8 +307,9 @@ on Android.
 | Signatures | Ed25519 | tweetnacl |
 | Key agreement | X25519, refusing non-canonical and small-order keys | tweetnacl, checks in `@tnp/crypto/primitives` |
 | AEAD, counter nonce | ChaCha20-Poly1305 (RFC 8439) | `@noble/ciphers` 1.3.0 |
-| AEAD, random nonce | XChaCha20-Poly1305 (none in use yet) | — |
+| AEAD, random nonce | XChaCha20-Poly1305 (192-bit nonce): personal DNS rules, `@tnp/crypto/dns-rules` | `@noble/ciphers` 1.3.0 |
 | KDF | HKDF-SHA256 | `@noble/hashes` 1.8.0 |
+| Password KDF | Argon2id (RFC 9106; default m = 64 MiB, t = 3, p = 1; floor m = 19 MiB, t = 2): the personal-rules sync passphrase | `@noble/hashes` 1.8.0 |
 | Hash | SHA-256 | `@noble/hashes` 1.8.0 |
 | Randomness | Platform CSPRNG only | tweetnacl → `crypto.getRandomValues` |
 
@@ -335,6 +336,11 @@ Rules:
   produced under, so rotating an algorithm does not require guessing. For
   session records this is the frame's `version` byte, which is authenticated as
   associated data, and the Noise protocol name, which is fixed per version.
+  The personal-rules envelope carries `v: 1`, authenticated in the associated
+  data of both the key wrap and the rule set, beside the Oxy user id (and, for
+  the rule set, its monotonic `version`); KDF parameters and salt are bound
+  into the wrap's associated data, so a stored record cannot be downgraded to
+  weaker parameters without the unwrap failing.
 
 ## 4. Authentication
 

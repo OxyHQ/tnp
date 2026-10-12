@@ -16,14 +16,26 @@ not (S8).
 ```
 query
   ↓
+[0] personal rules ── local approved-rules file only (naming.md §3);
+  ↓                    absent on the public resolver
 [1] classify  ──── offline, from the cached TLD policy table
   ↓                 (naming.md §1; never a network call)
-  ├── public-dns ──→ [2] override check ──→ [3] upstream ──→ [4] DNSSEC ──┐
-  │                        (per-name, local)                              │
+  ├── public-dns ──→ [3] upstream ──→ [4] DNSSEC ─────────────────────────┐
   └── tnp-native ──→ [5] TNP lookup ──→ [6] verify signature ─────────────┤
                                                                           ↓
                                                               [7] cache + respond
 ```
+
+**[0] Personal rules** (`packages/client/src/dns-rules.ts`, hooked at the top
+of `handleQuery`). A block answers `NXDOMAIN` with no SOA, so nothing
+downstream caches it, for native and public names alike — a blocked native
+name never reaches the registry. An approved redirect answers its exact name
+(30 s TTL): an address for the matching type and NODATA for every other type,
+or a CNAME plus the target resolved through steps [1]–[7] without the rules.
+A redirect is ignored for a name that classifies native. The rules come from
+one file the resolver re-checks every two seconds and refuses if it is not
+root-owned, private and exactly what `tnp rules` writes; the key that
+decrypts the synced set is never in the resolver process.
 
 Classification happens **first, offline, always**. A `public-dns` name never
 touches TNP infrastructure, which is both the namespace guarantee

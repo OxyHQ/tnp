@@ -1,8 +1,8 @@
 # Naming and namespace policy
 
 **Status: normative policy. Rules N1–N5 are implemented in `@tnp/namespace` and
-enforced by both the registry and the client. Migration steps M1–M3 are done;
-M4–M7 remain. See §6.**
+enforced by both the registry and the client. Migration steps M1–M3 and M7 are
+done; M4–M6 remain. See §6.**
 
 ---
 
@@ -105,20 +105,76 @@ fall through to public DNS.
 ## 3. Overrides — the only way a public name changes meaning
 
 An override is a per-name, user-installed rule that answers a `public-dns` name
-from TNP data. Requirements, all mandatory:
+differently on the user's own device. Requirements, all mandatory:
 
-1. **Per name.** Never per TLD, never a wildcard, never "all of TNP".
-2. **User-installed, locally.** It is a local device decision. The registry
-   cannot push one, and no API response can create one — otherwise a registry
-   compromise silently re-points arbitrary public names.
-3. **Visible.** `tnp status` lists every active override. The dashboard lists
-   them. They survive no upgrade silently.
-4. **Explicit at install.** The consent prompt names the exact name and states
-   that its public meaning is being replaced on this device.
-5. **Auditable.** Stored in one file, in one place, human-readable.
+1. **Per name.** Never per TLD, never a wildcard over a TLD, never "all of
+   TNP". The one subtree form is a *block* of a name and its subdomains
+   (below); it can only remove answers, and never covers a single-label name.
+2. **User-authored and device-applied.** The registry cannot create one, and
+   no API response can — otherwise a registry compromise silently re-points
+   arbitrary public names. For synced rules this is cryptographic, not a
+   policy: the API stores only ciphertext and never holds the key.
+3. **Visible.** `tnp status` reports the active rules and where they live;
+   `tnp rules status` and the dashboard list every one. They survive no
+   upgrade silently.
+4. **Explicit at install.** A rule that makes a public name answer something
+   else (a redirect) takes effect on a device only after a consent prompt
+   there that names the exact name and target and states that its public
+   meaning is being replaced on this device.
+5. **Auditable.** The rules in force on a device are in one file, in one
+   place, human-readable.
 
-Overrides are a Phase 2 feature. They do not exist today, and until they do, no
-public name may be answered from TNP data by any code path.
+### Synced personal rules
+
+**Status: implemented** (`@tnp/crypto/dns-rules`, `@tnp/shared-types`
+`dns-rules`, `packages/client/src/dns-rules*.ts`, `/dashboard/dns-rules`;
+user guide `docs/dns-rules.mdx`). This is the only mechanism by which a public
+name is answered differently by any TNP code path.
+
+- **Authorship.** A rule set is encrypted end to end under a random *rules
+  key*, itself wrapped under a key derived (Argon2id) from the user's sync
+  passphrase. Only someone holding the rules key — that is, the passphrase or
+  a device that already pulled — can author a rule set that decrypts. The
+  registry stores `{wrappedKey, kdfParams, salt, ciphertext, nonce, version,
+  updatedAt}` per Oxy account and nothing else; it cannot read, edit or
+  create a rule. Associated data binds the Oxy user id and the version, the
+  version is also inside the plaintext, and a device refuses a version lower
+  than one it accepted (and the same version with different bytes), so the
+  server can neither swap blobs between accounts nor roll a device back
+  silently.
+- **Block rules** answer `NXDOMAIN` for one exact name, or for a name and all
+  its subdomains. They may cover native and public names alike, and they
+  apply on a device as soon as it pulls: they can only make a name stop
+  resolving (fail closed), never point it anywhere. A holder of the rules key
+  can therefore deny names on the user's devices, but never redirect one.
+- **Redirect rules** cover one exact name, never its subdomains, and answer
+  with an IPv4 or IPv6 address (other types: NODATA) or a CNAME to another
+  name resolved through the normal path, without applying rules again (no
+  chains, no loops). A redirect of a **native** name is refused everywhere —
+  the web form, the client's parser, and the resolver at answer time — because
+  the TNP namespace is authoritative for it. A redirect of a public name
+  applies on a device only after `tnp rules approve` on that device; the
+  approval pins the exact target, and a later change of target needs
+  approving again. So neither the registry nor anyone who learns the
+  passphrase can change what a public name means on a device without a person
+  at that device agreeing.
+- **Where they apply.** Only to queries answered by the user's local TNP
+  resolver (`tnp run`, `tnp connect`) or by a router the user configured from
+  the dashboard's local export. The public TNP resolver never applies personal
+  rules: it has no key and is never given a rules file. With `tnp install`
+  the OS routes only native TLDs to the local resolver (resolution.md §10), so
+  public-name rules reach only devices or routers the user points at it.
+- **One file.** The device writes the decrypted, approved set to
+  `<configDir>/dns-rules.conf` (Linux `/etc/tnp/dns-rules.conf`, root:tnp
+  0640 so the sandboxed daemon can read it; 0600 elsewhere). The rules key,
+  the rollback record and approvals stay in root's state directory, which the
+  daemon cannot read. The resolver refuses the file outright if it is a
+  symlink, not owned by root (or itself), writable by group or others, or not
+  exactly what `tnp rules` writes.
+
+Rules the user writes into a router from the export are the router's
+configuration, outside TNP: the export is generated in the browser and never
+sent to the API, and its format-specific limits are documented there.
 
 ---
 
@@ -261,9 +317,9 @@ and a redirect from the old record for the hold period.
 `status: retired`: not served, not deleted, not re-registrable. Retained so an
 owner who missed the notice can still recover their name.
 
-**M7 — Overrides.** Ship the per-name override mechanism (§3) so a user who
-genuinely wants a private meaning for a public name can install one, deliberately
-and visibly.
+**M7 — Overrides. ✅ Done** as synced personal rules (§3): a user who genuinely
+wants a private meaning for a public name can install one, deliberately and
+visibly, on their own devices.
 
 ### What must not be done
 
