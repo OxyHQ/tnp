@@ -8,7 +8,7 @@ order: 1
 
 The same `DnsProxy` class powers two runtimes:
 
-- **`apps/dns-server`** — the public-resolver image. It listens on UDP and TCP and is stateless, but the AWS service and public traffic path remain parked at zero until a separate infrastructure promotion.
+- **`apps/dns-server`** — the public-resolver image. It is stateless. The public resolver answers plain DNS on **UDP and TCP port 53** at the address the API serves as `dns.ip` from `/client/latest`; there is no DNS-over-TLS listener (port 853), so it cannot be used as Android Private DNS. Queries to it are unencrypted, which is why the [install page](https://tnp.network/install) only ever forwards `.ox` to it and never makes it a device's or router's whole resolver.
 - **`packages/client` — `tnp run` / `tnp connect`** — the local proxy on `127.0.0.1:5354`. It uses the same resolution logic and may enable the encrypted overlay when connected.
 
 The class lives in `packages/client/src/proxy.ts`. `apps/dns-server/src/index.ts` is the small wrapper that constructs it, starts the TLD-policy sync, and binds the sockets.
@@ -32,7 +32,7 @@ await proxy.syncTlds();
 await proxy.start();
 ```
 
-UDP handles DNS-over-UDP. TCP uses the two-byte message-length prefix from RFC 1035, answers one query at a time per connection and in order, and closes a connection after 10 seconds idle, 30 seconds after it was accepted however busy it is, or when a client buffers more than 4 KB without completing a message. Connections beyond `maxTcpConnections` are closed on accept. DNS-over-TLS is not implemented or advertised by this runtime.
+UDP handles DNS-over-UDP. TCP uses the two-byte message-length prefix from RFC 1035, answers one query at a time per connection and in order, and closes a connection after 10 seconds idle, 30 seconds after it was accepted however busy it is, or when a client buffers more than 4 KB without completing a message. Connections beyond `maxTcpConnections` are closed on accept. DNS-over-TLS is not implemented or advertised by this runtime. `listenPort` (`TNP_LISTEN_PORT`) is the container's bind port; clients reach the public resolver on port 53 through the load balancer.
 
 ## Query validation and abuse limits
 
@@ -94,7 +94,7 @@ The proxy independently drops every public-root, special-use or private-use TLD 
 
 The public resolver image is built from `Dockerfile.dns`. `.github/workflows/ci.yml` builds it on every change. After all gates pass on `main`, the AWS publisher builds it natively for `linux/arm64`, publishes only the full Git SHA tag, verifies the registry artefact, and records its digest.
 
-The publisher does not move `latest`, register a task definition, scale a service, or open traffic. `tnp-dns` is intentionally parked at `desired_count = 0`. A later reviewed `oxy-infra` promotion must pin an approved digest and independently validate the NLB listeners, security groups, resolver behavior, and parking path before changing that count.
+The publisher does not move `latest`, register a task definition, scale a service, or open traffic. Promoting a published digest to the running `tnp-dns` service is a separate reviewed `oxy-infra` change that pins the digest and validates the NLB listeners, security groups, resolver behavior and parking path.
 
 ## Environment variables
 
@@ -115,5 +115,3 @@ The publisher does not move `latest`, register a task definition, scale a servic
 ## Parking page hand-off
 
 For a native name that should park, the API may return the address supplied through `TNP_PARKING_IP`. Production must inject the exact infrastructure-owned endpoint; the application has no hardcoded fallback. The API inspects the `Host` header and serves its inline registered-or-available page without redirecting the browser.
-
-The AWS DNS and parking traffic paths remain inactive while their services are parked. Activation requires a separate infrastructure review and live end-to-end validation.

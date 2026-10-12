@@ -79,7 +79,7 @@ Windows (PowerShell):
 irm https://get.tnp.network/ps | iex
 ```
 
-The installer detects the platform and architecture, downloads the matching `tnp` binary from the GitHub release, and verifies it against the release's signed `SHA256SUMS` before installing it — see [security.md §7](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/security.md) for what is checked where. `tnp install` runs the local resolver as a service and configures split DNS for TNP-native labels where the operating system supports it. Public DNS continues through the configured upstreams. The AWS public resolver remains parked and must not be documented as reachable until its separate infrastructure promotion passes.
+The installer detects the platform and architecture, downloads the matching `tnp` binary from the GitHub release, and verifies it against the release's signed `SHA256SUMS` before installing it — see [security.md §7](https://github.com/OxyHQ/tnp/blob/main/docs/architecture/security.md) for what is checked where. `tnp install` runs the local resolver as a service and configures split DNS for TNP-native labels where the operating system supports it. Public DNS continues through the configured upstreams. Without the client, forward only `.ox` to the public TNP resolver (plain DNS on UDP/TCP port 53, unencrypted, no DNS-over-TLS) in your router or OS resolver; the [install page](https://tnp.network/install) has the steps. Never make it a device's or router's whole resolver: every lookup would go to TNP in plaintext.
 
 ## Quick start
 
