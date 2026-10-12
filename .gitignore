@@ -7,3 +7,6 @@ dist/
 
 # Agent worktrees — local only, never part of the repo.
 .claude/worktrees/
+
+# Local `wrangler pages dev` state (miniflare caches).
+.wrangler/

@@ -80,7 +80,7 @@ Web app: `react-i18next`, 5 languages (en, zh, es, hi, fr). Translation files: `
 
 ## Deployment
 
-- **Web**: CF Pages (`tnp.network`) via `deploy.yml`, gated on CI
+- **Web**: CF Pages (`tnp.network`) via `deploy.yml`, gated on CI, with the locked `wrangler` devDependency (never `bunx wrangler@…`). The worker sets every security header (strict CSP, HSTS, COOP `same-origin-allow-popups` for the Oxy sign-in popup) in `apps/web/worker/security-headers.js`; a new origin the dashboard calls goes in `connect-src` there or the browser blocks it
 - **API and DNS images**: **ECS Fargate in us-west-2** runs both production services. After both gates pass on `main`, `ci.yml` calls the artefact-only `deploy-aws.yml`, which publishes `linux/arm64` API and DNS images under the full Git SHA and records their digests. It does not move `latest`, register task definitions, roll out ECS, scale services, or activate traffic.
 - **Infra is owned by `~/Oxy/oxy-infra`** (`terraform-uswest2/app-tnp.tf`): ECR repos `oxy/tnp-{api,dns,relay}`, ECS services on `oxy-cluster`, ALB target groups with `/health`. Do not create TNP AWS resources from this repo.
 - **API/DNS are active; relay stays parked.** The image publisher accepts the existing active API/DNS fleet and never changes service counts. Promote only a reviewed immutable digest after verifying the current task definition, database, secrets, health checks and traffic path. Never include relay in this publisher or scale it up through an API/DNS rollout; its security blockers below remain mandatory.
