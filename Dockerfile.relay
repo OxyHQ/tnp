@@ -16,6 +16,7 @@ COPY package.json bun.lock ./
 # installing anything, so one missing package.json fails the install.
 COPY apps/api/package.json apps/api/
 COPY apps/dns-server/package.json apps/dns-server/
+COPY apps/exit/package.json apps/exit/
 COPY apps/relay/package.json apps/relay/
 COPY apps/web/package.json apps/web/
 COPY packages/client/package.json packages/client/

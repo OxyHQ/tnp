@@ -1,0 +1,100 @@
+/**
+ * The exit agent's settings, from its environment (set by the systemd unit,
+ * `deploy/tnp-exit-agent.service`).
+ *
+ * - `TNP_API_URL`            default `https://api.tnp.network`. HTTPS only,
+ *                            except a loopback address for local testing.
+ * - `TNP_EXIT_TOKEN`         the bearer secret for `/exit/peers`. When unset,
+ *                            read from `$CREDENTIALS_DIRECTORY/exit-token`
+ *                            (systemd `LoadCredential=`), which is how the unit
+ *                            supplies it: the secret is then in no environment
+ *                            block and no file the service user can list.
+ * - `TNP_EXIT_INTERFACE`     default `wg0`.
+ * - `TNP_EXIT_POLL_SECONDS`  default 20, clamped to 5-300.
+ * - `TNP_EXIT_HEALTH_PORT`   default 9817 on 127.0.0.1; 0 turns it off.
+ * - `TNP_EXIT_WG_BIN`        default `wg` (found on PATH).
+ */
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+export interface AgentConfig {
+  apiUrl: string;
+  token: string;
+  iface: string;
+  intervalMs: number;
+  healthPort: number;
+  wgBin: string;
+}
+
+export class AgentConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AgentConfigError';
+  }
+}
+
+const IFACE_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,14}$/;
+const TOKEN_RE = /^[\x21-\x7e]{32,512}$/;
+
+function isLoopbackHost(host: string): boolean {
+  return host === 'localhost' || host === '[::1]' || /^127\.\d+\.\d+\.\d+$/.test(host);
+}
+
+export function readAgentConfig(
+  env: Record<string, string | undefined>,
+  readFile: (path: string) => string = (path) => readFileSync(path, 'utf8'),
+): AgentConfig {
+  const apiUrl = (env.TNP_API_URL?.trim() || 'https://api.tnp.network').replace(/\/+$/, '');
+  let parsed: URL;
+  try {
+    parsed = new URL(apiUrl);
+  } catch {
+    throw new AgentConfigError('TNP_API_URL is not a URL');
+  }
+  if (
+    parsed.protocol !== 'https:' &&
+    !(parsed.protocol === 'http:' && isLoopbackHost(parsed.host.replace(/:\d+$/, '')))
+  ) {
+    throw new AgentConfigError(
+      'TNP_API_URL must be https:// (http:// only for a loopback address)',
+    );
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new AgentConfigError('TNP_API_URL must not carry credentials, a query or a fragment');
+  }
+
+  let token = env.TNP_EXIT_TOKEN?.trim() ?? '';
+  if (!token && env.CREDENTIALS_DIRECTORY) {
+    try {
+      token = readFile(join(env.CREDENTIALS_DIRECTORY, 'exit-token')).trim();
+    } catch {
+      throw new AgentConfigError('the exit-token credential could not be read');
+    }
+  }
+  if (!token)
+    throw new AgentConfigError('TNP_EXIT_TOKEN (or the exit-token credential) is required');
+  if (!TOKEN_RE.test(token)) {
+    throw new AgentConfigError('the exit token must be 32-512 printable characters');
+  }
+
+  const iface = env.TNP_EXIT_INTERFACE?.trim() || 'wg0';
+  if (!IFACE_RE.test(iface))
+    throw new AgentConfigError('TNP_EXIT_INTERFACE is not an interface name');
+
+  const poll = Number(env.TNP_EXIT_POLL_SECONDS?.trim() || '20');
+  const intervalMs =
+    Math.min(300, Math.max(5, Number.isFinite(poll) ? Math.round(poll) : 20)) * 1000;
+
+  const healthPort = Number(env.TNP_EXIT_HEALTH_PORT?.trim() || '9817');
+  if (!Number.isInteger(healthPort) || healthPort < 0 || healthPort > 65_535) {
+    throw new AgentConfigError('TNP_EXIT_HEALTH_PORT must be a port number or 0');
+  }
+
+  const wgBin = env.TNP_EXIT_WG_BIN?.trim() || 'wg';
+  if (!/^[A-Za-z0-9_./-]+$/.test(wgBin) || wgBin.startsWith('-')) {
+    throw new AgentConfigError('TNP_EXIT_WG_BIN is not a program path');
+  }
+
+  return { apiUrl, token, iface, intervalMs, healthPort, wgBin };
+}

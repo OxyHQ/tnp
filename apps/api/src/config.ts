@@ -1,3 +1,5 @@
+import { readVpnConfig } from './vpn.js';
+
 // `.env` is loaded by Bun itself (every entry point runs on Bun) before any
 // module runs; a variable the shell already set wins.
 
@@ -63,6 +65,11 @@ export function parseFlag(value: string | undefined, fallback: boolean): boolean
 }
 
 const production = process.env.NODE_ENV === 'production';
+
+// The standard-tier VPN (docs/architecture/vpn.md §10): off unless
+// TNP_VPN_EXITS names an exit. Read once; problems are printed, never fatal.
+const vpn = readVpnConfig(process.env);
+for (const warning of vpn.warnings) console.warn(`[tnp-api] ${warning}`);
 
 /**
  * The signed relay directory's key and Oxy relays (registry/relayDirectory.ts).
@@ -180,4 +187,6 @@ export const config = {
    * through `/dns/resolve` from one address.
    */
   rateLimitExempt: parseList(process.env.TNP_RATE_LIMIT_EXEMPT),
+  /** WireGuard exits, device DNS and exit tokens; null while the VPN is off. See `vpn.ts`. */
+  vpn: vpn.config,
 };

@@ -1,0 +1,18 @@
+[Unit]
+Description=TNP exit: WireGuard interface (key from SSM, held in kernel memory only)
+Documentation=https://github.com/OxyHQ/tnp/blob/main/docs/architecture/exit-nodes.md
+# The packet filter is loaded first: wg0 never exists without it.
+Requires=nftables.service
+After=nftables.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/tnp-exit/src/apps/exit/deploy/wg-up.sh
+ExecStop=/usr/sbin/ip link del wg0
+ExecStopPost=/usr/bin/rm -f /run/tnp-exit/agent-token
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

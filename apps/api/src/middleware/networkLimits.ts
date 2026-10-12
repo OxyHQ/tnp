@@ -20,7 +20,7 @@
  * - `read` — other GETs.
  * - `heartbeat` — service nodes and relays check in every 30 seconds each, and
  *   one account may run many.
- * - `register` — creating names, TLD proposals, relays and service nodes: rare
+ * - `register` — creating names, TLD proposals, relays, service nodes and VPN devices: rare
  *   for a person, the thing a squatter or spammer does in bulk.
  * - `write` — everything else that changes state.
  */
@@ -65,6 +65,7 @@ const REGISTER_PATHS = new Set([
   '/tlds/propose',
   '/nodes/register',
   '/relays/register',
+  '/me/vpn/devices',
 ]);
 const HEARTBEAT_PATHS = new Set(['/nodes/heartbeat', '/relays/heartbeat']);
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);

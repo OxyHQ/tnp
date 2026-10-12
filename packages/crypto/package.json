@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./primitives": "./src/primitives.ts",
     "./testing": "./src/testing.ts",
-    "./dns-rules": "./src/dns-rules.ts"
+    "./dns-rules": "./src/dns-rules.ts",
+    "./wireguard": "./src/wireguard.ts"
   },
   "scripts": {
     "test": "bun test",

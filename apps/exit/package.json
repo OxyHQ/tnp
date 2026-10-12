@@ -1,0 +1,19 @@
+{
+  "name": "@tnp/exit",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@tnp/crypto": "workspace:*",
+    "@tnp/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "bun-types": "^1.4.3",
+    "typescript": "~7.0.2"
+  }
+}

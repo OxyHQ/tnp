@@ -356,6 +356,41 @@ export const dnsRuleSets = pgTable('dns_rule_sets', {
 });
 
 // ---------------------------------------------------------------------------
+// VPN devices (WireGuard, standard tier)
+// ---------------------------------------------------------------------------
+
+/**
+ * One WireGuard device of one Oxy account (docs/architecture/vpn.md §10,
+ * privacy-model.md §4).
+ *
+ * This is ALL the registry keeps about a device: who owns it, what its owner
+ * calls it, its public key and its tunnel address. There is deliberately no
+ * column for a private key, a handshake or connection time, an endpoint (the
+ * device's IP) or traffic, and no `updatedAt`: nothing here records use.
+ *
+ * `address` is the IPv4 tunnel address in `10.77.0.0/16`; the IPv6 one is
+ * derived from it (`vpnIpv6ForIpv4`), so it is not stored twice. Both unique
+ * indexes are load-bearing: WireGuard routes by key and by address, and two
+ * devices sharing either would receive each other's traffic.
+ */
+export const vpnDevices = pgTable(
+  'vpn_devices',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    oxyUserId: text('oxy_user_id').notNull(),
+    name: text('name').notNull(),
+    publicKey: text('public_key').notNull(),
+    address: text('address').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('vpn_devices_public_key_key').on(table.publicKey),
+    uniqueIndex('vpn_devices_address_key').on(table.address),
+    index('vpn_devices_oxy_user_id_idx').on(table.oxyUserId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
 

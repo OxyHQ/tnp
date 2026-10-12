@@ -44,6 +44,18 @@
         "typescript": "~7.0.2",
       },
     },
+    "apps/exit": {
+      "name": "@tnp/exit",
+      "version": "1.0.0",
+      "dependencies": {
+        "@tnp/crypto": "workspace:*",
+        "@tnp/shared-types": "workspace:*",
+      },
+      "devDependencies": {
+        "bun-types": "^1.4.3",
+        "typescript": "~7.0.2",
+      },
+    },
     "apps/relay": {
       "name": "@tnp/relay",
       "version": "1.0.0",
@@ -824,6 +836,8 @@
     "@tnp/crypto": ["@tnp/crypto@workspace:packages/crypto"],
 
     "@tnp/dns-server": ["@tnp/dns-server@workspace:apps/dns-server"],
+
+    "@tnp/exit": ["@tnp/exit@workspace:apps/exit"],
 
     "@tnp/namespace": ["@tnp/namespace@workspace:packages/namespace"],
 
