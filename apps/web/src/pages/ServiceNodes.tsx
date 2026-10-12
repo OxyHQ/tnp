@@ -100,7 +100,7 @@ export default function ServiceNodes() {
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
-      <div className="mb-8 flex gap-3">
+      <div className="mb-8 flex flex-wrap gap-3">
         <Link
           to="/dashboard"
           className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-border text-muted-foreground/70 hover:text-muted-foreground"
@@ -112,6 +112,12 @@ export default function ServiceNodes() {
           className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-primary/30 bg-primary/10 text-primary-text"
         >
           {t('serviceNodes:tabs.serviceNodes')}
+        </Link>
+        <Link
+          to="/dashboard/dns-rules"
+          className="cursor-pointer rounded-lg px-4 py-2 font-mono text-sm transition-colors border border-border text-muted-foreground/70 hover:text-muted-foreground"
+        >
+          {t('serviceNodes:tabs.dnsRules')}
         </Link>
       </div>
 

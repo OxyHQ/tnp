@@ -4,7 +4,8 @@
   },
   "tabs": {
     "domains": "域名",
-    "serviceNodes": "服务节点"
+    "serviceNodes": "服务节点",
+    "dnsRules": "DNS 规则"
   },
   "heading": "服务节点",
   "subtitle": "服务节点使你的域名可通过 TNP 覆盖网络访问 -- 无需端口转发或公网 IP。",

@@ -4,7 +4,8 @@
   },
   "tabs": {
     "domains": "域名",
-    "serviceNodes": "服务节点"
+    "serviceNodes": "服务节点",
+    "dnsRules": "DNS 规则"
   },
   "heading": "你的域名",
   "emptyState": "你还没有注册任何域名。",

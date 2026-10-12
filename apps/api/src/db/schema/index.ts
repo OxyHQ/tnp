@@ -298,6 +298,40 @@ export const votes = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Personal DNS rules (end-to-end encrypted)
+// ---------------------------------------------------------------------------
+
+/**
+ * One encrypted personal-rule envelope per Oxy account
+ * (docs/architecture/naming.md §3, privacy-model.md §4).
+ *
+ * Everything here is opaque to the API: the rules are sealed in `ciphertext`
+ * under a key that is itself wrapped under the user's sync passphrase, and
+ * the plaintext is padded so the length does not count the rules. There is
+ * deliberately no column for a rule count, a name, or anything derived from
+ * the plaintext, and no history: a write replaces the row.
+ *
+ * Keyed by the Oxy user id rather than `users.id`, so storing rules needs no
+ * local user row and deleting them leaves nothing behind.
+ */
+export const dnsRuleSets = pgTable('dns_rule_sets', {
+  oxyUserId: text('oxy_user_id').primaryKey(),
+  /** Envelope format version (`v`). */
+  envelopeVersion: integer('envelope_version').notNull(),
+  /** Argon2id parameters the wrap was derived with: `{ alg, m, t, p }`. */
+  kdfParams: jsonb('kdf_params')
+    .$type<{ alg: 'argon2id'; m: number; t: number; p: number }>()
+    .notNull(),
+  salt: text('salt').notNull(),
+  wrappedKey: text('wrapped_key').notNull(),
+  nonce: text('nonce').notNull(),
+  ciphertext: text('ciphertext').notNull(),
+  /** Monotonic; a write must be exactly this plus one. */
+  version: integer('version').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
 

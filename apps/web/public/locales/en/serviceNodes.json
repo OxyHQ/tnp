@@ -4,7 +4,8 @@
   },
   "tabs": {
     "domains": "Domains",
-    "serviceNodes": "Service Nodes"
+    "serviceNodes": "Service Nodes",
+    "dnsRules": "DNS Rules"
   },
   "heading": "Service Nodes",
   "subtitle": "Service nodes make your domains reachable over the TNP overlay network -- no port forwarding or public IP needed.",

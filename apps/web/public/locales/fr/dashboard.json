@@ -4,7 +4,8 @@
   },
   "tabs": {
     "domains": "Domaines",
-    "serviceNodes": "Nœuds de service"
+    "serviceNodes": "Nœuds de service",
+    "dnsRules": "Règles DNS"
   },
   "heading": "Vos domaines",
   "emptyState": "Vous n'avez pas encore enregistré de domaine.",

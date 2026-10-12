@@ -4,7 +4,8 @@
   },
   "tabs": {
     "domains": "Dominios",
-    "serviceNodes": "Nodos de servicio"
+    "serviceNodes": "Nodos de servicio",
+    "dnsRules": "Reglas DNS"
   },
   "heading": "Tus dominios",
   "emptyState": "Aún no has registrado ningún dominio.",

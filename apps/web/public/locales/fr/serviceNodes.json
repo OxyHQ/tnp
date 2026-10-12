@@ -4,7 +4,8 @@
   },
   "tabs": {
     "domains": "Domaines",
-    "serviceNodes": "Nœuds de service"
+    "serviceNodes": "Nœuds de service",
+    "dnsRules": "Règles DNS"
   },
   "heading": "Nœuds de service",
   "subtitle": "Les nœuds de service rendent vos domaines accessibles via le réseau overlay TNP -- sans redirection de port ni IP publique.",

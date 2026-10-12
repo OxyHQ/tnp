@@ -19,7 +19,9 @@
  */
 
 import { describe, expect, test } from 'bun:test';
+import { createRulesEnvelope } from '@tnp/crypto/dns-rules';
 import {
+  parsePutDnsRulesRequest,
   parseRegisterRelayRequest,
   parseRelayHeartbeatRequest,
   parseRegisterServiceNodeRequest,
@@ -27,6 +29,7 @@ import {
   parseRegisterDomainKeyRequest,
   type RegisterDomainKeyRequest,
   type ParseResult,
+  serializeDnsRuleSet,
 } from '@tnp/shared-types';
 import {
   encodeBase64,
@@ -260,6 +263,47 @@ describe('domain keys', () => {
     expect(expectAccepted(parseRegisterDomainKeyRequest(sent2.body), 'POST /domain-keys')).toEqual(
       rotate,
     );
+  });
+});
+
+describe('personal DNS rules', () => {
+  // A real envelope, made the way the dashboard makes one (the web's
+  // tests/dns-rules.test.ts captures its PUT body the same way).
+  const made = createRulesEnvelope({
+    passphrase: 'contract passphrase',
+    userId: 'oxy-user-contract',
+    body: new TextEncoder().encode(serializeDnsRuleSet([])),
+    kdfParams: { alg: 'argon2id', m: 19_456, t: 2, p: 1 },
+  });
+  const stored = {
+    ...made.envelope,
+    userId: 'oxy-user-contract',
+    updatedAt: '2026-10-12T00:00:00.000Z',
+  };
+
+  test('an envelope @tnp/crypto produces is a body PUT /me/dns-rules accepts, field for field', () => {
+    const accepted = expectAccepted(parsePutDnsRulesRequest(made.envelope), 'PUT /me/dns-rules');
+    expect(accepted).toEqual(made.envelope);
+  });
+
+  test('getDnsRules sends an authenticated GET and returns the validated record', async () => {
+    let returned: unknown = null;
+    const sent = await capture(async (client) => {
+      returned = await client.getDnsRules(AUTH_TOKEN);
+    }, stored);
+    expect(sent.url).toBe(`${BASE_URL}/me/dns-rules`);
+    expect(sent.method).toBe('GET');
+    expect(sent.body).toBeNull();
+    expect(returned).toEqual(stored);
+  });
+
+  test('getDnsRules refuses a malformed record instead of decrypting it', async () => {
+    await expect(
+      capture((client) => client.getDnsRules(AUTH_TOKEN), {
+        ...stored,
+        kdfParams: { alg: 'argon2id', m: 8, t: 1, p: 1 },
+      }),
+    ).rejects.toThrow('the API returned a malformed rule set');
   });
 });
 

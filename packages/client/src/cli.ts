@@ -6,6 +6,7 @@ import {
   dataDir,
   loadConfig,
   loadResolverConfig,
+  personalRulesPath,
   saveConfig,
   parsePrivacyLevel,
   type TnpConfig,
@@ -26,6 +27,7 @@ import {
   killSwitchRecorded,
   upstreamsBlockedByKillSwitch,
 } from './killswitch';
+import { describeActiveRules } from './dns-rules';
 import { parseLocalTarget } from './parse-input';
 import { DnsProxy } from './proxy';
 import { installService, serviceStatus, stopService, startService, NATIVE_TLDS } from './service';
@@ -61,6 +63,8 @@ Usage:
                        Also delete that data: config, identity key, log, binary
   tnp update           Update to the latest version
   tnp status           Check if the resolver service is running
+  tnp rules <cmd>      Personal DNS rules: pull, status, approve, revoke, forget
+                       (tnp rules help)
   tnp test <domain>    Test resolving a TNP domain
   tnp domain ...       Manage domain keys and node grants (tnp domain help)
   tnp pins [forget <name>]
@@ -122,7 +126,9 @@ async function cmdRun() {
   console.log(`[tnp] API: ${config.apiBaseUrl}`);
   console.log(`[tnp] upstream DNS: ${config.upstreamDns}`);
 
-  const proxy = new DnsProxy(config);
+  // Personal rules: the daemon reads only the approved-rules file `tnp rules`
+  // writes, never the rules key (dns-rules.ts).
+  const proxy = new DnsProxy({ ...config, personalRulesPath: personalRulesPath() });
 
   // Start the DNS proxy FIRST so upstream forwarding works immediately.
   // This is critical when system DNS points to us (127.0.0.1) — we need
@@ -253,8 +259,8 @@ async function cmdConnect() {
     `[tnp] privacy: ${config.privacyLevel}  kill switch: ${killSwitchOn ? 'on (plain DNS only)' : 'off'}  autoconnect: ${config.autoConnect ? 'on' : 'off'}`,
   );
 
-  // Start DNS proxy with overlay enabled
-  const proxy = new DnsProxy(config);
+  // Start DNS proxy with overlay enabled, applying this device's personal rules.
+  const proxy = new DnsProxy({ ...config, personalRulesPath: personalRulesPath() });
   proxy.enableOverlay();
 
   proxy.startTldSync(5 * 60 * 1000);
@@ -724,6 +730,9 @@ async function cmdStatus() {
   }
   const { pinsSummary } = await import('./overlay/commands');
   console.log(`[tnp] overlay: ${pinsSummary()}`);
+  // Every active override is visible here (naming.md §3.3).
+  const rules = describeActiveRules(personalRulesPath());
+  console.log(`[tnp] ${rules ?? 'personal DNS rules: none on this device'}`);
   process.exit(running ? 0 : 1);
 }
 
@@ -846,6 +855,11 @@ switch (command) {
   case 'test':
     await cmdTest(arg || '');
     break;
+  case 'rules': {
+    const { runRulesCommand } = await import('./rules-cli');
+    process.exit(await runRulesCommand(process.argv.slice(3)));
+    break;
+  }
   case 'version':
   case '--version':
   case '-v':

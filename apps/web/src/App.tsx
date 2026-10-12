@@ -7,6 +7,7 @@ import Explore from './pages/Explore';
 import Register from './pages/Register';
 import Domains from './pages/Domains';
 import Dashboard from './pages/Dashboard';
+import DnsRules from './pages/DnsRules';
 import ServiceNodes from './pages/ServiceNodes';
 import Network from './pages/Network';
 import Propose from './pages/Propose';
@@ -35,6 +36,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/dns-rules"
+              element={
+                <ProtectedRoute>
+                  <DnsRules />
                 </ProtectedRoute>
               }
             />

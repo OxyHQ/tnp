@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./primitives": "./src/primitives.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./dns-rules": "./src/dns-rules.ts"
   },
   "scripts": {
     "test": "bun test",

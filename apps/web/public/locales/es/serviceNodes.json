@@ -4,7 +4,8 @@
   },
   "tabs": {
     "domains": "Dominios",
-    "serviceNodes": "Nodos de servicio"
+    "serviceNodes": "Nodos de servicio",
+    "dnsRules": "Reglas DNS"
   },
   "heading": "Nodos de servicio",
   "subtitle": "Los nodos de servicio hacen que tus dominios sean accesibles a través de la red superpuesta de TNP -- sin necesidad de reenvío de puertos ni IP pública.",

@@ -16,14 +16,26 @@ not (S8).
 ```
 query
   ↓
+[0] personal rules ── local approved-rules file only (naming.md §3);
+  ↓                    absent on the public resolver
 [1] classify  ──── offline, from the cached TLD policy table
   ↓                 (naming.md §1; never a network call)
-  ├── public-dns ──→ [2] override check ──→ [3] upstream ──→ [4] DNSSEC ──┐
-  │                        (per-name, local)                              │
+  ├── public-dns ──→ [3] upstream ──→ [4] DNSSEC ─────────────────────────┐
   └── tnp-native ──→ [5] TNP lookup ──→ [6] verify signature ─────────────┤
                                                                           ↓
                                                               [7] cache + respond
 ```
+
+**[0] Personal rules** (`packages/client/src/dns-rules.ts`, hooked at the top
+of `handleQuery`). A block answers `NXDOMAIN` with no SOA, so nothing
+downstream caches it, for native and public names alike — a blocked native
+name never reaches the registry. An approved redirect answers its exact name
+(30 s TTL): an address for the matching type and NODATA for every other type,
+or a CNAME plus the target resolved through steps [1]–[7] without the rules.
+A redirect is ignored for a name that classifies native. The rules come from
+one file the resolver re-checks every two seconds and refuses if it is not
+root-owned, private and exactly what `tnp rules` writes; the key that
+decrypts the synced set is never in the resolver process.
 
 Classification happens **first, offline, always**. A `public-dns` name never
 touches TNP infrastructure, which is both the namespace guarantee
@@ -308,6 +320,16 @@ reverted silently, because its original servers were never recorded.
 on 53. `tnp connect` on Windows with the default port 5354 leaves DNS unchanged
 and says how to fix it; it no longer points Windows at the TNP public resolver,
 which would carry every `.ox` lookup across the network in plaintext.
+
+**Personal rules (owner `rules`).** The one other routing object TNP writes
+is opt-in and per name: for the public names a device's active personal rules
+cover (naming.md §3), `tnp rules` adds a third delegate
+(`tnp-rules.dns-delegate`), link (`tnp2`), `/etc/resolver/<name>` files or
+NRPT rules (comment `Managed by TNP (personal rules)`), pointed at the
+installed resolver's recorded target and recorded in
+`<dataDir>/dns-routing-rules.json` (`rules-routing.ts`). Nothing pre-existing
+is overwritten, nothing is routed without an installed resolver, and the
+native-TLD routing above is never touched by it.
 
 **Not verified on real systems by tests:** the generated configuration is
 unit-tested; its effect on Windows, macOS and each systemd version is not.

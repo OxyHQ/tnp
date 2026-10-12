@@ -1,0 +1,146 @@
+---
+title: Personal DNS rules
+description: Block domains or point them at another server on your own devices and router, with rules encrypted end to end so TNP never sees them.
+order: 4
+---
+
+# Personal DNS rules
+
+Personal DNS rules let a signed-in user block domains, or point a domain at another server, **on their own devices and router**. TNP's public resolver never applies them, and the TNP API never sees them: the rule set is encrypted in your browser before it is saved.
+
+Normative policy: [`architecture/naming.md` §3](./architecture/naming.md). Threat model: row 28 of [`architecture/threat-model.md`](./architecture/threat-model.md).
+
+## The two kinds of rule
+
+| Rule | What your devices answer | Covers | Takes effect on a device |
+|---|---|---|---|
+| **Block** | `NXDOMAIN` ("no such name") | the exact name, or the name **and every subdomain** | as soon as the device pulls the rules |
+| **Redirect** | an IPv4 or IPv6 address you choose, or an alias (CNAME) of another name | exactly that one name, never its subdomains | only after you approve it **on that device** |
+
+- Blocks answer `NXDOMAIN` rather than `0.0.0.0`: it needs no address family, and downstream caches do not keep it, so removing a block takes effect at once.
+- A redirect to an IPv4 address answers `A` queries; every other type for that name (`AAAA`, `HTTPS`, …) is answered empty, so a device cannot reach the public host through IPv6 or an HTTPS record's address hints. Add an IPv6 redirect too if you want IPv6 devices to reach your server.
+- A redirect to a name answers a CNAME plus that name's records, looked up the normal way. Rules are not applied to the target again, so redirects never chain or loop.
+- TNP names (`.ox`) can be blocked but never redirected: the TNP registry is authoritative for them.
+- A rule always names a domain, never a whole top-level domain such as `com`.
+
+## Setting up (dashboard)
+
+1. Sign in at [tnp.network](https://tnp.network) and open **Dashboard → DNS Rules** (`/dashboard/dns-rules`).
+2. Choose a **sync passphrase** (at least 12 characters; a few unrelated words work well). **TNP cannot recover it.** Lose it and nobody can decrypt your saved rules, including you; you can only delete them and start again.
+3. Add rules, then **Encrypt and save**. Every save encrypts the whole set again as the next version.
+
+The passphrase and the keys exist only in the open tab's memory; nothing is kept in browser storage. **Lock** (or leaving the page) forgets them.
+
+If two devices save at once, the second gets a conflict and is offered the newer version; nothing is silently overwritten.
+
+## Using the rules on a computer (`tnp` client)
+
+```bash
+# First time: fetch, decrypt with your passphrase, apply
+sudo TNP_TOKEN=<your Oxy token> tnp rules pull
+
+# Review and approve redirects on this device (each one is shown and confirmed)
+sudo tnp rules approve
+
+# What is active, pending and refused
+sudo tnp rules status
+tnp status
+```
+
+- The passphrase is asked for on the terminal without echo, or read from stdin with `--passphrase-stdin` (then pass the token in `TNP_TOKEN`, not `--token-stdin`). It is never accepted as an argument.
+- After the first pull the **rules key** is kept, root-only, so later pulls (`sudo tnp rules pull`, from cron if you like) need no passphrase. If you re-create the rule set with a new passphrase, run `sudo tnp rules pull --passphrase`; approvals on that device are cleared.
+- **Blocks apply right after a pull. Redirects wait** for `tnp rules approve`. Each of these also updates the per-name routing described below. The prompt names the exact domain and target and says that its public meaning is being replaced on this device. `tnp rules approve <name> --yes` approves a redirect you name explicitly without the prompt. If a redirect's target changes later, it is pending again until re-approved. `tnp rules revoke <name>` stops one.
+- `tnp rules forget` deletes the key, the state and the active rules file from the device. Your encrypted rules stay on TNP until you delete them in the dashboard.
+
+### Refusals that protect you
+
+`tnp rules pull` refuses, without changing anything on the device:
+
+- a rule set **older** than one this device already accepted (the server rolling you back);
+- a **different** rule set under a version this device already accepted (a forked history);
+- a rule set that does not decrypt (altered on the server) or belongs to another account.
+
+### Where the rules live
+
+| File | Contents | Who can read it |
+|---|---|---|
+| `/etc/tnp/dns-rules.conf` (macOS `/usr/local/etc/tnp/`, Windows `%ProgramData%\tnp\`) | The rules **in force** on this device, one per line: every block and the approved redirects | root, and on Linux the resolver's `tnp` group (0640) |
+| `/var/lib/tnp/dns-rules/` (macOS `/Library/Application Support/tnp/`, Windows `%ProgramData%\tnp\`) | The rules key, the highest version accepted, the last envelope, this device's approvals | root only (0700/0600) |
+
+The resolver daemon reads only the first file. It ignores the file entirely if it is a symlink, is not owned by root, is writable by anyone else, or contains anything `tnp rules` would not have written.
+
+### Which lookups the rules affect
+
+The client applies rules to the lookups **its own resolver answers**. `tnp install` routes only `.ox` names to it, and never takes over your DNS. On top of that, once you have pulled blocks or approved redirects for **public** names, `tnp rules` routes **exactly those names** to the installed resolver as well, and nothing else:
+
+| System | What `tnp rules` writes | Removed by |
+|---|---|---|
+| Linux, systemd ≥ 258 | `/etc/systemd/dns-delegate.d/tnp-rules.dns-delegate` with `Domains=~google.com ~ads.example.com …` and no default route | `tnp rules revoke` (for that name), `tnp rules forget`, `tnp uninstall` |
+| Linux, older systemd-resolved | a `tnp2` link with those routing domains. It does not survive a reboot: run `sudo tnp rules route` after one | as above |
+| macOS | `/etc/resolver/<name>` per name. An existing file there is never overwritten; that rule is reported as not routed | as above |
+| Windows | NRPT rules tagged `Managed by TNP (personal rules)`: the exact name, plus `.name` for a block with subdomains | as above |
+
+- Nothing is routed until `tnp install` has set up the system resolver: routing a name to a resolver that is not running would make it stop resolving. `sudo tnp rules route` re-applies routing from the active rules at any time.
+- On Linux and macOS, routing `google.com` also sends `www.google.com` to the TNP resolver, which forwards it upstream unchanged (encrypted, to the DoH resolvers in your TNP config) — only the exact name is redirected.
+- Without systemd-resolved, Linux cannot route by name; point your DNS at the TNP resolver or use the router export.
+- The routing files and NRPT rules are readable by other accounts on the device, so the names you route are visible to them.
+
+## Using the rules on a router (export)
+
+On the unlocked rules page, **Export for router** generates the configuration **in your browser** from your decrypted rules. Nothing is sent to TNP. Four formats:
+
+| Format | Blocks | Redirect to an address | Redirect to a name |
+|---|---|---|---|
+| **dnsmasq** | `address=/name/` → NXDOMAIN | `address=/name/IP` | `cname=` emitted **commented out**: dnsmasq answers it only when it knows the target locally (`/etc/hosts`, DHCP, `host-record`) |
+| **OpenWrt (uci)** | `uci add_list dhcp.@dnsmasq[0].address='/name/'` | `…address='/name/IP'` | commented-out `uci add dhcp cname` |
+| **AdGuard Home** | `\|\|name^$dnsrewrite=NXDOMAIN;;` (subdomains) or `\|name^…` (exact) | `\|name^$dnsrewrite=NOERROR;A;IP` | `\|name^$dnsrewrite=NOERROR;CNAME;target` |
+| **Pi-hole / hosts** | `0.0.0.0 name` and `:: name` (exact name only) | `IP name` | a comment pointing to Pi-hole's Local CNAME records |
+
+Differences from the TNP client to keep in mind:
+
+- **dnsmasq and OpenWrt apply `address=` to the name and all its subdomains.** An exact-name block or redirect in TNP becomes a whole-subtree rule on the router.
+- A dnsmasq redirect to an IPv4 address does not by itself stop `AAAA` lookups for the name; add an IPv6 redirect if your network uses IPv6, and check with `dig AAAA name @router`.
+- Hosts files cannot cover subdomains or express a CNAME; those rules come out as comments that say where to add them in Pi-hole.
+
+### OpenWrt, step by step
+
+```bash
+# On your computer: copy the "OpenWrt (uci)" export, then
+ssh root@192.168.1.1
+# paste the commands; they end with:
+uci commit dhcp
+/etc/init.d/dnsmasq restart
+
+# Check from any device on the network
+nslookup ads.example.com 192.168.1.1   # NXDOMAIN
+nslookup google.com 192.168.1.1        # your redirect address
+```
+
+Running the commands twice adds every entry twice. To replace an earlier import, first list what is there with `uci show dhcp.@dnsmasq[0].address` and remove the entries you added (for example `uci del_list dhcp.@dnsmasq[0].address='/ads.example.com/'`).
+
+Alternatively, save the **dnsmasq** export as `/etc/dnsmasq.d/tnp-rules.conf` (or a file in the `confdir` your OpenWrt dnsmasq reads) and restart dnsmasq.
+
+Rules on a router are the router's configuration, outside TNP: they apply to every device that uses that router for DNS, and nothing asks for per-device approval there.
+
+## What TNP can and cannot see
+
+| | |
+|---|---|
+| **TNP stores** | one encrypted blob per account: the ciphertext (padded to a power-of-two size), your rules key wrapped by your passphrase, the Argon2id settings and salt, a nonce, a version number and the time of your last save |
+| **TNP cannot** | read your rules or their names, count them, recover your passphrase, change a rule without your devices noticing, move your rules to another account, or make your devices accept an older version than one they already have |
+| **TNP's public resolver** | never applies anyone's personal rules |
+| **TNP can** | see that you use personal rules, roughly how large the set is and when you saved; refuse to serve or delete your rules |
+
+One limit is worth knowing: the dashboard decrypts your rules with code served by tnp.network. Someone able to change that code could capture a passphrase you type afterwards. The `tnp` command-line client is a signed release and does not depend on the page — and even with your passphrase, nobody can redirect a public name on your devices without you approving it on each one.
+
+## API
+
+The API stores and returns the envelope; it never sees a rule.
+
+| Method | Path | Body / response |
+|---|---|---|
+| `GET` | `/me/dns-rules` | `DnsRulesRecord` (the envelope plus `userId`, `updatedAt`), or 404 |
+| `PUT` | `/me/dns-rules` | `PutDnsRulesRequest`; `version` must be exactly the stored version plus one (1 for the first save), else 409 `{ code: "version_conflict", currentVersion }`. Ciphertext at most 256 KiB. |
+| `DELETE` | `/me/dns-rules` | 204, or 404 when nothing is stored |
+
+All three require Oxy auth and act only on the caller's own account. Contracts and parsers: `packages/shared-types/src/dns-rules.ts`; the envelope construction: `packages/crypto/src/dns-rules.ts`.

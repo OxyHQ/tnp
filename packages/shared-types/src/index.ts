@@ -152,3 +152,36 @@ export {
   type ClientLatestResponse,
   type ReleasePlatform,
 } from './release.js';
+
+export {
+  describeDnsRuleTarget,
+  DNS_RULES_ENVELOPE_VERSION,
+  DNS_RULES_KDF_LIMITS,
+  DNS_RULES_MAX_CIPHERTEXT_BYTES,
+  DNS_RULES_MAX_VERSION,
+  DNS_RULES_MIN_CIPHERTEXT_BYTES,
+  MAX_DNS_RULES,
+  normalizeRuleName,
+  parseDnsRule,
+  parseDnsRuleSet,
+  parseDnsRuleTargetInput,
+  parseDnsRulesRecord,
+  parsePutDnsRulesRequest,
+  serializeDnsRuleSet,
+  type DnsRule,
+  type DnsRuleErrorCode,
+  type DnsRuleField,
+  type DnsRuleParseError,
+  type DnsRuleParseResult,
+  type DnsRulesConflict,
+  type DnsRulesEnvelope,
+  type DnsRuleSet,
+  type DnsRulesKdfParams,
+  type DnsRulesRecord,
+  type DnsRuleTarget,
+  type IsNativeName,
+  type PutDnsRulesRequest,
+  type RejectedDnsRule,
+} from './dns-rules.js';
+
+export { exportAdGuard, exportDnsmasq, exportHosts, exportUci } from './dns-rules-export.js';
