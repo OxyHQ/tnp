@@ -1,5 +1,5 @@
-import dotenv from 'dotenv';
-dotenv.config();
+// `.env` is loaded by Bun itself (every entry point runs on Bun) before any
+// module runs; a variable the shell already set wins.
 
 // Public DNS / parking IP for TNP domains. MUST be provided via TNP_PARKING_IP.
 // This is the address clients are pointed at and the A record we hand out for

@@ -9,7 +9,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently \"bun run dev:api\" \"bun run dev:web\"",
+    "dev": "bun run --parallel --no-exit-on-error dev:api dev:web",
     "dev:api": "cd apps/api && bun run dev",
     "dev:web": "cd apps/web && bun run dev",
     "seed": "cd apps/api && bun run seed",
@@ -40,7 +40,6 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
-    "concurrently": "^10.0.3",
     "release-it": "^20.2.1"
   },
   "overrides": {
