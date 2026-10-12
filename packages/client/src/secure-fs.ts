@@ -384,6 +384,16 @@ export function restrictWindowsAcl(
   if (wantDir ? !st.isDirectory() : !st.isFile()) {
     throw new Error(`${path} is not a ${wantDir ? 'directory' : 'regular file'}; refusing`);
   }
+  if (wantDir) {
+    // Before anything changes: an ACL change on a directory propagates to its
+    // children, so a link already planted inside must stop us here.
+    const links = probeWindowsAcl(host, [path], true).filter((e) => e.reparse);
+    if (links.length > 0) {
+      throw new Error(
+        `${path} holds symbolic links or junctions TNP did not create (${links.map((e) => e.path).join('; ')}). Refusing to change its permissions; delete ${path} as Administrator and retry.`,
+      );
+    }
+  }
   for (const cmd of windowsAclCommands(host.icacls, path, profile)) runChecked(cmd, host.run);
 
   if (wantDir) {

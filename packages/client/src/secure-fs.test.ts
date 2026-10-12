@@ -352,9 +352,10 @@ describe('restrictWindowsAcl (planned commands, on a fake Windows)', () => {
       }),
     ];
     const fixed = [entry(dir, { dir: true }), entry(`${dir}\\config.json`)];
-    const host = fakeHost({ probes: [tree, fixed] });
+    const host = fakeHost({ probes: [tree, tree, fixed] });
     restrictWindowsAcl(dir, 'admin-only', host);
     expect(icaclsSteps(host.cmds)).toEqual([
+      'probe',
       `${dir} /setowner`,
       `${dir} /reset`,
       `${dir} /inheritance:r`,
@@ -376,11 +377,22 @@ describe('restrictWindowsAcl (planned commands, on a fake Windows)', () => {
       entry(`${dir}\\x`, { dir: true, reparse: true, owner: null, rules: [] }),
       entry(`${dir}\\x`, { dir: true, owner: USER_SID }),
     ]) {
-      const host = fakeHost({ probes: [[entry(dir, { dir: true }), planted]] });
+      const tree = [entry(dir, { dir: true }), planted];
+      const host = fakeHost({ probes: [tree, tree] });
       expect(() => restrictWindowsAcl(dir, 'admin-only', host)).toThrow(/did not create/);
       // Nothing was run on the planted entry.
       expect(host.cmds.some((c) => c.args[0] === `${dir}\\x`)).toBe(false);
     }
+  });
+
+  test('a junction already inside stops it before any ACL changes (which would propagate)', () => {
+    const tree = [
+      entry(dir, { dir: true }),
+      entry(`${dir}\\x`, { dir: true, reparse: true, owner: null, rules: [] }),
+    ];
+    const host = fakeHost({ probes: [tree] });
+    expect(() => restrictWindowsAcl(dir, 'admin-only', host)).toThrow(/junctions/);
+    expect(host.cmds.every((c) => c.file.endsWith('powershell.exe'))).toBe(true);
   });
 
   test('throws when the verified result is not what the profile allows', () => {
@@ -393,14 +405,15 @@ describe('restrictWindowsAcl (planned commands, on a fake Windows)', () => {
         ],
       }),
     ];
-    const host = fakeHost({ probes: [stillOpen, stillOpen] });
+    const host = fakeHost({ probes: [stillOpen, stillOpen, stillOpen] });
     expect(() => restrictWindowsAcl(dir, 'admin-only', host)).toThrow(/not as required/);
   });
 
   test('a failing icacls step stops everything', () => {
-    const host = fakeHost({ probes: [], failOn: '/reset' });
+    const host = fakeHost({ probes: [[entry(dir, { dir: true })]], failOn: '/reset' });
     expect(() => restrictWindowsAcl(dir, 'admin-only', host)).toThrow(/Access is denied/);
-    expect(host.cmds.some((c) => c.file.endsWith('powershell.exe'))).toBe(false);
+    // Only the probe before any change ran; nothing after the failure.
+    expect(host.cmds.filter((c) => c.file.endsWith('powershell.exe'))).toHaveLength(1);
   });
 
   test('a private file is reset, re-granted and verified without touching its owner', () => {
