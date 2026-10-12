@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
 import {
   loadConfig,
   saveConfig,
@@ -20,6 +19,15 @@ import {
   removeReservedResolverFiles,
   NATIVE_TLDS,
 } from './service';
+import {
+  currentReleasePlatform,
+  decideUpdate,
+  downloadVerifiedRelease,
+  fetchLatestVersion,
+  installBinaryAtomically,
+  isCompiledBinary,
+  ReleaseVerificationError,
+} from './update';
 
 const VERSION = '0.2.0';
 
@@ -749,36 +757,39 @@ function cmdInstall() {
 }
 
 async function cmdUpdate() {
-  const api = `https://api.tnp.network/client/latest`;
+  // Every check lives in ./update: the API's answer is only a version hint;
+  // the files come from the fixed release URL and must carry the pinned key's
+  // signature (docs/architecture/security.md §7).
+  const platform = currentReleasePlatform();
+  if (!platform) {
+    console.error(`[tnp] no release is published for ${process.platform}-${process.arch}`);
+    process.exit(1);
+  }
+  if (!isCompiledBinary()) {
+    console.error('[tnp] update replaces the installed tnp binary; run it from an installed tnp');
+    process.exit(1);
+  }
+
   console.log('[tnp] checking for updates...');
-
   try {
-    const res = await fetch(api);
-    if (!res.ok) throw new Error(`API returned ${res.status}`);
-    const data = (await res.json()) as {
-      version: string;
-      platforms: Record<string, { url: string } | null>;
-    };
-
-    if (data.version === VERSION) {
+    const latest = await fetchLatestVersion(loadConfig().apiBaseUrl);
+    const decision = decideUpdate(VERSION, latest);
+    if (decision.kind === 'current') {
       console.log(`[tnp] already on latest version (v${VERSION})`);
       return;
     }
-
-    console.log(`[tnp] updating v${VERSION} → v${data.version}...`);
-
-    const platformKey = `${process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'windows' : 'linux'}-${process.arch === 'arm64' ? 'arm64' : 'x64'}`;
-    const platformInfo = data.platforms[platformKey];
-    if (!platformInfo) {
-      console.error(`[tnp] no binary available for ${platformKey}`);
+    if (decision.kind === 'downgrade') {
+      console.error(
+        `[tnp] refusing to replace v${decision.from} with older v${decision.offered} offered by the API`,
+      );
       process.exit(1);
     }
 
-    const dlRes = await fetch(platformInfo.url);
-    if (!dlRes.ok) throw new Error(`Download failed: ${dlRes.status}`);
+    console.log(`[tnp] downloading v${decision.to} for ${platform}...`);
+    const release = await downloadVerifiedRelease(decision.to, platform);
+    console.log(`[tnp] verified ${release.asset}: signed by the pinned release key`);
 
-    const currentPath = resolve(process.argv[1] || '/usr/local/bin/tnp');
-    const tmpPath = `${currentPath}.tmp`;
+    const target = realpathSync(process.execPath);
 
     try {
       stopService();
@@ -788,12 +799,15 @@ async function cmdUpdate() {
       );
     }
 
-    await Bun.write(tmpPath, dlRes);
-    const { chmodSync, renameSync } = require('node:fs');
-    chmodSync(tmpPath, 0o755);
-    renameSync(tmpPath, currentPath);
-
-    console.log(`[tnp] updated to v${data.version}`);
+    // The service is restarted whether or not the replacement worked, so a
+    // failed install does not leave the resolver stopped.
+    let installError: unknown = null;
+    try {
+      installBinaryAtomically(target, release.binary);
+      console.log(`[tnp] updated v${VERSION} → v${release.version} at ${target}`);
+    } catch (err) {
+      installError = err;
+    }
 
     try {
       startService();
@@ -803,9 +817,17 @@ async function cmdUpdate() {
         `[tnp] could not restart service after update: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+    if (installError) throw installError;
   } catch (err) {
-    console.error(`[tnp] update failed: ${err}`);
-    console.error('[tnp] you may need to run this command with sudo');
+    console.error(`[tnp] update failed: ${err instanceof Error ? err.message : String(err)}`);
+    if (err instanceof ReleaseVerificationError) {
+      console.error('[tnp] nothing was installed: the download did not verify');
+    } else {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EACCES' || code === 'EPERM') {
+        console.error('[tnp] you may need to run this command with sudo');
+      }
+    }
     process.exit(1);
   }
 }

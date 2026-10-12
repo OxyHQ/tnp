@@ -13,11 +13,22 @@ name: Build & Release TNP Client
 # off its original commit. To ship client changes, bump VERSION in cli.ts.
 # Re-publishing an existing version is deliberately impossible from here:
 # delete that release and its tag by hand first.
+#
+# Every release is signed (docs/architecture/security.md §7). It takes four
+# jobs so that the signing seed never shares a runner with third-party package
+# code:
+#   build    typecheck, test, compile, write SHA256SUMS     (runs bun install)
+#   sign     Ed25519-sign SHA256SUMS with OpenSSL only       (installs nothing)
+#   verify   check every binary with the client's own code   (runs bun install)
+#   publish  provenance attestation + GitHub release         (installs nothing)
+# Every action is pinned by full commit SHA.
 on:
   push:
     branches: [main]
     paths:
       - 'packages/client/**'
+      - 'packages/shared-types/src/release.ts'
+      - '.github/scripts/sign-release.sh'
       - '.github/workflows/release-client.yml'
   workflow_dispatch:
 
@@ -38,7 +49,9 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       release: ${{ steps.version.outputs.release }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Resolve the client version and look for its tag
         id: version
@@ -73,18 +86,20 @@ jobs:
           esac
 
   build:
-    name: Build and release
+    name: Test and build
     needs: check
     if: needs.check.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     env:
       VERSION: ${{ needs.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
@@ -93,6 +108,14 @@ jobs:
         # (e.g. @opentui/core native binaries) on this linux-x64 runner so
         # that `bun build --compile` can resolve all cross-compile targets.
         run: bun install --frozen-lockfile --cpu='*' --os='*'
+
+      # The same gates as CI, on the exact commit being released: a release
+      # cannot ship code that fails them, even if it reached main past a red CI.
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun run test
 
       - name: Build all platforms
         run: |
@@ -115,15 +138,142 @@ jobs:
           build_target bun-darwin-x64     tnp-darwin-x64
           build_target bun-darwin-arm64   tnp-darwin-arm64
           build_target bun-windows-x64    tnp-windows-x64.exe
-          built=$(ls -1 dist 2>/dev/null | wc -l)
-          echo "Built $built artifact(s); failed targets: ${failed[*]:-none}"
-          if [ "$built" -eq 0 ]; then
-            echo "::error::No artifacts were built"
-            exit 1
-          fi
           if [ "${#failed[@]}" -ne 0 ]; then
+            echo "::error::Failed targets: ${failed[*]}"
             exit 1
           fi
+
+      # The binary must report the version it is released as, or `tnp update`
+      # would see it as older than the release and refuse it.
+      - name: Check the built version
+        run: |
+          reported="$(packages/client/dist/tnp-linux-x64 version)"
+          if [ "$reported" != "tnp v$VERSION" ]; then
+            echo "::error::Built binary reports '$reported', expected 'tnp v$VERSION'"
+            exit 1
+          fi
+
+      - name: Write SHA256SUMS
+        run: |
+          (
+            cd packages/client/dist
+            sha256sum tnp-darwin-arm64 tnp-darwin-x64 tnp-linux-arm64 tnp-linux-x64 tnp-windows-x64.exe > SHA256SUMS
+            cat SHA256SUMS
+          )
+          bun packages/client/src/release-check.ts packages/client/dist
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-unsigned
+          path: |
+            packages/client/dist/tnp-darwin-arm64
+            packages/client/dist/tnp-darwin-x64
+            packages/client/dist/tnp-linux-arm64
+            packages/client/dist/tnp-linux-x64
+            packages/client/dist/tnp-windows-x64.exe
+            packages/client/dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+  sign:
+    name: Sign SHA256SUMS
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # Only for .github/scripts/sign-release.sh and the pinned key in
+      # packages/shared-types/src/release.ts. Nothing is installed or built in
+      # this job: the seed only ever reaches bash, coreutils and OpenSSL.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-unsigned
+          path: ${{ runner.temp }}/release
+
+      # Refuses unless the seed derives the pinned public key, then verifies the
+      # new signature with that key and re-checks every checksum, so a wrong
+      # secret fails here instead of shipping a release no client accepts.
+      - name: Sign with the release key
+        env:
+          TNP_RELEASE_SIGNING_SEED: ${{ secrets.TNP_RELEASE_SIGNING_SEED }}
+        run: bash .github/scripts/sign-release.sh "$RUNNER_TEMP/release"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-signature
+          path: ${{ runner.temp }}/release/SHA256SUMS.sig
+          if-no-files-found: error
+          retention-days: 7
+
+  verify:
+    name: Verify as a client would
+    needs: sign
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-unsigned
+          path: ${{ runner.temp }}/release
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-signature
+          path: ${{ runner.temp }}/release
+
+      # verifyReleaseAsset is the function `tnp update` runs, and the OpenSSL
+      # command is the one the installers run. Both must accept the release.
+      - name: Verify every binary with the pinned key
+        working-directory: packages/client
+        run: |
+          bun src/release-check.ts "$RUNNER_TEMP/release" --signed
+          bun -e "import { RELEASE_SIGNING_PUBLIC_KEY_PEM } from '@tnp/shared-types'; process.stdout.write(RELEASE_SIGNING_PUBLIC_KEY_PEM)" > "$RUNNER_TEMP/release-key.pem"
+          openssl pkeyutl -verify -pubin -inkey "$RUNNER_TEMP/release-key.pem" -rawin \
+            -in "$RUNNER_TEMP/release/SHA256SUMS" -sigfile "$RUNNER_TEMP/release/SHA256SUMS.sig"
+
+  publish:
+    name: Attest and release
+    needs: [check, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-unsigned
+          path: release
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-signature
+          path: release
+
+      # SLSA build provenance for every binary, recorded in GitHub's attestation
+      # store and the public Sigstore log. Check a download with:
+      #   gh attestation verify tnp-linux-x64 --repo OxyHQ/tnp
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: release/SHA256SUMS
 
       # `gh release create` refuses when a release for the tag already exists,
       # so an existing release is never updated or overwritten. The explicit
@@ -131,10 +281,11 @@ jobs:
       - name: Create the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           tag="v$VERSION"
           set +e
-          git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null
+          git ls-remote --exit-code --tags "https://github.com/$GH_REPO.git" "refs/tags/$tag" >/dev/null
           status=$?
           set -e
           if [ "$status" -ne 2 ]; then
@@ -151,6 +302,12 @@ jobs:
           irm https://get.tnp.network/ps | iex
           ```
 
+          **Verify a download yourself:** `SHA256SUMS.sig` is the raw 64-byte
+          Ed25519 signature over `SHA256SUMS` by the TNP release key
+          `n4CCDVyVmPikeULWtYh6ohrhAPvd4n9CvhdDgwVSRjw=` — procedure in
+          `docs/architecture/security.md` §7. Build provenance:
+          `gh attestation verify <file> --repo OxyHQ/tnp`.
+
           **Platforms:** linux-x64, linux-arm64, darwin-x64, darwin-arm64, windows-x64
           EOF
           gh release create "$tag" \
@@ -159,8 +316,10 @@ jobs:
             --notes-file "$RUNNER_TEMP/notes.md" \
             --generate-notes \
             --latest \
-            packages/client/dist/tnp-linux-x64 \
-            packages/client/dist/tnp-linux-arm64 \
-            packages/client/dist/tnp-darwin-x64 \
-            packages/client/dist/tnp-darwin-arm64 \
-            packages/client/dist/tnp-windows-x64.exe
+            release/tnp-linux-x64 \
+            release/tnp-linux-arm64 \
+            release/tnp-darwin-x64 \
+            release/tnp-darwin-arm64 \
+            release/tnp-windows-x64.exe \
+            release/SHA256SUMS \
+            release/SHA256SUMS.sig
