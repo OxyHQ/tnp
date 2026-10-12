@@ -124,8 +124,15 @@ describe('client → relay → service node → target', () => {
       });
       await new Promise((r) => setTimeout(r, 300));
       socket.write('go');
-      await new Promise((r) => setTimeout(r, 1500));
-      const plateau = written;
+      // Wait for the producer to stall rather than for a fixed time: under a
+      // loaded runner the window fills more slowly, and a fixed 1.5 s sampled
+      // the plateau while bytes were still legitimately in flight.
+      let plateau = written;
+      for (const deadline = Date.now() + 20_000; Date.now() < deadline; ) {
+        await new Promise((r) => setTimeout(r, 500));
+        if (written === plateau) break;
+        plateau = written;
+      }
       await new Promise((r) => setTimeout(r, 500));
       // The producer stalled well short of the whole body: what it got rid of
       // is bounded by the end-to-end window plus socket buffers.
