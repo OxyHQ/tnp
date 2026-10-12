@@ -12,8 +12,17 @@
 /** Protocol major version. A peer that does not recognise it must not proceed. */
 export const PROTOCOL_VERSION = 0x01;
 
-/** Fixed header size: version(1) type(1) flags(2) circuitId(8) streamId(4) length(4). */
-export const HEADER_SIZE = 22;
+/**
+ * Fixed header size: version(1) type(1) flags(2) circuitId(8) streamId(4)
+ * length(4) = 20.
+ *
+ * Exactly the sum of its fields. An earlier draft declared 22 and never wrote
+ * or checked bytes 20–21, which left an unauthenticated 16-bit field in every
+ * frame that any relay could set freely — a ready-made channel for tagging a
+ * circuit's frames so a colluding hop can recognise them. There are no spare
+ * bytes: a future field arrives with a new major version, not in a gap.
+ */
+export const HEADER_SIZE = 20;
 
 /**
  * Largest payload a single frame may carry.
@@ -149,6 +158,10 @@ export const ErrorCode = {
 
   REPLAY_DETECTED: 0x0060,
   DOWNGRADE_DETECTED: 0x0061,
+  /** A sealed record's AEAD tag did not verify (tampering, reflection, wrong key). */
+  DECRYPT_FAILED: 0x0062,
+  /** The transport ended without the peer's authenticated close. */
+  TRUNCATED: 0x0063,
 } as const;
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -193,3 +206,42 @@ export const REQUIRED_CAPABILITIES: readonly CapabilityValue[] = [
   Capability.REPLAY_PROTECTION,
   Capability.FLOW_CONTROL,
 ];
+
+// ---------------------------------------------------------------------------
+// Session cryptography (transport.md §9)
+// ---------------------------------------------------------------------------
+
+/** The Noise protocol the v1 end-to-end session runs. Fixed: there is no negotiation. */
+export const NOISE_PROTOCOL_NAME = 'Noise_NK_25519_ChaChaPoly_SHA256';
+
+/**
+ * Size of each of the two handshake messages: an X25519 ephemeral key (32)
+ * plus the AEAD tag over an empty payload (16). Both are exact — a message of
+ * any other length is a protocol violation, so neither side can be made to
+ * accept handshake payload data.
+ */
+export const HANDSHAKE_MESSAGE_SIZE = 48;
+
+/** Sealed record overhead: counter(8) + record type(1) + AEAD tag(16). */
+export const SEALED_RECORD_OVERHEAD = 25;
+
+/**
+ * Largest plaintext one sealed record may carry, so that the record fits a
+ * single frame exactly: MAX_FRAME_PAYLOAD − SEALED_RECORD_OVERHEAD.
+ */
+export const MAX_SEALED_PLAINTEXT = MAX_FRAME_PAYLOAD - SEALED_RECORD_OVERHEAD;
+
+/**
+ * Hard ceiling on records per direction under one key (2^32). The last
+ * counter value is reserved for a KEY_UPDATE or CLOSE record, so a sender
+ * reaching it cannot be stuck unable to rekey. Far below ChaCha20-Poly1305's
+ * own limits and below the 2^64 − 1 nonce Noise reserves for rekeying.
+ */
+export const MAX_RECORDS_PER_KEY = 2 ** 32;
+
+/**
+ * Records after which a sender SHOULD update its key (2^24, about 1 TiB of
+ * full records). Each update is one-way, so compromising the current key
+ * does not expose records sent before the last update.
+ */
+export const KEY_UPDATE_INTERVAL = 2 ** 24;

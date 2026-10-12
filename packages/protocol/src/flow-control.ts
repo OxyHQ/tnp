@@ -14,15 +14,42 @@
 import { CIRCUIT_WINDOW_INITIAL, STREAM_WINDOW_INITIAL } from './constants.js';
 
 /**
+ * Largest credit a single grant, consume or window may express: 2^32 − 1,
+ * so every credit value fits a u32 on the wire.
+ */
+export const MAX_WINDOW_CREDIT = 0xffffffff;
+
+/**
+ * Throw unless `bytes` is an integer in [0, MAX_WINDOW_CREDIT].
+ *
+ * The window arithmetic is only sound on integers. `grant(NaN)` used to make
+ * `available` NaN — after which `bytes > available` is false for every
+ * `bytes`, so the window silently stopped limiting anything. Negative,
+ * fractional, infinite and out-of-range values are all refused the same way.
+ */
+function assertCredit(bytes: number, operation: string): void {
+  if (!Number.isInteger(bytes) || bytes < 0 || bytes > MAX_WINDOW_CREDIT) {
+    throw new RangeError(
+      `${operation}: credit must be an integer in [0, ${MAX_WINDOW_CREDIT}], got ${bytes}`,
+    );
+  }
+}
+
+/**
  * One direction of one window.
  *
  * A sender may have at most `available` unacknowledged payload bytes
- * outstanding. The receiver grants more as it consumes.
+ * outstanding. The receiver grants more as it consumes. Invariant, enforced
+ * by every method: `0 <= available <= initial`, both integers.
  */
 export class FlowWindow {
   private available: number;
+  private readonly initial: number;
 
-  constructor(private readonly initial: number) {
+  constructor(initial: number) {
+    assertCredit(initial, 'FlowWindow');
+    if (initial === 0) throw new RangeError('FlowWindow: initial window must be positive');
+    this.initial = initial;
     this.available = initial;
   }
 
@@ -31,7 +58,7 @@ export class FlowWindow {
   }
 
   get exhausted(): boolean {
-    return this.available <= 0;
+    return this.available === 0;
   }
 
   /**
@@ -39,10 +66,11 @@ export class FlowWindow {
    *
    * Returns false when the window cannot cover it. The caller must then pause
    * rather than send anyway — sending past the window is a `FLOW_CONTROL`
-   * violation and closes the circuit.
+   * violation and closes the circuit. Throws on a non-integer or out-of-range
+   * amount.
    */
   consume(bytes: number): boolean {
-    if (bytes < 0) throw new RangeError(`Cannot consume negative bytes: ${bytes}`);
+    assertCredit(bytes, 'consume');
     if (bytes > this.available) return false;
     this.available -= bytes;
     return true;
@@ -53,11 +81,14 @@ export class FlowWindow {
    *
    * Clamped to the initial window: a peer that grants more credit than it ever
    * advertised is either buggy or trying to make the sender exceed the bound
-   * the window exists to enforce, and both are handled the same way.
+   * the window exists to enforce, and both are handled the same way. Throws on
+   * a non-integer or out-of-range amount — a malformed grant from the wire is
+   * a protocol violation, not "zero credit".
    */
   grant(bytes: number): void {
-    if (bytes < 0) throw new RangeError(`Cannot grant negative bytes: ${bytes}`);
-    this.available = Math.min(this.available + bytes, this.initial);
+    assertCredit(bytes, 'grant');
+    // Compared before adding, so the sum is never formed outside the range.
+    this.available = bytes >= this.initial - this.available ? this.initial : this.available + bytes;
   }
 
   reset(): void {
@@ -86,8 +117,9 @@ export class StreamFlow {
     return Math.min(this.stream.remaining, this.circuit.remaining);
   }
 
-  /** Debit both windows, or neither. */
+  /** Debit both windows, or neither. Throws on a non-integer or out-of-range amount. */
   consume(bytes: number): boolean {
+    assertCredit(bytes, 'consume');
     if (bytes > this.sendable) return false;
     // `sendable` already proved both can cover it, so neither can fail here and
     // leave the pair inconsistent.
@@ -97,6 +129,7 @@ export class StreamFlow {
   }
 
   grant(bytes: number): void {
+    assertCredit(bytes, 'grant');
     this.stream.grant(bytes);
     this.circuit.grant(bytes);
   }

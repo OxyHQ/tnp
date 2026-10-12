@@ -12,3 +12,4 @@ export * from './constants.js';
 export * from './frame.js';
 export * from './circuit-id.js';
 export * from './flow-control.js';
+export * from './session.js';

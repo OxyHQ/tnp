@@ -10,6 +10,9 @@
  *   |                        payload (length bytes)                     |
  *   +-------------------------------------------------------------------+
  *
+ * The header is exactly 20 bytes — the sum of its fields, with no padding or
+ * reserved gap. Every header bit is either a defined field or absent.
+ *
  * Replaces a five-byte header with no version, no length field and a 32-bit
  * circuit id that clients allocated from a counter starting at 1 — so two
  * honest clients collided immediately and a hostile one could tear down
@@ -77,12 +80,15 @@ export function encodeFrame(options: EncodeOptions): Uint8Array<ArrayBuffer> {
   const circuitId = options.circuitId ?? 0n;
   const streamId = options.streamId ?? 0;
 
+  if (!isFrameType(options.type)) {
+    throw new RangeError(`Unknown frame type: ${options.type}`);
+  }
   if (payload.byteLength > MAX_FRAME_PAYLOAD) {
     throw new RangeError(
       `Payload of ${payload.byteLength} bytes exceeds MAX_FRAME_PAYLOAD (${MAX_FRAME_PAYLOAD})`,
     );
   }
-  if ((flags & ~KNOWN_FLAGS) !== 0) {
+  if (!Number.isInteger(flags) || flags < 0 || (flags & ~KNOWN_FLAGS) !== 0) {
     // Caught on the way OUT as well as in: emitting a bit the peer will reject
     // is a bug worth failing on locally, where the stack trace still exists.
     throw new RangeError(`Unknown flag bits set: 0x${(flags & ~KNOWN_FLAGS).toString(16)}`);
@@ -103,8 +109,6 @@ export function encodeFrame(options: EncodeOptions): Uint8Array<ArrayBuffer> {
   view.setBigUint64(4, circuitId, false);
   view.setUint32(12, streamId, false);
   view.setUint32(16, payload.byteLength, false);
-  // Bytes 20..21 are the tail of the length field's 32-bit slot at offset 16;
-  // the header is 22 bytes so payload begins at HEADER_SIZE.
   frame.set(payload, HEADER_SIZE);
 
   return frame;
@@ -226,6 +230,15 @@ export function decodeError(payload: Uint8Array): ProtocolError {
   if (payload.byteLength < 3) {
     throw new FrameDecodeError(
       `ERROR payload too short: ${payload.byteLength} bytes, need at least 3`,
+      ErrorCode.PROTOCOL_VIOLATION,
+    );
+  }
+
+  if (payload.byteLength > 3 + MAX_ERROR_DETAIL) {
+    // The cap binds the receiver too: a peer must not be able to make every
+    // ERROR it sends a 64 KiB string that ends up in someone's logs.
+    throw new FrameDecodeError(
+      `ERROR detail exceeds MAX_ERROR_DETAIL (${MAX_ERROR_DETAIL} bytes)`,
       ErrorCode.PROTOCOL_VIOLATION,
     );
   }
