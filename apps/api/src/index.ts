@@ -11,7 +11,7 @@ import { runSeed } from './seed.js';
 
 import tldsRouter from './routes/tlds.js';
 import domainsRouter from './routes/domains.js';
-import clientRouter from './routes/client.js';
+import clientRouter, { installerRoute } from './routes/client.js';
 import dnsRouter from './routes/dns.js';
 import nodesRouter from './routes/nodes.js';
 import relaysRouter from './routes/relays.js';
@@ -40,16 +40,13 @@ app.use(express.json());
 
 // Serve installer scripts when accessed via get.tnp.network
 // curl -fsSL https://get.tnp.network | sh  →  serves install.sh
-// irm https://get.tnp.network/ps | iex     →  serves install.ps1
+// irm https://get.tnp.network/ps | iex     →  serves install.ps1 (also `/` from PowerShell)
 app.use((req, _res, next) => {
   const host = req.hostname;
   if (host !== 'get.tnp.network') return next();
 
-  if (req.path === '/' || req.path === '/install.sh') {
-    req.url = '/client/install.sh';
-  } else if (req.path === '/ps' || req.path === '/install.ps1') {
-    req.url = '/client/install.ps1';
-  }
+  const route = installerRoute(req.path, req.get('user-agent'));
+  if (route) req.url = route;
   next();
 });
 

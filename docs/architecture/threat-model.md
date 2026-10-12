@@ -21,7 +21,7 @@ Scope: issue #13.
 | The relay/exit directory | Deciding who carries traffic | API, signed |
 | User traffic content | The user's data | In transit |
 | User traffic metadata | Who talks to whom, when, how much | Observable at every hop |
-| Update signing keys | Ship code to every device | Offline custody |
+| Update signing keys | Ship code to every device | Target: offline custody. Today: a GitHub Actions secret ([security.md §7](./security.md#7-update-security)) |
 
 ## 2. Trust matrix — what each party can observe
 
@@ -95,7 +95,7 @@ in the exit picker and in the operator consent flow.
 | 17 | Memory exhaustion | Unbounded frames, queues, caches | Hard limits everywhere | **None today** (S6, S9) |
 | 18 | Connection exhaustion | Open connections until the relay dies | Per-IP and per-identity limits | **None today** |
 | 19 | Exit abuse | Use TNP to attack third parties; expose the operator legally | Port policy, rate limits, private-range blocking, abuse handling | Not implemented |
-| 20 | Update compromise | Ship malicious code to every device | Signed artefacts, channel separation, downgrade protection | Not implemented |
+| 20 | Update compromise | Ship malicious code to every device | Signed artefacts, channel separation, downgrade protection | **Partial** — releases are Ed25519-signed; `tnp update` verifies and refuses downgrades; installers verify (the signature only where OpenSSL 3 exists); the key is an online CI secret; no channels or signed metadata ([security.md §7](./security.md#7-update-security)) |
 | 21 | Local privilege attack | Unprivileged local process reconfigures the daemon | Authenticated owner-only IPC; `0600` config | Partial |
 | 22 | DNS leak | Names resolved outside the tunnel | Remote resolution, port-53 capture, encrypted-DNS capture | Not implemented |
 | 23 | IPv6 leak | v6 escapes a v4-only tunnel | Full dual-stack capture or explicit v6 block | Not implemented |

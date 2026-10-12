@@ -107,3 +107,24 @@ export type {
   DnsResolveRcode,
   DnsResolveResponse,
 } from './dns-resolve.js';
+
+export {
+  compareSemver,
+  isReleasePlatform,
+  isStrictSemver,
+  MAX_RELEASE_BINARY_BYTES,
+  MAX_RELEASE_CHECKSUMS_BYTES,
+  parseClientLatestVersion,
+  parseSha256Sums,
+  RELEASE_CHECKSUMS_ASSET,
+  RELEASE_PLATFORM_ASSETS,
+  RELEASE_REPOSITORY,
+  RELEASE_SIGNATURE_ASSET,
+  RELEASE_SIGNATURE_BYTES,
+  RELEASE_SIGNING_PUBLIC_KEY_BASE64,
+  RELEASE_SIGNING_PUBLIC_KEY_PEM,
+  releaseAssetUrl,
+  releaseSigningPublicKey,
+  type ClientLatestResponse,
+  type ReleasePlatform,
+} from './release.js';

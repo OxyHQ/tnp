@@ -16,6 +16,7 @@ import { normalizeRelayEndpoint } from '@tnp/shared-types';
 import { loadConfig, saveConfig, parsePrivacyLevel, type TnpConfig } from './config';
 import { parseDecimalInt, parsePort } from './parse-input';
 import { serviceStatus } from './service';
+import { decideUpdate, fetchLatestVersion } from './update';
 
 const VERSION = '0.2.0';
 
@@ -353,28 +354,18 @@ async function actionUpdate(): Promise<void> {
 
     const config = loadConfig();
     try {
-      const res = await fetch(`${config.apiBaseUrl}/client/latest`, {
-        signal: AbortSignal.timeout(5000),
-      });
-
-      if (!res.ok) {
-        addLine(`Could not check for updates (HTTP ${res.status})`, YELLOW);
-        return;
-      }
-
-      const data = (await res.json()) as { version: string; url?: string };
-
-      if (data.version === VERSION) {
+      const decision = decideUpdate(VERSION, await fetchLatestVersion(config.apiBaseUrl));
+      if (decision.kind === 'current') {
         addLine(`✓ You are running the latest version (v${VERSION})`, GREEN);
+      } else if (decision.kind === 'update') {
+        addLine(`New version available: v${decision.to}`, CYAN);
+        addLine('Run `tnp update` to download, verify and install it.');
       } else {
-        addLine(`New version available: v${data.version}`, CYAN);
-        if (data.url) {
-          addLine(`Download: ${data.url}`);
-        }
+        addLine(`The update server offered older v${decision.offered}; ignoring it.`, YELLOW);
       }
     } catch (err) {
       addLine(
-        `Could not reach update server: ${err instanceof Error ? err.message : String(err)}`,
+        `Could not check for updates: ${err instanceof Error ? err.message : String(err)}`,
         YELLOW,
       );
     }

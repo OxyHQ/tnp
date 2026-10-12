@@ -151,6 +151,8 @@ None of these defences exist today.
 
 ## 7. Update security
 
+### Target
+
 - Every release artefact is signed; the client verifies before installing.
 - Three channels — development, preview, production — with independent signing.
 - Version and protocol-version metadata is signed alongside the artefact.
@@ -163,6 +165,103 @@ None of these defences exist today.
   declares the native protocol version it requires and the native module refuses
   to load a bundle outside its supported range. Detail:
   [`mobile-expo.md`](./mobile-expo.md).
+
+### Implemented (client releases)
+
+- **Signed checksums.** Each release `v<x.y.z>` carries the five binaries,
+  `SHA256SUMS` (`sha256sum` output over every binary) and `SHA256SUMS.sig`: the
+  **raw 64-byte** Ed25519 detached signature over the exact bytes of
+  `SHA256SUMS`. Release key (raw, base64):
+  `n4CCDVyVmPikeULWtYh6ohrhAPvd4n9CvhdDgwVSRjw=`. It is pinned once, in
+  `packages/shared-types/src/release.ts`; the client, both installers and the
+  signing script all read it from there, and tests assert it equals this value.
+- **Release pipeline** (`.github/workflows/release-client.yml`): typecheck and
+  test on the release commit, build, write `SHA256SUMS`; sign in a separate job
+  that installs no dependencies and uses only OpenSSL
+  (`.github/scripts/sign-release.sh`), which refuses unless the seed derives the
+  pinned key and re-verifies afterwards; verify every binary with the client's
+  own `verifyReleaseAsset` and with the installers' OpenSSL command; then
+  publish with an `actions/attest-build-provenance` SLSA attestation. Every
+  action is pinned by commit SHA.
+- **`tnp update`** reads only `version` from `/client/latest`, accepts only a
+  strict `x.y.z` that is **strictly newer** than the running version, downloads
+  from the fixed `https://github.com/OxyHQ/tnp/releases/download/v<version>/`
+  URLs, verifies the signature with the key compiled into the binary and the
+  binary's SHA-256 against the signed list, then replaces itself
+  (`process.execPath`) by exclusive-create temp file and atomic rename.
+- **Installers** (`apps/api/src/installers/`, the only copies) download from the
+  same fixed URLs into a `mktemp -d` directory and verify **before running or
+  moving anything**, with no fallback URL. The shell installer verifies the
+  signature when OpenSSL 3 or later is present and otherwise says that only the
+  checksum was checked (`TNP_REQUIRE_SIGNATURE=1` makes that fatal). PowerShell
+  has no Ed25519: the Windows installer uses OpenSSL 3 if it finds one (for
+  example Git for Windows') and otherwise states it checked the checksum only.
+  The installer option that pointed all system DNS at TNP's resolver over
+  plaintext UDP is removed.
+
+### Verifying a download by hand
+
+```sh
+v=0.3.0   # the release
+for f in tnp-linux-x64 SHA256SUMS SHA256SUMS.sig; do
+  curl -fsSLO "https://github.com/OxyHQ/tnp/releases/download/v$v/$f"
+done
+cat > tnp-release.pem <<'EOF'
+-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAn4CCDVyVmPikeULWtYh6ohrhAPvd4n9CvhdDgwVSRjw=
+-----END PUBLIC KEY-----
+EOF
+# OpenSSL 3 prints "Signature Verified Successfully"
+openssl pkeyutl -verify -pubin -inkey tnp-release.pem -rawin \
+  -in SHA256SUMS -sigfile SHA256SUMS.sig
+# macOS: shasum -a 256 -c --ignore-missing SHA256SUMS
+sha256sum --check --ignore-missing SHA256SUMS
+# Build provenance
+gh attestation verify tnp-linux-x64 --repo OxyHQ/tnp
+```
+
+Get the key from more than one place (this file and its git history, a release
+note, someone you trust) rather than from the page you download from.
+
+### What remains
+
+- **The key is an online CI secret** (`TNP_RELEASE_SIGNING_SEED` in GitHub
+  Actions), not the offline custody the threat model's asset table requires.
+  Anyone who can change `release-client.yml` on `main`, or who compromises
+  GitHub Actions for this repository, can sign. Next: a protected environment
+  with required reviewers on the signing job, then an offline or HSM-held key
+  with a two-person release ceremony.
+- **The installer's trust root is `get.tnp.network`.** The script, and the key
+  in it, come from the API over HTTPS; whoever controls that host controls the
+  installer. Signature checking protects against a tampered GitHub release or
+  CDN, not against a compromised API. Users at risk should verify by hand.
+- **No channels, no signed version metadata, no protocol-version downgrade
+  check** — only "strictly newer x.y.z". An old signed release with a known flaw
+  can still be installed fresh (`TNP_VERSION=`, or a compromised API serving an
+  installer that pins it); `tnp update` will not move to it.
+- **Freeze attacks**: a compromised API can withhold updates by reporting the
+  current version. There is no signed timestamp or expiry yet.
+- **No reproducible builds**: provenance attests where a binary was built, not
+  that its source produces it.
+- **Releases before the first signed one** (v0.2.0 and earlier) carry no
+  signature; the installers and `tnp update` refuse them.
+
+### Rotating the release key
+
+1. Generate a new seed offline:
+   `openssl genpkey -algorithm ed25519 -outform DER | tail -c 32 | base64`, and
+   derive its public key.
+2. Ship a client release, still signed by the **old** key, that changes
+   `RELEASE_SIGNING_PUBLIC_KEY_BASE64` (and this document and the tests that pin
+   the value) to the new key. Clients that update to it now trust the new key.
+3. Replace the `TNP_RELEASE_SIGNING_SEED` secret with the new seed. Every later
+   release is signed with it, and `sign-release.sh` refuses the old one.
+4. Publish the new key out of band. Clients older than step 2 cannot verify
+   later releases and must reinstall.
+
+If the key is **compromised**, step 2 cannot be trusted: publish the new key out
+of band and tell users to reinstall and verify by hand. The client has no
+revocation mechanism yet.
 
 ## 8. Local security boundaries
 

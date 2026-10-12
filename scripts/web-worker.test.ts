@@ -144,39 +144,41 @@ describe(`${entry}: security headers on tnp.network`, () => {
 });
 
 describe(`${entry}: get.tnp.network installer`, () => {
-  for (const [userAgent, file] of [
-    ['curl/8.7.1', '/install.sh'],
-    ['Mozilla/5.0 (Windows NT; Windows NT 10.0) WindowsPowerShell/5.1', '/install.ps1'],
-  ] as const) {
-    test(`${file}: byte-identical body, text/plain, nosniff, closed policy`, async () => {
-      const worker = await loadWorker();
-      const { INSTALLER_SECURITY_HEADERS } = await loadHeaders();
-      const script = read(`apps/web/public${file}`);
-      const result = await worker.fetch(
-        new Request('https://get.tnp.network/', { headers: { 'user-agent': userAgent } }),
-        {
-          ASSETS: {
-            fetch: async (input) => {
-              const path = new URL(input instanceof Request ? input.url : input.href).pathname;
-              expect(path).toBe(file);
-              return new Response(script, {
-                headers: { 'Content-Type': 'application/octet-stream' },
-              });
-            },
+  // get.tnp.network is served by the API; the worker never serves an installer
+  // of its own (a static copy drifted once already: it pinned v0.1.0 and
+  // verified nothing). It only redirects to the API's, if the host ever
+  // reaches Pages.
+  test.each([
+    ['/', 'curl/8.7.1', 'https://api.tnp.network/client/install.sh'],
+    ['/install.sh', 'Wget/1.21', 'https://api.tnp.network/client/install.sh'],
+    [
+      '/',
+      'Mozilla/5.0 (Windows NT; Windows NT 10.0) WindowsPowerShell/5.1',
+      'https://api.tnp.network/client/install.ps1',
+    ],
+    ['/ps', 'curl/8.7.1', 'https://api.tnp.network/client/install.ps1'],
+    ['/install.ps1', '', 'https://api.tnp.network/client/install.ps1'],
+  ])('%s (%s) redirects to %s with the closed policy', async (path, userAgent, location) => {
+    const worker = await loadWorker();
+    const { INSTALLER_SECURITY_HEADERS } = await loadHeaders();
+    const result = await worker.fetch(
+      new Request(`https://get.tnp.network${path}`, { headers: { 'user-agent': userAgent } }),
+      {
+        ASSETS: {
+          fetch: async () => {
+            throw new Error('get.tnp.network must not serve a static asset');
           },
         },
-      );
-      expect(result.status).toBe(200);
-      expect(await result.text()).toBe(script);
-      expect(result.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
-      expect(result.headers.get('Cache-Control')).toBe('no-cache');
-      expect(result.headers.get('X-Content-Type-Options')).toBe('nosniff');
-      expectSiteHeaders(result, INSTALLER_SECURITY_HEADERS);
-      expect(directive(result.headers.get('Content-Security-Policy') ?? '', 'default-src')).toEqual(
-        ["'none'"],
-      );
-    });
-  }
+      },
+    );
+    expect(result.status).toBe(302);
+    expect(result.headers.get('Location')).toBe(location);
+    expect(result.headers.get('Cache-Control')).toBe('no-store');
+    expectSiteHeaders(result, INSTALLER_SECURITY_HEADERS);
+    expect(directive(result.headers.get('Content-Security-Policy') ?? '', 'default-src')).toEqual([
+      "'none'",
+    ]);
+  });
 });
 
 describe('Content-Security-Policy', () => {

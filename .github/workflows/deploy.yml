@@ -32,7 +32,7 @@ jobs:
       contents: read
       actions: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Verify manual release source and CI
         if: github.event_name == 'workflow_dispatch'
@@ -44,7 +44,7 @@ jobs:
           OXY_1519_ROLLOUT_HOLD: ${{ vars.OXY_1519_ROLLOUT_HOLD }}
         run: python3 .github/scripts/verify-manual-frontend.py
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
@@ -66,9 +66,9 @@ jobs:
       deployments: write
       actions: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
