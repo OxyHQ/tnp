@@ -1,7 +1,11 @@
 # Pinned for the same reason as Dockerfile.api: the lockfile is consumed here
 # and in CI, and a version mismatch reads as a dependency problem when it is a
 # tooling one.
-FROM oven/bun:1.4.3
+#
+# The digest is what the build uses; the tag is for readers. Moving to another
+# Bun (or picking up a rebuilt 1.4.3) needs a new multi-arch index digest and a
+# re-review of the reviewed-image pin.
+FROM oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7b48be39c598
 WORKDIR /app
 
 # The hoisted linker, or bun nests dependencies under each workspace and the
@@ -38,6 +42,10 @@ COPY packages/shared-types packages/shared-types
 COPY apps/dns-server apps/dns-server
 
 ENV NODE_ENV=production
+# The image defaults to 5353, but production sets TNP_LISTEN_PORT=53
+# (oxy-infra app-tnp.tf), and binding a port below 1024 needs root here. So this
+# image still runs as root; moving production to 5353 behind the NLB is what lets
+# it drop to the base image's `bun` user.
 EXPOSE 5353/udp
 EXPOSE 5353/tcp
 

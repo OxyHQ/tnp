@@ -1,0 +1,36 @@
+# Build context for Dockerfile.api and Dockerfile.dns (both build from the repo
+# root). Neither COPYs anything listed here: they take bunfig.toml, package.json,
+# bun.lock, every workspace package.json, and the source of apps/api,
+# apps/dns-server and packages/{client,namespace,protocol,shared-types}.
+#
+# This file is a hashed input of the reviewed image pin
+# (.github/scripts/reviewed-images.json): editing it needs a re-pin.
+
+# Secrets and local configuration. A local build must never send them, and a
+# directory COPY (`COPY apps/api apps/api`) would bake them into a layer.
+**/.env
+**/.env.*
+**/*.local
+**/*.pem
+**/*.key
+**/.npmrc
+
+# VCS, agent worktrees and editor state.
+.git
+.github
+.claude
+.worktrees
+**/.DS_Store
+**/.idea
+**/.vscode
+
+# Dependencies are installed inside the image from bun.lock.
+**/node_modules
+
+# Build outputs, caches and logs (the client's compiled binary lives in dist/).
+**/dist
+**/build
+**/coverage
+**/.wrangler
+**/*.tsbuildinfo
+**/*.log

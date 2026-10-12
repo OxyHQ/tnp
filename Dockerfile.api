@@ -2,7 +2,11 @@
 # version mismatch between the two produces "lockfile had changes, but lockfile
 # is frozen" at build time — a failure that reads as a dependency problem and is
 # not.
-FROM oven/bun:1.4.3
+#
+# The digest is what the build uses; the tag is for readers. Moving to another
+# Bun (or picking up a rebuilt 1.4.3) needs a new multi-arch index digest and a
+# re-review of the reviewed-image pin.
+FROM oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7b48be39c598
 WORKDIR /app
 
 # The hoisted linker, or bun nests dependencies under each workspace and the
@@ -42,5 +46,9 @@ EXPOSE 8080
 # Lets the deploy target tell "the process is up" from "the process can answer".
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD bun -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+# The base image's unprivileged `bun` user (uid 1000). Everything above is owned
+# by root and only readable here: the API binds 8080 and writes nothing to disk.
+USER bun
 
 CMD ["bun", "apps/api/src/index.ts"]

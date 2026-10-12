@@ -7,7 +7,15 @@
       "dockerfile": "Dockerfile.api",
       "context": ".",
       "target": null,
-      "buildInputsSha256": "2560a9ea0bcb9669856d8a9877d5b638efb24ab3223a72a276cf31189d270e2f"
+      "buildInputsSha256": "109a196e1c143c773c2f828f06f2fabc9f5637bc130b4712250211c98dc936d2"
+    },
+    {
+      "name": "tnp-dns",
+      "ecrRepository": "oxy/tnp-dns",
+      "dockerfile": "Dockerfile.dns",
+      "context": ".",
+      "target": null,
+      "buildInputsSha256": "123cc4d2bf4262fab61b0353fc957c4ba68834684011b0cfca8433dda6e7ea90"
     }
   ]
 }
