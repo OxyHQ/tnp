@@ -29,7 +29,15 @@ COPY packages/protocol/package.json packages/protocol/
 COPY packages/relay-core/package.json packages/relay-core/
 COPY packages/shared-types/package.json packages/shared-types/
 
-RUN bun install --frozen-lockfile
+# Production dependencies of the API's workspace graph only. `--filter` leaves out
+# the other workspaces (the web app's React Native tree above all), `--production`
+# every devDependency (typescript, drizzle-kit, biome, bun-types), and
+# `--omit=peer` the peers bun would otherwise install because the web app put
+# them in the lockfile: @oxy.so/core's optional React Native/Expo peers. Nothing
+# the API imports at runtime is a devDependency or a peer it does not also
+# declare itself (express is a direct dependency). About 55 MB of node_modules
+# instead of 1.4 GB.
+RUN bun install --frozen-lockfile --production --omit=peer --filter @tnp/api
 
 # Source for the API and every workspace package it imports at runtime. Bun runs
 # the TypeScript directly, so the source is the artefact — a build step would

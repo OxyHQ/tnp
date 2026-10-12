@@ -29,7 +29,12 @@ COPY packages/protocol/package.json packages/protocol/
 COPY packages/relay-core/package.json packages/relay-core/
 COPY packages/shared-types/package.json packages/shared-types/
 
-RUN bun install --frozen-lockfile
+# Production dependencies of the resolver only. `@tnp/client` is in the filter
+# because apps/dns-server imports it by relative path (audit B1), so its runtime
+# dependencies (dns-packet) have to be installed though dns-server does not
+# declare them. `--production` drops every devDependency and `--omit=peer` the
+# web app's React Native/Expo peers; see Dockerfile.api.
+RUN bun install --frozen-lockfile --production --omit=peer --filter @tnp/dns-server --filter @tnp/client
 
 # Source for the resolver and every workspace package it reaches. `apps/dns-server`
 # still imports `packages/client` by relative path (audit B1), so the client's own
@@ -42,10 +47,16 @@ COPY packages/shared-types packages/shared-types
 COPY apps/dns-server apps/dns-server
 
 ENV NODE_ENV=production
-# The image defaults to 5353, but production sets TNP_LISTEN_PORT=53
-# (oxy-infra app-tnp.tf), and binding a port below 1024 needs root here. So this
-# image still runs as root; moving production to 5353 behind the NLB is what lets
-# it drop to the base image's `bun` user.
+# ROOT, ON PURPOSE. The image defaults to 5353, but production sets
+# TNP_LISTEN_PORT=53 (oxy-infra app-tnp.tf), and binding a port below 1024 needs
+# CAP_NET_BIND_SERVICE. Fargate cannot add capabilities (only SYS_PTRACE), and a
+# file capability on the shared bun binary is not something we can verify Fargate
+# honours before it takes production DNS down, so this image has no `USER` line.
+# It writes only the optional TNP_TLD_CACHE_PATH cache.
+#
+# Follow-up, in oxy-infra, then here: listen on 5353 behind the NLB (or set the
+# namespaced sysctl net.ipv4.ip_unprivileged_port_start=0 via ECS systemControls,
+# once confirmed on Fargate), then add `USER bun` as Dockerfile.api does.
 EXPOSE 5353/udp
 EXPOSE 5353/tcp
 

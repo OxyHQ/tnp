@@ -1,7 +1,7 @@
 # PARKED: the relay image is not built or published by any workflow, and its
 # ECS service stays at desired_count = 0 (docs/architecture/relays.md §8).
 # This file is kept buildable so the gate is the only thing standing in the way.
-FROM oven/bun:1.4.3
+FROM oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7b48be39c598
 WORKDIR /app
 
 # The hoisted linker, or bun nests dependencies under each workspace and the
@@ -22,7 +22,8 @@ COPY packages/protocol/package.json packages/protocol/
 COPY packages/relay-core/package.json packages/relay-core/
 COPY packages/shared-types/package.json packages/shared-types/
 
-RUN bun install --frozen-lockfile
+# Production dependencies of the relay only; see Dockerfile.api.
+RUN bun install --frozen-lockfile --production --omit=peer --filter @tnp/relay
 
 # The relay and every workspace package it imports at runtime.
 COPY apps/relay apps/relay
@@ -34,6 +35,10 @@ COPY packages/shared-types packages/shared-types
 ENV NODE_ENV=production
 ENV RELAY_PORT=8080
 EXPOSE 8080
+
+# The base image's unprivileged `bun` user, as in Dockerfile.api: the relay binds
+# a high port, and its code and node_modules stay root-owned and read-only.
+USER bun
 
 # RELAY_ENDPOINT (the public wss:// URL) is required at run time.
 CMD ["bun", "apps/relay/src/index.ts"]

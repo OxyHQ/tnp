@@ -7,7 +7,7 @@
       "dockerfile": "Dockerfile.api",
       "context": ".",
       "target": null,
-      "buildInputsSha256": "9d7a57e804e1d4f142bcd787dd4d4012974939aebd5fb77a7ea0bb481d40d66b"
+      "buildInputsSha256": "1477821b2d86911468b6c62998127721521efdaedebd68d721c89fc9681529b6"
     },
     {
       "name": "tnp-dns",
@@ -15,7 +15,7 @@
       "dockerfile": "Dockerfile.dns",
       "context": ".",
       "target": null,
-      "buildInputsSha256": "8e9caec2b3f223778187dd033dded044c35a7d12731fbff9ad36a56dee75fe0a"
+      "buildInputsSha256": "bc7df9130ef9de82290c13d7d21ba5ea33d64825f4e86f4084044aa97139adfd"
     }
   ]
 }
