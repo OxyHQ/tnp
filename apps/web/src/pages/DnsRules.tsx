@@ -184,6 +184,12 @@ export default function DnsRules() {
         >
           {t('dnsRules:tabs.dnsRules')}
         </Link>
+        <Link
+          to="/dashboard/vpn"
+          className="cursor-pointer rounded-lg border border-border px-4 py-2 font-mono text-sm text-muted-foreground/70 transition-colors hover:text-muted-foreground"
+        >
+          {t('dnsRules:tabs.vpn')}
+        </Link>
       </div>
 
       <h1 className="mb-2 font-pixel text-xl text-primary-text">{t('dnsRules:heading')}</h1>

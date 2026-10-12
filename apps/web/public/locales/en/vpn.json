@@ -1,0 +1,115 @@
+{
+  "meta": {
+    "title": "VPN -- TNP"
+  },
+  "tabs": {
+    "domains": "Domains",
+    "serviceNodes": "Service Nodes",
+    "dnsRules": "DNS Rules",
+    "vpn": "VPN"
+  },
+  "heading": "VPN",
+  "subtitle": "A WireGuard VPN to an exit run by TNP. Use it on your router, so every device at home is covered, or on a phone or computer with the official WireGuard app. Keys are made in this browser; TNP only ever receives the public key.",
+  "loading": "Loading your devices...",
+  "loadError": "Your VPN devices could not be loaded.",
+  "unavailable": {
+    "heading": "Not available yet",
+    "body": "TNP has not switched on its first exit yet, so devices cannot be added. This page will let you add them as soon as it does. Nothing has been stored for your account."
+  },
+  "honesty": {
+    "heading": "What this VPN protects, and what it does not",
+    "protectsHeading": "It protects",
+    "protects1": "From your local network (public Wi-Fi, other people on your router) and your internet provider: they see an encrypted WireGuard connection to a TNP exit, not the sites you visit, your DNS lookups or what you send.",
+    "protects2": "Your IP address from the sites you visit: they see the exit's address instead.",
+    "notHeading": "It does not protect",
+    "not1": "From TNP. Oxy operates the exit, so it can technically see which addresses and ports you connect to, and the content of anything the site itself does not encrypt. HTTPS hides the content, not which site you reach. Exits keep only totals, never per-connection records, but you are trusting us on that.",
+    "not2": "Your identity. This is not anonymity: one company runs the exit and knows which account each device belongs to, and someone able to watch both your connection and the exit can match them by timing.",
+    "not3": "What you tell a site. Signing in to an account identifies you, VPN or not.",
+    "not4": "From the hosting provider (AWS), which can observe the exit's traffic like any network operator.",
+    "tor": "If your safety depends on not being identified, for example as an activist or journalist facing a government, use <link>Tor Browser</link> instead of this VPN. TNP's private, multi-hop tier does not exist yet.",
+    "stored": "What TNP stores for each device: the name you give it, its public key and its tunnel address. Never its private key, never when it connects, from which IP address, or how much it sends.",
+    "ipv6": "IPv6 is not carried yet. The tunnel captures it so it cannot leak around the VPN, and the exit refuses it, so your apps use IPv4."
+  },
+  "add": {
+    "heading": "Add a device",
+    "intro": "Give the device a name you will recognise. A WireGuard key pair is generated in this browser; only the public key is sent to TNP.",
+    "name": "Device name",
+    "namePlaceholder": "Home router",
+    "submit": "Add device",
+    "adding": "Generating keys...",
+    "limit": "You have {{max}} devices, the most an account can have. Revoke one to add another.",
+    "failed": "The device could not be added."
+  },
+  "config": {
+    "heading": "Set up {{name}}",
+    "done": "Done",
+    "once": "This is the only time the private key is shown. TNP never received it and cannot show it again. Copy the configuration, download it or scan the code now; if you lose it, revoke the device and add a new one.",
+    "exit": "Exit",
+    "exitOption": "{{id}} ({{region}})",
+    "file": "WireGuard configuration ({{file}})",
+    "download": "Download {{file}}",
+    "qr": "Scan with the WireGuard app",
+    "qrLabel": "WireGuard configuration for {{name}} as a QR code",
+    "qrHelp": "The code contains the private key. Do not photograph it or share your screen while it is visible."
+  },
+  "guide": {
+    "heading": "Install it",
+    "tabs": {
+      "phone": "Android / iOS",
+      "desktop": "Windows / macOS",
+      "linux": "Linux",
+      "openwrt": "OpenWrt router"
+    },
+    "phone": {
+      "step1": "Install the official WireGuard app, published by WireGuard Development Team, from Google Play, F-Droid or the App Store.",
+      "step2": "Tap <code>+</code>, choose Scan from QR code and scan the code above. Name the tunnel, for example <code>tnp</code>.",
+      "step3": "Switch the tunnel on.",
+      "android": "Android kill switch: Settings, Network, VPN, the gear next to WireGuard, then turn on Always-on VPN and Block connections without VPN.",
+      "ios": "iOS: in the tunnel's settings, turn on On-Demand activation so it reconnects by itself."
+    },
+    "desktop": {
+      "step1": "Install WireGuard from <code>wireguard.com/install</code> (on macOS, from the Mac App Store).",
+      "step2": "Download the configuration above, then choose Import tunnel(s) from file and select it.",
+      "step3": "Click Activate.",
+      "windows": "On Windows, a full tunnel like this one blocks all traffic outside the tunnel while it is active, so nothing leaks if the connection drops."
+    },
+    "linux": {
+      "intro": "Download the configuration, then, in the folder you saved it to:",
+      "boot": "To start it at every boot: <code>sudo systemctl enable --now wg-quick@{{name}}</code>",
+      "dns": "wg-quick sets DNS through <code>resolvconf</code> or <code>systemd-resolved</code>. If neither is installed, your DNS does not change and lookups bypass the tunnel's resolver."
+    },
+    "openwrt": {
+      "intro": "WireGuard is built into OpenWrt. Set it up once on the router and every device on your network uses the VPN without installing anything.",
+      "packages": "Install the packages once: System, Software, or over SSH <code>opkg update && opkg install luci-proto-wireguard</code> (OpenWrt 25 and later: <code>apk add luci-proto-wireguard</code>), then reboot the router.",
+      "luciHeading": "In LuCI",
+      "luci1": "Network, Interfaces, Add new interface: name <code>wg0</code>, protocol WireGuard VPN.",
+      "luci2": "General Settings: click Load configuration… and paste the configuration above (OpenWrt 23.05 and later). On older versions, paste the private key and add the address <code>{{ipv4}}/32</code> by hand.",
+      "luci3": "Peers: check that the TNP exit peer has Route Allowed IPs ticked and Persistent Keep Alive set to <code>25</code>.",
+      "luci4": "Advanced Settings: Use custom DNS servers, <code>{{dns}}</code>. Then edit the wan interface and untick Use DNS servers advertised by peer, so lookups do not go to your provider.",
+      "luci5": "Firewall Settings: create a new zone named <code>tnp</code>. In Network, Firewall, set zone tnp to input reject, forward reject, with Masquerading and MSS clamping on, and allow zone lan to forward to tnp.",
+      "luci6": "Save & Apply. Status, WireGuard should show a recent handshake within a minute.",
+      "cliHeading": "Or over SSH, all at once",
+      "cliNote": "These commands contain this device's private key. Paste them into the router's shell and do not save them anywhere else. The connection may drop for a few seconds while the network restarts.",
+      "killHeading": "Optional: no fallback to your provider",
+      "killText": "While <code>wg0</code> is up, all LAN traffic is routed into the tunnel; if the exit is unreachable, traffic stops rather than leaking. If <code>wg0</code> itself goes down, OpenWrt falls back to your provider. To block that too, remove the lan to wan forwarding (LuCI: Network, Firewall, zone lan, untick wan under Allow forward to destination zones), or run:",
+      "killUndo": "To undo it, tick wan again in the same place. The router itself always keeps using wan: it needs it to reach the exit.",
+      "ipv6": "If your provider gives your network IPv6, devices try it first and fall back to IPv4 after a short delay. To avoid the delay, turn off IPv6 on the LAN while you use the VPN (Network, Interfaces, lan, DHCP Server, IPv6 Settings)."
+    }
+  },
+  "devices": {
+    "heading": "Your devices",
+    "count": "{{count}} of {{max}}",
+    "empty": "No devices yet.",
+    "lost": "Lost a phone or a config? Revoke the device: the exits stop accepting its key within a minute.",
+    "details": "{{address}}, added {{date}}",
+    "rename": "rename",
+    "save": "Save",
+    "cancel": "cancel",
+    "renamed": "Device renamed.",
+    "failed": "That did not work. Try again.",
+    "revoke": "revoke",
+    "revokeConfirm": "Revoke {{name}}? It stops working within a minute and its configuration cannot be used again.",
+    "revokeButton": "Revoke device",
+    "revoked": "{{name}} was revoked."
+  }
+}

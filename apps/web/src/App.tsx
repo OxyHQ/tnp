@@ -8,6 +8,7 @@ import Register from './pages/Register';
 import Domains from './pages/Domains';
 import Dashboard from './pages/Dashboard';
 import DnsRules from './pages/DnsRules';
+import Vpn from './pages/Vpn';
 import ServiceNodes from './pages/ServiceNodes';
 import Network from './pages/Network';
 import Propose from './pages/Propose';
@@ -44,6 +45,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <DnsRules />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/vpn"
+              element={
+                <ProtectedRoute>
+                  <Vpn />
                 </ProtectedRoute>
               }
             />

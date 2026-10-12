@@ -5,7 +5,8 @@
   "tabs": {
     "domains": "Domains",
     "serviceNodes": "Service Nodes",
-    "dnsRules": "DNS Rules"
+    "dnsRules": "DNS Rules",
+    "vpn": "VPN"
   },
   "heading": "Your Domains",
   "emptyState": "You have not registered any domains yet.",
