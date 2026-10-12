@@ -38,13 +38,13 @@ import {
   type X25519KeyPair,
 } from '@tnp/crypto/primitives';
 import {
+  allowedFlags,
   ErrorCode,
   type ErrorCodeValue,
   type FrameTypeValue,
   HANDSHAKE_MESSAGE_SIZE,
   isFrameType,
   KEY_UPDATE_INTERVAL,
-  KNOWN_FLAGS,
   MAX_FRAME_PAYLOAD,
   MAX_RECORDS_PER_KEY,
   MAX_SEALED_PLAINTEXT,
@@ -112,14 +112,18 @@ function resolveLimits(limits: SessionLimits | undefined): ResolvedLimits {
   ) {
     throw new RangeError(`maxRecordsPerKey must be an integer in [2, ${MAX_RECORDS_PER_KEY}]`);
   }
-  const keyUpdateInterval =
-    limits?.keyUpdateInterval ?? Math.min(KEY_UPDATE_INTERVAL, maxRecordsPerKey - 1);
+  // Both bounds apply: the protocol interval (an override may only rekey
+  // sooner) and the slot below the reserved last counter.
+  const intervalCeiling = Math.min(KEY_UPDATE_INTERVAL, maxRecordsPerKey - 1);
+  const keyUpdateInterval = limits?.keyUpdateInterval ?? intervalCeiling;
   if (
     !Number.isSafeInteger(keyUpdateInterval) ||
     keyUpdateInterval < 1 ||
-    keyUpdateInterval > maxRecordsPerKey - 1
+    keyUpdateInterval > intervalCeiling
   ) {
-    throw new RangeError('keyUpdateInterval must be an integer in [1, maxRecordsPerKey - 1]');
+    throw new RangeError(
+      'keyUpdateInterval must be an integer in [1, min(KEY_UPDATE_INTERVAL, maxRecordsPerKey - 1)]',
+    );
   }
   return { maxRecordsPerKey, keyUpdateInterval };
 }
@@ -335,6 +339,17 @@ export type OpenedRecord =
   | { type: 'close' }
   | { type: 'key-update' };
 
+/**
+ * The frame fields a sealed record is bound to. A decoded `Frame` satisfies
+ * it. `circuitId` is deliberately absent: it is connection-scoped and differs
+ * on each side of a relay.
+ */
+export interface RecordHeader {
+  type: FrameTypeValue;
+  flags: number;
+  streamId: number;
+}
+
 /** Only the handshakes construct sessions; a hand-built one could reuse a key for both directions. */
 const SESSION_TOKEN = Symbol('SessionCipher');
 
@@ -402,24 +417,26 @@ export class SessionCipher {
   }
 
   /**
-   * Seal `plaintext` (at most MAX_SEALED_PLAINTEXT bytes) into one record.
-   * `associatedData` is authenticated but not sent — pass
-   * `frameAssociatedData(...)` for the frame that will carry the record.
+   * Seal `plaintext` (at most MAX_SEALED_PLAINTEXT bytes) into one record for
+   * the frame described by `header`. The header's type, flags and stream id
+   * are authenticated (`frameAssociatedData`), so the record opens only in a
+   * frame with the same values. The header is mandatory: there is no way to
+   * seal a record that a relay could move to another stream.
    */
-  seal(plaintext: Uint8Array, associatedData: Uint8Array = EMPTY): Uint8Array {
+  seal(plaintext: Uint8Array, header: RecordHeader): Uint8Array {
     if (plaintext.length > MAX_SEALED_PLAINTEXT) {
       throw new RangeError(`plaintext of ${plaintext.length} bytes exceeds MAX_SEALED_PLAINTEXT`);
     }
     this.assertCanSend();
     // The last counter value is reserved for KEY_UPDATE / CLOSE.
     if (this.sendCounter >= this.limits.maxRecordsPerKey - 1) throw new RekeyRequiredError();
-    return this.sealRecord(RecordType.DATA, plaintext, associatedData);
+    return this.sealRecord(RecordType.DATA, plaintext, header);
   }
 
   /** The authenticated close record. After it, `seal` and `updateKey` throw. */
-  close(associatedData: Uint8Array = EMPTY): Uint8Array {
+  close(header: RecordHeader): Uint8Array {
     this.assertCanSend();
-    const record = this.sealRecord(RecordType.CLOSE, EMPTY, associatedData);
+    const record = this.sealRecord(RecordType.CLOSE, EMPTY, header);
     this.sentClose = true;
     wipe(this.sendKey);
     return record;
@@ -430,9 +447,9 @@ export class SessionCipher {
    * REKEY(k) from counter 0. The old key is wiped, so it cannot be recovered
    * from this object afterwards.
    */
-  updateKey(associatedData: Uint8Array = EMPTY): Uint8Array {
+  updateKey(header: RecordHeader): Uint8Array {
     this.assertCanSend();
-    const record = this.sealRecord(RecordType.KEY_UPDATE, EMPTY, associatedData);
+    const record = this.sealRecord(RecordType.KEY_UPDATE, EMPTY, header);
     const next = rekey(this.sendKey);
     wipe(this.sendKey);
     this.sendKey = next;
@@ -441,13 +458,17 @@ export class SessionCipher {
   }
 
   /**
-   * Open one record. Throws `SessionError` on anything but the exact next
-   * record, authentic, under the current key — and the session is dead after.
+   * Open one record carried in the frame described by `header` — typically
+   * the decoded `Frame` itself: `session.open(frame.payload, frame)`. Throws
+   * `SessionError` on anything but the exact next record, authentic, under
+   * the current key, in a frame with the header it was sealed for — and the
+   * session is dead after.
    */
-  open(record: Uint8Array, associatedData: Uint8Array = EMPTY): OpenedRecord {
+  open(record: Uint8Array, header: RecordHeader): OpenedRecord {
     if (this.failed) throw this.failed;
+    const ad = frameAssociatedData(header.type, header.flags, header.streamId);
     try {
-      return this.openRecord(record, associatedData);
+      return this.openRecord(record, ad);
     } catch (err) {
       if (err instanceof SessionError) this.poison(err);
       throw err;
@@ -479,7 +500,8 @@ export class SessionCipher {
     if (this.sendCounter >= this.limits.maxRecordsPerKey) throw new RekeyRequiredError();
   }
 
-  private sealRecord(type: number, body: Uint8Array, ad: Uint8Array): Uint8Array {
+  private sealRecord(type: number, body: Uint8Array, header: RecordHeader): Uint8Array {
+    const ad = frameAssociatedData(header.type, header.flags, header.streamId);
     const inner = new Uint8Array(1 + body.length);
     inner[0] = type;
     inner.set(body, 1);
@@ -567,8 +589,8 @@ export function frameAssociatedData(
   streamId: number,
 ): Uint8Array {
   if (!isFrameType(type)) throw new RangeError(`Unknown frame type: ${type}`);
-  if (!Number.isInteger(flags) || flags < 0 || (flags & ~KNOWN_FLAGS) !== 0) {
-    throw new RangeError(`Invalid flags: ${flags}`);
+  if (!Number.isInteger(flags) || flags < 0 || (flags & ~allowedFlags(type)) !== 0) {
+    throw new RangeError(`Invalid flags for this frame type: ${flags}`);
   }
   if (!Number.isInteger(streamId) || streamId < 0 || streamId > 0xffffffff) {
     throw new RangeError(`streamId out of range: ${streamId}`);

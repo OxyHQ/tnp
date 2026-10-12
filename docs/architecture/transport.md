@@ -76,7 +76,7 @@ not in a gap.)
 |---|---|---|
 | `version` | 1 | `0x01` for v1. A peer that does not recognise it closes with `UNSUPPORTED_VERSION` and sends nothing else. |
 | `type` | 1 | §4 |
-| `flags` | 2 | Type-specific. Unknown bits must be zero on send and **rejected** on receive, so a future flag cannot be silently ignored by an old peer. |
+| `flags` | 2 | Type-specific, checked against the mask for the frame's own type (only `STREAM_CLOSE` defines flags in v1: `CLOSE_WRITE` 0x0001, `CLOSE_READ` 0x0002; every other type carries none). Any other bit must be zero on send and is **rejected** on receive, so a future flag cannot be silently ignored by an old peer, and a flag cannot appear on a type it means nothing for. |
 | `circuitId` | 8 | **Connection-scoped**, generated from a CSPRNG by the side that initiates. Never a counter, never global. This is the fix for audit finding S1. |
 | `streamId` | 4 | Scoped to its circuit. `0` = circuit-level control. |
 | `payloadLength` | 4 | Bounded by `MAX_FRAME_PAYLOAD`. |
@@ -366,7 +366,11 @@ frame carrying the record: `version (u8) ‖ type (u8) ‖ flags (u16) ‖ strea
 (u32)`, big-endian — the header minus `circuitId`, which is connection-scoped
 and legitimately differs on each side of a relay, and minus `payloadLength`,
 which the record implies. So a relay cannot move a record to another stream,
-turn `STREAM_DATA` into `STREAM_CLOSE`, or flip a half-close flag. **Which frame
+turn `STREAM_DATA` into `STREAM_CLOSE`, or flip a half-close flag. The binding
+is not optional: `seal`, `close`, `updateKey` and `open` each take the frame
+header (`{ type, flags, streamId }` — a decoded `Frame` qualifies) and compute
+this AD themselves, so there is no call that produces an unbound record.
+**Which frame
 types carry sealed records end to end, and whether stream control
 (`STREAM_OPEN` and its target) travels inside them, is decided by the Phase 3
 cutover and is not yet specified.**
@@ -407,6 +411,8 @@ indistinguishable from the service finishing.
   Noise reserves for rekeying.
 - `KEY_UPDATE_INTERVAL` = 2²⁴ records: after that many, `needsKeyUpdate` is true
   and the sender should send `KEY_UPDATE`.
+- Both limits are protocol constants. A handshake's optional `limits` may only
+  **lower** them (tests use this); a value above either constant is refused.
 - `KEY_UPDATE` is sealed under the current key. Then, for that direction only,
   both sides set `k ← REKEY(k)` — Noise's rekey, the first 32 bytes of
   `ENCRYPT(k, 2⁶⁴ − 1, ε, 0³²)` — and reset the counter to 0. The old key is

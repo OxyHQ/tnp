@@ -26,8 +26,8 @@
  */
 
 import {
+  allowedFlags,
   HEADER_SIZE,
-  KNOWN_FLAGS,
   MAX_ERROR_DETAIL,
   MAX_FRAME_PAYLOAD,
   PROTOCOL_VERSION,
@@ -88,10 +88,13 @@ export function encodeFrame(options: EncodeOptions): Uint8Array<ArrayBuffer> {
       `Payload of ${payload.byteLength} bytes exceeds MAX_FRAME_PAYLOAD (${MAX_FRAME_PAYLOAD})`,
     );
   }
-  if (!Number.isInteger(flags) || flags < 0 || (flags & ~KNOWN_FLAGS) !== 0) {
+  const allowed = allowedFlags(options.type);
+  if (!Number.isInteger(flags) || flags < 0 || (flags & ~allowed) !== 0) {
     // Caught on the way OUT as well as in: emitting a bit the peer will reject
     // is a bug worth failing on locally, where the stack trace still exists.
-    throw new RangeError(`Unknown flag bits set: 0x${(flags & ~KNOWN_FLAGS).toString(16)}`);
+    throw new RangeError(
+      `Unknown flag bits set for this frame type: 0x${(flags & ~allowed).toString(16)}`,
+    );
   }
   if (circuitId < 0n || circuitId > MAX_UINT64) {
     throw new RangeError(`circuitId out of range: ${circuitId}`);
@@ -144,9 +147,10 @@ export function decodeFrame(data: Uint8Array): Frame {
   }
 
   const flags = view.getUint16(2, false);
-  if ((flags & ~KNOWN_FLAGS) !== 0) {
+  const allowed = allowedFlags(rawType);
+  if ((flags & ~allowed) !== 0) {
     throw new FrameDecodeError(
-      `Unknown flag bits set: 0x${(flags & ~KNOWN_FLAGS).toString(16)}`,
+      `Unknown flag bits set for this frame type: 0x${(flags & ~allowed).toString(16)}`,
       ErrorCode.PROTOCOL_VIOLATION,
     );
   }

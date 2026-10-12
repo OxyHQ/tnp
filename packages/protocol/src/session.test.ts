@@ -16,6 +16,7 @@ import {
   Flags,
   FrameType,
   HANDSHAKE_MESSAGE_SIZE,
+  KEY_UPDATE_INTERVAL,
   MAX_FRAME_PAYLOAD,
   MAX_SEALED_PLAINTEXT,
   SEALED_RECORD_OVERHEAD,
@@ -26,6 +27,7 @@ import {
   frameAssociatedData,
   RekeyRequiredError,
   ServerHandshake,
+  type RecordHeader,
   type SessionCipher,
   SessionError,
   type SessionLimits,
@@ -35,6 +37,8 @@ const NOW = 1_800_000_000;
 const NAME = 'example.ox';
 const bytes = (s: string) => new TextEncoder().encode(s);
 const text = (b: Uint8Array) => new TextDecoder().decode(b);
+/** The frame header most records in these tests travel under. */
+const H: RecordHeader = { type: FrameType.STREAM_DATA, flags: 0, streamId: 1 };
 
 /**
  * A real chain: identity → device → node (Ed25519) → certified X25519 key,
@@ -129,8 +133,8 @@ function expectSessionError(fn: () => unknown, code: ErrorCodeValue) {
   throw new Error('expected a SessionError');
 }
 
-function openData(session: SessionCipher, record: Uint8Array, ad?: Uint8Array): string {
-  const opened = session.open(record, ad);
+function openData(session: SessionCipher, record: Uint8Array, header: RecordHeader = H): string {
+  const opened = session.open(record, header);
   if (opened.type !== 'data') throw new Error(`expected data, got ${opened.type}`);
   return text(opened.plaintext);
 }
@@ -142,9 +146,9 @@ describe('handshake', () => {
     expect(m2.length).toBe(HANDSHAKE_MESSAGE_SIZE);
     expect(encodeBase64(client.handshakeHash)).toBe(encodeBase64(server.handshakeHash));
 
-    expect(openData(server, client.seal(bytes('GET / HTTP/1.1')))).toBe('GET / HTTP/1.1');
-    expect(openData(client, server.seal(bytes('200 OK')))).toBe('200 OK');
-    expect(openData(server, client.seal(bytes('second')))).toBe('second');
+    expect(openData(server, client.seal(bytes('GET / HTTP/1.1'), H))).toBe('GET / HTTP/1.1');
+    expect(openData(client, server.seal(bytes('200 OK'), H))).toBe('200 OK');
+    expect(openData(server, client.seal(bytes('second'), H))).toBe('second');
   });
 
   test('every session has fresh keys (forward secrecy from both ephemerals)', () => {
@@ -298,89 +302,113 @@ describe('low-order and all-zero X25519 keys are rejected', () => {
 describe('records: what a hostile relay can try', () => {
   test('replaying a record is REPLAY_DETECTED', () => {
     const { client, server } = handshake();
-    const r0 = client.seal(bytes('pay alice 10'));
+    const r0 = client.seal(bytes('pay alice 10'), H);
     openData(server, r0);
-    expectSessionError(() => server.open(r0), ErrorCode.REPLAY_DETECTED);
+    expectSessionError(() => server.open(r0, H), ErrorCode.REPLAY_DETECTED);
   });
 
   test('reordering records is rejected', () => {
     const { client, server } = handshake();
-    const r0 = client.seal(bytes('first'));
-    const r1 = client.seal(bytes('second'));
-    expectSessionError(() => server.open(r1), ErrorCode.PROTOCOL_VIOLATION);
+    const r0 = client.seal(bytes('first'), H);
+    const r1 = client.seal(bytes('second'), H);
+    expectSessionError(() => server.open(r1, H), ErrorCode.PROTOCOL_VIOLATION);
     // ...and the session is now dead: the "right" record is refused too.
-    expect(() => server.open(r0)).toThrow(SessionError);
+    expect(() => server.open(r0, H)).toThrow(SessionError);
   });
 
   test('dropping a record is detected at the next one', () => {
     const { client, server } = handshake();
-    client.seal(bytes('dropped by the relay'));
-    expectSessionError(() => server.open(client.seal(bytes('next'))), ErrorCode.PROTOCOL_VIOLATION);
+    client.seal(bytes('dropped by the relay'), H);
+    expectSessionError(
+      () => server.open(client.seal(bytes('next'), H), H),
+      ErrorCode.PROTOCOL_VIOLATION,
+    );
   });
 
   test("reflecting the client's own record back to it fails authentication", () => {
     const { client } = handshake();
-    const r0 = client.seal(bytes('to the server'));
+    const r0 = client.seal(bytes('to the server'), H);
     // Same counter (0) the client expects next, but sealed under the
     // client→server key, which the client never decrypts with.
-    expectSessionError(() => client.open(r0), ErrorCode.DECRYPT_FAILED);
+    expectSessionError(() => client.open(r0, H), ErrorCode.DECRYPT_FAILED);
   });
 
   test('a tampered byte anywhere in a record is rejected', () => {
     const r = handshake();
-    const record = r.client.seal(bytes('integrity matters'));
+    const record = r.client.seal(bytes('integrity matters'), H);
     // Counter bytes (0–7) report as a replay/gap; everything after as DECRYPT_FAILED.
     for (let i = 0; i < record.length; i++) {
       const { client, server } = handshake();
-      const fresh = client.seal(bytes('integrity matters'));
+      const fresh = client.seal(bytes('integrity matters'), H);
       fresh[i] ^= 0x80;
-      expect(() => server.open(fresh)).toThrow(SessionError);
+      expect(() => server.open(fresh, H)).toThrow(SessionError);
     }
     expect(record.length).toBe(SEALED_RECORD_OVERHEAD + 'integrity matters'.length);
   });
 
   test('moving a record to another stream or frame type breaks it (frame header is AD)', () => {
+    const stream7 = { type: FrameType.STREAM_DATA, flags: 0, streamId: 7 } as const;
     const { client, server } = handshake();
-    const ad = frameAssociatedData(FrameType.STREAM_DATA, 0, 7);
-    const record = client.seal(bytes('for stream 7'), ad);
+    const record = client.seal(bytes('for stream 7'), stream7);
     expectSessionError(
-      () => server.open(record, frameAssociatedData(FrameType.STREAM_DATA, 0, 8)),
+      () => server.open(record, { ...stream7, streamId: 8 }),
       ErrorCode.DECRYPT_FAILED,
     );
     const again = handshake();
-    const r2 = again.client.seal(bytes('data'), frameAssociatedData(FrameType.STREAM_DATA, 0, 7));
+    const r2 = again.client.seal(bytes('data'), stream7);
     expectSessionError(
       () =>
-        again.server.open(r2, frameAssociatedData(FrameType.STREAM_CLOSE, Flags.CLOSE_WRITE, 7)),
+        again.server.open(r2, {
+          type: FrameType.STREAM_CLOSE,
+          flags: Flags.CLOSE_WRITE,
+          streamId: 7,
+        }),
       ErrorCode.DECRYPT_FAILED,
     );
+    // A record sealed for one direction's close flag does not open under the other.
+    const third = handshake();
+    const close = { type: FrameType.STREAM_CLOSE, flags: Flags.CLOSE_WRITE, streamId: 7 } as const;
+    const r3 = third.client.seal(new Uint8Array(0), close);
+    expectSessionError(
+      () => third.server.open(r3, { ...close, flags: Flags.CLOSE_READ }),
+      ErrorCode.DECRYPT_FAILED,
+    );
+  });
+
+  test('the frame header is mandatory: sealing without one does not compile', () => {
+    const { client } = handshake();
+    // @ts-expect-error a record must be bound to the frame that carries it
+    expect(() => client.seal(bytes('unbound'))).toThrow();
   });
 
   test('a record from another session is rejected', () => {
     const a = handshake();
     const b = handshake();
-    expectSessionError(() => b.server.open(a.client.seal(bytes('x'))), ErrorCode.DECRYPT_FAILED);
+    expectSessionError(
+      () => b.server.open(a.client.seal(bytes('x'), H), H),
+      ErrorCode.DECRYPT_FAILED,
+    );
   });
 
   test('after any failure the session is dead in both directions', () => {
     const { client, server } = handshake();
-    const r0 = client.seal(bytes('a'));
+    const r0 = client.seal(bytes('a'), H);
     const bad = r0.slice();
     bad[bad.length - 1] ^= 1;
-    expect(() => server.open(bad)).toThrow(SessionError);
-    expect(() => server.open(r0)).toThrow(SessionError);
-    expect(() => server.seal(bytes('reply'))).toThrow(SessionError);
+    expect(() => server.open(bad, H)).toThrow(SessionError);
+    expect(() => server.open(r0, H)).toThrow(SessionError);
+    expect(() => server.seal(bytes('reply'), H)).toThrow(SessionError);
   });
 
   test('impossible record sizes are rejected without decrypting', () => {
     const { server } = handshake();
     expectSessionError(
-      () => server.open(new Uint8Array(SEALED_RECORD_OVERHEAD - 1)),
+      () => server.open(new Uint8Array(SEALED_RECORD_OVERHEAD - 1), H),
       ErrorCode.PROTOCOL_VIOLATION,
     );
     const { server: s2 } = handshake();
     expectSessionError(
-      () => s2.open(new Uint8Array(MAX_FRAME_PAYLOAD + 1)),
+      () => s2.open(new Uint8Array(MAX_FRAME_PAYLOAD + 1), H),
       ErrorCode.PROTOCOL_VIOLATION,
     );
   });
@@ -389,43 +417,43 @@ describe('records: what a hostile relay can try', () => {
 describe('authenticated close', () => {
   test('a clean end requires the close record', () => {
     const { client, server } = handshake();
-    openData(server, client.seal(bytes('last data')));
-    expect(server.open(client.close()).type).toBe('close');
+    openData(server, client.seal(bytes('last data'), H));
+    expect(server.open(client.close(H), H).type).toBe('close');
     expect(server.peerClosed).toBe(true);
     server.transportEnded(); // does not throw
   });
 
   test('truncation without an authenticated close is detected', () => {
     const { client, server } = handshake();
-    openData(server, client.seal(bytes('partial respon')));
-    client.close(); // the relay drops this and closes the socket
+    openData(server, client.seal(bytes('partial respon'), H));
+    client.close(H); // the relay drops this and closes the socket
     expectSessionError(() => server.transportEnded(), ErrorCode.TRUNCATED);
   });
 
   test('nothing is accepted after close, and nothing can be sent after sending it', () => {
     const { client, server } = handshake();
-    const close = client.close();
-    expect(() => client.seal(bytes('more'))).toThrow(SessionError);
-    expect(() => client.updateKey()).toThrow(SessionError);
-    server.open(close);
-    expectSessionError(() => server.open(close), ErrorCode.PROTOCOL_VIOLATION);
+    const close = client.close(H);
+    expect(() => client.seal(bytes('more'), H)).toThrow(SessionError);
+    expect(() => client.updateKey(H)).toThrow(SessionError);
+    server.open(close, H);
+    expectSessionError(() => server.open(close, H), ErrorCode.PROTOCOL_VIOLATION);
   });
 
   test('close is a half-close: the other direction keeps working', () => {
     const { client, server } = handshake();
-    server.open(client.close());
-    expect(openData(client, server.seal(bytes('still talking')))).toBe('still talking');
+    server.open(client.close(H), H);
+    expect(openData(client, server.seal(bytes('still talking'), H))).toBe('still talking');
   });
 
   test('the close record cannot be forged', () => {
     const { client, server } = handshake();
-    const data = client.seal(new Uint8Array(0)); // same length as a close record
-    const close = client.close();
+    const data = client.seal(new Uint8Array(0), H); // same length as a close record
+    const close = client.close(H);
     expect(data.length).toBe(close.length);
     // A relay cannot tell which is which, and cannot fabricate either.
     const forged = close.slice();
     forged[9] ^= 1;
-    expect(() => server.open(forged)).toThrow(SessionError);
+    expect(() => server.open(forged, H)).toThrow(SessionError);
   });
 });
 
@@ -434,27 +462,27 @@ describe('record limits and rekeying', () => {
 
   test('counter exhaustion requires a key update before more data', () => {
     const { client, server } = handshake({ limits });
-    for (let i = 0; i < 3; i++) openData(server, client.seal(bytes(`r${i}`)));
+    for (let i = 0; i < 3; i++) openData(server, client.seal(bytes(`r${i}`), H));
     expect(client.needsKeyUpdate).toBe(true);
     // Counter 3 is the reserved last slot: data is refused...
-    expect(() => client.seal(bytes('r3'))).toThrow(RekeyRequiredError);
+    expect(() => client.seal(bytes('r3'), H)).toThrow(RekeyRequiredError);
     // ...but a key update fits in it, and data flows again under the new key.
-    expect(server.open(client.updateKey()).type).toBe('key-update');
+    expect(server.open(client.updateKey(H), H).type).toBe('key-update');
     expect(client.needsKeyUpdate).toBe(false);
     for (let i = 0; i < 3; i++)
-      expect(openData(server, client.seal(bytes(`k1-${i}`)))).toBe(`k1-${i}`);
+      expect(openData(server, client.seal(bytes(`k1-${i}`), H))).toBe(`k1-${i}`);
   });
 
   test('a record sealed under the old key after an update is rejected', () => {
     const { client, server } = handshake({ limits });
-    const update = client.updateKey();
-    const afterUpdate = client.seal(bytes('new key'));
-    server.open(update);
+    const update = client.updateKey(H);
+    const afterUpdate = client.seal(bytes('new key'), H);
+    server.open(update, H);
     expect(openData(server, afterUpdate)).toBe('new key');
 
     // Replaying the update record: its counter belongs to the old key epoch,
     // but the receiver is at counter 1 of the new one.
-    expect(() => server.open(update)).toThrow(SessionError);
+    expect(() => server.open(update, H)).toThrow(SessionError);
   });
 
   test('a receiver refuses data in the reserved last slot from a peer ignoring the limit', () => {
@@ -469,9 +497,9 @@ describe('record limits and rekeying', () => {
     const server = new ServerHandshake({ staticKey: fixture.staticKey, name: NAME, limits });
     const { message, session: serverSession } = server.respond(client.start());
     const clientSession = client.finish(message);
-    for (let i = 0; i < 3; i++) openData(serverSession, clientSession.seal(bytes(`r${i}`)));
+    for (let i = 0; i < 3; i++) openData(serverSession, clientSession.seal(bytes(`r${i}`), H));
     expectSessionError(
-      () => serverSession.open(clientSession.seal(bytes('r3'))),
+      () => serverSession.open(clientSession.seal(bytes('r3'), H), H),
       ErrorCode.PROTOCOL_VIOLATION,
     );
   });
@@ -482,6 +510,8 @@ describe('record limits and rekeying', () => {
       { maxRecordsPerKey: 2 ** 33 },
       { maxRecordsPerKey: 1 },
       { keyUpdateInterval: 0 },
+      // An override may only rekey sooner than the protocol interval, never later.
+      { keyUpdateInterval: KEY_UPDATE_INTERVAL + 1 },
     ]) {
       expect(
         () => new ServerHandshake({ staticKey: fixture.staticKey, name: NAME, limits: bad }),
@@ -494,27 +524,26 @@ describe('sealed records fit in frames', () => {
   test('the largest plaintext seals to exactly MAX_FRAME_PAYLOAD and round-trips through a frame', () => {
     const { client, server } = handshake();
     const plaintext = new Uint8Array(MAX_SEALED_PLAINTEXT).fill(0xab);
-    const ad = frameAssociatedData(FrameType.STREAM_DATA, 0, 1);
-    const record = client.seal(plaintext, ad);
+    const record = client.seal(plaintext, H);
     expect(record.length).toBe(MAX_FRAME_PAYLOAD);
-    const frame = decodeFrame(
-      encodeFrame({ type: FrameType.STREAM_DATA, circuitId: 9n, streamId: 1, payload: record }),
-    );
-    const opened = server.open(
-      frame.payload,
-      frameAssociatedData(frame.type, frame.flags, frame.streamId),
-    );
+    const frame = decodeFrame(encodeFrame({ ...H, circuitId: 9n, payload: record }));
+    // The decoded frame is itself the record header.
+    const opened = server.open(frame.payload, frame);
     expect(opened.type === 'data' && opened.plaintext.length).toBe(MAX_SEALED_PLAINTEXT);
   });
 
   test('one byte more is refused before sealing', () => {
     const { client } = handshake();
-    expect(() => client.seal(new Uint8Array(MAX_SEALED_PLAINTEXT + 1))).toThrow(RangeError);
+    expect(() => client.seal(new Uint8Array(MAX_SEALED_PLAINTEXT + 1), H)).toThrow(RangeError);
   });
 
   test('frameAssociatedData refuses values the header could not carry', () => {
     expect(() => frameAssociatedData(0xff as never, 0, 0)).toThrow(RangeError);
     expect(() => frameAssociatedData(FrameType.STREAM_DATA, 0x8000, 0)).toThrow(RangeError);
+    // CLOSE_WRITE is a STREAM_CLOSE flag; on STREAM_DATA it is invalid.
+    expect(() => frameAssociatedData(FrameType.STREAM_DATA, Flags.CLOSE_WRITE, 0)).toThrow(
+      RangeError,
+    );
     expect(() => frameAssociatedData(FrameType.STREAM_DATA, 0, 2 ** 32)).toThrow(RangeError);
   });
 });

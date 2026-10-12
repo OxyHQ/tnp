@@ -21,7 +21,7 @@ describe('frame codec', () => {
     const payload = new Uint8Array([1, 2, 3, 4, 5]);
     const frame = decodeFrame(
       encodeFrame({
-        type: FrameType.STREAM_DATA,
+        type: FrameType.STREAM_CLOSE,
         circuitId: 0x0123456789abcdefn,
         streamId: 0xdeadbeef,
         flags: Flags.CLOSE_WRITE,
@@ -30,7 +30,7 @@ describe('frame codec', () => {
     );
 
     expect(frame.version).toBe(PROTOCOL_VERSION);
-    expect(frame.type).toBe(FrameType.STREAM_DATA);
+    expect(frame.type).toBe(FrameType.STREAM_CLOSE);
     expect(frame.circuitId).toBe(0x0123456789abcdefn);
     expect(frame.streamId).toBe(0xdeadbeef);
     expect(frame.flags).toBe(Flags.CLOSE_WRITE);
@@ -151,6 +151,22 @@ describe('frame decoding rejects malformed input', () => {
   test('encoding refuses an unknown flag bit locally', () => {
     expect(() => encodeFrame({ type: FrameType.PING, flags: 0x8000 })).toThrow(/Unknown flag bits/);
     expect(() => encodeFrame({ type: FrameType.PING, flags: Number.NaN })).toThrow(RangeError);
+  });
+
+  test('flags are checked per frame type, not against the union of all flags', () => {
+    // CLOSE_WRITE means something only on STREAM_CLOSE. Anywhere else it is
+    // refused on the way out and on the way in, so peers cannot disagree on it.
+    for (const type of [FrameType.PING, FrameType.STREAM_DATA, FrameType.CIRCUIT_CREATE]) {
+      expect(() => encodeFrame({ type, flags: Flags.CLOSE_WRITE })).toThrow(/flag bits/);
+      const frame = encodeFrame({ type });
+      new DataView(frame.buffer).setUint16(2, Flags.CLOSE_WRITE, false);
+      expect(() => decodeFrame(frame)).toThrow(FrameDecodeError);
+    }
+    const close = encodeFrame({
+      type: FrameType.STREAM_CLOSE,
+      flags: Flags.CLOSE_WRITE | Flags.CLOSE_READ,
+    });
+    expect(decodeFrame(close).flags).toBe(Flags.CLOSE_WRITE | Flags.CLOSE_READ);
   });
 
   test('encoding refuses an unknown frame type locally', () => {

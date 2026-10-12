@@ -123,8 +123,22 @@ export const Flags = {
   CLOSE_READ: 0x0002,
 } as const;
 
-/** Every flag bit defined in v1. Anything outside this mask is a violation. */
+/** Every flag bit defined in v1, across all frame types. */
 export const KNOWN_FLAGS = Flags.CLOSE_WRITE | Flags.CLOSE_READ;
+
+/** Flag bits each frame type may carry. A type not listed here carries none. */
+const FLAGS_BY_TYPE: Readonly<Partial<Record<FrameTypeValue, number>>> = {
+  [FrameType.STREAM_CLOSE]: Flags.CLOSE_WRITE | Flags.CLOSE_READ,
+};
+
+/**
+ * The flag bits valid on `type`. Anything outside this mask is a violation —
+ * checked per type, not against the union, so a CLOSE_WRITE bit on a PING or
+ * a STREAM_DATA is refused rather than left for each peer to interpret.
+ */
+export function allowedFlags(type: FrameTypeValue): number {
+  return FLAGS_BY_TYPE[type] ?? 0;
+}
 
 /**
  * Structured error codes.
