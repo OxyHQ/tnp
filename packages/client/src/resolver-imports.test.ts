@@ -86,7 +86,8 @@ function copiedSourceDirs(dockerfile: string): Set<string> {
 
 describe('the resolver import graph', () => {
   const graph = importGraph(join(ROOT, 'apps/dns-server/src/index.ts'));
-  const relative = [...graph.files].map((f) => f.slice(ROOT.length + 1));
+  // Forward slashes on every OS, so the expectations below read the same on Windows.
+  const relative = [...graph.files].map((f) => f.slice(ROOT.length + 1).replaceAll('\\', '/'));
   const copied = copiedSourceDirs(readFileSync(join(ROOT, 'Dockerfile.dns'), 'utf-8'));
 
   test('reaches the resolver and the personal-rules reader (vacuity floor)', () => {

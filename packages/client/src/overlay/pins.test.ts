@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { encodeBase64, generateSigningKeyPair } from '@tnp/crypto';
 import { MAX_SERIALS_PER_PIN, PinStore, raiseSerials } from './pins';
-import { invokingUser, OverlayStore } from './store';
+import { invokingUser, OverlayStore, systemPasswd } from './store';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -93,10 +93,25 @@ describe('rollback marks', () => {
 });
 
 describe('the invoking user under sudo', () => {
+  // Real account databases: /etc/passwd on Linux, Directory Services (dscl)
+  // on macOS, where /etc/passwd lists no ordinary users.
+  test.skipIf(process.platform === 'win32')(
+    'systemPasswd finds this account where the OS keeps it',
+    () => {
+      const me = userInfo();
+      const line = systemPasswd(me.username)
+        .split('\n')
+        .find((l) => l.split(':')[0] === me.username);
+      expect(line).toBeDefined();
+      const fields = (line as string).split(':');
+      expect(Number(fields[2])).toBe(me.uid);
+      expect(fields[5]).toBe(me.homedir);
+    },
+  );
+
   const passwd = () => 'root:x:0:0:root:/root:/bin/sh\nalice:x:1000:1000::/home/alice:/bin/sh\n';
 
   test("root under sudo stores in the invoking user's home", () => {
-    if (process.platform === 'darwin' || process.platform === 'win32') return;
     expect(
       invokingUser({ SUDO_USER: 'alice', SUDO_UID: '1000', SUDO_GID: '1000' }, 0, passwd),
     ).toEqual({ uid: 1000, gid: 1000, home: '/home/alice' });

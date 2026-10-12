@@ -23,7 +23,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { resolve, sep, win32 } from 'node:path';
+import { posix, win32 } from 'node:path';
 import { type Cmd, type CmdRunner, findSystemBinary, runChecked, runCmd } from './system-cmd';
 
 /** Well-known Windows SIDs, so ACLs never depend on localized account names. */
@@ -459,7 +459,9 @@ export type LstatFn = (path: string) => PathStat;
  * must already be resolved (`realpath`) so a symlink cannot route the walk.
  */
 export function findUntrustedComponent(path: string, lstat: LstatFn = fsLstatSync): string | null {
-  const parts = resolve(path).split(sep).filter(Boolean);
+  // POSIX only (uid and mode bits); `posix` so the walk is the same whatever
+  // OS the tests run on.
+  const parts = posix.resolve(path).split('/').filter(Boolean);
   const chain = ['/', ...parts.map((_, i) => `/${parts.slice(0, i + 1).join('/')}`)];
   for (const component of chain) {
     let st: ReturnType<LstatFn>;

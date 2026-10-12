@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { formatUninstallReport, tnpTraces } from './uninstall';
+import {
+  applyNativeRouting,
+  macResolverFile,
+  removeNativeRouting,
+  type RoutingDeps,
+} from './dns-routing';
+import { formatUninstallReport, removeConnectRouting, tnpTraces } from './uninstall';
 
 describe('tnpTraces', () => {
   test('Linux covers config, identity key, log and binary', () => {
@@ -115,5 +121,63 @@ describe('formatUninstallReport', () => {
     expect(formatUninstallReport({ ...report, remaining: [] }, true).join('\n')).toContain(
       'note: journal',
     );
+  });
+});
+
+describe('removeConnectRouting', () => {
+  const INSTALLED = { address: '127.0.0.1', port: 53 };
+  const SESSION = { address: '127.0.0.1', port: 5354 };
+  const STATE = '/Users/me/Library/Application Support/tnp/dns-routing-connect.json';
+
+  function macDeps(): { deps: RoutingDeps; files: Map<string, string> } {
+    const files = new Map<string, string>();
+    const deps: RoutingDeps = {
+      platform: 'darwin',
+      run: () => '',
+      exists: (path) => files.has(path),
+      read: (path) => {
+        const content = files.get(path);
+        if (content === undefined) throw new Error(`ENOENT ${path}`);
+        return content;
+      },
+      write: (path, content) => void files.set(path, content),
+      remove: (path) => void files.delete(path),
+      log: () => {},
+      warn: () => {},
+    };
+    return { deps, files };
+  }
+
+  // Found on a real Mac (client-platforms.yml): `tnp connect` killed while
+  // running over an installed resolver, then `tnp uninstall --purge`.
+  test('run before the install teardown, it leaves no /etc/resolver/ox behind', () => {
+    const { deps, files } = macDeps();
+    const install = applyNativeRouting({ owner: 'install', target: INSTALLED }, deps).state;
+    const session = applyNativeRouting({ owner: 'connect', target: SESSION }, deps).state;
+    files.set(STATE, JSON.stringify(session));
+    expect(files.get('/etc/resolver/ox')).toBe(macResolverFile(SESSION));
+
+    expect(removeConnectRouting(STATE, deps)).toBe(true);
+    expect(files.get('/etc/resolver/ox')).toBe(macResolverFile(INSTALLED));
+    expect(files.has(STATE)).toBe(false);
+    removeNativeRouting(install, deps);
+    expect(files.has('/etc/resolver/ox')).toBe(false);
+  });
+
+  test('the other order is what left the file: why uninstall runs it first', () => {
+    const { deps, files } = macDeps();
+    const install = applyNativeRouting({ owner: 'install', target: INSTALLED }, deps).state;
+    const session = applyNativeRouting({ owner: 'connect', target: SESSION }, deps).state;
+    files.set(STATE, JSON.stringify(session));
+
+    removeNativeRouting(install, deps);
+    removeConnectRouting(STATE, deps);
+    expect(files.get('/etc/resolver/ox')).toBe(macResolverFile(INSTALLED));
+  });
+
+  test('without a recorded session it does nothing', () => {
+    const { deps, files } = macDeps();
+    expect(removeConnectRouting(STATE, deps)).toBe(false);
+    expect(files.size).toBe(0);
   });
 });

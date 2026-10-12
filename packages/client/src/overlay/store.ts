@@ -41,6 +41,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { isCanonicalName } from '@tnp/shared-types';
 import { restrictWindowsAcl } from '../secure-fs';
+import { findSystemBinary, runCmd } from '../system-cmd';
 
 export interface InvokingUser {
   uid: number;
@@ -48,15 +49,40 @@ export interface InvokingUser {
   home: string;
 }
 
+const ACCOUNT_NAME_RE = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
+
+/**
+ * passwd(5) lines that include `name`'s account, if it exists. Linux reads
+ * /etc/passwd. macOS keeps its accounts in Directory Services, not in
+ * /etc/passwd, so the line is built from `dscl . -read /Users/<name>`.
+ */
+export function systemPasswd(name: string): string {
+  if (process.platform !== 'darwin') return readFileSync('/etc/passwd', 'utf-8');
+  const dscl = findSystemBinary('dscl');
+  if (!dscl || !ACCOUNT_NAME_RE.test(name)) return '';
+  const res = runCmd({
+    file: dscl,
+    args: ['.', '-read', `/Users/${name}`, 'UniqueID', 'NFSHomeDirectory'],
+  });
+  if (res.status !== 0) return '';
+  const uid = /^UniqueID:\s*(\d+)\s*$/m.exec(res.stdout)?.[1];
+  const home = /^NFSHomeDirectory:\s*(\/\S.*?)\s*$/m.exec(res.stdout)?.[1];
+  return uid && home ? `${name}:*:${uid}:::${home}:\n` : '';
+}
+
 /**
  * The user `sudo` was invoked by, when this process runs as root under sudo;
- * null otherwise. The home directory comes from the password database, never
- * from the environment root inherited.
+ * null otherwise. The account must exist in the system's account database
+ * with the uid sudo recorded, and the home directory is the one recorded
+ * there, never one derived from the environment root inherited.
+ *
+ * macOS used to skip that check and take `/Users/$SUDO_USER` with whatever
+ * `SUDO_UID` said; the unit tests caught it once they ran on a Mac.
  */
 export function invokingUser(
   env: NodeJS.ProcessEnv = process.env,
   uid: number | undefined = process.getuid?.(),
-  passwd: () => string = () => readFileSync('/etc/passwd', 'utf-8'),
+  passwd: (name: string) => string = systemPasswd,
 ): InvokingUser | null {
   if (uid !== 0) return null;
   const name = env.SUDO_USER;
@@ -65,10 +91,8 @@ export function invokingUser(
   if (!name || name === 'root' || !Number.isInteger(sudoUid) || !Number.isInteger(sudoGid)) {
     return null;
   }
-  if (process.platform === 'darwin')
-    return { uid: sudoUid, gid: sudoGid, home: join('/Users', name) };
   try {
-    for (const line of passwd().split('\n')) {
+    for (const line of passwd(name).split('\n')) {
       const fields = line.split(':');
       if (fields[0] === name && Number(fields[2]) === sudoUid && fields[5]) {
         return { uid: sudoUid, gid: sudoGid, home: fields[5] };

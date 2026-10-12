@@ -19,7 +19,13 @@ import { homedir, userInfo } from 'node:os';
 import { join, win32 } from 'node:path';
 import { type AutoConnectUser, removeAutoConnect } from './autoconnect';
 import { dataDir, logPath, RESOLVER_STATE_DIR } from './config';
-import { readRoutingState, removeNativeRouting, routingStatePath } from './dns-routing';
+import {
+  readRoutingState,
+  removeNativeRouting,
+  type RoutingDeps,
+  routingStatePath,
+  systemDeps,
+} from './dns-routing';
 import { removeRulesRouting } from './rules-routing';
 import { disableKillSwitch } from './killswitch';
 import { SERVICE_USER, serviceBinaryPath, uninstallService } from './service';
@@ -255,24 +261,41 @@ export interface UninstallReport {
   notes: string[];
 }
 
+/**
+ * Remove the DNS routing a `tnp connect` session recorded at `statePath`, and
+ * the record. Returns false when there is none.
+ *
+ * Uninstall must call this BEFORE it removes the installed routing. A session
+ * is stacked on top of the install: on macOS it backs up the installed
+ * `/etc/resolver/ox` and writes its own over it. Undone in that order (last
+ * in, first out), the session restores the install's file and the install
+ * teardown then deletes it. Undone the other way round, the install teardown
+ * finds the session's file and leaves it alone, and the session teardown then
+ * restores the install's file, which stays behind after "uninstall --purge"
+ * pointing `.ox` at a resolver that no longer exists.
+ */
+export function removeConnectRouting(statePath: string, deps: RoutingDeps = systemDeps): boolean {
+  if (!deps.exists(statePath)) return false;
+  removeNativeRouting(readRoutingState(statePath, deps), deps);
+  deps.remove(statePath);
+  return true;
+}
+
 export function performUninstall(opts: { purge: boolean; publicDnsIp: string }): UninstallReport {
   const report: UninstallReport = { done: [], remaining: [], failed: [], notes: [] };
 
+  // A `tnp connect` that died without restoring left its routing recorded.
+  // Removed first: see removeConnectRouting.
+  try {
+    if (removeConnectRouting(routingStatePath(dataDir(), 'connect'))) {
+      report.done.push('DNS routing left by an interrupted `tnp connect`');
+    }
+  } catch (err) {
+    report.failed.push(`DNS routing left by \`tnp connect\`: ${errorMessage(err)}`);
+  }
+
   uninstallService();
   report.done.push('resolver service and the DNS configuration TNP installed');
-
-  // A `tnp connect` that died without restoring left its routing recorded.
-  // Remove exactly that, through the same path connect itself uses.
-  const connectState = routingStatePath(dataDir(), 'connect');
-  if (exists(connectState)) {
-    try {
-      removeNativeRouting(readRoutingState(connectState));
-      unlinkSync(connectState);
-      report.done.push('DNS routing left by an interrupted `tnp connect`');
-    } catch (err) {
-      report.failed.push(`DNS routing left by \`tnp connect\`: ${errorMessage(err)}`);
-    }
-  }
 
   // Per-name routing for personal DNS rules points at the resolver being
   // removed; left behind, those names would stop resolving.

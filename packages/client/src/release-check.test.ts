@@ -99,76 +99,84 @@ describe('checkReleaseDir', () => {
   });
 });
 
-describe.skipIf(!hasOpenSsl3)('.github/scripts/sign-release.sh', () => {
-  function keySource(publicKey: Uint8Array): string {
-    const file = join(root, `release-${counter++}.ts`);
-    writeFileSync(
-      file,
-      `export const RELEASE_SIGNING_PUBLIC_KEY_BASE64 = '${Buffer.from(publicKey).toString('base64')}';\n`,
-    );
-    return file;
-  }
-
-  function sign(dir: string, env: Record<string, string>) {
-    const result = Bun.spawnSync(['bash', SIGN_SCRIPT, dir], {
-      env: { PATH: process.env.PATH ?? '', ...env },
-    });
-    return {
-      exitCode: result.exitCode,
-      output: result.stdout.toString() + result.stderr.toString(),
-    };
-  }
-
-  test('signs exactly as tweetnacl does, and the client verification accepts it', () => {
-    const dir = releaseDir();
-    const r = sign(dir, {
-      TNP_RELEASE_SIGNING_SEED: seedB64,
-      TNP_RELEASE_KEY_SOURCE: keySource(keys.publicKey),
-    });
-    expect(r.output).toContain('Signed SHA256SUMS');
-    expect(r.exitCode).toBe(0);
-    const sums = new Uint8Array(readFileSync(join(dir, 'SHA256SUMS')));
-    const sig = new Uint8Array(readFileSync(join(dir, 'SHA256SUMS.sig')));
-    expect(Buffer.from(sig)).toEqual(Buffer.from(nacl.sign.detached(sums, keys.secretKey)));
-    expect(() => checkReleaseDir(dir, { signed: true, publicKey: keys.publicKey })).not.toThrow();
-  });
-
-  test('refuses a seed that does not derive the pinned key — the real one included', () => {
-    const envs: Record<string, string>[] = [
-      { TNP_RELEASE_SIGNING_SEED: seedB64 },
-      {
-        TNP_RELEASE_SIGNING_SEED: seedB64,
-        TNP_RELEASE_KEY_SOURCE: keySource(nacl.sign.keyPair.fromSeed(new Uint8Array(32)).publicKey),
-      },
-    ];
-    for (const env of envs) {
-      const dir = releaseDir();
-      const r = sign(dir, env);
-      expect(r.exitCode).not.toBe(0);
-      expect(r.output).toContain('does not derive the pinned release public key');
-      expect(existsSync(join(dir, 'SHA256SUMS.sig'))).toBe(false);
+// sign-release.sh is a GNU/Linux tool (`base64 -w0`, `sha256sum`, GNU `wc`)
+// that only ever runs in the ubuntu release job; on macOS and Windows its
+// coreutils differ, so it is tested where it runs.
+describe.skipIf(!hasOpenSsl3 || process.platform !== 'linux')(
+  '.github/scripts/sign-release.sh',
+  () => {
+    function keySource(publicKey: Uint8Array): string {
+      const file = join(root, `release-${counter++}.ts`);
+      writeFileSync(
+        file,
+        `export const RELEASE_SIGNING_PUBLIC_KEY_BASE64 = '${Buffer.from(publicKey).toString('base64')}';\n`,
+      );
+      return file;
     }
-  });
 
-  test('refuses a missing or malformed seed', () => {
-    for (const seedValue of ['', 'abc', Buffer.alloc(31).toString('base64')]) {
+    function sign(dir: string, env: Record<string, string>) {
+      const result = Bun.spawnSync(['bash', SIGN_SCRIPT, dir], {
+        env: { PATH: process.env.PATH ?? '', ...env },
+      });
+      return {
+        exitCode: result.exitCode,
+        output: result.stdout.toString() + result.stderr.toString(),
+      };
+    }
+
+    test('signs exactly as tweetnacl does, and the client verification accepts it', () => {
       const dir = releaseDir();
       const r = sign(dir, {
-        TNP_RELEASE_SIGNING_SEED: seedValue,
+        TNP_RELEASE_SIGNING_SEED: seedB64,
+        TNP_RELEASE_KEY_SOURCE: keySource(keys.publicKey),
+      });
+      expect(r.output).toContain('Signed SHA256SUMS');
+      expect(r.exitCode).toBe(0);
+      const sums = new Uint8Array(readFileSync(join(dir, 'SHA256SUMS')));
+      const sig = new Uint8Array(readFileSync(join(dir, 'SHA256SUMS.sig')));
+      expect(Buffer.from(sig)).toEqual(Buffer.from(nacl.sign.detached(sums, keys.secretKey)));
+      expect(() => checkReleaseDir(dir, { signed: true, publicKey: keys.publicKey })).not.toThrow();
+    });
+
+    test('refuses a seed that does not derive the pinned key — the real one included', () => {
+      const envs: Record<string, string>[] = [
+        { TNP_RELEASE_SIGNING_SEED: seedB64 },
+        {
+          TNP_RELEASE_SIGNING_SEED: seedB64,
+          TNP_RELEASE_KEY_SOURCE: keySource(
+            nacl.sign.keyPair.fromSeed(new Uint8Array(32)).publicKey,
+          ),
+        },
+      ];
+      for (const env of envs) {
+        const dir = releaseDir();
+        const r = sign(dir, env);
+        expect(r.exitCode).not.toBe(0);
+        expect(r.output).toContain('does not derive the pinned release public key');
+        expect(existsSync(join(dir, 'SHA256SUMS.sig'))).toBe(false);
+      }
+    });
+
+    test('refuses a missing or malformed seed', () => {
+      for (const seedValue of ['', 'abc', Buffer.alloc(31).toString('base64')]) {
+        const dir = releaseDir();
+        const r = sign(dir, {
+          TNP_RELEASE_SIGNING_SEED: seedValue,
+          TNP_RELEASE_KEY_SOURCE: keySource(keys.publicKey),
+        });
+        expect(r.exitCode).not.toBe(0);
+        expect(existsSync(join(dir, 'SHA256SUMS.sig'))).toBe(false);
+      }
+    });
+
+    test('refuses when a binary does not match SHA256SUMS', () => {
+      const dir = releaseDir({ tamper: 'tnp-linux-arm64' });
+      const r = sign(dir, {
+        TNP_RELEASE_SIGNING_SEED: seedB64,
         TNP_RELEASE_KEY_SOURCE: keySource(keys.publicKey),
       });
       expect(r.exitCode).not.toBe(0);
       expect(existsSync(join(dir, 'SHA256SUMS.sig'))).toBe(false);
-    }
-  });
-
-  test('refuses when a binary does not match SHA256SUMS', () => {
-    const dir = releaseDir({ tamper: 'tnp-linux-arm64' });
-    const r = sign(dir, {
-      TNP_RELEASE_SIGNING_SEED: seedB64,
-      TNP_RELEASE_KEY_SOURCE: keySource(keys.publicKey),
     });
-    expect(r.exitCode).not.toBe(0);
-    expect(existsSync(join(dir, 'SHA256SUMS.sig'))).toBe(false);
-  });
-});
+  },
+);

@@ -21,8 +21,10 @@
 #      system LibreSSL (checksum only, refused with TNP_REQUIRE_SIGNATURE=1)
 #      and with Homebrew's OpenSSL 3 (signature verified).
 #
-# The scripts are in .github/scripts/client-platforms/. Their logs are uploaded
-# when a job fails.
+# The scripts are in .github/scripts/client-platforms/. Every step after the
+# dependency install runs even when an earlier test step failed, so one red
+# step does not hide the others; the job still fails. Logs are uploaded when a
+# job fails.
 
 name: Client platforms
 
@@ -57,6 +59,7 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dependencies
+        id: deps
         run: bun install --frozen-lockfile --cpu='*' --os='*'
 
       - name: Client unit tests (native Windows)
@@ -65,17 +68,22 @@ jobs:
       # The installer tests include the PowerShell verifier harness, here under
       # both pwsh and Windows PowerShell 5.1 (powershell.exe).
       - name: Installer tests (pwsh and Windows PowerShell 5.1)
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
         working-directory: apps/api
         run: bun test src/routes/client.test.ts
 
       - name: Compile the client for Windows
+        id: compile
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
         run: bun build packages/client/src/cli.ts --compile --outfile "${{ runner.temp }}\tnp-e2e\tnp.exe"
 
       - name: End-to-end on Windows
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
         shell: pwsh
         run: ./.github/scripts/client-platforms/e2e-windows.ps1 -Tnp "${{ runner.temp }}\tnp-e2e\tnp.exe"
 
       - name: Real install.ps1 against the signed release (Windows PowerShell 5.1)
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
         shell: pwsh
         run: ./.github/scripts/client-platforms/installer-windows.ps1
 
@@ -104,19 +112,24 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dependencies
+        id: deps
         run: bun install --frozen-lockfile --cpu='*' --os='*'
 
       - name: Client unit tests (native macOS)
         run: bun run --filter @tnp/client test
 
       - name: Installer tests (install.sh under macOS sh, pwsh harness)
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
         working-directory: apps/api
         run: bun test src/routes/client.test.ts
 
       - name: Compile the client for macOS
+        id: compile
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
         run: bun build packages/client/src/cli.ts --compile --outfile "$RUNNER_TEMP/tnp-e2e/tnp"
 
       - name: End-to-end on macOS
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
         run: |
           sudo env \
             TNP_BIN="$RUNNER_TEMP/tnp-e2e/tnp" \
@@ -125,6 +138,7 @@ jobs:
             bash .github/scripts/client-platforms/e2e-macos.sh
 
       - name: Real install.sh against the signed release (LibreSSL and OpenSSL 3)
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
         run: bash .github/scripts/client-platforms/installer-macos.sh
 
       - name: Upload logs
