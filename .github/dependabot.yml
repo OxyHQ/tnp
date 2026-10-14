@@ -1,0 +1,21 @@
+# Dependabot configuration. Only first-party Oxy SDKs are delegated to it, and
+# the `oxy` group's PR auto-merges (.github/workflows/automerge-first-party.yml).
+# `allow` keeps every third-party dependency a manual `bun install`.
+version: 2
+
+updates:
+  - package-ecosystem: "bun"
+    directories:
+      - "/"
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "Europe/Bucharest"
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    allow:
+      - dependency-name: "@oxy.so/*"
+    groups:
+      oxy:
+        patterns:
+          - "@oxy.so/*"
