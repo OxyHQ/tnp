@@ -1,4 +1,7 @@
 name: Deploy to Cloudflare Pages
+# The commit under release, in the run's title: the scope step reads it back
+# from earlier runs to find the last commit that actually deployed.
+run-name: Deploy web ${{ github.event.workflow_run.head_sha || github.sha }}
 
 # Releases the web app only after CI succeeded on a push to main, for that
 # exact commit. CI is what typechecks, tests, runs the PostgreSQL suite and
@@ -26,8 +29,6 @@ on:
 
 env:
   # The commit CI tested on `workflow_run`; the dispatched commit otherwise.
-  # The job guard below also requires CI's commit to be main's head when CI
-  # finished, so a slower CI run for an older commit cannot roll the site back.
   DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
@@ -39,12 +40,11 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.head_repository.full_name == github.repository &&
-      github.event.workflow_run.head_sha == github.sha))
+      github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # On the job, not the workflow: a run that the guard above skips (a red CI,
-    # a commit main already left) never enters the lane, so it cannot displace
+    # On the job, not the workflow: a run that the guard above skips (a red
+    # CI) never enters the lane, so it cannot displace
     # a pending release. Releases run one at a time and are never cancelled: a
     # rollout interrupted half-way is worse than a late one. A newer pending
     # release may replace an older pending one, which is safe because the
@@ -70,8 +70,14 @@ jobs:
       # the site is built from: apps/web, the workspace packages it imports,
       # the install graph and this workflow. When the last release cannot be
       # found or is not an ancestor, it deploys. A manual dispatch always
-      # deploys. A commit main has already moved past deploys nothing; the
-      # newer head's release carries it.
+      # deploys.
+      #
+      # A commit main has moved past is held ONLY when a newer main commit has
+      # a CI run of its own (queued, running or green): that run's release
+      # carries this one, and holding is what stops a slow CI for an older
+      # commit rolling the site back. A newer commit with no CI run at all (a
+      # bot merge with GITHUB_TOKEN starts no workflow) would never release
+      # anything, so then this, the newest CI-tested commit, deploys.
       - name: Decide whether this commit changes the site
         id: scope
         env:
@@ -88,16 +94,31 @@ jobs:
           fi
           main_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
           if [ "$main_sha" != "$DEPLOY_SHA" ]; then
-            decide false "::notice::main moved from $DEPLOY_SHA to $main_sha; the newer head's release carries this commit."
-            exit 0
+            read -r status newer < <(gh api "repos/$GITHUB_REPOSITORY/compare/$DEPLOY_SHA...$main_sha" \
+              --jq '"\(.status) \([.commits[].sha] | join(","))"')
+            if [ "$status" != ahead ]; then
+              echo "::error::$DEPLOY_SHA is not behind main ($main_sha): compare says $status."
+              exit 1
+            fi
+            for sha in ${newer//,/ }; do
+              runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&event=push&branch=main" \
+                --jq '[.workflow_runs[] | select(.status != "completed" or .conclusion == "success")] | length')
+              if [ "$runs" != 0 ]; then
+                decide false "::notice::Newer main commit $sha has its own CI run; its release carries $DEPLOY_SHA."
+                exit 0
+              fi
+            done
+            echo "No main commit after $DEPLOY_SHA has a CI run of its own; deploying it as the newest CI-tested commit."
           fi
 
           # The last release is the newest successful run of this workflow
-          # whose "Deploy to Cloudflare Pages" step succeeded; that run's
-          # head_sha is the commit it deployed (the guard above binds it).
+          # whose "Deploy to Cloudflare Pages" step succeeded. The commit it
+          # deployed is in its title (run-name above); a run from before
+          # run-name existed deployed its head_sha.
           base=''
           runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?branch=main&status=success&per_page=100" \
-            --jq ".workflow_runs[] | select(.id != $GITHUB_RUN_ID) | \"\(.id) \(.head_sha)\"" || true)
+            --jq ".workflow_runs[] | select(.id != $GITHUB_RUN_ID)
+              | \"\(.id) \((.display_title | capture(\"^Deploy web (?<s>[0-9a-f]{40})$\") | .s) // .head_sha)\"" || true)
           while read -r id sha; do
             [ -n "$id" ] || continue
             deployed=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs" < /dev/null \
