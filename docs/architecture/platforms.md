@@ -137,7 +137,8 @@ own `SystemRoot` and then gets TNP run elevated could substitute them. Taking
 the system directory from `GetSystemDirectoryW` closes that and is next.
 
 **Executed on real Windows and macOS** (`.github/workflows/client-platforms.yml`,
-on every pull request): the client unit tests run natively on
+on every push to main and on every pull request that touches `packages/`, the
+installers or the install graph): the client unit tests run natively on
 `windows-latest` and `macos-latest`, and the compiled binary is installed with
 administrator rights against a local fake API, resolved through
 (`Resolve-DnsName`, `dscacheutil`), its ACLs/modes read back, the kill switch
