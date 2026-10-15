@@ -43,8 +43,57 @@ permissions:
   contents: read
 
 jobs:
+  # The org shares one 20-job Actions concurrency cap (5 of them macOS) across
+  # every repository, and these two legs are the scarcest slots it has. A pull
+  # request runs them only when it touches what they build and test:
+  # packages/** (the client and every workspace package it imports), the
+  # installer route and its local imports in apps/api (the closure of
+  # src/routes/client.ts and client.test.ts — extend this list if that file
+  # imports something new), the install graph, the e2e scripts and this file.
+  #
+  # Both legs are required checks, and a SKIPPED required check counts as
+  # passing, so the skip is decided only by a `changes` job that SUCCEEDED and
+  # said nothing relevant changed. If `changes` fails, or the event is not a
+  # pull request (a push to main skips `changes`), both legs run. Never move
+  # this to a workflow-level `paths:` filter: a required check whose workflow
+  # never starts stays pending forever.
+  changes:
+    name: Detect client platform changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      platforms: ${{ steps.filter.outputs.platforms }}
+    steps:
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            platforms:
+              - '.github/workflows/client-platforms.yml'
+              - '.github/scripts/client-platforms/**'
+              - 'packages/**'
+              - 'apps/api/src/routes/client.ts'
+              - 'apps/api/src/routes/client.test.ts'
+              - 'apps/api/src/installers/**'
+              - 'apps/api/src/config.ts'
+              - 'apps/api/src/vpn.ts'
+              - 'apps/api/src/registry/**'
+              - 'apps/api/package.json'
+              - 'apps/api/bunfig.toml'
+              - 'apps/api/tsconfig.json'
+              - 'apps/*/package.json'
+              - 'package.json'
+              - 'bun.lock'
+              - 'bunfig.toml'
+
   windows:
     name: Windows (real install, kill switch, uninstall)
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.platforms == 'true') }}
     runs-on: windows-latest
     timeout-minutes: 25
     env:
@@ -102,6 +151,8 @@ jobs:
 
   macos:
     name: macOS (real install, kill switch, uninstall)
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.platforms == 'true') }}
     runs-on: macos-latest
     timeout-minutes: 25
     env:

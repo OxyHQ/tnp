@@ -32,9 +32,65 @@ permissions:
   contents: read
 
 jobs:
+  # The org shares one 20-job Actions concurrency cap across every repository,
+  # so a pull request runs the PostgreSQL suite and the image builds only when
+  # it touches their inputs. Typecheck, lint and unit tests always run.
+  #
+  # Both gated jobs are required checks, and a SKIPPED required check counts
+  # as passing, so a skip is decided only by a `changes` job that SUCCEEDED and
+  # said that area did not change. If `changes` fails, or the event is not a
+  # pull request (a push to main skips `changes`), every job runs: the push to
+  # main is the only test of the merged result. Never replace this with a
+  # workflow-level `paths:` filter: a required check whose workflow never
+  # starts stays pending forever.
+  changes:
+    name: Detect affected areas
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      database: ${{ steps.filter.outputs.database == 'true' || steps.filter.outputs.shared == 'true' }}
+      docker: ${{ steps.filter.outputs.docker == 'true' || steps.filter.outputs.shared == 'true' }}
+    steps:
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          # shared: the install graph (every workspace manifest is copied into
+          # every image and resolved by every install) and this workflow.
+          # database: apps/api and the workspace packages it imports.
+          # docker: everything the three Dockerfiles COPY, plus the
+          # reviewed-image pin and gate the job checks.
+          filters: |
+            shared:
+              - '.github/workflows/ci.yml'
+              - 'package.json'
+              - 'bun.lock'
+              - 'bunfig.toml'
+              - 'apps/*/package.json'
+              - 'packages/*/package.json'
+            database:
+              - 'apps/api/**'
+              - 'packages/crypto/**'
+              - 'packages/namespace/**'
+              - 'packages/protocol/**'
+              - 'packages/shared-types/**'
+            docker:
+              - 'Dockerfile*'
+              - '.dockerignore'
+              - '**/*.dockerignore'
+              - '.github/scripts/**'
+              - 'apps/api/**'
+              - 'apps/dns-server/**'
+              - 'apps/relay/**'
+              - 'packages/**'
+
   verify:
     name: Typecheck and test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -76,7 +132,10 @@ jobs:
   # fails when TEST_DATABASE_URL is missing rather than skipping.
   database:
     name: PostgreSQL integration tests
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.database == 'true') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:17
@@ -111,7 +170,13 @@ jobs:
   # is built (and started) before any can be published.
   docker:
     name: AWS images build
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docker == 'true') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Only a push to main writes the layer cache; pull requests read it.
+      WRITE_CACHE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -126,14 +191,37 @@ jobs:
       - name: Verify the production image's build inputs are reviewed
         run: python3 -B .github/scripts/reviewed-image.py check
 
+      # Builds reuse layers from the GitHub Actions cache. The ci-* scopes are
+      # this job's own (linux/amd64; the publisher's arm64 scopes would never
+      # match) and are written only by a push to main, so pull-request code
+      # never writes a cache main reads. --load puts each image in the local
+      # store under the same tag the steps below run.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # `type=gha` needs the Actions runtime token and cache URL, which GitHub
+      # gives to JavaScript actions and NOT to `run:` steps; without them buildx
+      # skips the cache silently.
+      - name: Expose the Actions cache to buildx
+        uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+
       - name: Build the API image
-        run: docker build -f Dockerfile.api -t tnp-api:ci .
+        run: >-
+          docker buildx build -f Dockerfile.api -t tnp-api:ci --load
+          --cache-from type=gha,scope=ci-tnp-api
+          ${WRITE_CACHE:+--cache-to type=gha,scope=ci-tnp-api,mode=max} .
 
       - name: Build the DNS image
-        run: docker build -f Dockerfile.dns -t tnp-dns:ci .
+        run: >-
+          docker buildx build -f Dockerfile.dns -t tnp-dns:ci --load
+          --cache-from type=gha,scope=ci-tnp-dns
+          ${WRITE_CACHE:+--cache-to type=gha,scope=ci-tnp-dns,mode=max} .
 
       - name: Build the relay image
-        run: docker build -f Dockerfile.relay -t tnp-relay:ci .
+        run: >-
+          docker buildx build -f Dockerfile.relay -t tnp-relay:ci --load
+          --cache-from type=gha,scope=ci-tnp-relay
+          ${WRITE_CACHE:+--cache-to type=gha,scope=ci-tnp-relay,mode=max} .
 
       # The relay's identity is its key: start the image with a throwaway seed
       # and prove, from inside the running container, that it answers a client
@@ -312,10 +400,16 @@ jobs:
 
   # Publish only after EVERY gate passes, on a push to main. The reusable workflow
   # only writes immutable API/DNS/relay images; it cannot roll out or scale ECS.
+  # On a push `changes` is skipped and every gate runs. That skipped ancestor
+  # would make the implicit success() skip this job too, so each gate's result
+  # is required explicitly instead: all three must be a real success, never a
+  # skip. (No timeout-minutes: a reusable-workflow call cannot take one; each
+  # of its jobs sets its own.)
   publish_aws_images:
     needs: [verify, database, docker]
     if: >-
-      ${{ vars.OXY_1519_ROLLOUT_HOLD != 'true' && (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+      ${{ !cancelled() && vars.OXY_1519_ROLLOUT_HOLD != 'true' && (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      && needs.verify.result == 'success' && needs.database.result == 'success' && needs.docker.result == 'success' }}
     uses: ./.github/workflows/deploy-aws.yml
     permissions:
       id-token: write
