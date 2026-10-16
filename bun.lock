@@ -14,7 +14,7 @@
       "version": "1.0.0",
       "dependencies": {
         "@oxy.so/core": "4.10.0",
-        "@oxy.so/utils": "^1.0.1",
+        "@oxy.so/utils": "^1.2.0",
         "@tnp/crypto": "workspace:*",
         "@tnp/namespace": "workspace:*",
         "@tnp/protocol": "workspace:*",
@@ -77,7 +77,7 @@
       "version": "1.0.0",
       "dependencies": {
         "@expo/vector-icons": "^15.1.1",
-        "@oxy.so/bloom": "6.2.1",
+        "@oxy.so/bloom": "9.0.0",
         "@oxy.so/core": "4.10.0",
         "@oxy.so/services": "11.5.0",
         "@tanstack/query-async-storage-persister": "^5.101.2",
@@ -702,7 +702,7 @@
 
     "@oxy.so/telemetry": ["@oxy.so/telemetry@1.2.0", "", {}, "sha512-ryydgkL5jDUVzpG0I2O1/QF+AHYITpaHdqABXdno23J7kYeijUO+QBIXEEQxCBy/9S7AslqDvHwhWpFsGLLrzA=="],
 
-    "@oxy.so/utils": ["@oxy.so/utils@1.0.1", "", {}, "sha512-7bZTyXBd5z99D9zsm3k1BSHSODsUxnTZOZd9sPBuip59E71v08hYAwCHqqQIpitwLeFxDpgwADfyaP3s82gRUA=="],
+    "@oxy.so/utils": ["@oxy.so/utils@1.2.0", "", {}, "sha512-FerneDb/AkTGsqp9VNKkz7oVKrWJYCB/juxcL6S452RLdC2Di7zaSjXYSWF6oyVQAG953MIA9mxYSjKfABwzeQ=="],
 
     "@phun-ky/typeof": ["@phun-ky/typeof@2.0.3", "", {}, "sha512-oeQJs1aa8Ghke8JIK9yuq/+KjMiaYeDZ38jx7MhkXncXlUKjqQ3wEm2X3qCKyjo+ZZofZj+WsEEiqkTtRuE2xQ=="],
 
