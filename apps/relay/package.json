@@ -10,7 +10,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@oxy.so/core": "4.10.0",
+    "@oxy.so/core": "4.21.1",
     "@oxy.so/telemetry": "1.2.0",
     "@tnp/crypto": "workspace:*",
     "@tnp/protocol": "workspace:*",
