@@ -56,7 +56,12 @@ globalThis.fetch = new Proxy(originalFetch, {
 async function run(): Promise<void> {
   try {
     issuer = createServer((req, res) => {
-      if (!req.url?.startsWith('/session/validate/receiver-session')) {
+      // The SDK validates the request's bearer against its session
+      // (@oxy.so/core >= 4.17): the bearer travels to Oxy, never only its id.
+      if (
+        !req.url?.startsWith('/session/validate-header/receiver-session') ||
+        !req.headers.authorization?.startsWith('Bearer ')
+      ) {
         res.writeHead(404).end();
         return;
       }
