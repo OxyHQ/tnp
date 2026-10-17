@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
-    "@oxy.so/bloom": "6.2.1",
+    "@oxy.so/bloom": "10.0.0",
     "@oxy.so/core": "4.21.1",
     "@oxy.so/services": "11.12.1",
     "@tanstack/query-async-storage-persister": "^5.101.2",
