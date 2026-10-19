@@ -110,6 +110,13 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      # Every Oxy app shares one Postgres: a new migration may not hold a lock
+      # that stalls a hot table (NOT VALID constraints validated later, hot-table
+      # DDL alone in its migration). The rules are @oxy.so/db's; the baseline and
+      # hot tables are in apps/api's db:check-locks script.
+      - name: Verify every new migration keeps its locks short
+        run: bun run --cwd apps/api db:check-locks
+
       # AGENTS.md is prepended to EVERY agent session, so its bytes are paid on
       # every task forever, and it grows by accretion — one reasonable paragraph
       # at a time, invisible per-commit. Nothing breaks when it grows, which is
