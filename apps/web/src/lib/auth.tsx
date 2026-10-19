@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useAuth as useOxyAuth } from '@oxy.so/services';
+import { useAuth as useOxyAuth } from '@oxy.so/services/ui/client';
 import { setApiClient } from './api';
 
 export { useOxyAuth as useAuth };
