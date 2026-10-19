@@ -42,5 +42,24 @@
     "rules": {
       "preset": "recommended"
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/web/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@oxy.so/services": "The root entry registers every account screen synchronously, which puts them in first paint. Import from '@oxy.so/services/ui/client' (or '@oxy.so/services/ui')."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

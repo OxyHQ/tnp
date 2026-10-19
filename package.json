@@ -47,8 +47,8 @@
     "@oxy.so/contracts": "5.0.0",
     "@oxy.so/core": "6.0.0",
     "@oxy.so/protocol": "1.4.1",
-    "@oxy.so/services": "11.17.0",
-    "@oxy.so/bloom": "14.0.0"
+    "@oxy.so/services": "12.2.0",
+    "@oxy.so/bloom": "15.0.0"
   },
   "resolutions": {
     "@oxy.so/telemetry": "2.1.0"
