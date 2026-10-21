@@ -109,10 +109,14 @@ async function run(): Promise<void> {
       assert.equal(admitted, before);
     }
 
-    // revalidates on the next call and refuses revocation without a cached admit
+    // with no live revocation feed (@oxy.so/core 6.9.0: no service token here)
+    // every request asks Oxy, so a revoked session is refused on the very next
+    // request and never by a cached admit
     {
       active = true;
+      const admittedChecks = validations;
       assert.equal((await request(bearer())).status, 200);
+      assert.equal(validations, admittedChecks + 1);
       const before = admitted;
       const checks = validations;
       active = false;
