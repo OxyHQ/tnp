@@ -1,3 +1,4 @@
+import { useAccountColor } from '@oxy.so/services/ui/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import Layout from './components/Layout';
@@ -20,6 +21,8 @@ import ServicesDomain from './pages/ServicesDomain';
 import { AuthBridge } from './lib/auth';
 
 export default function App() {
+  // The account's colour is the app's accent; signed-out visitors keep TNP green.
+  useAccountColor();
   return (
     <HelmetProvider>
       <AuthBridge />
