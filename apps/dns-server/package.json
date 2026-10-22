@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@oxy.so/core": "6.9.1"
+    "@oxy.so/core": "6.11.0"
   },
   "devDependencies": {
     "bun-types": "^1.4.3",
