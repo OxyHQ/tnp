@@ -15,7 +15,8 @@
     "@tnp/crypto": "workspace:*",
     "@tnp/protocol": "workspace:*",
     "@tnp/relay-core": "workspace:*",
-    "@tnp/shared-types": "workspace:*"
+    "@tnp/shared-types": "workspace:*",
+    "@aws-sdk/credential-provider-node": "3.972.84"
   },
   "devDependencies": {
     "bun-types": "^1.4.3",

@@ -1,12 +1,14 @@
 # Ecosystem activity
 
 The API, public DNS daemon, and hosted relay each have a collector and a live
-infrastructure heartbeat. Each process turns collection on for itself once
-`OXY_SERVICE_API_KEY` and `OXY_SERVICE_API_SECRET` are both set (plus
-`AWS_REGION` for region metadata) — this credential is dedicated to ecosystem
-activity in all three apps and used for nothing else, so there is no separate
-enable flag. Missing either credential emits a warning and collection stays
-off. These settings do not activate infrastructure. The September 13 live ECS
+infrastructure heartbeat. Each process starts the shared publisher using its
+registered workload identity and temporary AWS role credentials. `AWS_REGION`
+supplies infrastructure metadata. With no region configured, local startup
+omits only the publisher; user authentication and workload clients still work. ECS and authenticated development/SSO roles
+use the same provider; Oxy's live binding determines the application/environment.
+No Oxy API key, application scope or inter-app consent is required. A missing or
+revoked binding is reported by the shared publisher with bounded retry/backoff.
+These settings do not activate infrastructure. The September 13 live ECS
 audit found one running API task and one running DNS task; the relay alone
 remains parked with desired count zero and retains the separate publication
 and deployment blockers documented in `architecture/relays.md`.

@@ -1,7 +1,5 @@
-import { OxyServer, createOptionalOxyAuth } from '@oxy.so/core/server';
-import { config } from '../config.js';
-
-const oxy = new OxyServer({ baseURL: config.oxyApiUrl });
+import { createOptionalOxyAuth } from '@oxy.so/core/server';
+import { oxy } from '../oxy.js';
 
 // Optional Oxy auth: resolves req.userId / req.user when a valid bearer token
 // is present, but never rejects the request. Route handlers enforce auth with
