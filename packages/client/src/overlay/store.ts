@@ -146,6 +146,20 @@ const STALE_LOCK_MS = SLOW_WRITES ? 60_000 : 10_000;
 /** How long to wait for another process's lock before giving up. */
 const LOCK_WAIT_MS = SLOW_WRITES ? 30_000 : 5_000;
 
+/**
+ * Whether a failed exclusive create of a lock file means another process holds
+ * it. EEXIST everywhere. On Windows, also EPERM/EACCES: a file another process
+ * has unlinked stays "delete pending" until its last handle closes, and
+ * creating it meanwhile fails with ACCESS_DENIED. That is the lock being
+ * released, so it is waited out under the same deadline as a held one.
+ */
+function lockContended(err: unknown): boolean {
+  const { code } = err as NodeJS.ErrnoException;
+  return (
+    code === 'EEXIST' || (process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES'))
+  );
+}
+
 const sleeper = new Int32Array(new SharedArrayBuffer(4));
 function sleepSync(ms: number): void {
   Atomics.wait(sleeper, 0, 0, ms);
@@ -286,17 +300,17 @@ export class OverlayStore {
           0o600,
         );
       } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+        if (!lockContended(err)) throw err;
+        if (Date.now() > deadline) {
+          throw new Error(`the file ${path} is locked by another process`, { cause: err });
+        }
         try {
           if (Date.now() - lstatSync(lockPath).mtimeMs > STALE_LOCK_MS) {
             unlinkSync(lockPath); // a holder that crashed
             continue;
           }
         } catch {
-          continue; // released between our open and stat
-        }
-        if (Date.now() > deadline) {
-          throw new Error(`the file ${path} is locked by another process`);
+          continue; // released (or still being deleted) between our open and stat
         }
         sleepSync(10);
       }
