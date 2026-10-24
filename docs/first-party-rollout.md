@@ -14,8 +14,9 @@ Infrastructure activity requires a configured region. Without one, local boot
 omits only the publisher; authentication remains available. A configured publisher
 uses the shared retry/backoff and reports missing/revoked workload authority.
 
-Release gate: this source was validated with Oxy core 7, contracts 6, protocol
-1.5.1 and services 13 candidates. Pin the published registry versions before
-merging/deploying; no local tarball override is committed. The receiver HTTP
+The adoption release pins published registry core7.0.0, contracts6.0.0,
+protocol1.5.1 and services13.0.0. All eleven workspace type checks and the full
+1,556-test suite passed (seven existing skips); no local tarball override is
+committed. Network grants and certificates retain their signed domain authority. The receiver HTTP
 fixture explicitly disposes its shared Oxy client so its background resources do
 not outlive the child process.

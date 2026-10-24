@@ -10,7 +10,7 @@
     "test": "bun test src"
   },
   "dependencies": {
-    "@oxy.so/core": "6.9.1",
+    "@oxy.so/core": "7.0.0",
     "@aws-sdk/credential-provider-node": "3.972.84"
   },
   "devDependencies": {
