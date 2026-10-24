@@ -20,3 +20,14 @@ protocol1.5.1 and services13.0.0. All eleven workspace type checks and the full
 committed. Network grants and certificates retain their signed domain authority. The receiver HTTP
 fixture explicitly disposes its shared Oxy client so its background resources do
 not outlive the child process.
+
+## Deployment evidence
+
+A green image-publisher workflow publishes artifacts; it does not prove a runtime
+cutover. Keep API, DNS and relay in the migration inventory until their running
+versions are read back. After verifying the new image digests, pin the API and
+DNS digests in `oxy-infra` and deploy only those existing services through the
+reviewed infrastructure change. Record their task revisions, image digests and
+health checks. Preserve the relay's current deployment state: this migration
+must not activate a dormant relay or create resources. Its source readiness and
+runtime status are separate facts.
