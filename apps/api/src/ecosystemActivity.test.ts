@@ -1,83 +1,42 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import type { createEcosystemTraffic } from '@oxy.so/core/server';
 import {
-  canAuthenticateAsOxyService,
   getEcosystemActivity,
   startEcosystemActivity,
+  stopEcosystemActivity,
 } from './ecosystemActivity';
 
-/**
- * The identity answer is INJECTED rather than arranged.
- *
- * `canAttestWorkloadIdentity` reads `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI`,
- * which ECS sets and nothing else does, so a test that set it would be asserting
- * this suite's idea of how the SDK detects a task role rather than what tnp-api
- * does with the answer. Mocking the module instead is worse still here: bun's
- * `mock.module` is global to the test process, and replacing
- * `@oxy.so/core/server` for one file broke four unrelated tests in this app.
- */
-describe('tnp-api ecosystem activity bootstrap', () => {
-  test('starts on an attestable task role with no key pair anywhere', () => {
-    // The case the key check got wrong. A deployed task carries no pair at all —
-    // it attests its ECS task role — and the old gate read that as "no
-    // credentials" and returned. From the dashboard that is indistinguishable
-    // from a quiet day, with nothing saying the publisher never started.
-    delete process.env.OXY_SERVICE_API_KEY;
-    delete process.env.OXY_SERVICE_API_SECRET;
+afterEach(stopEcosystemActivity);
+describe('tnp-api workload activity', () => {
+  test('passes a temporary role provider without an ECS-only or API-key gate', () => {
+    const calls: Parameters<typeof createEcosystemTraffic>[0][] = [];
     let installations = 0;
-    const create = (() => ({
-      installFetch() {
-        installations++;
-      },
-      record() {},
-    })) as unknown as typeof createEcosystemTraffic;
-    startEcosystemActivity(
-      () => true,
-      () => true,
-      create,
-    );
+    const create = ((options) => {
+      calls.push(options);
+      return {
+        installFetch() {
+          installations++;
+        },
+        async stop() {},
+      };
+    }) as typeof createEcosystemTraffic;
+    const ready = () => true;
+    startEcosystemActivity(ready, create, 'us-west-2');
+    startEcosystemActivity(ready, create, 'us-west-2');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.service).toBe('tnp-api');
+    expect(calls[0]?.ready).toBe(ready);
+    expect(typeof calls[0]?.workloadCredentials).toBe('function');
+    expect(calls[0]?.credential).toBeUndefined();
     expect(installations).toBe(1);
     expect(getEcosystemActivity()).toBeDefined();
   });
+});
 
-  test('refuses when it can neither attest nor present a pair', () => {
-    // The honest "this process cannot act as itself here" — a laptop, a CI box.
-    // Asserted through the injected answer, which is what production computes
-    // from the two together.
-    const create = (() => {
-      throw new Error('must not run');
-    }) as unknown as typeof createEcosystemTraffic;
-    expect(() =>
-      startEcosystemActivity(
-        () => true,
-        () => false,
-        create,
-      ),
-    ).not.toThrow();
-  });
-
-  /**
-   * The predicate itself, which is where the decision lives — the cases above
-   * inject past it and would stay green if it went back to reading the pair.
-   */
-  describe('canAuthenticateAsOxyService', () => {
-    test('an attestable task role is enough, with no pair anywhere', () => {
-      delete process.env.OXY_SERVICE_API_KEY;
-      delete process.env.OXY_SERVICE_API_SECRET;
-      expect(canAuthenticateAsOxyService(() => true)).toBe(true);
-    });
-
-    test('a complete pair is enough where nothing can attest', () => {
-      process.env.OXY_SERVICE_API_KEY = 'fixture';
-      process.env.OXY_SERVICE_API_SECRET = 'fixture';
-      expect(canAuthenticateAsOxyService(() => false)).toBe(true);
-    });
-
-    test('a half pair is not an identity, and neither is nothing', () => {
-      delete process.env.OXY_SERVICE_API_SECRET;
-      expect(canAuthenticateAsOxyService(() => false)).toBe(false);
-      delete process.env.OXY_SERVICE_API_KEY;
-      expect(canAuthenticateAsOxyService(() => false)).toBe(false);
-    });
-  });
+test('omits only telemetry when infrastructure region is not configured', () => {
+  const create = (() => {
+    throw new Error('publisher must not start without location');
+  }) as typeof createEcosystemTraffic;
+  startEcosystemActivity(() => true, create, '');
+  expect(getEcosystemActivity()).toBeUndefined();
 });

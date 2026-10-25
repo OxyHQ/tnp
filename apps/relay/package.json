@@ -10,12 +10,13 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@oxy.so/core": "6.9.1",
+    "@oxy.so/core": "7.0.0",
     "@oxy.so/telemetry": "2.1.0",
     "@tnp/crypto": "workspace:*",
     "@tnp/protocol": "workspace:*",
     "@tnp/relay-core": "workspace:*",
-    "@tnp/shared-types": "workspace:*"
+    "@tnp/shared-types": "workspace:*",
+    "@aws-sdk/credential-provider-node": "3.972.84"
   },
   "devDependencies": {
     "bun-types": "^1.4.3",

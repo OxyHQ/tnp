@@ -15,6 +15,16 @@ deployed until the relay is activated ([`relays.md`](./relays.md) §8).
 
 ---
 
+## Oxy platform identity
+
+TNP's own API, DNS and hosted relay use the Oxy shared session/workload contract
+([ADR 0049](https://github.com/OxyHQ/oxy/blob/main/docs/adr/0049-first-party-platform-authority.md)).
+Own workloads do not request OAuth scopes or use customer API keys. This does
+not change the signed domain/node grant chains below: their purpose, name,
+validity and revocation rules authorize network resources, not inter-app OAuth.
+The dashboard keeps `createLinkedClient` as its session transport; the network
+protocol never depends on a human Oxy bearer to establish a circuit.
+
 ## 1. Key hierarchy
 
 The rule this exists to enforce: **the Oxy identity key is never a transport

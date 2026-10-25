@@ -13,6 +13,7 @@ let receiverOrigin = '';
 let active = true;
 let validations = 0;
 let admitted = 0;
+let disposeOxy = () => {};
 
 function bearer(userId = 'receiver-owner', includeSession = true): string {
   const payload = {
@@ -81,6 +82,8 @@ async function run(): Promise<void> {
     // Configuration syntax only: this test never opens a product database.
     process.env.DATABASE_URL = 'postgres://unused:unused@127.0.0.1:1/receiver_fixture_unused';
     const { oxyAuthOptional } = await import('../../middleware/auth.js');
+    const { oxy } = await import('../../oxy.js');
+    disposeOxy = () => oxy.dispose();
     const middleware = [oxyAuthOptional, requireOxyAuth];
     const app = express();
     app.get('/owned-fixture', middleware, (req: ExpressRequest, res: ExpressResponse) => {
@@ -130,6 +133,7 @@ async function run(): Promise<void> {
         '\n',
     );
   } finally {
+    disposeOxy();
     try {
       await close(receiver);
     } finally {
