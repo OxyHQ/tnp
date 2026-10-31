@@ -1,3 +1,4 @@
+import { useScrollRestoration } from '@oxy.so/bloom/scroll';
 import { useTranslation } from 'react-i18next';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
@@ -21,6 +22,8 @@ const LANGUAGES = [
 ] as const;
 
 export default function Layout() {
+  // Every route uses this one document scroller; Bloom owns its route offsets.
+  useScrollRestoration('window');
   const { t, i18n } = useTranslation('common');
   const { isAuthenticated, signIn, signOut } = useAuth();
   const location = useLocation();
