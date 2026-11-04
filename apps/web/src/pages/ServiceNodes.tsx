@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { writeClipboardText } from '@oxy.so/bloom/hooks';
 import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
 import { Trans, useTranslation } from 'react-i18next';
@@ -83,9 +84,12 @@ export default function ServiceNodes() {
   }, [load, page]);
 
   const copyToClipboard = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(key);
-    setTimeout(() => setCopied(null), 2000);
+    writeClipboardText(text)
+      .then(() => {
+        setCopied(key);
+        setTimeout(() => setCopied(null), 2000);
+      })
+      .catch(() => setCopied(null));
   };
 
   const truncateKey = (key: string): string => {

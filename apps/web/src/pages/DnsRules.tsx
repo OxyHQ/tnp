@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
 import { Trans, useTranslation } from 'react-i18next';
 import { toast } from '@oxy.so/bloom/toast';
+import { writeClipboardText } from '@oxy.so/bloom/hooks';
 import { RulesEnvelopeError } from '@tnp/crypto/dns-rules';
 import {
   type DnsRule,
@@ -691,9 +692,12 @@ function ExportPanel({ rules }: { rules: DnsRule[] }) {
   const text = useMemo(() => EXPORTS[format](rules), [format, rules]);
 
   const copy = () => {
-    void navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    writeClipboardText(text)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => setCopied(false));
   };
 
   return (

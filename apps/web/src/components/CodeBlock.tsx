@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { writeClipboardText } from '@oxy.so/bloom/hooks';
 import { useTranslation } from 'react-i18next';
 
 interface CodeBlockProps {
@@ -11,9 +12,12 @@ export default function CodeBlock({ code, className = '' }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    writeClipboardText(code)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => setCopied(false));
   };
 
   return (

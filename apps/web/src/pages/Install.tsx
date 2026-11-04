@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, type ReactElement } from 'react';
+import { writeClipboardText } from '@oxy.so/bloom/hooks';
 import { Helmet } from 'react-helmet-async';
 import { Trans, useTranslation } from 'react-i18next';
 import type { ClientLatestResponse } from '@tnp/shared-types';
@@ -102,8 +103,7 @@ export default function Install() {
   const copyCommand = useCallback((command: string, field: string) => {
     // Only claim "copied" once the write succeeded; a blocked clipboard must
     // not leave the user pasting whatever was there before.
-    navigator.clipboard
-      .writeText(command)
+    writeClipboardText(command)
       .then(() => {
         setCopied(field);
         setTimeout(() => setCopied(null), 2000);
