@@ -107,6 +107,10 @@ jobs:
       - name: Lint and format check (Biome)
         run: bunx biome ci .
 
+      # ADR 0055: nested namespace keys, no stray keys in a translation.
+      - name: Translation keys (oxy-doctor-i18n)
+        run: bun run i18n:check
+
       - name: Typecheck
         run: bun run typecheck
 
