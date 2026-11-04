@@ -8,7 +8,7 @@
  */
 
 import { isIP } from 'node:net';
-import cors from 'cors';
+import { createOxyCors } from '@oxy.so/core/server';
 import express, {
   type NextFunction,
   type Request,
@@ -57,9 +57,6 @@ export function createApp(options: AppOptions): express.Express {
 
   const limits = createNetworkLimits(
     options.limits ?? {
-      trustProxyHops: config.trustProxyHops,
-      trustCloudflareHeader: config.trustCloudflareHeader,
-      cloudflareIpRanges: config.cloudflareIpRanges,
       exempt: config.rateLimitExempt,
       vpnExitAddresses: config.vpnExitAddresses,
     },
@@ -73,8 +70,8 @@ export function createApp(options: AppOptions): express.Express {
   const app = express();
   app.disable('x-powered-by');
   // `trust proxy` stays off: it would let a client steer `req.hostname` with
-  // X-Forwarded-Host. The rate limiter applies the proxy hop count itself
-  // (middleware/clientIp.ts).
+  // X-Forwarded-Host. The rate limiter resolves the client address itself,
+  // with the SDK's `resolveClientIp` (middleware/clientIp.ts).
 
   app.use((req, res, next) => {
     const activity = (options.ecosystemActivity ?? getEcosystemActivity)();
@@ -83,12 +80,9 @@ export function createApp(options: AppOptions): express.Express {
   });
 
   app.use(securityHeaders);
-  app.use(
-    cors({
-      origin: options.corsOrigins ?? config.corsOrigins,
-      credentials: true,
-    }),
-  );
+  // Exact-match allowlist: TNP's own origins plus the HTTPS Oxy apex family,
+  // never a reflected or wildcard origin with credentials.
+  app.use(createOxyCors({ appOrigins: options.corsOrigins ?? config.corsOrigins }));
   // Before the body parser and before auth: a client over its budget costs
   // neither a JSON parse nor a token validation.
   app.use(limits.perAddress);

@@ -1,25 +1,27 @@
 /**
- * The relay directory: who may be published as Oxy-operated, which relays are
- * live, and in what order clients see them.
+ * The relay registry: which community relays are live, and in what order
+ * clients see them.
  *
  * Three rules, each closing a way the directory used to be steerable by any
  * Oxy account (security review, 2026-10):
  *
- * 1. `operator` is the registry's decision. A relay is `oxy` only while its
- *    registering account is on the `TNP_OXY_RELAY_OPERATORS` allowlist, and
- *    that is evaluated when the directory is read — so a row written back when
- *    the field was self-asserted, or an operator later removed from the list,
- *    is `community` immediately rather than at its next registration.
+ * 1. Every registry relay is `community`. `operator` is not a request field,
+ *    and the registry never promotes an account's relay to `oxy`: Oxy's own
+ *    relays are the API's `TNP_OXY_RELAYS`, whose endpoints no account may
+ *    register (`routes/relays.ts`), and the signed directory lists them from
+ *    that configuration alone (`relayDirectory.ts`). A row written back when
+ *    the field was self-asserted is `community` too: the stored value is
+ *    never read.
  * 2. A relay is listed only while its heartbeat is fresh. Nothing ever wrote
  *    `offline`, so one heartbeat used to list a relay forever.
  * 3. The order is not the relay's to choose. It used to be status, then
  *    endpoint string — so `ws://…` sorted ahead of every `wss://…` and a
- *    chosen hostname could put a relay first. Now: Oxy-operated first, then
- *    longest-registered, then id. Tenure costs an attacker time; an endpoint
- *    string or a heartbeat rate costs nothing.
+ *    chosen hostname could put a relay first. Now: longest-registered, then
+ *    id. Tenure costs an attacker time; an endpoint string or a heartbeat rate
+ *    costs nothing.
  */
 
-import { and, asc, eq, gt, inArray, isNotNull, ne, not, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gt, isNotNull, ne, sql } from 'drizzle-orm';
 import { verifyRelayRegistryProof, type RelayRegistryProofPurpose } from '@tnp/crypto';
 import {
   MAX_RELAYS_PER_ACCOUNT,
@@ -61,30 +63,17 @@ export function relayKeyProofValid(params: {
   );
 }
 
-export function relayOperatorFor(
-  operatorUserId: string,
-  oxyOperators: ReadonlySet<string>,
-): RelayOperator {
-  return oxyOperators.has(operatorUserId) ? 'oxy' : 'community';
-}
-
-/** `operator_user_id IN (allowlist)`, or a constant false for an empty allowlist. */
-function isOxyOperated(oxyOperators: ReadonlySet<string>): SQL {
-  return oxyOperators.size > 0 ? inArray(relays.operatorUserId, [...oxyOperators]) : sql`false`;
-}
-
 export async function listRelayDirectory(
   db: Executor,
-  params: { oxyOperators: ReadonlySet<string>; operator: RelayOperator | null },
+  params: { operator: RelayOperator | null },
 ): Promise<RelayDirectoryEntry[]> {
-  const { oxyOperators, operator } = params;
-  const oxy = isOxyOperated(oxyOperators);
+  // No registry relay is Oxy-operated (rule 1 above).
+  if (params.operator === 'oxy') return [];
 
   const rows = await db
     .select({
       endpoint: relays.endpoint,
       publicKey: relays.publicKey,
-      operatorUserId: relays.operatorUserId,
       location: relays.location,
       status: relays.status,
     })
@@ -94,15 +83,14 @@ export async function listRelayDirectory(
         ne(relays.status, 'offline'),
         // The database's clock, not this task's: the heartbeat wrote `now()`.
         gt(relays.lastSeen, sql`now() - make_interval(secs => ${RELAY_STALE_AFTER_SECONDS})`),
-        operator === 'oxy' ? oxy : operator === 'community' ? not(oxy) : undefined,
       ),
     )
-    .orderBy(sql`case when ${oxy} then 0 else 1 end`, asc(relays.createdAt), asc(relays.id));
+    .orderBy(asc(relays.createdAt), asc(relays.id));
 
   return rows.map((row) => ({
     endpoint: row.endpoint,
     publicKey: row.publicKey,
-    operator: relayOperatorFor(row.operatorUserId, oxyOperators),
+    operator: 'community',
     location: row.location,
     status: row.status,
   }));
@@ -165,18 +153,17 @@ export async function registerRelay(
   params: {
     request: RegisterRelayRequest;
     operatorUserId: string;
-    oxyOperators: ReadonlySet<string>;
     keyProven?: boolean;
     liveChecked?: boolean;
   },
 ): Promise<RegisterRelayOutcome> {
-  const { request, operatorUserId, oxyOperators } = params;
+  const { request, operatorUserId } = params;
   const proven = params.keyProven === true;
   const keyProvenAt = proven ? sql`now()` : null;
   const liveCheckedAt = proven && params.liveChecked ? sql`now()` : null;
   const { endpoint, publicKey, capacity, location } = request;
-  // Stored for the record; the directory recomputes it on every read.
-  const operator = relayOperatorFor(operatorUserId, oxyOperators);
+  // Stored for the record; never read back (rule 1 above).
+  const operator: RelayOperator = 'community';
 
   return db.transaction(async (tx) => {
     await tx.execute(

@@ -1,92 +1,49 @@
 import { describe, expect, test } from 'bun:test';
 import type { Request } from 'express';
-import {
-  addressIn,
-  addressKey,
-  buildAddressSet,
-  clientAddress,
-  CLOUDFLARE_IP_RANGES,
-  peerAddress,
-  unmapIpv4,
-} from './clientIp.js';
+import { addressIn, addressKey, buildAddressSet, clientAddress, unmapIpv4 } from './clientIp.js';
 
-const cloudflare = buildAddressSet(CLOUDFLARE_IP_RANGES).set;
-
-function request(ip: string, cfConnectingIp?: string, forwardedFor?: string): Request {
+/** A request as the task sees it: the socket peer and the forwarded chain. */
+function request(socketPeer: string, forwardedFor?: string): Request {
   return {
-    socket: { remoteAddress: ip },
-    get: (name: string) => {
-      const header = name.toLowerCase();
-      if (header === 'cf-connecting-ip') return cfConnectingIp;
-      if (header === 'x-forwarded-for') return forwardedFor;
-      return undefined;
-    },
+    socket: { remoteAddress: socketPeer },
+    headers: forwardedFor === undefined ? {} : { 'x-forwarded-for': forwardedFor },
   } as unknown as Request;
 }
 
-const settings = (trustCloudflareHeader: boolean) => ({
-  trustProxyHops: 0,
-  trustCloudflareHeader,
-  cloudflare,
-});
-
-describe('peerAddress', () => {
-  test('with no trusted hop, X-Forwarded-For is ignored entirely', () => {
-    expect(peerAddress(request('10.0.0.9', undefined, '198.51.100.7'), 0)).toBe('10.0.0.9');
-  });
-
-  test('one trusted hop (the ALB) reads only the entry the ALB appended', () => {
-    // The client wrote `1.1.1.1`; Cloudflare appended the client's real
-    // address; the ALB appended the Cloudflare edge it saw.
-    const req = request('10.0.0.9', undefined, '1.1.1.1, 198.51.100.7, 162.158.1.1');
-    expect(peerAddress(req, 1)).toBe('162.158.1.1');
-  });
-
-  test('a client reaching the ALB directly cannot forge its peer', () => {
-    const req = request('10.0.0.9', undefined, '162.158.1.1, 203.0.113.50');
-    expect(peerAddress(req, 1)).toBe('203.0.113.50');
-  });
-
-  test('more hops than entries falls back to the leftmost, never past it', () => {
-    expect(peerAddress(request('10.0.0.9', undefined, '203.0.113.50'), 5)).toBe('203.0.113.50');
-    expect(peerAddress(request('10.0.0.9'), 1)).toBe('10.0.0.9');
-  });
-
-  test('a malformed trusted entry falls back to the socket peer', () => {
-    expect(peerAddress(request('10.0.0.9', undefined, 'garbage'), 1)).toBe('10.0.0.9');
-  });
-});
+const ALB = '10.0.3.17';
+const CLOUDFLARE_EDGE = '162.158.1.1';
 
 describe('clientAddress', () => {
-  test('uses the peer address when the Cloudflare header is not trusted', () => {
-    const req = request('162.158.1.1', '198.51.100.7');
-    expect(clientAddress(req, settings(false))).toBe('162.158.1.1');
+  test('through Cloudflare and the ALB, the client Cloudflare saw', () => {
+    expect(clientAddress(request(ALB, `198.51.100.7, ${CLOUDFLARE_EDGE}`))).toBe('198.51.100.7');
   });
 
-  test('a Cloudflare peer behind the ALB, end to end', () => {
-    const req = request('10.0.0.9', '198.51.100.7', '6.6.6.6, 198.51.100.7, 162.158.1.1');
-    expect(clientAddress(req, { ...settings(true), trustProxyHops: 1 })).toBe('198.51.100.7');
+  test('straight to the ALB, the address the ALB saw', () => {
+    expect(clientAddress(request(ALB, '203.0.113.50'))).toBe('203.0.113.50');
   });
 
-  test('takes CF-Connecting-IP from a Cloudflare peer when trusted', () => {
-    const req = request('162.158.1.1', '198.51.100.7');
-    expect(clientAddress(req, settings(true))).toBe('198.51.100.7');
+  test('a forged entry left of a non-Cloudflare hop is never read', () => {
+    // A client that bypasses Cloudflare writes its own X-Forwarded-For; the
+    // ALB appends the real peer after it, and only that is believed.
+    expect(clientAddress(request(ALB, '198.51.100.7, 203.0.113.50'))).toBe('203.0.113.50');
   });
 
-  test('ignores CF-Connecting-IP from a peer outside Cloudflare: it would be forged', () => {
-    // A client that reaches the ALB directly can send any header it likes.
-    const req = request('203.0.113.50', '198.51.100.7');
-    expect(clientAddress(req, settings(true))).toBe('203.0.113.50');
+  test("a forged entry left of Cloudflare's append is never read", () => {
+    expect(clientAddress(request(ALB, `1.1.1.1, 198.51.100.7, ${CLOUDFLARE_EDGE}`))).toBe(
+      '198.51.100.7',
+    );
   });
 
-  test('ignores a CF-Connecting-IP that is not an address', () => {
-    const req = request('162.158.1.1', 'not-an-ip');
-    expect(clientAddress(req, settings(true))).toBe('162.158.1.1');
+  test('a public socket peer has no proxy in front: the header is ignored', () => {
+    expect(clientAddress(request('203.0.113.50', '198.51.100.7'))).toBe('203.0.113.50');
   });
 
-  test('recognises an IPv4-mapped Cloudflare peer', () => {
-    const req = request('::ffff:162.158.1.1', '198.51.100.7');
-    expect(clientAddress(req, settings(true))).toBe('198.51.100.7');
+  test('an IPv4-mapped socket peer is unmapped', () => {
+    expect(clientAddress(request('::ffff:203.0.113.50'))).toBe('203.0.113.50');
+  });
+
+  test('a closed socket has no address', () => {
+    expect(clientAddress({ socket: {}, headers: {} } as unknown as Request)).toBe('');
   });
 });
 

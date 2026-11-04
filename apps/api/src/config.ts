@@ -71,14 +71,6 @@ export function parseNonNegativeInt(value: string | undefined, fallback: number)
   return value?.trim() && Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-/** `true` or `false` (any case), or `fallback` for anything else, including unset. */
-export function parseFlag(value: string | undefined, fallback: boolean): boolean {
-  const normalized = value?.trim().toLowerCase();
-  if (normalized === 'true') return true;
-  if (normalized === 'false') return false;
-  return fallback;
-}
-
 const production = process.env.NODE_ENV === 'production';
 
 // The standard-tier VPN (docs/architecture/vpn.md §10): off unless
@@ -165,37 +157,11 @@ export const config = {
     parseNonNegativeInt(process.env.TNP_DOMAIN_KEY_RESET_HOLD_DAYS, 30) * 86_400,
   corsOrigins: corsOriginsFor(production),
   /**
-   * Oxy user ids whose relays the directory publishes as `oxy`. Everyone else
-   * is `community`, whatever their relay claims. Empty by default, so no relay
-   * is Oxy-operated until an operator is named here (docs/architecture/relays.md).
-   */
-  oxyRelayOperators: new Set(parseList(process.env.TNP_OXY_RELAY_OPERATORS)) as ReadonlySet<string>,
-  /**
    * `TNP_DIRECTORY_SIGNING_SEED` (base64 32-byte Ed25519 seed, SSM in
    * production) and `TNP_OXY_RELAYS` (JSON `[{endpoint, relayKey, region}]`).
    * Without the seed, `GET /relays/directory` answers 503.
    */
   relayDirectory: relayDirectoryConfig(process.env, production),
-  /**
-   * Proxy hop count: how many proxies in front of the API
-   * append to `X-Forwarded-For`. Production is Cloudflare → ALB → task and only
-   * the ALB is trusted by default, because it is the only hop whose append
-   * cannot be forged by a client that reaches it directly. See
-   * `middleware/clientIp.ts`.
-   */
-  trustProxyHops: parseNonNegativeInt(process.env.TNP_TRUST_PROXY_HOPS, production ? 1 : 0),
-  /**
-   * Take the client address from `CF-Connecting-IP` — but only on requests
-   * whose peer (as `trustProxyHops` determines it) is a Cloudflare address, so
-   * a client that reaches the ALB without Cloudflare cannot forge it.
-   *
-   * On by default in production: off, every client behind the same Cloudflare
-   * edge address would share one rate-limit bucket, and a busy edge would
-   * throttle strangers together. `false` turns it off.
-   */
-  trustCloudflareHeader: parseFlag(process.env.TNP_TRUST_CF_CONNECTING_IP, production),
-  /** Overrides the built-in Cloudflare ranges (`middleware/clientIp.ts`) when set. */
-  cloudflareIpRanges: parseList(process.env.TNP_CLOUDFLARE_IP_RANGES),
   /**
    * Client addresses or CIDRs the per-IP rate limits do not apply to — meant
    * for TNP's own public DNS server, which resolves every query it receives

@@ -31,8 +31,6 @@ beforeEach(async () => {
   await t.db.delete(relays);
 });
 
-const OXY = new Set(['oxy-staff']);
-
 function request(endpoint: string): RegisterRelayRequest {
   return {
     endpoint,
@@ -47,24 +45,25 @@ async function live(endpoint: string, operatorUserId: string) {
   const registration = await registerRelay(t.db, {
     request: request(endpoint),
     operatorUserId,
-    oxyOperators: OXY,
   });
   await recordRelayHeartbeat(t.db, { endpoint, operatorUserId });
   return registration.status === 'ok' ? registration.registration : null;
 }
 
 describe('operator', () => {
-  test('is decided by the allowlist, not by the relay', async () => {
-    const community = await live('wss://anyone.example.test', 'some-account');
-    const oxy = await live('wss://oxy.example.test', 'oxy-staff');
-    expect(community?.operator).toBe('community');
-    expect(oxy?.operator).toBe('oxy');
+  test('every registry relay is community, whoever registered it', async () => {
+    const relay = await live('wss://anyone.example.test', 'some-account');
+    expect(relay?.operator).toBe('community');
 
     const [stored] = await t.db
       .select({ operator: relays.operator })
       .from(relays)
       .where(eq(relays.endpoint, 'wss://anyone.example.test'));
     expect(stored?.operator).toBe('community');
+    expect(await listRelayDirectory(t.db, { operator: 'oxy' })).toEqual([]);
+    expect(
+      (await listRelayDirectory(t.db, { operator: 'community' })).map((r) => r.endpoint),
+    ).toEqual(['wss://anyone.example.test']);
   });
 
   test('a row that claimed oxy before the registry decided is listed as community', async () => {
@@ -81,19 +80,11 @@ describe('operator', () => {
       lastSeen: sql`now()`,
     });
 
-    const directory = await listRelayDirectory(t.db, { oxyOperators: OXY, operator: null });
+    const directory = await listRelayDirectory(t.db, { operator: null });
     expect(directory.map((r) => [r.endpoint, r.operator])).toEqual([
       ['wss://impostor.example.test', 'community'],
     ]);
-    expect(await listRelayDirectory(t.db, { oxyOperators: OXY, operator: 'oxy' })).toEqual([]);
-  });
-
-  test('with an empty allowlist there are no Oxy relays at all', async () => {
-    await live('wss://oxy.example.test', 'oxy-staff');
-    const none = new Set<string>();
-    expect(await listRelayDirectory(t.db, { oxyOperators: none, operator: 'oxy' })).toEqual([]);
-    const all = await listRelayDirectory(t.db, { oxyOperators: none, operator: null });
-    expect(all.map((r) => r.operator)).toEqual(['community']);
+    expect(await listRelayDirectory(t.db, { operator: 'oxy' })).toEqual([]);
   });
 
   test("re-registering another account's endpoint is refused", async () => {
@@ -101,8 +92,7 @@ describe('operator', () => {
     expect(
       await registerRelay(t.db, {
         request: request('wss://taken.example.test'),
-        operatorUserId: 'oxy-staff',
-        oxyOperators: OXY,
+        operatorUserId: 'second',
       }),
     ).toEqual({ status: 'taken' });
   });
@@ -113,7 +103,6 @@ describe('operator', () => {
       await registerRelay(t.db, {
         request: request('wss://r4.example.test'),
         operatorUserId: 'squatter',
-        oxyOperators: OXY,
       }),
     ).toEqual({ status: 'cap' });
     expect(
@@ -121,7 +110,6 @@ describe('operator', () => {
         await registerRelay(t.db, {
           request: request('wss://r2.example.test'),
           operatorUserId: 'squatter',
-          oxyOperators: OXY,
         })
       ).status,
     ).toBe('ok');
@@ -132,7 +120,6 @@ describe('operator', () => {
         registerRelay(t.db, {
           request: request(`wss://c${n}.example.test`),
           operatorUserId: 'racer',
-          oxyOperators: OXY,
         }),
       ),
     );
@@ -145,9 +132,8 @@ describe('liveness', () => {
     await registerRelay(t.db, {
       request: request('wss://quiet.example.test'),
       operatorUserId: 'a',
-      oxyOperators: OXY,
     });
-    expect(await listRelayDirectory(t.db, { oxyOperators: OXY, operator: null })).toEqual([]);
+    expect(await listRelayDirectory(t.db, { operator: null })).toEqual([]);
   });
 
   test('a relay whose last heartbeat is stale is excluded, whatever its stored status', async () => {
@@ -158,28 +144,26 @@ describe('liveness', () => {
       .set({ lastSeen: sql`now() - make_interval(secs => ${RELAY_STALE_AFTER_SECONDS + 1})` })
       .where(eq(relays.endpoint, 'wss://stale.example.test'));
 
-    const directory = await listRelayDirectory(t.db, { oxyOperators: OXY, operator: null });
+    const directory = await listRelayDirectory(t.db, { operator: null });
     expect(directory.map((r) => r.endpoint)).toEqual(['wss://fresh.example.test']);
 
     // A heartbeat brings it back.
     await recordRelayHeartbeat(t.db, { endpoint: 'wss://stale.example.test', operatorUserId: 'b' });
-    const again = await listRelayDirectory(t.db, { oxyOperators: OXY, operator: null });
+    const again = await listRelayDirectory(t.db, { operator: null });
     expect(again).toHaveLength(2);
   });
 });
 
 describe('order', () => {
-  test('Oxy-operated first, then by tenure — never by endpoint string', async () => {
-    // Registered in this order; the community endpoints are chosen so that a
-    // sort by endpoint string would put the newest first.
+  test('by tenure — never by endpoint string', async () => {
+    // Registered in this order, with endpoints chosen so that a sort by
+    // endpoint string would put the newest first.
     await live('wss://zzz-oldest.example.test', 'a');
     await live('wss://mmm-middle.example.test', 'b');
     await live('wss://aaa-newest.example.test', 'c');
-    await live('wss://oxy.example.test', 'oxy-staff');
 
-    const directory = await listRelayDirectory(t.db, { oxyOperators: OXY, operator: null });
+    const directory = await listRelayDirectory(t.db, { operator: null });
     expect(directory.map((r) => r.endpoint)).toEqual([
-      'wss://oxy.example.test',
       'wss://zzz-oldest.example.test',
       'wss://mmm-middle.example.test',
       'wss://aaa-newest.example.test',
@@ -188,7 +172,7 @@ describe('order', () => {
 
   test('the listing publishes no account and no timestamp', async () => {
     await live('wss://relay.example.test', 'secret-account');
-    const [entry] = await listRelayDirectory(t.db, { oxyOperators: OXY, operator: null });
+    const [entry] = await listRelayDirectory(t.db, { operator: null });
     expect(Object.keys(entry ?? {}).sort()).toEqual(
       ['endpoint', 'location', 'operator', 'publicKey', 'status'].sort(),
     );
@@ -212,7 +196,6 @@ describe('key proofs and the signed directory', () => {
     await registerRelay(t.db, {
       request: { ...request(endpoint), publicKey },
       operatorUserId,
-      oxyOperators: OXY,
       keyProven: true,
       liveChecked: true,
     });
@@ -230,14 +213,13 @@ describe('key proofs and the signed directory', () => {
     expect(listed.map((r) => r.endpoint)).toEqual(['wss://proven.example.test']);
     expect(listed[0]?.publicKey).toBe(publicKey);
     // The legacy listing still has both.
-    expect(await listRelayDirectory(t.db, { oxyOperators: OXY, operator: null })).toHaveLength(2);
+    expect(await listRelayDirectory(t.db, { operator: null })).toHaveLength(2);
   });
 
   test("a key proof without the registry's own live check does not list a relay", async () => {
     await registerRelay(t.db, {
       request: { ...request('wss://squat.example.test'), publicKey },
       operatorUserId: 'a',
-      oxyOperators: OXY,
       keyProven: true,
       liveChecked: false,
     });
@@ -366,7 +348,6 @@ describe('key proofs and the signed directory', () => {
     await registerRelay(t.db, {
       request: request('wss://relay.example.test'),
       operatorUserId: 'a',
-      oxyOperators: OXY,
     });
     expect(await listProvenCommunityRelays(t.db)).toEqual([]);
   });

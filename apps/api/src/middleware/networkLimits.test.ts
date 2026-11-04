@@ -21,9 +21,6 @@ const TIERS = { resolve: tier, read: tier, heartbeat: tier, register: tier, writ
 
 async function serve(exitAddresses: string[]): Promise<{ server: Server; base: string }> {
   const limits = createNetworkLimits({
-    trustProxyHops: 0,
-    trustCloudflareHeader: false,
-    cloudflareIpRanges: [],
     exempt: [],
     vpnExitAddresses: exitAddresses,
     addressTiers: TIERS,

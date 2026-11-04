@@ -33,8 +33,10 @@
  *   ordinary per-address tiers: each VPN user gets what one address would.
  *   Before auth it spends only from a per-exit token-validation budget, which
  *   bounds the call-outs a flood of made-up tokens can cause; once that is
- *   spent, such requests are charged to the shared tier instead. If auth
- *   fails, it is charged to the exit's shared tier like any anonymous request.
+ *   spent, such requests are charged to the shared tier instead. A token the
+ *   optional auth refuses ends the request there (401, `strictOptionalBearer`
+ *   in `auth.ts`); one that reaches `perUser` without an account is charged
+ *   to the exit's shared tier like any anonymous request.
  * - Every other request from an exit address spends from the exit's shared
  *   tier: twenty addresses' worth, for all its anonymous users together.
  *   That includes the exit's own resolver's `/dns/resolve` calls (native
@@ -44,13 +46,7 @@
 
 import type { Request, RequestHandler } from 'express';
 import { getOxyUserId } from '@oxy.so/core/server';
-import {
-  addressIn,
-  addressKey,
-  buildAddressSet,
-  clientAddress,
-  CLOUDFLARE_IP_RANGES,
-} from './clientIp.js';
+import { addressIn, addressKey, buildAddressSet, clientAddress } from './clientIp.js';
 import { rateLimit, spend, TokenBucketLimiter, type RateLimitRule } from './rateLimit.js';
 
 export type RequestClass = 'resolve' | 'read' | 'heartbeat' | 'register' | 'write';
@@ -147,11 +143,6 @@ export function classifyRequest(method: string, path: string): RequestClass | nu
 const fullPath = (req: Request) => `${req.baseUrl}${req.path}`;
 
 export interface NetworkLimitSettings {
-  /** See `clientIp.ts`. */
-  trustProxyHops: number;
-  trustCloudflareHeader: boolean;
-  /** Empty means the built-in `CLOUDFLARE_IP_RANGES`. */
-  cloudflareIpRanges: readonly string[];
   /** Addresses or CIDRs exempt from the per-address limits. */
   exempt: readonly string[];
   /** TNP's WireGuard exit addresses (`TNP_VPN_EXIT_ADDRESSES`). Never exempt; see above. */
@@ -189,9 +180,6 @@ function rules(
 
 export function createNetworkLimits(settings: NetworkLimitSettings): NetworkLimits {
   const maxKeys = settings.maxKeys ?? 20_000;
-  const cloudflare = buildAddressSet(
-    settings.cloudflareIpRanges.length > 0 ? settings.cloudflareIpRanges : CLOUDFLARE_IP_RANGES,
-  );
   const exempt = buildAddressSet(settings.exempt);
   const exits = buildAddressSet(settings.vpnExitAddresses ?? []);
   const exitSharedRules = rules(
@@ -217,17 +205,12 @@ export function createNetworkLimits(settings: NetworkLimitSettings): NetworkLimi
     settings.now,
   );
   const userRules = rules(settings.userTiers ?? USER_TIERS, 'account', maxKeys, settings.now);
-  const ipSettings = {
-    trustProxyHops: settings.trustProxyHops,
-    trustCloudflareHeader: settings.trustCloudflareHeader,
-    cloudflare: cloudflare.set,
-  };
 
   const perAddress: RequestHandler = (req, res, next) => {
     const path = fullPath(req);
     const kind = classifyRequest(req.method, path);
     if (!kind) return next();
-    const address = clientAddress(req, ipSettings);
+    const address = clientAddress(req);
     if (address === '' || addressIn(exempt.set, address)) return next();
     if (addressIn(exits.set, address)) {
       // With validation budget left, defer to per-account metering after
@@ -266,7 +249,7 @@ export function createNetworkLimits(settings: NetworkLimitSettings): NetworkLimi
       if (kind) {
         const user = getOxyUserId(req);
         const rule = user ? addressRules[kind] : exitSharedRules[kind];
-        const key = user ? `vpn-user:${user}` : addressKey(clientAddress(req, ipSettings));
+        const key = user ? `vpn-user:${user}` : addressKey(clientAddress(req));
         if (rule && !spend(rule, key, res)) return;
       }
     }
@@ -276,6 +259,6 @@ export function createNetworkLimits(settings: NetworkLimitSettings): NetworkLimi
   return {
     perAddress,
     perUser,
-    invalidEntries: [...cloudflare.invalid, ...exempt.invalid, ...exits.invalid],
+    invalidEntries: [...exempt.invalid, ...exits.invalid],
   };
 }
