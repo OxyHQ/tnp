@@ -112,6 +112,12 @@ jobs:
       - name: Translation keys (oxy-doctor-i18n)
         run: bun run i18n:check
 
+      # One copy of every package one version can serve and of every package
+      # that must be single (@oxy.so/*, react, expo, ...), Oxy releases inside
+      # their upgrade window, and the native peers @oxy.so/services requires.
+      - name: Oxy dependency health (oxy-doctor)
+        run: bun run doctor:oxy
+
       - name: Typecheck
         run: bun run typecheck
 
