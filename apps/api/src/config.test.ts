@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import { spyOn } from 'bun:test';
 import {
   parseExpiryEnforced,
-  parseFlag,
   parseList,
   parseNonNegativeInt,
   parseParkingIp,
@@ -49,16 +48,6 @@ describe('list and number settings', () => {
     expect(parseNonNegativeInt('abc', 7)).toBe(7);
     expect(parseNonNegativeInt('0', 7)).toBe(0);
     expect(parseNonNegativeInt(' 2 ', 7)).toBe(2);
-  });
-});
-
-describe('parseFlag', () => {
-  test('honours an explicit true or false and otherwise keeps the default', () => {
-    expect(parseFlag('TRUE', false)).toBe(true);
-    expect(parseFlag(' false ', true)).toBe(false);
-    expect(parseFlag(undefined, true)).toBe(true);
-    expect(parseFlag('yes', false)).toBe(false);
-    expect(parseFlag('', true)).toBe(true);
   });
 });
 

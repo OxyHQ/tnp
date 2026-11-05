@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import express from 'express';
 import type { Server } from 'node:http';
-import { getRequiredOxyUserId, requireOxyAuth } from '@oxy.so/core/server';
+import { getOxyUserId, getRequiredOxyUserId, requireOxyAuth } from '@oxy.so/core/server';
 import { oxyAuthOptional } from './auth.js';
 
 /**
@@ -41,6 +41,10 @@ beforeAll(async () => {
   app.post('/guarded', oxyAuthOptional, requireOxyAuth, (req, res) => {
     res.json({ userId: getRequiredOxyUserId(req) });
   });
+  // A mixed route: anonymous reads are allowed, the optional resolver alone.
+  app.get('/public', oxyAuthOptional, (req, res) => {
+    res.json({ userId: getOxyUserId(req) ?? null });
+  });
 
   await new Promise<void>((resolve) => {
     server = app.listen(0, '127.0.0.1', () => resolve());
@@ -77,6 +81,23 @@ test('a request with no bearer token is refused on a guarded route', async () =>
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: '{}',
+  });
+
+  expect(response.status).toBe(401);
+});
+
+test('an anonymous request passes the optional resolver', async () => {
+  const response = await fetch(`${baseUrl}/public`);
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ userId: null });
+});
+
+test('a presented bearer that does not verify is refused, not read as anonymous', async () => {
+  // strictOptionalBearer: a bad token on a public route is a 401 the client
+  // can act on (re-sign-in), never a quiet downgrade to anonymous results.
+  const response = await fetch(`${baseUrl}/public`, {
+    headers: { authorization: `Bearer ${forgeSessionlessToken('victim-account-000')}` },
   });
 
   expect(response.status).toBe(401);

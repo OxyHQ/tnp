@@ -1,68 +1,28 @@
 /**
  * Which address a request comes from, for rate limiting.
  *
- * Production is Cloudflare → ALB → task. Every hop appends to
- * `X-Forwarded-For`, but only appends made by a proxy we trust mean anything:
- * a client can send any `X-Forwarded-For` it likes, and it arrives with the
- * real entries appended after it.
+ * Production is Cloudflare → ALB → task, and some callers (TNP's own DNS
+ * server, a VPN exit's resolver) reach the ALB through Cloudflare too. The
+ * client address is `resolveClientIp` from `@oxy.so/core/server` — the same
+ * rule every Oxy backend applies through `oxyTrustProxy`: the ALB (a private
+ * socket peer) is trusted to have appended the address it saw, and that
+ * address is trusted to have appended the client's only when it is one of
+ * Cloudflare's published edge ranges. Nothing further left is ever read, so a
+ * client that reaches the ALB without Cloudflare is keyed by its own address
+ * and cannot choose another.
  *
- * - Trusting one hop (`TNP_TRUST_PROXY_HOPS=1`, the production default)
- *   trusts only the ALB, so the peer is whatever connected to the ALB. That is
- *   unforgeable — but for traffic through Cloudflare it is a Cloudflare edge
- *   address shared by many users, so keying limits on it alone would throttle
- *   everyone behind the same edge together.
- * - Trusting two would take the address Cloudflare saw — and would take a
- *   forged one from anyone who reaches the ALB without going through
- *   Cloudflare, which nothing in this repository prevents.
- *
- * The hop count is applied here, not through Express's `trust proxy`: that
- * setting also makes `req.hostname` read `X-Forwarded-Host`, which the ALB
- * passes through from the client, and the parking page and the installer
- * rewrite both route on the hostname.
- *
- * So `CF-Connecting-IP` (set by Cloudflare, overwriting any client value) is
- * used only when `TNP_TRUST_CF_CONNECTING_IP` is on (the production default)
- * AND the request's peer is inside Cloudflare's published ranges. A client
- * that bypasses Cloudflare cannot make its peer a Cloudflare address, so it
- * cannot choose its own key; it is keyed by its own address instead.
+ * It is applied here, not through Express's `trust proxy`: that setting also
+ * makes `req.hostname` read `X-Forwarded-Host`, which the ALB passes through
+ * from the client, and the parking page and the installer rewrite both route
+ * on the hostname.
  *
  * IPv6 clients are keyed by their /64: one subscriber is routinely given a
  * whole /64, and a limit per /128 is no limit at all.
  */
 
-import type { Request } from 'express';
 import { BlockList, isIP } from 'node:net';
-
-/**
- * Cloudflare's published edge ranges (https://www.cloudflare.com/ips/), as of
- * 2026-10. They change rarely; `TNP_CLOUDFLARE_IP_RANGES` overrides them
- * without a release. A stale list fails safe: a request from a new edge range
- * falls back to the peer address, which is coarser but still unforgeable.
- */
-export const CLOUDFLARE_IP_RANGES: readonly string[] = [
-  '173.245.48.0/20',
-  '103.21.244.0/22',
-  '103.22.200.0/22',
-  '103.31.4.0/22',
-  '141.101.64.0/18',
-  '108.162.192.0/18',
-  '190.93.240.0/20',
-  '188.114.96.0/20',
-  '197.234.240.0/22',
-  '198.41.128.0/17',
-  '162.158.0.0/15',
-  '104.16.0.0/13',
-  '104.24.0.0/14',
-  '172.64.0.0/13',
-  '131.0.72.0/22',
-  '2400:cb00::/32',
-  '2606:4700::/32',
-  '2803:f800::/32',
-  '2405:b500::/32',
-  '2405:8100::/32',
-  '2a06:98c0::/29',
-  '2c0f:f248::/32',
-];
+import { resolveClientIp } from '@oxy.so/core/server';
+import type { Request } from 'express';
 
 /** `::ffff:192.0.2.1` → `192.0.2.1`; everything else unchanged. */
 export function unmapIpv4(address: string): string {
@@ -129,38 +89,12 @@ export function addressKey(address: string): string {
   return isIP(unmapped) === 6 ? ipv6Prefix64(unmapped) : unmapped;
 }
 
-export interface ClientIpSettings {
-  /** Proxies in front of the API whose `X-Forwarded-For` appends are believed. */
-  trustProxyHops: number;
-  trustCloudflareHeader: boolean;
-  cloudflare: BlockList;
-}
-
 /**
- * The address that connected to the outermost trusted proxy: the socket peer,
- * then one `X-Forwarded-For` entry from the right per trusted hop. Entries
- * further left were written by the client or an untrusted hop and are never
- * read. Same rule as Express's numeric `trust proxy`.
+ * The client's address as the proxy chain proves it, by Oxy's one rule
+ * (`resolveClientIp` from `@oxy.so/core/server`): the socket peer is believed
+ * as a proxy only when it is private (the ALB), and the hop the ALB saw only
+ * when it is a Cloudflare edge. Empty only when the socket has already closed.
  */
-export function peerAddress(req: Request, trustProxyHops: number): string {
-  const socketPeer = req.socket.remoteAddress ?? '';
-  if (trustProxyHops <= 0) return unmapIpv4(socketPeer);
-  const forwarded = (req.get('x-forwarded-for') ?? '')
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry !== '');
-  const chain = [...forwarded, socketPeer];
-  const chosen = chain[Math.max(0, chain.length - 1 - trustProxyHops)] ?? socketPeer;
-  // A malformed entry from a trusted hop is not an address; fall back to the socket.
-  return unmapIpv4(isIP(unmapIpv4(chosen)) !== 0 ? chosen : socketPeer);
-}
-
-/** The client's address as best this request can prove it. */
-export function clientAddress(req: Request, settings: ClientIpSettings): string {
-  const peer = peerAddress(req, settings.trustProxyHops);
-  if (settings.trustCloudflareHeader && addressIn(settings.cloudflare, peer)) {
-    const forwarded = req.get('cf-connecting-ip')?.trim() ?? '';
-    if (isIP(forwarded) !== 0) return unmapIpv4(forwarded);
-  }
-  return peer;
+export function clientAddress(req: Request): string {
+  return unmapIpv4(resolveClientIp(req) ?? '');
 }

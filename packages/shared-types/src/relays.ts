@@ -27,9 +27,9 @@ import {
  * Who runs a relay. A directory fact clients may weigh, not a privileged
  * status — see `docs/architecture/relays.md` §1.
  *
- * Decided by the registry, never by the relay: `oxy` is published only for a
- * relay registered by an account on the API's `TNP_OXY_RELAY_OPERATORS`
- * allowlist, and everything else is `community`. It used to be a request
+ * Decided by the API, never by the relay: `oxy` is published only for the
+ * relays in the API's `TNP_OXY_RELAYS` configuration (signed directory), and
+ * every relay an account registers is `community`. It used to be a request
  * field, so any Oxy account could register a relay as `oxy` and be
  * auto-selected by every `tnp serve` that preferred Oxy relays.
  */

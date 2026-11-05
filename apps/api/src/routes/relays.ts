@@ -32,13 +32,11 @@ export interface RelayDirectoryRouteConfig {
 }
 
 /**
- * `oxyOperators`, `directory` and `liveCheck` are injectable so the contract
- * tests can run the router with configuration of their choosing; production
- * passes `TNP_OXY_RELAY_OPERATORS`, `TNP_DIRECTORY_SIGNING_SEED`,
- * `TNP_OXY_RELAYS` and the real outbound check.
+ * `directory` and `liveCheck` are injectable so the contract tests can run the
+ * router with configuration of their choosing; production passes
+ * `TNP_DIRECTORY_SIGNING_SEED`, `TNP_OXY_RELAYS` and the real outbound check.
  */
 export function createRelaysRouter(
-  oxyOperators: ReadonlySet<string> = config.oxyRelayOperators,
   directory: RelayDirectoryRouteConfig = config.relayDirectory,
   liveCheck: RelayLiveCheck = relayLiveCheck(),
 ): Router {
@@ -84,10 +82,7 @@ export function createRelaysRouter(
 
       // Annotated rather than merely returned: the directory listing is a
       // contract the CLI and the web dashboard both read.
-      const directory: RelayDirectoryEntry[] = await listRelayDirectory(getDb(), {
-        oxyOperators,
-        operator,
-      });
+      const directory: RelayDirectoryEntry[] = await listRelayDirectory(getDb(), { operator });
       res.json(directory);
     } catch (err) {
       logError('List relays error:', err);
@@ -100,8 +95,8 @@ export function createRelaysRouter(
     try {
       // The one definition of what this endpoint accepts lives in
       // @tnp/shared-types, and the relay builds its request from that same
-      // declaration — see audit finding B2. It has no `operator`: that is
-      // decided here, from the authenticated account, never by the caller.
+      // declaration — see audit finding B2. It has no `operator`: a registry
+      // relay is `community`, whoever registers it (registry/relays.ts).
       const parsed = parseRegisterRelayRequest(req.body);
       if (!parsed.ok) {
         res.status(400).json({ error: parsed.error });
@@ -149,7 +144,6 @@ export function createRelaysRouter(
       const outcome = await registerRelay(getDb(), {
         request: parsed.value,
         operatorUserId: getRequiredOxyUserId(req),
-        oxyOperators,
         keyProven,
         liveChecked,
       });

@@ -35,9 +35,6 @@ const testAuth: RequestHandler = (req: Request, _res: ExpressResponse, next: Nex
 };
 
 const generousLimits: NetworkLimitSettings = {
-  trustProxyHops: 0,
-  trustCloudflareHeader: false,
-  cloudflareIpRanges: [],
   exempt: [],
 };
 
@@ -147,6 +144,35 @@ describe('CORS', () => {
     expect(res.headers.get('access-control-allow-origin')).toBeNull();
     const ok = await fetch(`${base}/health`, { headers: { Origin: 'https://tnp.network' } });
     expect(ok.headers.get('access-control-allow-origin')).toBe('https://tnp.network');
+    expect(ok.headers.get('access-control-allow-credentials')).toBe('true');
+    expect(ok.headers.get('vary')).toContain('Origin');
+  });
+
+  test('an unlisted origin is never reflected, with or without credentials', async () => {
+    const base = await serve({ corsOrigins: corsOriginsFor(true) });
+    for (const origin of ['https://evil.example', 'null', 'https://tnp.network.evil.example']) {
+      const res = await fetch(`${base}/health`, { headers: { Origin: origin } });
+      expect(res.headers.get('access-control-allow-origin')).toBeNull();
+      expect(res.headers.get('access-control-allow-credentials')).toBeNull();
+    }
+  });
+
+  test('the dashboard preflight for a write with Idempotency-Key is admitted', async () => {
+    const base = await serve({ corsOrigins: corsOriginsFor(true) });
+    const res = await fetch(`${base}/services/orders`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://tnp.network',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'authorization,content-type,idempotency-key',
+      },
+    });
+    expect(res.status).toBe(204);
+    expect(res.headers.get('access-control-allow-origin')).toBe('https://tnp.network');
+    expect(res.headers.get('access-control-allow-methods')).toContain('POST');
+    expect(res.headers.get('access-control-allow-headers')?.toLowerCase()).toContain(
+      'idempotency-key',
+    );
   });
 });
 

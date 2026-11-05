@@ -275,7 +275,7 @@ describe('relay key proofs', () => {
     });
     app.use(
       '/relays',
-      createRelaysRouter(new Set(), { signer: null, oxyRelays }, async (endpoint, key) => {
+      createRelaysRouter({ signer: null, oxyRelays }, async (endpoint, key) => {
         checked.push(endpoint);
         return liveCheck(endpoint, key);
       }),
@@ -370,7 +370,7 @@ describe('GET /relays/directory', () => {
   }
 
   test('without a signing seed it answers 503 and never an unsigned listing', async () => {
-    const res = await getFrom(createRelaysRouter(new Set(), { signer: null, oxyRelays: [] }));
+    const res = await getFrom(createRelaysRouter({ signer: null, oxyRelays: [] }));
     expect(res.status).toBe(503);
     expect(res.body).toEqual({ error: 'The signed relay directory is not available' });
     // The default router in this test process has no TNP_DIRECTORY_SIGNING_SEED either.
@@ -385,7 +385,7 @@ describe('GET /relays/directory', () => {
     // No database here: community relays are unavailable, so the directory
     // degrades to the configured Oxy relays and is still signed.
     const res = await getFrom(
-      createRelaysRouter(new Set(), {
+      createRelaysRouter({
         signer: signed.signer,
         oxyRelays: [{ endpoint: 'wss://relay.tnp.network', relayKey: oxyKey, region: 'us-west-2' }],
       }),
