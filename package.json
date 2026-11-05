@@ -41,16 +41,16 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
-    "@oxy.so/doctor": "1.6.0",
+    "@oxy.so/doctor": "1.6.1",
     "release-it": "^20.2.1"
   },
   "overrides": {
     "@oxy.so/telemetry": "2.1.0",
-    "@oxy.so/contracts": "6.5.0",
-    "@oxy.so/core": "7.17.0",
+    "@oxy.so/contracts": "6.9.0",
+    "@oxy.so/core": "7.23.0",
     "@oxy.so/protocol": "1.6.1",
-    "@oxy.so/services": "14.3.4",
-    "@oxy.so/bloom": "16.14.1"
+    "@oxy.so/services": "14.3.8",
+    "@oxy.so/bloom": "17.8.2"
   },
   "resolutions": {
     "@oxy.so/telemetry": "2.1.0"
