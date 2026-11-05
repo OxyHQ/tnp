@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -24,64 +24,62 @@ export default function App() {
     <HelmetProvider>
       <AuthBridge />
       {/* One toaster for the app; pages report failed actions through `toast`. */}
-      <BrowserRouter>
-        <Routes>
-          <Route element={<Layout />}>
-            <Route path="/" element={<Home />} />
-            <Route path="/explore" element={<Explore />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/domains" element={<Domains />} />
-            <Route path="/d/:domain" element={<DomainDetail />} />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/dns-rules"
-              element={
-                <ProtectedRoute>
-                  <DnsRules />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/vpn"
-              element={
-                <ProtectedRoute>
-                  <Vpn />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/service-nodes"
-              element={
-                <ProtectedRoute>
-                  <ServiceNodes />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/network" element={<Network />} />
-            <Route path="/propose" element={<Propose />} />
-            <Route path="/install" element={<Install />} />
-            <Route path="/park/:domain" element={<Park />} />
-            {/* Optional services area. Status and explanation are public; the
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/explore" element={<Explore />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/domains" element={<Domains />} />
+          <Route path="/d/:domain" element={<DomainDetail />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/dns-rules"
+            element={
+              <ProtectedRoute>
+                <DnsRules />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/vpn"
+            element={
+              <ProtectedRoute>
+                <Vpn />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/service-nodes"
+            element={
+              <ProtectedRoute>
+                <ServiceNodes />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/network" element={<Network />} />
+          <Route path="/propose" element={<Propose />} />
+          <Route path="/install" element={<Install />} />
+          <Route path="/park/:domain" element={<Park />} />
+          {/* Optional services area. Status and explanation are public; the
               page itself asks for a session before search and inventory. */}
-            <Route path="/services" element={<Services />} />
-            <Route
-              path="/services/domains/:id"
-              element={
-                <ProtectedRoute>
-                  <ServicesDomain />
-                </ProtectedRoute>
-              }
-            />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+          <Route path="/services" element={<Services />} />
+          <Route
+            path="/services/domains/:id"
+            element={
+              <ProtectedRoute>
+                <ServicesDomain />
+              </ProtectedRoute>
+            }
+          />
+        </Route>
+      </Routes>
     </HelmetProvider>
   );
 }
