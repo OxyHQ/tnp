@@ -47,11 +47,11 @@
   },
   "overrides": {
     "@oxy.so/telemetry": "2.1.0",
-    "@oxy.so/contracts": "6.9.0",
-    "@oxy.so/core": "7.23.0",
-    "@oxy.so/protocol": "1.6.1",
-    "@oxy.so/services": "14.4.0",
-    "@oxy.so/bloom": "17.9.0"
+    "@oxy.so/contracts": "6.19.0",
+    "@oxy.so/core": "7.42.0",
+    "@oxy.so/protocol": "1.11.0",
+    "@oxy.so/services": "14.14.0",
+    "@oxy.so/bloom": "17.19.3"
   },
   "resolutions": {
     "@oxy.so/telemetry": "2.1.0"
