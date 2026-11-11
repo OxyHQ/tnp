@@ -204,11 +204,10 @@ jobs:
       # mismatch, so catching it here, on every pull request, is what stops a
       # merge from stranding main unpublishable. The fixture tests run first so
       # a green check means the gate can fail.
-      - name: Prove the reviewed-image gate can fail
-        run: python3 -B -m unittest discover -s .github/scripts -p test_reviewed_image.py
       - name: Verify the production image's build inputs are reviewed
-        run: python3 -B .github/scripts/reviewed-image.py check
-
+        uses: OxyHQ/oxy/.github/actions/reviewed-image@main
+        with:
+          phase: check
       # Builds reuse layers from the GitHub Actions cache. The ci-* scopes are
       # this job's own (linux/amd64; the publisher's arm64 scopes would never
       # match) and are written only by a push to main, so pull-request code
