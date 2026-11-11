@@ -205,7 +205,7 @@ jobs:
       # merge from stranding main unpublishable. The fixture tests run first so
       # a green check means the gate can fail.
       - name: Verify the production image's build inputs are reviewed
-        uses: OxyHQ/oxy/.github/actions/reviewed-image@main
+        uses: OxyHQ/oxy/.github/actions/reviewed-image@9abead2154c630484521880dcbe9512f84b93d18 # main
         with:
           phase: check
       # Builds reuse layers from the GitHub Actions cache. The ci-* scopes are

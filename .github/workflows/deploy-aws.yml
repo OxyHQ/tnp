@@ -103,7 +103,7 @@ jobs:
       # pull request (`reviewed-image.py check`, AWS images build).
       - name: Refuse unreviewed image build inputs
         id: reviewed
-        uses: OxyHQ/oxy/.github/actions/reviewed-image@main
+        uses: OxyHQ/oxy/.github/actions/reviewed-image@9abead2154c630484521880dcbe9512f84b93d18 # main
         with:
           phase: guard
           # The matrix leg's name is its recipe; a leg with no registered recipe
