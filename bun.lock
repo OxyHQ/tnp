@@ -6,7 +6,7 @@
       "name": "tnp",
       "devDependencies": {
         "@biomejs/biome": "2.5.15",
-        "@oxy.so/doctor": "1.7.0",
+        "@oxy.so/doctor": "1.8.0",
         "release-it": "^20.2.1",
       },
     },
@@ -17,7 +17,7 @@
         "@aws-sdk/credential-provider-node": "3.972.84",
         "@oxy.so/core": "7.49.0",
         "@oxy.so/db": "1.5.0",
-        "@oxy.so/utils": "^1.3.0",
+        "@oxy.so/utils": "^1.5.2",
         "@tnp/crypto": "workspace:*",
         "@tnp/namespace": "workspace:*",
         "@tnp/protocol": "workspace:*",
@@ -731,7 +731,7 @@
 
     "@oxy.so/db": ["@oxy.so/db@1.5.0", "", { "peerDependencies": { "drizzle-orm": "^0.45.2", "postgres": "^3.4.9" }, "bin": { "oxy-db-rebase-migrations": "dist/cjs/bin/rebase-migrations.js", "oxy-db-check-migration-locks": "dist/cjs/bin/check-migration-locks.js" } }, "sha512-oCJ6LMbwleGFhbSGaKXc38IYQm2Zm9luaN2zi5fqojirPPXUDUpFey01Eo/zMUKgmlzEHMGE53IOY0BrE8qp1A=="],
 
-    "@oxy.so/doctor": ["@oxy.so/doctor@1.7.0", "", { "dependencies": { "semver": "^7.7.4" }, "bin": { "oxy-doctor": "src/cli.mjs", "oxy-doctor-i18n": "src/i18n-cli.mjs", "oxy-emulator-preflight": "src/emulator-preflight.mjs", "oxy-doctor-expo-android": "src/expo-android.mjs" } }, "sha512-g/xbx4YK59fOWqsJw2CyZSMR/NQyzi8vASxHTUNnIx5TVA762R+33PKqazeUeRB+DudcnLEKnIFDcs4EsImwhg=="],
+    "@oxy.so/doctor": ["@oxy.so/doctor@1.8.0", "", { "dependencies": { "semver": "^7.7.4" }, "bin": { "oxy-doctor": "src/cli.mjs", "oxy-doctor-i18n": "src/i18n-cli.mjs", "oxy-emulator-preflight": "src/emulator-preflight.mjs", "oxy-doctor-expo-android": "src/expo-android.mjs" } }, "sha512-iL9yY2umG/2sj2ymmhqEljMQR1KgogTOndEC8fdHUPbPR6Y7npNWuW8ALuBkORUA5ItpeYnmaLRoK6ew6WrWtw=="],
 
     "@oxy.so/protocol": ["@oxy.so/protocol@1.11.1", "", { "dependencies": { "@noble/curves": "^2.4.0", "@oxy.so/contracts": "^7.0.0" }, "peerDependencies": { "@react-native-async-storage/async-storage": "<4.0.0", "expo-crypto": "<59.0.0", "expo-modules-core": "<59.0.0", "expo-secure-store": "<59.0.0", "express": "^4.18.0 || ^5.0.0" }, "optionalPeers": ["@react-native-async-storage/async-storage", "expo-crypto", "expo-secure-store", "express"] }, "sha512-x1rVo+EJjQnnvQ5bRlPAovIqP2YkPGEeNQRWfHIxvu9RViBSSRW3C+03W4Yhcm3S9XsJvunvzm5yO5LmqRE91w=="],
 
@@ -739,7 +739,7 @@
 
     "@oxy.so/telemetry": ["@oxy.so/telemetry@2.1.0", "", {}, "sha512-YxI/7XQLFf+WglPzUndec4LItM9cSJNsA67UZRLPj4w4mw38+bYNhV9hw/aOqXx4MXCD4Yk8CJ9mwcW72uAnwA=="],
 
-    "@oxy.so/utils": ["@oxy.so/utils@1.3.0", "", {}, "sha512-HY+LrU6AcM+BkXGTlcYUoVdzwrQvbjf9HpFYKpoiXB9D51B+NXJBvV/Nk29zCTKkt3SL67jb40eEFAbTjrgMEQ=="],
+    "@oxy.so/utils": ["@oxy.so/utils@1.5.2", "", {}, "sha512-t56zODHuokbfzmz2LdTsRTzntSq8YyWGCbxDzC+gkQey6zgWQA/tVkGxObY3lcbkD1Aa1hPe+00SBGvPRpZqOw=="],
 
     "@peable.to/contracts": ["@peable.to/contracts@4.1.0", "", { "dependencies": { "zod": "^4.6.7" } }, "sha512-JsXw1uxCFEf+HSAyuBLrexbvp4GH5qXyYuCqAJiPow6uMXMQ38ELH6Xv/BUUnnKJeNrMl/n6rVZ+TZd+vOIEhA=="],
 

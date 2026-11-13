@@ -42,7 +42,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
-    "@oxy.so/doctor": "1.7.0",
+    "@oxy.so/doctor": "1.8.0",
     "release-it": "^20.2.1"
   },
   "overrides": {
