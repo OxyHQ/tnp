@@ -1,4 +1,4 @@
-import { metadataFromHeaders } from '@oxy.so/telemetry/server';
+import { metadataFromHeaders, sourceRegionFromEdgePop } from '@oxy.so/telemetry/server';
 import { createEcosystemTraffic } from '@oxy.so/core/server';
 import { createAwsWorkloadCredentialProvider } from '@oxy.so/core/server/aws';
 const workloadCredentials = createAwsWorkloadCredentialProvider();
@@ -42,6 +42,7 @@ export async function stopEcosystemActivity(): Promise<void> {
 }
 
 export function requestEdgeRegion(headers: Headers): string | undefined {
-  const pop = metadataFromHeaders({ 'cf-ray': headers.get('cf-ray') ?? undefined }).edgePop;
-  return pop ? `edge-${pop}` : undefined;
+  return sourceRegionFromEdgePop(
+    metadataFromHeaders({ 'cf-ray': headers.get('cf-ray') ?? undefined }).edgePop,
+  );
 }

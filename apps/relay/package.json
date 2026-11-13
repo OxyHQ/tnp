@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@oxy.so/core": "7.49.0",
-    "@oxy.so/telemetry": "2.1.0",
+    "@oxy.so/telemetry": "2.2.0",
     "@tnp/crypto": "workspace:*",
     "@tnp/protocol": "workspace:*",
     "@tnp/relay-core": "workspace:*",
