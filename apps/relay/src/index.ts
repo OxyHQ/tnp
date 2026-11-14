@@ -32,11 +32,16 @@ if (process.argv.includes('--check-config')) {
 }
 
 // Imported only for a real start: `--check-config` must not start telemetry.
-const { recordTransport, requestEdgeRegion, startEcosystemActivity, stopEcosystemActivity } =
-  await import('./ecosystemActivity.js');
+const { startEcosystemTraffic } = await import('@oxy.so/core/server');
+const { createAwsWorkloadCredentialProvider } = await import('@oxy.so/core/server/aws');
+const { recordTransport, requestEdgeRegion } = await import('./ecosystemActivity.js');
 
 let ready = false;
-startEcosystemActivity(() => ready);
+const traffic = startEcosystemTraffic({
+  service: 'tnp-relay',
+  ready: () => ready,
+  workloadCredentials: createAwsWorkloadCredentialProvider(),
+});
 
 const core = new RelayCore({
   endpoint: config.endpoint,
@@ -51,7 +56,7 @@ const relay = serveRelay({
   onRequest(req) {
     // Aggregate only: a direction and an edge region, never an address or name.
     if (new URL(req.url).pathname !== '/health') {
-      recordTransport('inbound', requestEdgeRegion(req.headers));
+      recordTransport(traffic, 'inbound', requestEdgeRegion(req.headers));
     }
   },
 });
@@ -60,7 +65,7 @@ ready = true;
 const shutdown = async () => {
   ready = false;
   await relay.stop();
-  await stopEcosystemActivity();
+  await traffic.stop();
 };
 process.once('SIGTERM', () => {
   void shutdown();

@@ -17,7 +17,6 @@ import express, {
 } from 'express';
 import { config } from './config.js';
 import { getDb } from './db/postgres.js';
-import { getEcosystemActivity } from './ecosystemActivity.js';
 import { createHealthRouter } from './health.js';
 import { oxyAuthOptional } from './middleware/auth.js';
 import { createNetworkLimits, type NetworkLimitSettings } from './middleware/networkLimits.js';
@@ -44,7 +43,8 @@ export interface AppOptions {
   /** Defaults to the database; injectable so the parking page is testable without one. */
   loadParkingFacts?: (host: string) => Promise<NameFacts>;
   /** Defaults to the process's ecosystem traffic publisher, when one was started. */
-  ecosystemActivity?: typeof getEcosystemActivity;
+  /** Ecosystem activity observation (`traffic.observeHttp`); omitted in tests. */
+  observeHttp?: RequestHandler;
   limits?: NetworkLimitSettings;
   corsOrigins?: string[];
   requestTimeoutMs?: number;
@@ -73,11 +73,7 @@ export function createApp(options: AppOptions): express.Express {
   // X-Forwarded-Host. The rate limiter resolves the client address itself,
   // with the SDK's `resolveClientIp` (middleware/clientIp.ts).
 
-  app.use((req, res, next) => {
-    const activity = (options.ecosystemActivity ?? getEcosystemActivity)();
-    if (activity) activity.observeHttp(req, res, next);
-    else next();
-  });
+  if (options.observeHttp) app.use(options.observeHttp);
 
   app.use(securityHeaders);
   // Exact-match allowlist: TNP's own origins plus the HTTPS Oxy apex family,
