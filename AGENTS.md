@@ -2,10 +2,9 @@
 
 > **Budget: under 12 KB**, enforced by `scripts/check-agents-md-size.mjs`
 > (`bun run validate:agents-md`). It is prepended to EVERY agent session, so its
-> bytes are paid on every task forever, and it grows by accretion — one
-> reasonable paragraph at a time, invisible per-commit. An addition that pushes
-> it over is paid for in the SAME edit: compress something, or move it to
-> `docs/` and leave a pointer.
+> bytes are paid on every task forever, and it grows by accretion, invisible
+> per-commit. An addition that pushes it over is paid for in the SAME edit:
+> compress something, or move it to `docs/` and leave a pointer.
 
 Universal network layer over the public internet: its own namespace, resolution,
 NAT-traversing service publication, an overlay transport, and (planned) onion
@@ -30,6 +29,9 @@ Rules that override convenience:
   normative.
 - **The WireGuard VPN is honest about its exit.** Oxy runs it and sees
   destinations; never call it anonymous. `vpn.md` §10.
+- **First-party never asks people for permissions.** This app acts for a person
+  with `actingFor` on what oxy's first-party registry declares (oxy ADR 0066);
+  permissions, scopes and consent are only for third parties.
 
 ## Commands
 
@@ -121,9 +123,9 @@ Key modules in `packages/client/src/`:
 
 - **DNS/parking IP**: `TNP_PARKING_IP` and `TNP_PUBLIC_DNS` MUST be set to the AWS NLB EIP at deploy time. Never hardcode IP values.
 - **Gates**: `bun run typecheck` and `bun run test` at the repo root fan out to every workspace with `bun run --filter '*'` and exit non-zero if any fails. `ci.yml` runs both on every PR; it publishes images only after them, and `deploy.yml` starts only from a green CI on `main` (`workflow_run`), so a red `main` cannot ship. Run them locally before pushing. `ci.yml` also runs `bunx biome ci .` (root `biome.json`); `release-client.yml` releases only when `VERSION` in `packages/client/src/cli.ts` has no `v<VERSION>` tag, and never updates an existing release: bump `VERSION` (and `interactive.ts`'s) to ship client changes. Releases are Ed25519-signed (`security.md` §7) and the installers refuse an unsigned one, so bump `CLIENT_VERSION` in `apps/api/src/routes/client.ts` only once that release is published.
-- **`apps/dns-server` imports `packages/client` by relative path** without declaring the dependency. That is why audit B1 (a `TnpConfig` built with 5 of 18 required fields) went unnoticed for so long. The resolver now takes a narrow `DnsProxyConfig` instead, but the relative import stands until Phase 2 extracts `@tnp/resolver` — do not add more cross-workspace relative imports; extract a package instead.
+- **`apps/dns-server` imports `packages/client` by relative path** without declaring the dependency, which hid audit B1 (a `TnpConfig` missing 13 of 18 fields). The resolver now takes a narrow `DnsProxyConfig` instead, but the relative import stands until Phase 2 extracts `@tnp/resolver`; never add another cross-workspace relative import, extract a package.
 - **`@tnp/relay-core` is the only relay**: `apps/relay` and `relay-node.ts` are bindings around it. Transport spec: `transport.md` §6, §9, §11; trust model (domain keys, pinning, no Oxy root): `security.md` §1.
-- **A request body is a contract, and a contract lives in `@tnp/shared-types`.** Never write a request shape twice. An API route validates with the package's parser and destructures the parsed value; the client builds a value of the same declared type. Both hold for the relay, service-node and DNS-record endpoints; move any other endpoint the same way when you touch it, rather than hand-matching a new literal against a route you read once — that is exactly how `registerRelay` came to send `{port, location}` to an endpoint requiring `{endpoint, publicKey, operator, capacity}` for the whole life of the feature (audit B2). The gate is two-sided and both halves are needed: `packages/client/src/api.contract.test.ts` captures the bytes the real client sends and feeds them to the real parser, `apps/api/src/routes/*.contract.test.ts` drives the real router over HTTP with no database (a rejected body is a 400 from the contract, an accepted one reaches the handler and 500s at `getDb()`).
+- **A request body is a contract, and a contract lives in `@tnp/shared-types`.** Never write a request shape twice. An API route validates with the package's parser and destructures the parsed value; the client builds a value of the same declared type. Both hold for the relay, service-node and DNS-record endpoints; move any other endpoint the same way when you touch it, rather than hand-matching a new literal against a route you read once — that is how `registerRelay` shipped a wrong body for its whole life (audit B2). The gate is two-sided and both halves are needed: `packages/client/src/api.contract.test.ts` captures the bytes the real client sends and feeds them to the real parser, `apps/api/src/routes/*.contract.test.ts` drives the real router over HTTP with no database (a rejected body is a 400; an accepted one reaches the handler and 500s at `getDb()`).
 - **A new workspace package must be added to every Dockerfile that installs the graph containing it.** Bun resolves the whole workspace before installing anything, so one missing `COPY <pkg>/package.json` fails the install with `@tnp/<name>@workspace:* failed to resolve` no matter how unrelated that package is to the image. Only `Dockerfile.api` is built in CI, so `Dockerfile.dns` silently broke this way once already.
 - **The API is assembled in `apps/api/src/app.ts`** (headers, per-address then per-account rate limits, request timeout, auth); `index.ts` only builds the services router and starts it. Relay `operator` is decided by the API (`oxy` only for `TNP_OXY_RELAYS`), never by the relay. API env vars: `docs/api.mdx`.
 - **Privileged client code never builds shell strings.** New system commands go through `system-cmd.ts` as argv with tools from system dirs (not `$PATH`); decide them in a pure function and unit-test it, since Windows/macOS paths cannot run in CI. The kill switch is DNS-only and fail-closed (`killswitch.ts`, `platforms.md` §4); services run an admin-only binary copy, never `process.argv[1]`.
