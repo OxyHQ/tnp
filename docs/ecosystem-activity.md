@@ -2,8 +2,10 @@
 
 The API, public DNS daemon, and hosted relay each have a collector and a live
 infrastructure heartbeat. Each process starts the shared publisher using its
-registered workload identity and temporary AWS role credentials. `AWS_REGION`
-supplies infrastructure metadata. With no region configured, local startup
+registered workload identity and temporary AWS role credentials, through
+`startEcosystemTraffic` from `@oxy.so/core/server`. `OXY_ECOSYSTEM_ACTIVITY_ENABLED`
+(`true`/`false`) wins when set; unset, `AWS_REGION` supplies infrastructure metadata
+and turns the publisher on. With no region configured, local startup
 omits only the publisher; user authentication and workload clients still work. ECS and authenticated development/SSO roles
 use the same provider; Oxy's live binding determines the application/environment.
 No Oxy API key, application scope or inter-app consent is required. A missing or

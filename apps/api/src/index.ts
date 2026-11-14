@@ -1,4 +1,5 @@
-import { startEcosystemActivity, stopEcosystemActivity } from './ecosystemActivity.js';
+import { startEcosystemTraffic } from '@oxy.so/core/server';
+import { workloadCredentials } from './oxy.js';
 import { config } from './config.js';
 import { runSeed } from './seed.js';
 import { createApp } from './app.js';
@@ -12,13 +13,18 @@ import { logError } from './utils/logError.js';
 // is the one place the network may import it from (docs/architecture/services.md).
 // Every action is off unless its flag is set, and no adapter is constructed
 // until a flagged route needs one.
+let ready = false;
+const traffic = startEcosystemTraffic({
+  service: 'tnp-api',
+  ready: () => ready,
+  workloadCredentials,
+});
 const app = createApp({
   servicesRouter: createProductionServicesRouter(readServicesConfig(), getDb),
+  observeHttp: traffic.observeHttp,
 });
 
 async function start() {
-  let ready = false;
-  startEcosystemActivity(() => ready);
   // Migrations run before the pool opens, so the process cannot begin serving
   // against a schema it has not migrated.
   await runMigrations();
@@ -37,7 +43,8 @@ async function start() {
     stopping = true;
     ready = false;
     server.close(() => {
-      void stopEcosystemActivity()
+      void traffic
+        .stop()
         .finally(() => closePostgres())
         .catch(() => {
           console.error('Failed to close activity publisher or database');

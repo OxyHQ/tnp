@@ -1,8 +1,5 @@
-import {
-  startEcosystemActivity,
-  recordTransport,
-  stopEcosystemActivity,
-} from './ecosystemActivity.js';
+import { startEcosystemTraffic } from '@oxy.so/core/server';
+import { createAwsWorkloadCredentialProvider } from '@oxy.so/core/server/aws';
 import { DnsProxy } from '../../../packages/client/src/proxy';
 import {
   DEFAULT_UPSTREAM_DNS,
@@ -52,6 +49,18 @@ const config: DnsProxyConfig = {
   maxInflight: envInt('TNP_MAX_INFLIGHT', 512),
 };
 
+/** Transport counters contain no address, domain, frame, or circuit identifier. */
+function recordTransport(direction: 'inbound' | 'outbound', peerRegion?: string): void {
+  const region = process.env.AWS_REGION;
+  traffic.record({
+    scope: 'external',
+    direction,
+    activityType: 'platform',
+    sourceRegion: direction === 'inbound' ? peerRegion : region,
+    targetRegion: direction === 'inbound' ? region : peerRegion,
+  });
+}
+
 const proxy = new DnsProxy(config, recordTransport);
 
 console.log('[tnp-dns] starting public DNS server...');
@@ -60,7 +69,11 @@ console.log(`[tnp-dns] API: ${config.apiBaseUrl}`);
 console.log(`[tnp-dns] upstream: ${config.upstreamDns}`);
 console.log(`[tnp-dns] rate-limit exempt sources: ${exempt.entries.length}`);
 
-startEcosystemActivity(() => proxy.listening);
+const traffic = startEcosystemTraffic({
+  service: 'tnp-dns',
+  ready: () => proxy.listening,
+  workloadCredentials: createAwsWorkloadCredentialProvider(),
+});
 proxy.startTldSync(5 * 60 * 1000);
 // Native TLDs are classified from the built-in list before this returns, and a
 // failure keeps them: a native name is never forwarded upstream either way.
@@ -70,7 +83,7 @@ await proxy.start();
 const shutdown = async () => {
   console.log('\n[tnp-dns] shutting down...');
   proxy.stop();
-  await stopEcosystemActivity();
+  await traffic.stop();
   process.exit(0);
 };
 

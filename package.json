@@ -48,7 +48,7 @@
   "overrides": {
     "@oxy.so/telemetry": "2.2.0",
     "@oxy.so/contracts": "7.0.0",
-    "@oxy.so/core": "7.49.0",
+    "@oxy.so/core": "7.51.0",
     "@oxy.so/protocol": "1.11.1",
     "@oxy.so/services": "14.21.0",
     "@oxy.so/bloom": "21.0.0"
