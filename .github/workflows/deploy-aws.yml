@@ -103,19 +103,12 @@ jobs:
       # pull request (`reviewed-image.py check`, AWS images build).
       - name: Refuse unreviewed image build inputs
         id: reviewed
-        env:
-          APP: ${{ matrix.app }}
-        run: |
-          set -euo pipefail
-          case "$APP" in
-            tnp-api) python3 -B .github/scripts/reviewed-image.py guard --recipe tnp-api ;;
-            tnp-dns) python3 -B .github/scripts/reviewed-image.py guard --recipe tnp-dns ;;
-            tnp-relay) python3 -B .github/scripts/reviewed-image.py guard --recipe tnp-relay ;;
-            *)
-              echo "::error::$APP has no reviewed recipe; refusing to build it."
-              exit 1
-              ;;
-          esac
+        uses: OxyHQ/oxy/.github/actions/reviewed-image@9abead2154c630484521880dcbe9512f84b93d18 # main
+        with:
+          phase: guard
+          # The matrix leg's name is its recipe; a leg with no registered recipe
+          # is refused by the guard, not built.
+          recipe: ${{ matrix.app }}
 
       - name: Build and publish immutable SHA image
         id: image
