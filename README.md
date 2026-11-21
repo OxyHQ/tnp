@@ -149,6 +149,21 @@ tnp relay                 # registers (signed key proof); see relays.md
 tnp install / uninstall / status / test <domain>
 ```
 
+## Web composition
+
+`BrowserRouter` surrounds the root `BloomProvider`, preserving TNP's dark seed
+and existing typography. The local `ScrollRouterAdapter` supplies only route
+identity and focus to Bloom; `Layout` registers the single document scroller
+with `useScrollRestoration('window')`. The sticky header, page markup and footer
+keep their existing layout.
+
+Offsets belong to the pathname, including dynamic route parameters. Current
+pages do not select content from search/hash values, so those changes do not
+reset the document. New routes begin at the top; revisiting a route restores its
+session offset. If a future page selects content from query parameters or keeps
+inactive routes mounted, update the adapter's identity/focus contract with it.
+Inner table/code overflow regions remain independent of this document owner.
+
 ## API
 
 Base URL `https://api.tnp.network`. Auth is an Oxy bearer token validated through

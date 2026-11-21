@@ -1,7 +1,9 @@
 import { StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { OxyProvider } from '@oxy.so/services/ui/client';
-import { BloomThemeProvider } from '@oxy.so/bloom/theme';
+import { BloomProvider } from '@oxy.so/bloom/provider';
+import { BrowserRouter } from 'react-router-dom';
+import { reactRouterScrollAdapter } from './lib/scroll-router';
 import './lib/i18n';
 import App from './App';
 import './index.css';
@@ -33,12 +35,14 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <BloomThemeProvider mode="dark" seed={TNP_SEED}>
-      <Suspense fallback={<div className="min-h-screen bg-background" />}>
-        <OxyProvider baseURL={OXY_API} clientId={OXY_CLIENT_ID}>
-          <App />
-        </OxyProvider>
-      </Suspense>
-    </BloomThemeProvider>
+    <BrowserRouter>
+      <BloomProvider mode="dark" seed={TNP_SEED} scrollAdapter={reactRouterScrollAdapter}>
+        <Suspense fallback={<div className="min-h-screen bg-background" />}>
+          <OxyProvider baseURL={OXY_API} clientId={OXY_CLIENT_ID}>
+            <App />
+          </OxyProvider>
+        </Suspense>
+      </BloomProvider>
+    </BrowserRouter>
   </StrictMode>,
 );

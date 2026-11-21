@@ -16,7 +16,7 @@
  * silently renders transparent.
  *
  * The base tokens themselves (`--background`, `--foreground`, `--card`, …) are
- * written onto `document.documentElement` at runtime by `BloomThemeProvider`
+ * written onto `document.documentElement` at runtime by `BloomProvider`
  * (see main.tsx), which is why they do not appear in this file.
  */
 @import "@oxy.so/bloom/design-tokens/theme.css";
@@ -110,7 +110,7 @@
  * ends up with a palette that is partly its own and partly Bloom's, depending
  * on which names happen to collide.
  *
- * TNP's identity now comes from the seed passed to BloomThemeProvider, so the
+ * TNP's identity now comes from the seed passed to BloomProvider, so the
  * whole palette is derived from it, self-consistent and WCAG-legible, rather
  * than a hand-picked list sitting beside Bloom's.
  */
