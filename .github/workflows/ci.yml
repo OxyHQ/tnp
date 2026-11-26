@@ -194,7 +194,7 @@ jobs:
 
   # verify's hosted twin in the Seldon race: the same name and steps.
   verify-hosted:
-    name: Typecheck and test
+    name: ${{ vars.CI_SELDON_RACE == 'true' && 'Typecheck and test' || 'Typecheck and test (seldon twin, off)' }}
     needs: race
     if: ${{ !cancelled() && needs.race.outputs.race == 'true' }}
     runs-on: ubuntu-latest
@@ -207,7 +207,7 @@ jobs:
   # verify's rescue: reruns it hosted when its Seldon lane failed (the house
   # network drops connections); a genuine failure fails again.
   verify-rescue:
-    name: Typecheck and test
+    name: ${{ vars.CI_SELDON_RACE == 'true' && 'Typecheck and test' || 'Typecheck and test (seldon rescue, off)' }}
     needs: verify
     if: ${{ !cancelled() && needs.verify.result == 'failure' && vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-latest
@@ -260,7 +260,7 @@ jobs:
 
   # database's hosted twin in the Seldon race: the same name, services and steps.
   database-hosted:
-    name: PostgreSQL integration tests
+    name: ${{ vars.CI_SELDON_RACE == 'true' && 'PostgreSQL integration tests' || 'PostgreSQL integration tests (seldon twin, off)' }}
     needs: [changes, race]
     if: ${{ !cancelled() && needs.race.outputs.race == 'true' && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.database == 'true') }}
     runs-on: ubuntu-latest
@@ -274,7 +274,7 @@ jobs:
   # database's rescue: reruns it hosted when its Seldon lane failed (the house
   # network drops connections); a genuine failure fails again.
   database-rescue:
-    name: PostgreSQL integration tests
+    name: ${{ vars.CI_SELDON_RACE == 'true' && 'PostgreSQL integration tests' || 'PostgreSQL integration tests (seldon rescue, off)' }}
     needs: [changes, database]
     if: ${{ !cancelled() && needs.database.result == 'failure' && vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.database == 'true') }}
     runs-on: ubuntu-latest
@@ -522,7 +522,7 @@ jobs:
 
   # docker's hosted twin in the Seldon race: the same name, env and steps.
   docker-hosted:
-    name: AWS images build
+    name: ${{ vars.CI_SELDON_RACE == 'true' && 'AWS images build' || 'AWS images build (seldon twin, off)' }}
     needs: [changes, race]
     if: ${{ !cancelled() && needs.race.outputs.race == 'true' && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docker == 'true') }}
     runs-on: ubuntu-latest
@@ -536,7 +536,7 @@ jobs:
   # docker's rescue: reruns it hosted when its Seldon lane failed (the house
   # network drops connections); a genuine failure fails again.
   docker-rescue:
-    name: AWS images build
+    name: ${{ vars.CI_SELDON_RACE == 'true' && 'AWS images build' || 'AWS images build (seldon rescue, off)' }}
     needs: [changes, docker]
     if: ${{ !cancelled() && needs.docker.result == 'failure' && vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docker == 'true') }}
     runs-on: ubuntu-latest
