@@ -106,7 +106,7 @@ jobs:
   race:
     needs: changes
     if: ${{ !cancelled() && vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork }}
-    uses: OxyHQ/oxy/.github/workflows/seldon-race-start.yml@main
+    uses: OxyHQ/oxy/.github/workflows/seldon-race-start.yml@6833cdbbf37623bdc893a2a8e7015e900c07201e # main
     permissions:
       actions: read
 
@@ -114,7 +114,7 @@ jobs:
     needs: race
     # `!cancelled()`: an ancestor skipped on this event must not skip it.
     if: ${{ !cancelled() && needs.race.outputs.race == 'true' }}
-    uses: OxyHQ/oxy/.github/workflows/seldon-race-finish.yml@main
+    uses: OxyHQ/oxy/.github/workflows/seldon-race-finish.yml@6833cdbbf37623bdc893a2a8e7015e900c07201e # main
     permissions:
       actions: read
 
@@ -132,7 +132,7 @@ jobs:
       - &race-guard
         name: Seldon race guard
         if: vars.CI_SELDON_RACE == 'true' && !endsWith(github.job, '-rescue')
-        uses: OxyHQ/oxy/.github/actions/seldon-race@main
+        uses: OxyHQ/oxy/.github/actions/seldon-race@6833cdbbf37623bdc893a2a8e7015e900c07201e # main
         with:
           mode: guard
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -603,7 +603,7 @@ jobs:
       - name: Seldon race verdict
         id: race
         if: vars.CI_SELDON_RACE == 'true'
-        uses: OxyHQ/oxy/.github/actions/seldon-race@main
+        uses: OxyHQ/oxy/.github/actions/seldon-race@6833cdbbf37623bdc893a2a8e7015e900c07201e # main
         with:
           mode: verdict
       - name: Every job passed
