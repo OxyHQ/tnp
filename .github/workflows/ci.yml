@@ -103,6 +103,12 @@ jobs:
   # again on a genuine failure. CI complete takes the raced jobs' verdict from
   # the race. One wave: every raced job needs at most `changes`, so the start
   # job waits for it and then sees every lane.
+  #
+  # Pinned: this repository requires every action pinned to a full commit SHA
+  # (`sha_pinning_required`), so the OxyHQ/oxy references name a commit of its
+  # main. Do NOT set CI_SELDON_RACE here yet: the oxy reusable workflows call
+  # the seldon-race action at @main, which that policy refuses (probe run
+  # 45902589840), so the race start would fail.
   race:
     needs: changes
     if: ${{ !cancelled() && vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork }}
