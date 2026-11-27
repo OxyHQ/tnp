@@ -104,15 +104,16 @@ jobs:
   # the race. One wave: every raced job needs at most `changes`, so the start
   # job waits for it and then sees every lane.
   #
-  # Pinned: this repository requires every action pinned to a full commit SHA
-  # (`sha_pinning_required`), so the OxyHQ/oxy references name a commit of its
-  # main. Do NOT set CI_SELDON_RACE here yet: the oxy reusable workflows call
-  # the seldon-race action at @main, which that policy refuses (probe run
-  # 45902589840), so the race start would fail.
+  # This repository requires every action pinned to a full commit SHA
+  # (`sha_pinning_required`), so the two seldon-race action steps below (the
+  # guard and the verdict) name a commit of OxyHQ/oxy main. The policy does not
+  # cover reusable-workflow references, so the race's start, finish and retry
+  # workflows are called at @main; they pin the action by SHA themselves
+  # (OxyHQ/oxy#2338).
   race:
     needs: changes
     if: ${{ !cancelled() && vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork }}
-    uses: OxyHQ/oxy/.github/workflows/seldon-race-start.yml@6833cdbbf37623bdc893a2a8e7015e900c07201e # main
+    uses: OxyHQ/oxy/.github/workflows/seldon-race-start.yml@main
     permissions:
       actions: read
 
@@ -120,7 +121,7 @@ jobs:
     needs: race
     # `!cancelled()`: an ancestor skipped on this event must not skip it.
     if: ${{ !cancelled() && needs.race.outputs.race == 'true' }}
-    uses: OxyHQ/oxy/.github/workflows/seldon-race-finish.yml@6833cdbbf37623bdc893a2a8e7015e900c07201e # main
+    uses: OxyHQ/oxy/.github/workflows/seldon-race-finish.yml@main
     permissions:
       actions: read
 
@@ -138,7 +139,7 @@ jobs:
       - &race-guard
         name: Seldon race guard
         if: vars.CI_SELDON_RACE == 'true' && !endsWith(github.job, '-rescue')
-        uses: OxyHQ/oxy/.github/actions/seldon-race@6833cdbbf37623bdc893a2a8e7015e900c07201e # main
+        uses: OxyHQ/oxy/.github/actions/seldon-race@0f985e7a8fdc3584107d7f2043c5cd2465075129 # main
         with:
           mode: guard
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -609,7 +610,7 @@ jobs:
       - name: Seldon race verdict
         id: race
         if: vars.CI_SELDON_RACE == 'true'
-        uses: OxyHQ/oxy/.github/actions/seldon-race@6833cdbbf37623bdc893a2a8e7015e900c07201e # main
+        uses: OxyHQ/oxy/.github/actions/seldon-race@0f985e7a8fdc3584107d7f2043c5cd2465075129 # main
         with:
           mode: verdict
       - name: Every job passed
