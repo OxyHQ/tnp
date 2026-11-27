@@ -88,11 +88,60 @@ jobs:
               - 'apps/relay/**'
               - 'packages/**'
 
+  # The Seldon race (OxyHQ/oxy docs/engineering/build-and-deploy.md, CI on
+  # Seldon), opt-in with the repository variable CI_SELDON_RACE=true, on
+  # same-repository pull requests (and merge_group runs, should this workflow
+  # ever take them) only. Push runs stay hosted: publish_aws_images follows the
+  # push run on main. Unset, every job runs hosted as before and none of these
+  # takes a runner. Set, Typecheck and test and AWS images build run on the
+  # self-hosted seldon-ci pool and PostgreSQL integration tests on
+  # seldon-ci-light; a lane still queued 3 minutes after it was created gets its
+  # hosted twin (the `-hosted` jobs), the lane that starts first wins and the
+  # finish job cancels the other through its job-level concurrency group. A
+  # Seldon lane that fails, whatever the reason (the house network drops new
+  # connections in bursts), reruns hosted in its `-rescue` job, which fails
+  # again on a genuine failure. CI complete takes the raced jobs' verdict from
+  # the race. One wave: every raced job needs at most `changes`, so the start
+  # job waits for it and then sees every lane.
+  #
+  # This repository requires every action pinned to a full commit SHA
+  # (`sha_pinning_required`), so the two seldon-race action steps below (the
+  # guard and the verdict) name a commit of OxyHQ/oxy main. The policy does not
+  # cover reusable-workflow references, so the race's start, finish and retry
+  # workflows are called at @main; they pin the action by SHA themselves
+  # (OxyHQ/oxy#2338).
+  race:
+    needs: changes
+    if: ${{ !cancelled() && vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork }}
+    uses: OxyHQ/oxy/.github/workflows/seldon-race-start.yml@main
+    permissions:
+      actions: read
+
+  race-finish:
+    needs: race
+    # `!cancelled()`: an ancestor skipped on this event must not skip it.
+    if: ${{ !cancelled() && needs.race.outputs.race == 'true' }}
+    uses: OxyHQ/oxy/.github/workflows/seldon-race-finish.yml@main
+    permissions:
+      actions: read
+
   verify:
     name: Typecheck and test
-    runs-on: ubuntu-latest
+    runs-on: &seldon-lane ${{ vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork && 'seldon-ci' || 'ubuntu-latest' }}
+    concurrency:
+      group: seldon-race-${{ github.run_id }}-${{ github.run_attempt }}-seldon-Typecheck and test
+    permissions: &race-lane-permissions
+      contents: read
+      actions: read # the Seldon race guard reads this run's jobs
     timeout-minutes: 15
-    steps:
+    steps: &verify-steps
+      # A lane that starts after its hosted twin waits here to be cancelled (the Seldon race).
+      - &race-guard
+        name: Seldon race guard
+        if: vars.CI_SELDON_RACE == 'true' && !endsWith(github.job, '-rescue')
+        uses: OxyHQ/oxy/.github/actions/seldon-race@0f985e7a8fdc3584107d7f2043c5cd2465075129 # main
+        with:
+          mode: guard
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -144,6 +193,29 @@ jobs:
       - name: Test
         run: bun run test
 
+  # verify's hosted twin in the Seldon race: the same name and steps.
+  verify-hosted:
+    name: ${{ vars.CI_SELDON_RACE == 'true' && 'Typecheck and test' || 'Typecheck and test (seldon twin, off)' }}
+    needs: race
+    if: ${{ !cancelled() && needs.race.outputs.race == 'true' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: seldon-race-${{ github.run_id }}-${{ github.run_attempt }}-hosted-Typecheck and test
+    permissions: *race-lane-permissions
+    timeout-minutes: 15
+    steps: *verify-steps
+
+  # verify's rescue: reruns it hosted when its Seldon lane failed (the house
+  # network drops connections); a genuine failure fails again.
+  verify-rescue:
+    name: ${{ vars.CI_SELDON_RACE == 'true' && 'Typecheck and test' || 'Typecheck and test (seldon rescue, off)' }}
+    needs: verify
+    if: ${{ !cancelled() && needs.verify.result == 'failure' && vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork }}
+    runs-on: ubuntu-latest
+    permissions: *race-lane-permissions
+    timeout-minutes: 15
+    steps: *verify-steps
+
   # Constraints, locks and ON CONFLICT are server behaviour, so these tests run
   # against a real PostgreSQL. Each test file migrates its own database from
   # empty and drops it afterwards (apps/api/test-db/harness.ts). The command
@@ -152,9 +224,12 @@ jobs:
     name: PostgreSQL integration tests
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.database == 'true') }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork && 'seldon-ci-light' || 'ubuntu-latest' }}
+    concurrency:
+      group: seldon-race-${{ github.run_id }}-${{ github.run_attempt }}-seldon-PostgreSQL integration tests
+    permissions: *race-lane-permissions
     timeout-minutes: 10
-    services:
+    services: &database-services
       postgres:
         image: postgres:17
         env:
@@ -168,7 +243,8 @@ jobs:
           --health-interval 2s
           --health-timeout 5s
           --health-retries 30
-    steps:
+    steps: &database-steps
+      - *race-guard
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -183,6 +259,31 @@ jobs:
           TEST_DATABASE_URL: postgres://tnp:tnp@127.0.0.1:5432/postgres
         run: bun run test:db
 
+  # database's hosted twin in the Seldon race: the same name, services and steps.
+  database-hosted:
+    name: ${{ vars.CI_SELDON_RACE == 'true' && 'PostgreSQL integration tests' || 'PostgreSQL integration tests (seldon twin, off)' }}
+    needs: [changes, race]
+    if: ${{ !cancelled() && needs.race.outputs.race == 'true' && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.database == 'true') }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: seldon-race-${{ github.run_id }}-${{ github.run_attempt }}-hosted-PostgreSQL integration tests
+    permissions: *race-lane-permissions
+    timeout-minutes: 10
+    services: *database-services
+    steps: *database-steps
+
+  # database's rescue: reruns it hosted when its Seldon lane failed (the house
+  # network drops connections); a genuine failure fails again.
+  database-rescue:
+    name: ${{ vars.CI_SELDON_RACE == 'true' && 'PostgreSQL integration tests' || 'PostgreSQL integration tests (seldon rescue, off)' }}
+    needs: [changes, database]
+    if: ${{ !cancelled() && needs.database.result == 'failure' && vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.database == 'true') }}
+    runs-on: ubuntu-latest
+    permissions: *race-lane-permissions
+    timeout-minutes: 10
+    services: *database-services
+    steps: *database-steps
+
   # Every AWS image consumes the monorepo workspace graph. A missing manifest or
   # source COPY is invisible to TypeScript and unit tests, so every Dockerfile
   # is built (and started) before any can be published.
@@ -190,12 +291,16 @@ jobs:
     name: AWS images build
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docker == 'true') }}
-    runs-on: ubuntu-latest
+    runs-on: *seldon-lane
+    concurrency:
+      group: seldon-race-${{ github.run_id }}-${{ github.run_attempt }}-seldon-AWS images build
+    permissions: *race-lane-permissions
     timeout-minutes: 20
-    env:
+    env: &docker-env
       # Only a push to main writes the layer cache; pull requests read it.
       WRITE_CACHE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || '' }}
-    steps:
+    steps: &docker-steps
+      - *race-guard
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # The production image's build inputs (Dockerfile, context, target and
@@ -416,19 +521,162 @@ jobs:
             exit 1
           fi
 
+  # docker's hosted twin in the Seldon race: the same name, env and steps.
+  docker-hosted:
+    name: ${{ vars.CI_SELDON_RACE == 'true' && 'AWS images build' || 'AWS images build (seldon twin, off)' }}
+    needs: [changes, race]
+    if: ${{ !cancelled() && needs.race.outputs.race == 'true' && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docker == 'true') }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: seldon-race-${{ github.run_id }}-${{ github.run_attempt }}-hosted-AWS images build
+    permissions: *race-lane-permissions
+    timeout-minutes: 20
+    env: *docker-env
+    steps: *docker-steps
+
+  # docker's rescue: reruns it hosted when its Seldon lane failed (the house
+  # network drops connections); a genuine failure fails again.
+  docker-rescue:
+    name: ${{ vars.CI_SELDON_RACE == 'true' && 'AWS images build' || 'AWS images build (seldon rescue, off)' }}
+    needs: [changes, docker]
+    if: ${{ !cancelled() && needs.docker.result == 'failure' && vars.CI_SELDON_RACE == 'true' && github.run_attempt == 1 && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && !github.event.pull_request.head.repo.fork && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docker == 'true') }}
+    runs-on: ubuntu-latest
+    permissions: *race-lane-permissions
+    timeout-minutes: 20
+    env: *docker-env
+    steps: *docker-steps
+
   # Publish only after EVERY gate passes, on a push to main. The reusable workflow
   # only writes immutable API/DNS/relay images; it cannot roll out or scale ECS.
   # On a push `changes` is skipped and every gate runs. That skipped ancestor
   # would make the implicit success() skip this job too, so each gate's result
   # is required explicitly instead: all three must be a real success, never a
   # skip. (No timeout-minutes: a reusable-workflow call cannot take one; each
-  # of its jobs sets its own.)
+  # of its jobs sets its own.) A push never races, so the twins and rescues are
+  # skipped there; they are needed and accepted only so that a gate's success
+  # in any of its lanes counts, should the race ever reach this event.
   publish_aws_images:
-    needs: [verify, database, docker]
+    needs: [verify, verify-hosted, verify-rescue, database, database-hosted, database-rescue, docker, docker-hosted, docker-rescue]
     if: >-
       ${{ !cancelled() && vars.OXY_1519_ROLLOUT_HOLD != 'true' && (github.event_name == 'push' && github.ref == 'refs/heads/main')
-      && needs.verify.result == 'success' && needs.database.result == 'success' && needs.docker.result == 'success' }}
+      && (needs.verify.result == 'success' || needs.verify-hosted.result == 'success' || needs.verify-rescue.result == 'success')
+      && (needs.database.result == 'success' || needs.database-hosted.result == 'success' || needs.database-rescue.result == 'success')
+      && (needs.docker.result == 'success' || needs.docker-hosted.result == 'success' || needs.docker-rescue.result == 'success') }}
     uses: ./.github/workflows/deploy-aws.yml
     permissions:
       id-token: write
       contents: read
+
+  # The one check this workflow stands for, modelled on OxyHQ/Bloom's and
+  # OxyHQ/Gemies': green only when every gate above passed or skipped for a
+  # reason this workflow declares, so a cancelled or unexplained-skipped job can
+  # never read as a pass. Required checks by job name cannot follow the Seldon
+  # race (a twin and a rescue share their job's name, and a cancelled loser is
+  # not a failure); this one can.
+  #
+  # The skips it allows, and nothing else:
+  #   - `changes` runs on pull requests only.
+  #   - On a pull request, PostgreSQL integration tests and AWS images build
+  #     skip when a `changes` that succeeded said their area did not change.
+  #   - The race's jobs, twins and rescues skip whenever they are not needed.
+  #   - publish_aws_images is not judged: it runs on a push to main only, and
+  #     its own run reports there.
+  # When the race or a rescue ran, a raced job passes on the race's verdict:
+  # each of its names passed in some lane and failed in no hosted lane.
+  # Not race-finish: its reapers run on seldon-ci-light and only follow the
+  # cancellation, so needing it would wait on Seldon.
+  ci-complete:
+    name: CI complete
+    if: always()
+    needs:
+      - changes
+      - race
+      - verify
+      - verify-hosted
+      - verify-rescue
+      - database
+      - database-hosted
+      - database-rescue
+      - docker
+      - docker-hosted
+      - docker-rescue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read # the Seldon race verdict reads this run's jobs
+    steps:
+      # Per job name: passed when one of its lanes succeeded and no hosted lane
+      # failed. Whenever the race is on: a rescue can run without the race.
+      - name: Seldon race verdict
+        id: race
+        if: vars.CI_SELDON_RACE == 'true'
+        uses: OxyHQ/oxy/.github/actions/seldon-race@0f985e7a8fdc3584107d7f2043c5cd2465075129 # main
+        with:
+          mode: verdict
+      - name: Every job passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          EVENT_NAME: ${{ github.event_name }}
+          RACE_VERDICT: ${{ steps.race.outputs.outcome }}
+        run: |
+          set -euo pipefail
+          failures=()
+          result() { jq -r --arg job "$1" '.[$job].result // "missing"' <<<"$RESULTS"; }
+          said() { jq -r --arg out "$1" '.changes.outputs[$out] // ""' <<<"$RESULTS"; }
+
+          # `changes` runs on pull requests and nowhere else.
+          changes="$(result changes)"
+          if [ "$EVENT_NAME" = pull_request ]; then
+            [ "$changes" = success ] || failures+=("changes did not pass: $changes")
+          else
+            [ "$changes" = skipped ] || failures+=("changes ran on $EVENT_NAME: $changes")
+          fi
+
+          # The race's start: skipped when not needed, never failed.
+          r="$(result race)"
+          case "$r" in
+            success | skipped) ;;
+            *) failures+=("race did not pass: $r") ;;
+          esac
+          raced="$(jq -r '.race.outputs.race // ""' <<<"$RESULTS")"
+
+          # A raced family's result, in $family: the verdict when the race ran
+          # (and the job was not skipped) or its rescue ran; otherwise the
+          # job's own, with its twin and rescue skipped. Not called in a
+          # subshell, so its failures reach the list.
+          family() {
+            local job="$1" own twin rescue
+            own="$(result "$job")"
+            twin="$(result "$job-hosted")"
+            rescue="$(result "$job-rescue")"
+            if [ "$rescue" != skipped ] || { [ "$raced" = true ] && ! { [ "$own" = skipped ] && [ "$twin" = skipped ]; }; }; then
+              family="${RACE_VERDICT:-no verdict}"
+              return
+            fi
+            [ "$twin" = skipped ] || failures+=("$job-hosted ran although the Seldon race did not: $twin")
+            family="$own"
+          }
+
+          # job, its `changes` output (empty: never filtered), its result.
+          check() {
+            local job="$1" filter="$2" r="$3"
+            [ "$r" = success ] && return
+            if [ "$r" = skipped ] && [ -n "$filter" ] && [ "$EVENT_NAME" = pull_request ] && [ "$changes" = success ] && [ "$(said "$filter")" != true ]; then
+              return
+            fi
+            failures+=("$job did not pass: $r")
+          }
+          family verify
+          check verify '' "$family"
+          family database
+          check database database "$family"
+          family docker
+          check docker docker "$family"
+
+          if [ ${#failures[@]} -gt 0 ]; then
+            for failure in "${failures[@]}"; do
+              echo "::error::$failure"
+            done
+            exit 1
+          fi
+          echo 'Every job passed, or skipped for a reason this workflow declares.'
