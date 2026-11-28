@@ -16,6 +16,16 @@ import {
 // Mode nothing else in Pages adds them.
 const INSTALLER_ORIGIN = 'https://api.tnp.network';
 
+// Vite names every file it writes under /assets/ by a hash of its bytes
+// (`index-<hash>.js`), and public/ has no assets/ folder, so a browser keeps
+// these for a year and never asks again; the zone's 4-hour browser TTL made a
+// returning visitor revalidate every one. index.html and public/ are not hashed
+// and keep the asset server's policy. A hashed name this deploy does not have
+// (an old tab asking for the last release's chunk) is a 404 that nothing keeps,
+// never the SPA shell, which a year-long cache would pin to the name.
+const HASHED_PREFIX = '/assets/';
+const IMMUTABLE = 'public, max-age=31536000, immutable';
+
 function installerPath(pathname, userAgent) {
   if (pathname === '/install.sh') return '/client/install.sh';
   if (pathname === '/ps' || pathname === '/install.ps1') return '/client/install.ps1';
@@ -42,6 +52,24 @@ export default {
 
     // tnp.network -- serve static assets, SPA fallback to index.html
     const response = await env.ASSETS.fetch(request);
+
+    if (url.pathname.startsWith(HASHED_PREFIX)) {
+      if (
+        response.status === 404 ||
+        (response.headers.get('content-type') ?? '').startsWith('text/html')
+      ) {
+        return withHeaders(
+          new Response('Not found', {
+            status: 404,
+            headers: { 'content-type': 'text/plain' },
+          }),
+          { ...SITE_SECURITY_HEADERS, 'Cache-Control': 'no-store' },
+        );
+      }
+      if (response.status === 200 || response.status === 304) {
+        return withHeaders(response, { ...SITE_SECURITY_HEADERS, 'Cache-Control': IMMUTABLE });
+      }
+    }
 
     if (response.status === 404) {
       // SPA fallback: serve index.html for client-side routing
