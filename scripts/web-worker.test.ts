@@ -143,6 +143,79 @@ describe(`${entry}: security headers on tnp.network`, () => {
   });
 });
 
+describe(`${entry}: content-hashed assets`, () => {
+  const HASHED = 'https://tnp.network/assets/index-DkPR-7Rw.js';
+
+  test('a hashed asset is immutable for a year and keeps the site headers', async () => {
+    const worker = await loadWorker();
+    const { SITE_SECURITY_HEADERS } = await loadHeaders();
+    const result = await worker.fetch(new Request(HASHED), {
+      ASSETS: {
+        fetch: async () =>
+          new Response('js', {
+            headers: {
+              'Content-Type': 'application/javascript',
+              'Cache-Control': 'public, max-age=0, must-revalidate',
+            },
+          }),
+      },
+    });
+    expect(result.status).toBe(200);
+    expect(result.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable');
+    expect(result.headers.get('Content-Type')).toBe('application/javascript');
+    expectSiteHeaders(result, SITE_SECURITY_HEADERS);
+    expect(await result.text()).toBe('js');
+  });
+
+  test('a bodiless 304 for a hashed asset is immutable too', async () => {
+    const worker = await loadWorker();
+    const result = await worker.fetch(new Request(HASHED), {
+      ASSETS: { fetch: async () => new Response(null, { status: 304 }) },
+    });
+    expect(result.status).toBe(304);
+    expect(result.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable');
+  });
+
+  test.each([
+    ['a 404', () => new Response('missing', { status: 404 })],
+    [
+      'the SPA shell',
+      () =>
+        new Response('<!doctype html>', {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        }),
+    ],
+  ])('a hashed-asset miss (%s) is an uncached 404, never the shell', async (_name, miss) => {
+    const worker = await loadWorker();
+    const requested: string[] = [];
+    const result = await worker.fetch(new Request(HASHED), {
+      ASSETS: {
+        fetch: async (input) => {
+          requested.push(new URL(input instanceof Request ? input.url : input.href).pathname);
+          return miss();
+        },
+      },
+    });
+    expect(requested).toEqual(['/assets/index-DkPR-7Rw.js']);
+    expect(result.status).toBe(404);
+    expect(result.headers.get('Cache-Control')).toBe('no-store');
+    expect(result.headers.get('X-Content-Type-Options')).toBe('nosniff');
+  });
+
+  test('the shell keeps the asset server policy', async () => {
+    const worker = await loadWorker();
+    const result = await worker.fetch(new Request('https://tnp.network/'), {
+      ASSETS: {
+        fetch: async () =>
+          new Response('<!doctype html>', {
+            headers: { 'Cache-Control': 'public, max-age=0, must-revalidate' },
+          }),
+      },
+    });
+    expect(result.headers.get('Cache-Control')).toBe('public, max-age=0, must-revalidate');
+  });
+});
+
 describe(`${entry}: get.tnp.network installer`, () => {
   // get.tnp.network is served by the API; the worker never serves an installer
   // of its own (a static copy drifted once already: it pinned v0.1.0 and
